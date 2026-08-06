@@ -34,6 +34,15 @@ export interface DashboardActivityVO {
   createdAt: string
 }
 
+export interface ProjectTeamMemberVO {
+  userId: string
+  username: string
+  displayName: string
+  email?: string
+  roleName: string
+  openIssueCount: number
+}
+
 // ─── 图表数据已迁移至 reportStatisticsApi.dashboard() ─────────────────────────────────────
 
 /**
@@ -63,5 +72,10 @@ export const dashboardApi = {
   /** Widget 活动流（支持多维筛选） */
   activityFeed(params?: { projectIds?: string[]; actions?: string[]; userIds?: string[]; limit?: number }) {
     return request.get<any, R<DashboardActivityVO[]>>('/dashboard/activity-feed', { params })
+  },
+
+  /** 项目团队成员数据（用于 Project Team Widget） */
+  projectTeam(params: { projectId: string; limit?: number }) {
+    return request.get<any, R<ProjectTeamMemberVO[]>>('/dashboard/project-team', { params })
   }
 }

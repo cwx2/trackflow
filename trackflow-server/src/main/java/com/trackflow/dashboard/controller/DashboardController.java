@@ -5,6 +5,7 @@ import com.trackflow.common.util.SecurityUtils;
 import com.trackflow.dashboard.service.DashboardService;
 import com.trackflow.dashboard.vo.DashboardSummaryVO;
 import com.trackflow.dashboard.vo.DashboardActivityVO;
+import com.trackflow.dashboard.vo.ProjectTeamMemberVO;
 import com.trackflow.issue.vo.IssueVO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -78,5 +79,17 @@ public class DashboardController {
         // 限制最大条数为 50
         int safeLimit = Math.min(Math.max(limit, 1), 50);
         return R.ok(dashboardService.getWidgetActivityFeed(currentUserId, projectIds, actions, userIds, safeLimit));
+    }
+
+    /**
+     * 项目团队成员数据（用于 Project Team Widget）
+     * 返回指定项目的成员列表及各成员未关闭工单数
+     */
+    @GetMapping("/project-team")
+    @PreAuthorize("isAuthenticated()")
+    public R<List<ProjectTeamMemberVO>> projectTeam(
+            @RequestParam("projectId") Long projectId,
+            @RequestParam(value = "limit", required = false) Integer limit) {
+        return R.ok(dashboardService.getProjectTeam(projectId, limit));
     }
 }

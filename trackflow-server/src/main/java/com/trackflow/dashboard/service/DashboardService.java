@@ -1,10 +1,14 @@
 package com.trackflow.dashboard.service;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.trackflow.common.constant.IssueStatusCategory;
 import com.trackflow.common.constant.SystemRoleIds;
 import com.trackflow.dashboard.vo.DashboardActivityVO;
 import com.trackflow.dashboard.vo.DashboardSummaryVO;
+import com.trackflow.dashboard.vo.ProjectTeamMemberVO;
+import com.trackflow.system.entity.SysRole;
+import com.trackflow.system.mapper.SysRoleMapper;
 import com.trackflow.issue.converter.IssueConverter;
 import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.entity.IssueStatus;
@@ -42,6 +46,7 @@ public class DashboardService {
     private final ProjectMapper projectMapper;
     private final ProjectMemberMapper projectMemberMapper;
     private final SysUserMapper sysUserMapper;
+    private final SysRoleMapper sysRoleMapper;
     private final StatusCacheHelper statusCacheHelper;
     private final ReportStatisticsService reportStatisticsService;
 
@@ -383,5 +388,83 @@ public class DashboardService {
                 }
             }
         }
+    }
+
+    /**
+     * 获取项目团队成员信息（用于 Project Team Widget）
+     * 包含每个成员的角色和未关闭工单数
+     */
+    public List<ProjectTeamMemberVO> getProjectTeam(Long projectId, Integer limit) {
+        // 1. 查询项目成员
+        List<ProjectMember> members = projectMemberMapper.selectList(
+                new LambdaQueryWrapper<ProjectMember>().eq(ProjectMember::getProjectId, projectId)
+        );
+        if (members.isEmpty()) return List.of();
+
+        // 2. 按 userId 聚合（一个用户可能有多个角色）
+        Map<Long, List<ProjectMember>> membersByUser = members.stream()
+                .collect(Collectors.groupingBy(ProjectMember::getUserId));
+
+        // 3. 获取用户信息
+        List<Long> userIds = new ArrayList<>(membersByUser.keySet());
+        Map<Long, SysUser> userMap = sysUserMapper.selectBatchIds(userIds).stream()
+                .collect(Collectors.toMap(SysUser::getId, u -> u, (a, b) -> a));
+
+        // 4. 获取角色信息
+        List<Long> roleIds = members.stream().map(ProjectMember::getRoleId).distinct().toList();
+        Map<Long, String> roleNameMap = sysRoleMapper.selectBatchIds(roleIds).stream()
+                .collect(Collectors.toMap(SysRole::getId, SysRole::getName, (a, b) -> a));
+
+        // 5. 统计每个成员的未关闭工单数（一次性查询）
+        Set<Long> closedStatusIds = statusCacheHelper.getClosedStatusIds();
+        Map<Long, Long> openCountByAssignee = new HashMap<>();
+        // 查询该项目所有未删除、未关闭、有 assignee 的工单
+        List<Issue> openIssues = issueMapper.selectList(
+                new LambdaQueryWrapper<Issue>()
+                        .eq(Issue::getProjectId, projectId)
+                        .isNull(Issue::getDeletedAt)
+                        .isNotNull(Issue::getAssigneeId)
+                        .notIn(!closedStatusIds.isEmpty(), Issue::getStatusId, closedStatusIds)
+        );
+        for (Issue issue : openIssues) {
+            openCountByAssignee.merge(issue.getAssigneeId(), 1L, Long::sum);
+        }
+
+        // 6. 组装 VO
+        List<ProjectTeamMemberVO> result = userIds.stream().map(userId -> {
+            ProjectTeamMemberVO vo = new ProjectTeamMemberVO();
+            vo.setUserId(userId.toString());
+
+            SysUser user = userMap.get(userId);
+            if (user != null) {
+                vo.setUsername(user.getUsername());
+                vo.setDisplayName(user.getDisplayName());
+                vo.setEmail(user.getEmail());
+            }
+
+            // 角色名拼接
+            List<ProjectMember> userMembers = membersByUser.get(userId);
+            String roleNames = userMembers.stream()
+                    .map(m -> roleNameMap.getOrDefault(m.getRoleId(), ""))
+                    .filter(name -> !name.isEmpty())
+                    .distinct()
+                    .collect(Collectors.joining(", "));
+            vo.setRoleName(roleNames);
+
+            // 未关闭工单数
+            vo.setOpenIssueCount(openCountByAssignee.getOrDefault(userId, 0L).intValue());
+            return vo;
+        }).toList();
+
+        // 7. 排序：按工单数降序，再按显示名字母序
+        List<ProjectTeamMemberVO> sorted = new ArrayList<>(result);
+        sorted.sort(Comparator.comparingInt(ProjectTeamMemberVO::getOpenIssueCount).reversed()
+                .thenComparing(vo -> vo.getDisplayName() != null ? vo.getDisplayName() : ""));
+
+        // 8. 应用限制条数
+        if (limit != null && limit > 0 && sorted.size() > limit) {
+            return sorted.subList(0, limit);
+        }
+        return sorted;
     }
 }

@@ -474,6 +474,28 @@
             <span class="form-hint">选择要显示到期日历的项目</span>
           </a-form-item>
         </template>
+
+        <!-- project_team 配置 -->
+        <template v-if="editingWidgetType === 'project_team'">
+          <a-form-item label="项目" :rules="[{ required: true, message: '请选择项目' }]">
+            <a-select v-model="widgetConfigForm.projectId" placeholder="选择项目（必填）">
+              <a-option v-for="p in availableProjects" :key="p.id" :value="p.id">
+                {{ p.name }}
+              </a-option>
+            </a-select>
+            <span class="form-hint">选择要展示团队成员的项目</span>
+          </a-form-item>
+          <a-form-item label="显示条数">
+            <a-input-number
+              v-model="widgetConfigForm.teamLimit"
+              :min="1"
+              :max="50"
+              placeholder="留空 = 显示全部"
+              style="width: 100%"
+            />
+            <span class="form-hint">限制显示的成员数量，留空表示全部</span>
+          </a-form-item>
+        </template>
       </a-form>
     </a-modal>
 
@@ -539,7 +561,8 @@ const widgetTypes = [
   { type: 'sprint_progress', label: 'Sprint 进度', icon: '🏃', description: 'Sprint 完成进度条', defaultTitle: 'Sprint 进度', group: '敏捷' },
   { type: 'agile_chart', label: '敏捷图表', icon: '📉', description: '燃尽图或累积流图，跟踪 Sprint 进展趋势', defaultTitle: '敏捷图表', group: '敏捷' },
   { type: 'agile_board_status', label: '看板状态', icon: '📊', description: 'Sprint 工单状态分布（待处理/进行中/已完成）', defaultTitle: '看板状态', group: '敏捷' },
-  { type: 'calendar', label: '到期日历', icon: '📅', description: 'Issue 到期日期日历视图', defaultTitle: '到期日历', group: '基础' }
+  { type: 'calendar', label: '到期日历', icon: '📅', description: 'Issue 到期日期日历视图', defaultTitle: '到期日历', group: '基础' },
+  { type: 'project_team', label: '项目成员', icon: '👥', description: '展示项目团队成员及各自未关闭工单数', defaultTitle: '项目成员', group: '基础' }
 ]
 
 // ─── 状态 ─────────────────────────────────────────────
@@ -588,6 +611,8 @@ const widgetConfigForm = ref<{
   activityActions?: string[]
   activityUserIds?: string[]
   activityLimit?: number
+  // Project Team Widget config
+  teamLimit?: number
 }>({
   title: '',
   refreshInterval: 600,
@@ -603,7 +628,8 @@ const widgetConfigForm = ref<{
   activityProjectIds: [],
   activityActions: [],
   activityUserIds: [],
-  activityLimit: 10
+  activityLimit: 10,
+  teamLimit: undefined
 })
 
 // Available users for activity feed widget
@@ -953,6 +979,7 @@ async function addWidget(widgetType: string, defaultTitle: string) {
     if (widgetType === 'number_card') { width = 3; height = 2 }
     else if (widgetType === 'agile_chart') { width = 6; height = 4 }
     else if (widgetType === 'agile_board_status') { width = 4; height = 2 }
+    else if (widgetType === 'project_team') { width = 3; height = 4 }
 
     await customDashboardApi.addWidget(currentDashboard.value.id, {
       widgetType,
@@ -1002,7 +1029,8 @@ function editWidget(widget: DashboardWidgetVO) {
     activityProjectIds: config.projectIds || [],
     activityActions: config.actions || [],
     activityUserIds: config.userIds || [],
-    activityLimit: config.limit ?? 10
+    activityLimit: config.limit ?? 10,
+    teamLimit: config.limit ?? undefined
   }
 
   // Load reports if needed for report widgets
@@ -1022,6 +1050,11 @@ function editWidget(widget: DashboardWidgetVO) {
 
   // Load projects for calendar widget
   if (widget.widgetType === 'calendar') {
+    loadAvailableProjectsForIssueList()
+  }
+
+  // Load projects for project_team widget
+  if (widget.widgetType === 'project_team') {
     loadAvailableProjectsForIssueList()
   }
 
@@ -1129,6 +1162,9 @@ async function handleWidgetConfigSave() {
       config.pageSize = form.issueListPageSize ?? 10
     } else if (widget.widgetType === 'calendar') {
       if (form.projectId) config.projectId = form.projectId
+    } else if (widget.widgetType === 'project_team') {
+      if (form.projectId) config.projectId = form.projectId
+      if (form.teamLimit != null && form.teamLimit > 0) config.limit = form.teamLimit
     }
     // report_distribution / report: reportId is saved separately
 

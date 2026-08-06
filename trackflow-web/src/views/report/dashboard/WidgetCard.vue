@@ -105,6 +105,7 @@ import ActivityFeedWidget from './widgets/ActivityFeedWidget.vue'
 import AgileChartWidget from './widgets/AgileChartWidget.vue'
 import BoardStatusWidget from './widgets/BoardStatusWidget.vue'
 import CalendarWidget from './widgets/CalendarWidget.vue'
+import ProjectTeamWidget from './widgets/ProjectTeamWidget.vue'
 
 const props = defineProps<{
   widget: DashboardWidgetVO | undefined
@@ -159,7 +160,8 @@ const widgetTypeMap: Record<string, { icon: string; label: string }> = {
   sprint_progress: { icon: '🏃', label: 'Sprint 进度' },
   calendar: { icon: '📅', label: '到期日历' },
   agile_chart: { icon: '📉', label: '敏捷图表' },
-  agile_board_status: { icon: '📊', label: '看板状态' }
+  agile_board_status: { icon: '📊', label: '看板状态' },
+  project_team: { icon: '👥', label: '项目成员' }
 }
 
 const widgetIcon = computed(() => {
@@ -183,7 +185,8 @@ const widgetComponentMap: Record<string, Component> = {
   activity_feed: ActivityFeedWidget,
   agile_chart: AgileChartWidget,
   agile_board_status: BoardStatusWidget,
-  calendar: CalendarWidget
+  calendar: CalendarWidget,
+  project_team: ProjectTeamWidget
 }
 
 const widgetComponent = computed(() => {
