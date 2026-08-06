@@ -115,7 +115,11 @@ export function useNotification() {
       }
       const res = await notificationApi.list(params)
       if (res.code === 0 && res.data) {
-        notifications.value = res.data.list
+        // 未读优先排序：未读在前，已读在后，每组内部保持后端返回顺序（时间倒序）
+        const list = res.data.list
+        const unread = list.filter(n => !n.isRead)
+        const read = list.filter(n => n.isRead)
+        notifications.value = [...unread, ...read]
         totalCount.value = res.data.pagination.total
       }
     } catch {
@@ -150,6 +154,10 @@ export function useNotification() {
           unreadCount.value = Math.max(0, unreadCount.value - 1)
           // 更新分类未读计数
           decrementCategoryCount(item.type)
+          // 重新排序：未读优先
+          const unread = notifications.value.filter(n => !n.isRead)
+          const read = notifications.value.filter(n => n.isRead)
+          notifications.value = [...unread, ...read]
         }
       }
     } catch {
@@ -168,6 +176,10 @@ export function useNotification() {
           unreadCount.value += 1
           // 更新分类未读计数
           incrementCategoryCount(item.type)
+          // 重新排序：未读优先
+          const unread = notifications.value.filter(n => !n.isRead)
+          const read = notifications.value.filter(n => n.isRead)
+          notifications.value = [...unread, ...read]
         }
       }
     } catch {

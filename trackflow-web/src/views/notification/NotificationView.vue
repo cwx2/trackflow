@@ -2,12 +2,34 @@
   <div class="notification-page">
     <!-- 页面头部 -->
     <div class="page-header">
-      <div class="header-left">
-        <h1 class="page-title">通知中心</h1>
-        <span class="page-subtitle">{{ unreadCount }} 条未读</span>
+      <!-- 第一行：标题 + 操作按钮 -->
+      <div class="header-row1">
+        <div class="header-left">
+          <h1 class="page-title">通知中心</h1>
+          <span v-if="unreadCount > 0" class="unread-badge">{{ unreadCount }}</span>
+        </div>
+        <div class="header-actions">
+          <button
+            class="action-link"
+            :class="{ active: unreadOnly }"
+            @click="handleToggleUnread"
+          >仅未读</button>
+          <span class="action-divider">·</span>
+          <button
+            class="action-link"
+            :disabled="unreadCount === 0"
+            @click="handleMarkAllRead"
+          >全部已读</button>
+          <span class="action-divider">·</span>
+          <button
+            class="action-link danger"
+            :disabled="!hasRead"
+            @click="handleDeleteAllRead"
+          >清除已读</button>
+        </div>
       </div>
-      <div class="header-actions">
-        <!-- 项目筛选 -->
+      <!-- 第二行：项目筛选 -->
+      <div class="header-row2">
         <a-select
           v-model="selectedProjectId"
           placeholder="全部项目"
@@ -19,39 +41,6 @@
         >
           <a-option v-for="p in projects" :key="p.id" :value="p.id">{{ p.name }}</a-option>
         </a-select>
-        <button
-          class="action-btn"
-          :class="{ active: unreadOnly }"
-          title="仅显示未读"
-          @click="handleToggleUnread"
-        >
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-            <path d="M8 16A8 8 0 1 1 8 0a8 8 0 0 1 0 16zm3.78-9.72a.75.75 0 0 0-1.06-1.06L6.75 9.19 5.28 7.72a.75.75 0 0 0-1.06 1.06l2 2a.75.75 0 0 0 1.06 0l4.5-4.5z" />
-          </svg>
-          <span>仅未读</span>
-        </button>
-        <button
-          class="action-btn"
-          title="全部标记已读"
-          :disabled="unreadCount === 0"
-          @click="handleMarkAllRead"
-        >
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-            <path d="M1.5 3.25a2.25 2.25 0 1 1 3 2.122v5.256a2.251 2.251 0 1 1-1.5 0V5.372A2.25 2.25 0 0 1 1.5 3.25Zm5.677-.177L9.573.677A.25.25 0 0 1 10 .854V2.5h1A2.5 2.5 0 0 1 13.5 5v5.628a2.251 2.251 0 1 1-1.5 0V5a1 1 0 0 0-1-1h-1v1.646a.25.25 0 0 1-.427.177L7.177 3.427a.25.25 0 0 1 0-.354Z"/>
-          </svg>
-          <span>全部已读</span>
-        </button>
-        <button
-          class="action-btn danger"
-          title="清除所有已读通知"
-          :disabled="!hasRead"
-          @click="handleDeleteAllRead"
-        >
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-            <path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"/>
-          </svg>
-          <span>清除已读</span>
-        </button>
       </div>
     </div>
 
@@ -479,17 +468,26 @@ onMounted(() => {
 
 /* Page Header */
 .page-header {
+  margin-bottom: 16px;
+  flex-shrink: 0;
+}
+
+.header-row1 {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 20px;
-  flex-shrink: 0;
+  margin-bottom: 10px;
+}
+
+.header-row2 {
+  display: flex;
+  align-items: center;
 }
 
 .header-left {
   display: flex;
-  align-items: baseline;
-  gap: 12px;
+  align-items: center;
+  gap: 8px;
 }
 
 .page-title {
@@ -500,56 +498,68 @@ onMounted(() => {
   letter-spacing: -0.3px;
 }
 
-.page-subtitle {
-  font-size: 13px;
-  color: var(--tf-text-tertiary);
+.unread-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  background: var(--tf-accent);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 10px;
+  line-height: 1;
 }
 
 .header-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
+}
+
+.action-divider {
+  color: var(--tf-border);
+  font-size: 14px;
+  user-select: none;
 }
 
 .project-filter-select {
   width: 160px;
 }
 
-.action-btn {
+.action-link {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border: 1px solid var(--tf-border);
+  padding: 4px 8px;
+  border: none;
   background: transparent;
-  border-radius: 6px;
-  color: var(--tf-text-secondary);
+  border-radius: 4px;
+  color: var(--tf-text-tertiary);
   font-size: 12px;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  transition: color 0.15s, background 0.15s;
 }
-.action-btn:hover {
-  background: var(--tf-bg-hover);
+.action-link:hover {
   color: var(--tf-text-primary);
-  border-color: var(--tf-border-hover, var(--tf-border));
+  background: var(--tf-bg-hover);
 }
-.action-btn.active {
-  background: var(--tf-accent-bg);
+.action-link.active {
   color: var(--tf-accent);
-  border-color: var(--tf-accent);
+  background: var(--tf-accent-bg);
 }
-.action-btn:disabled {
-  opacity: 0.4;
+.action-link:disabled {
+  opacity: 0.35;
   cursor: not-allowed;
 }
-.action-btn:disabled:hover {
+.action-link:disabled:hover {
+  color: var(--tf-text-tertiary);
   background: transparent;
-  color: var(--tf-text-secondary);
-  border-color: var(--tf-border);
 }
-.action-btn.danger:hover:not(:disabled) {
-  color: var(--tf-error, #f85149);
-  border-color: var(--tf-error, #f85149);
+.action-link.danger:hover:not(:disabled) {
+  color: var(--tf-danger);
+  background: rgba(230, 126, 128, 0.08);
 }
 
 /* Category Tabs */
