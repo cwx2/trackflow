@@ -382,11 +382,9 @@ def _run_cli(cmd: list[str], label: str, req_stem: str | None = None,
     _wait_for_circuit(label)
     start = time.time()
 
-    # >20KB 用临时文件传 prompt（stdin pipe 在 Windows 上不可靠）
-    _use_temp = stdin_data and len(stdin_data) > 20000 and os.name == "nt"
+    # Windows 上 stdin pipe 对大 prompt 不可靠，全部用临时文件
     _temp_file = None
-
-    if _use_temp:
+    if stdin_data and os.name == "nt":
         import tempfile as _tempfile
         try:
             _tmp = _tempfile.NamedTemporaryFile(
@@ -397,11 +395,9 @@ def _run_cli(cmd: list[str], label: str, req_stem: str | None = None,
             _tmp.write(stdin_data.decode("utf-8", errors="replace"))
             _tmp.flush()
             _tmp.close()
-            # 把 prompt 放到文件后，命令行只需很短的文件路径引用
-            _short_prompt = f"请严格按照文件 {_temp_file} 中的完整指令执行任务。"
-            stdin_data = _short_prompt.encode("utf-8")
+            stdin_data = f"请严格按照 {_temp_file} 中的指令执行。".encode("utf-8")
         except Exception as e:
-            log.warning(f"[{label}] 临时文件创建失败: {e}，退回 stdin")
+            log.warning(f"[{label}] 临时文件创建失败: {e}")
 
     try:
         process = subprocess.Popen(
