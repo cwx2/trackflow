@@ -263,7 +263,7 @@ const selectedProject = computed({
 
 // 权限控制（必须在 selectedProject 定义之后）
 // 页面级权限控制（用于创建按钮等需要选择项目的场景）
-const { canCreateSprint, canEditSprint, canDeleteSprint } = usePermission(() => selectedProject.value)
+const { canCreateSprint, canEditSprint } = usePermission(() => selectedProject.value)
 
 /**
  * 基于 Sprint 自身的 projectId 检查编辑权限
@@ -315,14 +315,7 @@ const drawerSprintName = ref('')
 const drawerProjectId = ref<string | undefined>(undefined)
 const drawerInitialFilter = ref<'unassigned' | string | null>(null)
 
-const activeSprints = computed(() => sprints.value.filter(s => s.status === 'active' || s.status === 'Active'))
-const plannedSprints = computed(() => sprints.value.filter(s => s.status === 'planned' || s.status === 'Planned'))
-const completedSprints = computed(() => sprints.value.filter(s => s.status === 'completed' || s.status === 'Completed'))
-const archivedSprints = computed(() => sprints.value.filter(s => s.status === 'archived' || s.status === 'Archived'))
-const hasActiveSprint = computed(() => activeSprints.value.length > 0)
-const nextStartableSprint = computed(() => {
-  return plannedSprints.value.find(s => !isSprintNotStartable(s)) || null
-})
+
 
 const sprintGuidanceMessage = computed(() => {
   if (hasActiveSprint.value) {

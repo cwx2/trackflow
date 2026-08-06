@@ -1,4 +1,4 @@
-import { ref, computed, type Ref, type ComputedRef } from 'vue'
+import { ref, computed, type ComputedRef } from 'vue'
 import { Message, Modal } from '@arco-design/web-vue'
 import { sprintApi } from '@/api'
 import { preloadPermissions } from '@/composables/usePermission'

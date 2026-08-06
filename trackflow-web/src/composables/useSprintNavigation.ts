@@ -1,4 +1,4 @@
-import { computed, type Ref } from 'vue'
+import { type Ref } from 'vue'
 import { useRouter } from 'vue-router'
 import type { SprintVO, ProjectVO } from '@/api/types'
 
@@ -30,7 +30,7 @@ export function useSprintNavigation(
     router.push({ path: '/boards', query })
   }
 
-  function viewIssuesByCategory(sprint: SprintVO, category: 'done' | 'in_progress' | 'open') {
+  function viewIssuesByCategory(sprint: SprintVO, category: string) {
     const projectKey = getProjectKey(sprint)
     const categoryLabels: Record<string, string> = {
       done: '已完成',
