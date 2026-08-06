@@ -406,7 +406,7 @@
             <div class="copy-from-row">
               <a-select
                 :model-value="copyFromFieldId ?? undefined"
-                @update:model-value="(v: string | undefined) => { copyFromFieldId = v ?? null }"
+                @update:model-value="(v) => { copyFromFieldId = (v as string) ?? null }"
                 placeholder="选择源字段追加选项"
                 allow-clear
                 style="flex: 1"
@@ -427,7 +427,7 @@
             <div class="copy-from-row">
               <a-select
                 :model-value="mergeFromFieldId ?? undefined"
-                @update:model-value="(v: string | undefined) => { mergeFromFieldId = v ?? null }"
+                @update:model-value="(v) => { mergeFromFieldId = (v as string) ?? null }"
                 placeholder="选择字段合并其选项到当前字段"
                 allow-clear
                 style="flex: 1"

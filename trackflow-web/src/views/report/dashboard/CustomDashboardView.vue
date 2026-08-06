@@ -328,7 +328,7 @@
         <p class="move-hint">将「{{ movingWidgetTitle }}」移动到：</p>
         <a-select
           :model-value="moveTargetDashboardId ?? undefined"
-          @update:model-value="(v: string | undefined) => { moveTargetDashboardId = v ?? null }"
+          @update:model-value="(v) => { moveTargetDashboardId = (v as string) ?? null }"
           placeholder="选择目标仪表盘"
         >
           <a-option
