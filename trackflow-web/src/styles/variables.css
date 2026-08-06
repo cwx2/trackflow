@@ -130,41 +130,49 @@
   --accent-purple: var(--tf-purple);
 }
 
-/* ===== 护眼主题 ===== */
+/* ===== 护眼主题（Everforest 风格）===== */
 [data-theme="green"] {
-  --tf-bg-body: #1e2a1e;
-  --tf-bg-surface: #243524;
-  --tf-bg-elevated: #2b3f2b;
-  --tf-bg-hover: #324832;
-  --tf-bg-active: #3a5239;
-  --tf-bg-code: #1a241a;
+  /* 背景色层次：深蓝绿调，比纯绿更柔和 */
+  --tf-bg-body: #2D353B;
+  --tf-bg-surface: #343F44;
+  --tf-bg-elevated: #3D484D;
+  --tf-bg-hover: #475258;
+  --tf-bg-active: #4F585E;
+  --tf-bg-code: #232A2E;
 
-  --tf-text-primary: #d4e7d0;
-  --tf-text-secondary: #a3c49e;
-  --tf-text-tertiary: #7a9e75;
-  --tf-text-muted: #5a7a56;
-  --tf-text-link: #7dcea0;
+  /* 文字色：暖米色调，减少眼疲劳 */
+  --tf-text-primary: #D3C6AA;
+  --tf-text-secondary: #9DA9A0;
+  --tf-text-tertiary: #859289;
+  --tf-text-muted: #7A8478;
+  --tf-text-link: #A7C080;
 
-  --tf-border: #3a5239;
-  --tf-border-light: #2b3f2b;
+  /* 边框 */
+  --tf-border: #475258;
+  --tf-border-light: #3D484D;
 
-  --tf-accent: #7dcea0;
-  --tf-accent-hover: #9eddb9;
-  --tf-accent-bg: rgba(125, 206, 160, 0.1);
-  --tf-success: #6bcf7f;
-  --tf-warning: #d4a94e;
-  --tf-danger: #e06060;
-  --tf-purple: #b89edb;
+  /* 强调色：柔和草绿 */
+  --tf-accent: #A7C080;
+  --tf-accent-hover: #B8C2AA;
+  --tf-accent-bg: rgba(167, 192, 128, 0.12);
 
-  --tf-sidebar-bg: #1a261a;
-  --tf-sidebar-text: #a3c49e;
-  --tf-sidebar-hover: #2b3f2b;
-  --tf-sidebar-active-bg: rgba(125, 206, 160, 0.12);
-  --tf-sidebar-active-text: #7dcea0;
+  /* 语义色：全部降饱和，不刺眼 */
+  --tf-success: #83C092;
+  --tf-warning: #DBBC7F;
+  --tf-danger: #E67E80;
+  --tf-purple: #D699B6;
 
-  --tf-scrollbar: rgba(125, 206, 160, 0.15);
-  --tf-scrollbar-hover: rgba(125, 206, 160, 0.25);
-  --tf-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  /* 侧边栏 */
+  --tf-sidebar-bg: #2D353B;
+  --tf-sidebar-text: #9DA9A0;
+  --tf-sidebar-hover: #3D484D;
+  --tf-sidebar-active-bg: rgba(167, 192, 128, 0.15);
+  --tf-sidebar-active-text: #A7C080;
+
+  /* 滚动条 */
+  --tf-scrollbar: rgba(167, 192, 128, 0.15);
+  --tf-scrollbar-hover: rgba(167, 192, 128, 0.25);
+  --tf-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
 
   /* 兼容旧变量 */
   --bg-primary: var(--tf-bg-body);
@@ -184,129 +192,129 @@
   --accent-purple: var(--tf-purple);
 }
 
-/* ===== 护眼主题 Arco Design 组件变量覆盖 ===== */
+/* ===== 护眼主题 Arco Design 组件变量覆盖（Everforest 风格）===== */
 /* 当 html 有 data-theme="green" 且 body 有 arco-theme="dark" 时，
-   覆盖 Arco Design 的内置暗色主题变量，使组件配色与深绿背景协调 */
+   覆盖 Arco Design 的内置暗色主题变量，使组件配色与 Everforest 蓝绿背景协调 */
 html[data-theme="green"] body[arco-theme='dark'] {
-  /* 基础调色板 - 降饱和度、偏绿色调 */
-  --arcoblue-1: 10,40,30;
-  --arcoblue-2: 16,56,44;
-  --arcoblue-3: 24,76,60;
-  --arcoblue-4: 36,100,80;
-  --arcoblue-5: 80,170,130;
-  --arcoblue-6: 125,206,160;
-  --arcoblue-7: 158,221,185;
-  --arcoblue-8: 185,233,205;
-  --arcoblue-9: 212,245,225;
-  --arcoblue-10: 235,255,240;
+  /* 基础调色板 - Everforest 草绿色调 */
+  --arcoblue-1: 45,53,59;
+  --arcoblue-2: 52,63,68;
+  --arcoblue-3: 61,72,77;
+  --arcoblue-4: 71,82,88;
+  --arcoblue-5: 130,160,100;
+  --arcoblue-6: 167,192,128;
+  --arcoblue-7: 184,194,170;
+  --arcoblue-8: 200,210,185;
+  --arcoblue-9: 220,228,205;
+  --arcoblue-10: 240,245,232;
 
-  /* 红色 - 柔和，降低饱和度使其在绿色背景上不刺眼 */
-  --red-1: 50,15,15;
-  --red-2: 80,20,20;
-  --red-3: 120,35,35;
-  --red-4: 160,55,50;
-  --red-5: 200,80,75;
-  --red-6: 224,96,96;
-  --red-7: 235,130,125;
-  --red-8: 242,165,160;
-  --red-9: 248,200,195;
-  --red-10: 255,235,232;
+  /* 红色 - Everforest 柔红 */
+  --red-1: 60,40,42;
+  --red-2: 85,50,52;
+  --red-3: 120,65,66;
+  --red-4: 160,85,86;
+  --red-5: 200,110,112;
+  --red-6: 230,126,128;
+  --red-7: 238,155,156;
+  --red-8: 244,185,186;
+  --red-9: 249,215,216;
+  --red-10: 253,240,240;
 
-  /* 橙色 - 偏暖绿调 */
-  --orange-1: 50,30,10;
-  --orange-2: 75,48,15;
-  --orange-3: 105,70,22;
-  --orange-4: 140,95,35;
-  --orange-5: 180,130,55;
-  --orange-6: 212,169,78;
-  --orange-7: 225,190,110;
-  --orange-8: 238,210,145;
-  --orange-9: 248,230,185;
-  --orange-10: 255,248,225;
+  /* 橙色 - Everforest 暖黄 */
+  --orange-1: 55,48,38;
+  --orange-2: 75,62,45;
+  --orange-3: 105,88,55;
+  --orange-4: 140,118,70;
+  --orange-5: 180,155,95;
+  --orange-6: 219,188,127;
+  --orange-7: 228,205,155;
+  --orange-8: 238,220,180;
+  --orange-9: 246,235,210;
+  --orange-10: 253,248,238;
 
-  /* 蓝色 - 偏青绿调 */
-  --blue-1: 5,30,45;
-  --blue-2: 10,50,70;
-  --blue-3: 18,75,100;
-  --blue-4: 30,105,140;
-  --blue-5: 55,145,180;
-  --blue-6: 90,175,200;
-  --blue-7: 125,195,215;
-  --blue-8: 160,215,228;
-  --blue-9: 200,235,240;
-  --blue-10: 235,250,252;
+  /* 蓝色 - Everforest 水蓝 */
+  --blue-1: 40,50,55;
+  --blue-2: 50,65,72;
+  --blue-3: 60,85,95;
+  --blue-4: 75,110,125;
+  --blue-5: 95,145,160;
+  --blue-6: 127,187,179;
+  --blue-7: 155,205,198;
+  --blue-8: 180,220,215;
+  --blue-9: 210,238,234;
+  --blue-10: 238,250,248;
 
-  /* 绿色 - 与主题一致 */
-  --green-1: 0,50,20;
-  --green-2: 5,75,30;
-  --green-3: 12,100,40;
-  --green-4: 22,130,52;
-  --green-5: 35,160,65;
-  --green-6: 107,207,127;
-  --green-7: 140,220,155;
-  --green-8: 170,235,180;
-  --green-9: 200,245,205;
-  --green-10: 230,255,235;
+  /* 绿色 - Everforest 青绿 */
+  --green-1: 42,55,50;
+  --green-2: 52,72,65;
+  --green-3: 65,95,85;
+  --green-4: 80,120,108;
+  --green-5: 100,155,135;
+  --green-6: 131,192,146;
+  --green-7: 158,210,170;
+  --green-8: 185,225,195;
+  --green-9: 215,240,220;
+  --green-10: 238,250,240;
 
-  /* 灰色 - 偏绿色调 */
-  --gray-1: 26,34,26;
-  --gray-2: 42,53,42;
-  --gray-3: 58,72,58;
-  --gray-4: 80,98,78;
-  --gray-5: 100,125,98;
-  --gray-6: 122,158,117;
-  --gray-7: 155,185,150;
-  --gray-8: 185,210,180;
-  --gray-9: 212,231,208;
-  --gray-10: 235,247,232;
+  /* 灰色 - Everforest 中性蓝绿调 */
+  --gray-1: 45,53,59;
+  --gray-2: 52,63,68;
+  --gray-3: 61,72,77;
+  --gray-4: 71,82,88;
+  --gray-5: 79,88,94;
+  --gray-6: 133,146,137;
+  --gray-7: 157,169,160;
+  --gray-8: 185,195,188;
+  --gray-9: 215,222,217;
+  --gray-10: 240,244,241;
 
-  /* 金色 - 偏暖黄绿 */
-  --gold-1: 45,38,8;
-  --gold-2: 70,60,12;
-  --gold-3: 100,85,20;
-  --gold-4: 135,115,32;
-  --gold-5: 175,150,48;
-  --gold-6: 200,175,65;
-  --gold-7: 218,198,100;
-  --gold-8: 232,218,140;
-  --gold-9: 245,236,185;
-  --gold-10: 255,250,228;
+  /* 金色 - Everforest 暖金 */
+  --gold-1: 50,46,38;
+  --gold-2: 70,62,42;
+  --gold-3: 100,88,52;
+  --gold-4: 135,118,68;
+  --gold-5: 170,150,85;
+  --gold-6: 200,178,100;
+  --gold-7: 218,198,130;
+  --gold-8: 232,218,162;
+  --gold-9: 245,236,200;
+  --gold-10: 253,250,238;
 
-  /* 青色 - 与绿色调和谐 */
-  --cyan-1: 5,45,45;
-  --cyan-2: 10,70,68;
-  --cyan-3: 18,100,95;
-  --cyan-4: 28,135,128;
-  --cyan-5: 42,170,162;
-  --cyan-6: 70,192,185;
-  --cyan-7: 110,210,205;
-  --cyan-8: 148,225,220;
-  --cyan-9: 190,240,236;
-  --cyan-10: 232,252,250;
+  /* 青色 - Everforest 水青 */
+  --cyan-1: 40,52,52;
+  --cyan-2: 48,68,67;
+  --cyan-3: 58,90,88;
+  --cyan-4: 72,118,115;
+  --cyan-5: 90,152,148;
+  --cyan-6: 115,180,176;
+  --cyan-7: 145,200,196;
+  --cyan-8: 175,218,215;
+  --cyan-9: 210,236,234;
+  --cyan-10: 240,250,249;
 
-  /* 紫色 - 降饱和，偏冷绿 */
-  --purple-1: 25,15,50;
-  --purple-2: 40,24,75;
-  --purple-3: 60,38,105;
-  --purple-4: 85,55,140;
-  --purple-5: 115,78,175;
-  --purple-6: 145,105,195;
-  --purple-7: 175,140,210;
-  --purple-8: 200,172,225;
-  --purple-9: 225,205,240;
-  --purple-10: 245,238,252;
+  /* 紫色 - Everforest 紫粉 */
+  --purple-1: 50,40,48;
+  --purple-2: 68,52,64;
+  --purple-3: 92,68,86;
+  --purple-4: 125,90,115;
+  --purple-5: 160,118,145;
+  --purple-6: 214,153,182;
+  --purple-7: 225,178,200;
+  --purple-8: 235,205,218;
+  --purple-9: 244,228,236;
+  --purple-10: 252,245,248;
 
-  /* 橘红色 - 降饱和 */
-  --orangered-1: 55,18,8;
-  --orangered-2: 85,30,12;
-  --orangered-3: 120,48,22;
-  --orangered-4: 155,70,38;
-  --orangered-5: 195,100,60;
-  --orangered-6: 215,125,82;
-  --orangered-7: 228,155,115;
-  --orangered-8: 238,185,150;
-  --orangered-9: 248,215,190;
-  --orangered-10: 255,240,228;
+  /* 橘红色 - Everforest 柔橘 */
+  --orangered-1: 58,42,38;
+  --orangered-2: 82,52,42;
+  --orangered-3: 115,68,52;
+  --orangered-4: 150,90,65;
+  --orangered-5: 190,118,85;
+  --orangered-6: 215,140,105;
+  --orangered-7: 228,168,138;
+  --orangered-8: 238,195,172;
+  --orangered-9: 248,222,208;
+  --orangered-10: 254,242,236;
 
   /* primary/success/danger/warning/link 语义色映射到绿色调 */
   --primary-1: var(--arcoblue-1);
@@ -364,77 +372,77 @@ html[data-theme="green"] body[arco-theme='dark'] {
   --link-9: var(--arcoblue-9);
   --link-10: var(--arcoblue-10);
 
-  /* 背景色 - 深绿调 */
-  --color-bg-1: #1e2a1e;
-  --color-bg-2: #243524;
-  --color-bg-3: #2b3f2b;
-  --color-bg-4: #324832;
-  --color-bg-5: #3a5239;
-  --color-bg-white: #d4e7d0;
+  /* 背景色 - Everforest 蓝绿调 */
+  --color-bg-1: #2D353B;
+  --color-bg-2: #343F44;
+  --color-bg-3: #3D484D;
+  --color-bg-4: #475258;
+  --color-bg-5: #4F585E;
+  --color-bg-white: #D3C6AA;
   --color-bg-popup: var(--color-bg-5);
 
-  /* 文字色 - 绿色调 */
-  --color-text-1: rgba(212, 231, 208, 0.9);
-  --color-text-2: rgba(163, 196, 158, 0.85);
-  --color-text-3: rgba(122, 158, 117, 0.7);
-  --color-text-4: rgba(90, 122, 86, 0.5);
+  /* 文字色 - Everforest 暖米色调 */
+  --color-text-1: rgba(211, 198, 170, 0.9);
+  --color-text-2: rgba(157, 169, 160, 0.85);
+  --color-text-3: rgba(133, 146, 137, 0.7);
+  --color-text-4: rgba(122, 132, 120, 0.5);
 
-  /* 填充色 - 绿色调半透明 */
-  --color-fill-1: rgba(125, 206, 160, 0.04);
-  --color-fill-2: rgba(125, 206, 160, 0.08);
-  --color-fill-3: rgba(125, 206, 160, 0.14);
-  --color-fill-4: rgba(125, 206, 160, 0.20);
+  /* 填充色 - Everforest 草绿半透明 */
+  --color-fill-1: rgba(167, 192, 128, 0.04);
+  --color-fill-2: rgba(167, 192, 128, 0.08);
+  --color-fill-3: rgba(167, 192, 128, 0.14);
+  --color-fill-4: rgba(167, 192, 128, 0.20);
 
   /* 边框色 */
-  --color-border: #3a5239;
-  --color-border-1: #2b3f2b;
-  --color-border-2: #3a5239;
-  --color-border-3: #4e6e4c;
-  --color-border-4: #5a8058;
+  --color-border: #475258;
+  --color-border-1: #3D484D;
+  --color-border-2: #475258;
+  --color-border-3: #4F585E;
+  --color-border-4: #5A6268;
 
-  /* Primary 系列 - 使用护眼强调色 */
-  --color-primary-light-1: rgba(125, 206, 160, 0.2);
-  --color-primary-light-2: rgba(125, 206, 160, 0.35);
-  --color-primary-light-3: rgba(125, 206, 160, 0.5);
-  --color-primary-light-4: rgba(125, 206, 160, 0.65);
+  /* Primary 系列 - Everforest 草绿强调色 */
+  --color-primary-light-1: rgba(167, 192, 128, 0.2);
+  --color-primary-light-2: rgba(167, 192, 128, 0.35);
+  --color-primary-light-3: rgba(167, 192, 128, 0.5);
+  --color-primary-light-4: rgba(167, 192, 128, 0.65);
 
-  /* Secondary - 绿色调 */
-  --color-secondary: rgba(212, 231, 208, 0.08);
-  --color-secondary-hover: rgba(212, 231, 208, 0.14);
-  --color-secondary-active: rgba(212, 231, 208, 0.22);
-  --color-secondary-disabled: rgba(212, 231, 208, 0.06);
+  /* Secondary - Everforest 暖米色调 */
+  --color-secondary: rgba(211, 198, 170, 0.08);
+  --color-secondary-hover: rgba(211, 198, 170, 0.14);
+  --color-secondary-active: rgba(211, 198, 170, 0.22);
+  --color-secondary-disabled: rgba(211, 198, 170, 0.06);
 
-  /* Danger - 柔和红色 */
-  --color-danger-light-1: rgba(224, 96, 96, 0.2);
-  --color-danger-light-2: rgba(224, 96, 96, 0.35);
-  --color-danger-light-3: rgba(224, 96, 96, 0.5);
-  --color-danger-light-4: rgba(224, 96, 96, 0.65);
+  /* Danger - Everforest 柔红 */
+  --color-danger-light-1: rgba(230, 126, 128, 0.2);
+  --color-danger-light-2: rgba(230, 126, 128, 0.35);
+  --color-danger-light-3: rgba(230, 126, 128, 0.5);
+  --color-danger-light-4: rgba(230, 126, 128, 0.65);
 
-  /* Success - 绿色 */
-  --color-success-light-1: rgba(107, 207, 127, 0.2);
-  --color-success-light-2: rgba(107, 207, 127, 0.35);
-  --color-success-light-3: rgba(107, 207, 127, 0.5);
-  --color-success-light-4: rgba(107, 207, 127, 0.65);
+  /* Success - Everforest 青绿 */
+  --color-success-light-1: rgba(131, 192, 146, 0.2);
+  --color-success-light-2: rgba(131, 192, 146, 0.35);
+  --color-success-light-3: rgba(131, 192, 146, 0.5);
+  --color-success-light-4: rgba(131, 192, 146, 0.65);
 
-  /* Warning - 柔和金色 */
-  --color-warning-light-1: rgba(212, 169, 78, 0.2);
-  --color-warning-light-2: rgba(212, 169, 78, 0.35);
-  --color-warning-light-3: rgba(212, 169, 78, 0.5);
-  --color-warning-light-4: rgba(212, 169, 78, 0.65);
+  /* Warning - Everforest 暖黄 */
+  --color-warning-light-1: rgba(219, 188, 127, 0.2);
+  --color-warning-light-2: rgba(219, 188, 127, 0.35);
+  --color-warning-light-3: rgba(219, 188, 127, 0.5);
+  --color-warning-light-4: rgba(219, 188, 127, 0.65);
 
   /* Link - 与 primary 一致 */
-  --color-link-light-1: rgba(125, 206, 160, 0.2);
-  --color-link-light-2: rgba(125, 206, 160, 0.35);
-  --color-link-light-3: rgba(125, 206, 160, 0.5);
-  --color-link-light-4: rgba(125, 206, 160, 0.65);
+  --color-link-light-1: rgba(167, 192, 128, 0.2);
+  --color-link-light-2: rgba(167, 192, 128, 0.35);
+  --color-link-light-3: rgba(167, 192, 128, 0.5);
+  --color-link-light-4: rgba(167, 192, 128, 0.65);
 
   /* Tooltip/Spin/Menu/Mask */
-  --color-tooltip-bg: #3a5239;
-  --color-spin-layer-bg: rgba(30, 42, 30, 0.6);
-  --color-menu-dark-bg: #1a261a;
-  --color-menu-light-bg: #1a261a;
+  --color-tooltip-bg: #4F585E;
+  --color-spin-layer-bg: rgba(45, 53, 59, 0.6);
+  --color-menu-dark-bg: #2D353B;
+  --color-menu-light-bg: #2D353B;
   --color-menu-dark-hover: var(--color-fill-2);
-  --color-mask-bg: rgba(20, 30, 20, 0.65);
+  --color-mask-bg: rgba(35, 42, 46, 0.65);
 
   /* Neutral 色（灰色系组件用）- 绿色调 */
   --color-neutral-1: rgb(var(--gray-1));
@@ -571,44 +579,44 @@ a:hover { text-decoration: underline; }
   --wf-flow-particle-glow: rgba(37,99,235,0.4);
 }
 
-/* 护眼主题工作流变量 */
+/* 护眼主题工作流变量（Everforest 风格）*/
 [data-theme="green"] {
-  --wf-canvas-bg:        #161f16;
-  --wf-grid-dot:         #49664b;
+  --wf-canvas-bg:        #232A2E;
+  --wf-grid-dot:         #5A6268;
   /* 水印大 Logo */
   --wf-canvas-watermark: rgba(255, 255, 255, 0.06);
   --wf-canvas-watermark-edge: rgba(0, 0, 0, 0.14);
   --wf-canvas-watermark-shadow: rgba(0, 0, 0, 0.26);
   --wf-canvas-watermark-highlight: rgba(255, 255, 255, 0.14);
 
-  --wf-node-bg:          #1e2a1e;
-  --wf-node-bg-hover:    #243024;
-  --wf-node-border:      #3a5239;
-  --wf-node-border-hover:#4e6e4c;
+  --wf-node-bg:          #2D353B;
+  --wf-node-bg-hover:    #343F44;
+  --wf-node-border:      #475258;
+  --wf-node-border-hover:#5A6268;
   --wf-node-shadow:      0 2px 12px rgba(0,0,0,0.35);
   --wf-node-shadow-hover:0 4px 20px rgba(0,0,0,0.5);
-  --wf-node-title:       #d4e7d0;
-  --wf-node-subtitle:    #7a9e75;
-  --wf-node-header-border: #3a5239;
+  --wf-node-title:       #D3C6AA;
+  --wf-node-subtitle:    #859289;
+  --wf-node-header-border: #475258;
 
-  --wf-port-in:          #7dcea0;
-  --wf-port-out:         #d4a94e;
-  --wf-port-label:       #7a9e75;
-  --wf-port-type:        #5a7a56;
+  --wf-port-in:          #A7C080;
+  --wf-port-out:         #DBBC7F;
+  --wf-port-label:       #859289;
+  --wf-port-type:        #7A8478;
 
-  --wf-status-running:   #7dcea0;
-  --wf-status-success:   #6bcf7f;
-  --wf-status-failed:    #e06060;
-  --wf-status-idle:      #3a5239;
+  --wf-status-running:   #A7C080;
+  --wf-status-success:   #83C092;
+  --wf-status-failed:    #E67E80;
+  --wf-status-idle:      #475258;
 
-  --wf-glow-running:     0 0 0 2px #7dcea0, 0 0 20px rgba(125,206,160,0.35);
-  --wf-glow-success:     0 0 0 2px #6bcf7f, 0 0 16px rgba(107,207,127,0.3);
-  --wf-glow-failed:      0 0 0 2px #e06060, 0 0 16px rgba(224,96,96,0.3);
+  --wf-glow-running:     0 0 0 2px #A7C080, 0 0 20px rgba(167,192,128,0.35);
+  --wf-glow-success:     0 0 0 2px #83C092, 0 0 16px rgba(131,192,146,0.3);
+  --wf-glow-failed:      0 0 0 2px #E67E80, 0 0 16px rgba(230,126,128,0.3);
 
-  --wf-edge-color:       #7dcea0;
-  --wf-edge-color-hover: #9eddb9;
+  --wf-edge-color:       #A7C080;
+  --wf-edge-color-hover: #B8C2AA;
   --wf-edge-width:       2;
 
-  --wf-flow-particle:    #a3ffcc;
-  --wf-flow-particle-glow: rgba(163,255,204,0.5);
+  --wf-flow-particle:    #D3C6AA;
+  --wf-flow-particle-glow: rgba(211,198,170,0.5);
 }
