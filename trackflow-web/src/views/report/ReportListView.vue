@@ -214,6 +214,7 @@
               <a-option value="by_status">按状态分布</a-option>
               <a-option value="by_assignee">按负责人分布</a-option>
               <a-option value="by_priority">按优先级分布</a-option>
+              <a-option value="by_two_fields">双字段交叉分析</a-option>
             </a-option-group>
             <a-option-group label="时间线趋势">
               <a-option value="burndown_chart">燃尽图</a-option>
@@ -252,7 +253,7 @@
           </a-select>
           <span v-if="isGroupByLocked" class="form-hint">已根据报表类型自动设置</span>
         </a-form-item>
-        <a-form-item label="第二分组维度（交叉分析）">
+        <a-form-item label="第二分组维度（交叉分析）" :required="form.type === 'by_two_fields'">
           <a-select v-model="form.secondGroupBy" placeholder="不使用（单维度）" allow-clear>
             <a-option
               v-for="dim in availableSecondDimensions"
@@ -260,7 +261,7 @@
               :value="dim.value"
             >{{ dim.label }}</a-option>
           </a-select>
-          <span class="form-hint">选择后将生成双维度交叉矩阵（如"状态 × 负责人"）</span>
+          <span class="form-hint">{{ form.type === 'by_two_fields' ? '双字段交叉分析必须选择第二分组维度' : '选择后将生成双维度交叉矩阵（如"状态 × 负责人"）' }}</span>
         </a-form-item>
         <a-form-item label="Issue 筛选">
           <a-textarea
@@ -359,6 +360,7 @@ const typeCategories: Record<string, string> = {
   by_assignee: 'issue_distribution',
   by_priority: 'issue_distribution',
   by_type: 'issue_distribution',
+  by_two_fields: 'issue_distribution',
   burndown: 'timeline',
   burndown_chart: 'timeline',
   cumulative_flow: 'timeline',
@@ -544,6 +546,11 @@ watch(() => form.type, (newType) => {
     form.groupBy = typeToGroupByMap[newType]
   } else if (newType === 'time_report') {
     form.groupBy = 'assignee'
+  } else if (newType === 'by_two_fields') {
+    form.groupBy = 'assignee'
+    if (!form.secondGroupBy) {
+      form.secondGroupBy = 'status'
+    }
   }
 })
 
@@ -717,6 +724,10 @@ async function handleSubmit() {
   }
   if (!form.type) {
     Message.warning('请选择报表类型')
+    return
+  }
+  if (form.type === 'by_two_fields' && !form.secondGroupBy) {
+    Message.warning('双字段交叉分析需要选择第二分组维度')
     return
   }
 
@@ -921,6 +932,7 @@ function reportTypeLabel(type: string) {
     by_assignee: '负责人分布',
     by_priority: '优先级分布',
     by_type: '类型分布',
+    by_two_fields: '交叉分析',
     burndown: '燃尽图',
     burndown_chart: '燃尽图',
     cumulative_flow: '累积流图',

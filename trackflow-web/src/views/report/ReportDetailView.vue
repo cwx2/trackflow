@@ -174,6 +174,7 @@
               <a-option value="by_status">按状态分布</a-option>
               <a-option value="by_assignee">按负责人分布</a-option>
               <a-option value="by_priority">按优先级分布</a-option>
+              <a-option value="by_two_fields">双字段交叉分析</a-option>
             </a-option-group>
             <a-option-group label="时间线趋势">
               <a-option value="burndown_chart">燃尽图</a-option>
@@ -488,6 +489,7 @@ function reportTypeLabel(type: string) {
     by_assignee: '负责人分布',
     by_priority: '优先级分布',
     by_type: '类型分布',
+    by_two_fields: '交叉分析',
     burndown: '燃尽图',
     burndown_chart: '燃尽图',
     cumulative_flow: '累积流图',

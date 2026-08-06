@@ -71,6 +71,11 @@ const chartOption = computed(() => {
 })
 
 function buildChartOption(data: ReportDataVO): Record<string, any> {
+  // 双维度交叉分析：使用堆叠条形图
+  if (data.secondGroupBy && data.matrix && data.secondLabels) {
+    return buildStackedBarOption(data)
+  }
+
   const chartType = data.chartType || inferChartType(data.groupBy, data.type)
 
   if (chartType === 'pie') return buildPieOption(data)
@@ -185,6 +190,53 @@ function buildBarVerticalOption(data: ReportDataVO): Record<string, any> {
       barMaxWidth: 24,
       itemStyle: { borderRadius: [3, 3, 0, 0] }
     }]
+  }
+}
+
+function buildStackedBarOption(data: ReportDataVO): Record<string, any> {
+  const primaryLabels = data.labels
+  const secondaryLabels = data.secondLabels || []
+  const matrix = data.matrix || []
+
+  const series = secondaryLabels.map((secLabel, colIdx) => ({
+    name: secLabel,
+    type: 'bar',
+    stack: 'total',
+    barMaxWidth: 24,
+    itemStyle: { color: palette[colIdx % palette.length] },
+    data: primaryLabels.map((_, rowIdx) => matrix[rowIdx]?.[colIdx] || 0)
+  }))
+
+  return {
+    backgroundColor: 'transparent',
+    tooltip: {
+      trigger: 'axis',
+      textStyle: { fontSize: 11 },
+      axisPointer: { type: 'shadow' }
+    },
+    legend: {
+      bottom: 0,
+      textStyle: { color: 'var(--tf-text-secondary, #9ca3af)', fontSize: 10 },
+      itemWidth: 8,
+      itemHeight: 8,
+      itemGap: 8
+    },
+    grid: { left: 32, right: 8, top: 8, bottom: 28 },
+    xAxis: {
+      type: 'category',
+      data: primaryLabels,
+      axisLine: { show: false },
+      axisTick: { show: false },
+      axisLabel: { fontSize: 10, rotate: primaryLabels.length > 5 ? 30 : 0 }
+    },
+    yAxis: {
+      type: 'value',
+      minInterval: 1,
+      axisLine: { show: false },
+      axisLabel: { fontSize: 10 },
+      splitLine: { lineStyle: { type: 'dashed', opacity: 0.3 } }
+    },
+    series
   }
 }
 

@@ -16,6 +16,7 @@ public enum ReportType {
     BY_ASSIGNEE("by_assignee", "按负责人分布", "assignee", "distribution"),
     BY_PRIORITY("by_priority", "按优先级分布", "priority", "distribution"),
     BY_TYPE("by_type", "按工单类型分布", "type", "distribution"),
+    BY_TWO_FIELDS("by_two_fields", "双字段交叉分析", null, "distribution"),
     CUSTOM("custom", "自定义报表", null, "distribution"),
 
     // ─── Timeline 类（时间线趋势） ──────────────────
