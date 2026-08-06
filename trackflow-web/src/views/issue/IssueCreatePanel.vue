@@ -239,7 +239,7 @@
             <span class="prop-label">状态</span>
             <a-select v-model="form.statusId" size="small" allow-clear placeholder="默认初始状态">
               <a-option v-for="s in statuses" :key="s.id" :value="s.id">
-                <span class="status-dot" :style="{ backgroundColor: s.color || '#6b7280' }"></span>{{ s.name }}
+                <span class="status-dot" :style="{ backgroundColor: s.color || '#6b7280' }"></span>{{ s.displayName || localizeStatusName(s.name) }}
               </a-option>
             </a-select>
           </div>
