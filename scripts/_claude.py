@@ -519,11 +519,8 @@ def run_claude(prompt: str, label: str,
     budget = FIX_MAX_BUDGET_USD if is_fix else DEFAULT_MAX_BUDGET_USD
     cmd = _build_base_cmd(budget)
 
-    # 自动注入 SKILL 内容（替代 Kiro CLI 的 skill 加载机制）
+    # 只注入 SKILL，不注入 steering（CLAUDE.md 已提供项目上下文）
     prompt = _inject_skills(prompt)
-
-    # 注入项目上下文和运行约束
-    prompt = _inject_steering() + "\n\n" + prompt
 
     effective_model = model or KIRO_MODEL
     if effective_model and effective_model != "auto":
