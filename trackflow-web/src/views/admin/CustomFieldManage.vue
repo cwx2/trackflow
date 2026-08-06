@@ -1449,6 +1449,9 @@ onMounted(() => {
   min-height: 0;
   display: flex;
   flex-direction: column;
+  /* Override Arco Tabs' overflow:hidden which breaks position:sticky context.
+     overflow:clip provides clipping without creating a scroll container. */
+  overflow: clip;
 }
 
 .cf-tabs :deep(.arco-tabs-nav) {
@@ -1458,18 +1461,22 @@ onMounted(() => {
 .cf-tabs :deep(.arco-tabs-content) {
   flex: 1;
   min-height: 0;
-  overflow: hidden;
+  overflow: clip;
 }
 
 .cf-tabs :deep(.arco-tabs-content-list) {
   height: 100%;
 }
 
+.cf-tabs :deep(.arco-tabs-content .arco-tabs-content-item) {
+  overflow: visible;
+}
+
 .cf-tabs :deep(.arco-tabs-pane) {
   height: 100%;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .cf-body {
@@ -1509,7 +1516,21 @@ onMounted(() => {
 .cf-table-scroll {
   flex: 1;
   min-height: 0;
-  overflow-y: auto;
+  overflow: auto;
+}
+
+/* Override Arco's internal scrollbar/content containers that create intermediate
+   scroll contexts and break position:sticky on table headers. */
+.cf-table-scroll :deep(.arco-scrollbar) {
+  overflow: visible;
+}
+
+.cf-table-scroll :deep(.arco-scrollbar-container) {
+  overflow: visible !important;
+}
+
+.cf-table-scroll :deep(.arco-table-content-scroll-x) {
+  overflow: visible !important;
 }
 
 .cf-table-scroll :deep(.arco-table-th) {
