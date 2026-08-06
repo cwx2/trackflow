@@ -6,6 +6,7 @@
     </div>
     <a-switch :model-value="modelValue" size="small" @change="handleChange" />
   </div>
+</template>
 
 <script setup lang="ts">
 defineProps<{
