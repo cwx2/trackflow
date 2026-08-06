@@ -62,7 +62,7 @@ public class IssueNotificationEventListener {
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void handleMentioned(IssueNotificationEvent.Mentioned event) {
         if (NotificationContext.isSilent()) return;
-        notificationHelper.notifyMentioned(event.issue(), event.commentContent(), event.commenterId());
+        notificationHelper.notifyMentioned(event.issue(), event.commentContent(), event.commenterId(), event.commentId());
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)

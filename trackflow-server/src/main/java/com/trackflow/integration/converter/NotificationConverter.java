@@ -13,6 +13,7 @@ public interface NotificationConverter extends BaseConverter {
     @Mapping(target = "actorId", expression = "java(longToString(entity.getActorId()))")
     @Mapping(target = "projectId", expression = "java(longToString(entity.getProjectId()))")
     @Mapping(target = "resourceId", expression = "java(longToString(entity.getResourceId()))")
+    @Mapping(target = "sourceId", expression = "java(longToString(entity.getSourceId()))")
     @Mapping(target = "actorName", ignore = true)
     @Mapping(target = "actorAvatar", ignore = true)
     @Mapping(target = "reasonLabel", ignore = true)

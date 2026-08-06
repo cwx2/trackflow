@@ -23,6 +23,12 @@ public class Notification implements Serializable {
     private String resourceType;
     private Long resourceId;
     private String resourceUrl;
+    /**
+     * 来源子资源 ID，用于精准定位。
+     * 例如：type=mention 时为触发 @提及 的评论 ID；type=comment_added 时为新评论 ID。
+     * 前端用此字段构造 hash 锚点（#c_{sourceId}），跳转后滚动并高亮目标评论。
+     */
+    private Long sourceId;
     private String reason;
     private Boolean isRead;
     private LocalDateTime createdAt;

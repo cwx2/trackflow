@@ -59,8 +59,10 @@ export interface NotificationVO {
   reasonLabel?: string
   resourceType?: string
   resourceId?: string
-  /** 资源直链路径（前端路由相对路径），如 /issues/DE4-123 */
+  /** 资源直链路径（前端路由相对路径），如 /issues/DE4-123#c_456 */
   resourceUrl?: string
+  /** 来源子资源 ID（如评论 ID），前端用于 hash 精准定位 */
+  sourceId?: string
   isRead: boolean
   createdAt: string
   updatedAt?: string

@@ -293,7 +293,7 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
      * 性能优化：使用批量偏好查询 + notifyBatch，将 N 次 DB 操作降至常数级。
      */
     @Async("notificationExecutor")
-    public void notifyMentioned(Issue issue, String commentContent, Long commenterId) {
+    public void notifyMentioned(Issue issue, String commentContent, Long commenterId, Long commentId) {
         try {
             Set<String> mentionedUsernames = extractMentions(commentContent);
             if (mentionedUsernames.isEmpty()) {
@@ -335,10 +335,10 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
             String content = String.format("%s 在工单 [%s] %s 的评论中提到了你",
                     commenterName, issue.getIssueKey(), issue.getTitle());
 
-            // 所有 @mention 通知 reason 相同，直接批量调用
+            // 所有 @mention 通知 reason 相同，直接批量调用；传入 commentId 作为 sourceId 用于精准定位
             notificationService.notifyBatch(enabledUserIds, commenterId, title, content,
                     NotificationType.mention, NotificationReason.mentioned,
-                    "issue", issue.getId(), issue.getProjectId());
+                    "issue", issue.getId(), issue.getProjectId(), commentId);
 
             log.debug("[IssueNotification] 已发送@提及通知: issue={}, mentionedUsers={}",
                     issue.getIssueKey(), enabledUserIds.size());

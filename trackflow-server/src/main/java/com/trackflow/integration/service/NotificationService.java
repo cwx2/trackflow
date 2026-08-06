@@ -72,10 +72,11 @@ public class NotificationService {
      * @param resourceType 关联资源类型
      * @param resourceId   关联资源ID
      * @param projectId    关联项目ID（可为 null，如全局/系统通知）
+     * @param sourceId     来源子资源 ID（如 @mention 的评论 ID），可为 null；用于前端 hash 精准定位
      */
     @Transactional(rollbackFor = Exception.class)
         public void notify(Long userId, Long actorId, String title, String content, NotificationType type,
-                           NotificationReason reason, String resourceType, Long resourceId, Long projectId) {
+                           NotificationReason reason, String resourceType, Long resourceId, Long projectId, Long sourceId) {
         // 防御性校验：actor_id 不应为 null（除系统自动通知外）
         if (actorId == null && type != NotificationType.issue_auto_assigned
                 && type != NotificationType.due_date_alert && type != NotificationType.overdue_alert) {
@@ -117,6 +118,10 @@ public class NotificationService {
             existing.setMailSent(false);
             existing.setMailSentAt(null);
             // 聚合时不覆盖 reason（保留第一次的 reason）
+            // 聚合时更新 sourceId 为最新的来源（最近的 @mention 评论）
+            if (sourceId != null) {
+                existing.setSourceId(sourceId);
+            }
             notificationMapper.updateById(existing);
             log.debug("[Notification] 聚合通知: id={}, userId={}, type={}, resourceId={}, count={}",
                     existing.getId(), userId, typeValue, resourceId, existing.getAggregationCount());
@@ -132,7 +137,8 @@ public class NotificationService {
             n.setReason(reason != null ? reason.name() : null);
             n.setResourceType(resourceType);
             n.setResourceId(resourceId);
-            n.setResourceUrl(urlBuilder.buildPath(resourceType, resourceId, projectId));
+            n.setSourceId(sourceId);
+            n.setResourceUrl(urlBuilder.buildPath(resourceType, resourceId, projectId, sourceId));
             n.setIsRead(false);
             n.setMailSent(false);
             n.setCreatedAt(LocalDateTime.now());
@@ -146,7 +152,7 @@ public class NotificationService {
         // - 其他类型：延迟发送，由 NotificationMailScheduler 定时任务在聚合窗口结束后处理
         //   如果用户在等待期间已读 IAN，则跳过邮件（避免"已知道了还收到邮件"的冗余打扰）
         if (isNew && type == NotificationType.mention) {
-            String fullUrl = urlBuilder.buildFullUrl(resourceType, resourceId, projectId);
+            String fullUrl = urlBuilder.buildFullUrl(resourceType, resourceId, projectId, sourceId);
             boolean sent = dispatchEmail(userId, title, content, fullUrl);
             if (sent) {
                 // 仅在邮件实际发送成功后才标记——失败的由 NotificationMailScheduler 60秒后重试
@@ -161,12 +167,21 @@ public class NotificationService {
     }
 
     /**
+     * 创建通知（含 reason）。
+     */
+    @Transactional(rollbackFor = Exception.class)
+        public void notify(Long userId, Long actorId, String title, String content, NotificationType type,
+                           NotificationReason reason, String resourceType, Long resourceId, Long projectId) {
+        notify(userId, actorId, title, content, type, reason, resourceType, resourceId, projectId, null);
+    }
+
+    /**
      * 创建通知（无 reason 的兼容重载，向后兼容旧调用方）。
      */
     @Transactional(rollbackFor = Exception.class)
         public void notify(Long userId, Long actorId, String title, String content, NotificationType type,
                            String resourceType, Long resourceId, Long projectId) {
-        notify(userId, actorId, title, content, type, null, resourceType, resourceId, projectId);
+        notify(userId, actorId, title, content, type, null, resourceType, resourceId, projectId, null);
     }
 
     /**
@@ -175,7 +190,7 @@ public class NotificationService {
     @Transactional(rollbackFor = Exception.class)
         public void notify(Long userId, Long actorId, String title, String content, NotificationType type,
                            String resourceType, Long resourceId) {
-        notify(userId, actorId, title, content, type, null, resourceType, resourceId, null);
+        notify(userId, actorId, title, content, type, null, resourceType, resourceId, null, null);
     }
 
     /**
@@ -207,12 +222,13 @@ public class NotificationService {
     }
 
     /**
-     * 批量创建通知（含 reason），含聚合去重逻辑。
+     * 批量创建通知（含 reason 和 sourceId），含聚合去重逻辑。
+     * sourceId 用于精准定位（如 @mention 的评论 ID）。
      */
     @Transactional(rollbackFor = Exception.class)
         public void notifyBatch(Collection<Long> userIds, Long actorId, String title, String content,
                                 NotificationType type, NotificationReason reason,
-                                String resourceType, Long resourceId, Long projectId) {
+                                String resourceType, Long resourceId, Long projectId, Long sourceId) {
         if (userIds == null || userIds.isEmpty()) {
             return;
         }
@@ -262,6 +278,10 @@ public class NotificationService {
                 // 聚合时重置 mailSent=false，让定时任务在聚合窗口结束后重新评估
                 existing.setMailSent(false);
                 existing.setMailSentAt(null);
+                // 聚合时更新 sourceId 为最新的来源
+                if (sourceId != null) {
+                    existing.setSourceId(sourceId);
+                }
                 toUpdate.add(existing);
             } else {
                 // 新建通知
@@ -275,7 +295,8 @@ public class NotificationService {
                 n.setReason(reason != null ? reason.name() : null);
                 n.setResourceType(resourceType);
                 n.setResourceId(resourceId);
-                n.setResourceUrl(urlBuilder.buildPath(resourceType, resourceId, projectId));
+                n.setSourceId(sourceId);
+                n.setResourceUrl(urlBuilder.buildPath(resourceType, resourceId, projectId, sourceId));
                 n.setIsRead(false);
                 n.setMailSent(false);
                 n.setCreatedAt(LocalDateTime.now());
@@ -301,7 +322,7 @@ public class NotificationService {
         // - mention 类型：立即批量发送邮件
         // - 其他类型：延迟发送，由 NotificationMailScheduler 处理
         if (!newNotificationUserIds.isEmpty() && type == NotificationType.mention) {
-            String fullUrl = urlBuilder.buildFullUrl(resourceType, resourceId, projectId);
+            String fullUrl = urlBuilder.buildFullUrl(resourceType, resourceId, projectId, sourceId);
             Set<Long> sentIds = dispatchEmailBatch(newNotificationUserIds, title, content, fullUrl);
             if (!sentIds.isEmpty()) {
                 // 仅标记实际发送成功的用户——失败的由 NotificationMailScheduler 60秒后重试
@@ -313,6 +334,16 @@ public class NotificationService {
         for (Long userId : filteredUserIds) {
             applicationEventPublisher.publishEvent(new NotificationPushEvent(userId, title, typeValue, resourceType, resourceId));
         }
+    }
+
+    /**
+     * 批量创建通知（含 reason），含聚合去重逻辑。向后兼容旧调用方。
+     */
+    @Transactional(rollbackFor = Exception.class)
+        public void notifyBatch(Collection<Long> userIds, Long actorId, String title, String content,
+                                NotificationType type, NotificationReason reason,
+                                String resourceType, Long resourceId, Long projectId) {
+        notifyBatch(userIds, actorId, title, content, type, reason, resourceType, resourceId, projectId, null);
     }
 
     /**

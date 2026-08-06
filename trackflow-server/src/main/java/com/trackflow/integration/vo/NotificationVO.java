@@ -18,6 +18,8 @@ public class NotificationVO {
     private String resourceType;
     private String resourceId;
     private String resourceUrl;
+    /** 来源子资源 ID（如评论 ID），前端用于构造 hash 锚点精准定位 */
+    private String sourceId;
     private Boolean isRead;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

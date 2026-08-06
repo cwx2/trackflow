@@ -2398,7 +2398,7 @@ public class IssueService {
         eventPublisher.publishEvent(new IssueNotificationEvent.Commented(issue, currentUserId));
 
         // 解析评论中的 @mention 并通知被提及的用户 — 事务提交后触发
-        eventPublisher.publishEvent(new IssueNotificationEvent.Mentioned(issue, content, currentUserId));
+        eventPublisher.publishEvent(new IssueNotificationEvent.Mentioned(issue, content, currentUserId, comment.getId()));
 
         // 触发 comment_added 工作流规则 — 事务提交后异步执行
         eventPublisher.publishEvent(new WorkflowRuleEvent.CommentAdded(

@@ -335,11 +335,54 @@ const {
 onMounted(() => {
   loadAll()
   document.addEventListener('paste', onPasteUpload)
+  // 通知点击跳转：解析 hash 锚点，滚动并闪动高亮目标评论/活动条目
+  scrollToHashAnchor()
 })
 
 onUnmounted(() => {
   document.removeEventListener('paste', onPasteUpload)
 })
+
+/**
+ * 解析 URL hash，等待对应 DOM 元素出现后滚动定位并闪动高亮两次。
+ * 格式：#c_{commentId}（评论）或 #a_{activityId}（活动记录）
+ */
+function scrollToHashAnchor() {
+  const hash = window.location.hash
+  if (!hash || hash.length <= 1) return
+  const targetId = hash.slice(1) // 去掉 '#'
+
+  // 最多等待 5 秒（数据加载 + DOM 渲染）
+  const maxWaitMs = 5000
+  const intervalMs = 200
+  let elapsed = 0
+
+  const tryScroll = () => {
+    const el = document.getElementById(targetId)
+    if (el) {
+      // 滚动到目标
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      // 闪动高亮两次
+      flashElement(el)
+      return
+    }
+    elapsed += intervalMs
+    if (elapsed < maxWaitMs) {
+      setTimeout(tryScroll, intervalMs)
+    }
+  }
+  setTimeout(tryScroll, intervalMs)
+}
+
+/**
+ * 给元素添加闪动高亮动画（高亮 → 正常 → 高亮 → 正常，共两次）
+ */
+function flashElement(el: HTMLElement) {
+  el.classList.add('stream-item--flash')
+  setTimeout(() => {
+    el.classList.remove('stream-item--flash')
+  }, 1600)
+}
 
 // ============ Computed (view-specific) ============
 const projectName = computed(() => issue.value?.projectName || '')
@@ -774,5 +817,21 @@ onBeforeRouteLeave((_to, _from, next) => {
   font-size: 13px;
   color: var(--color-text-3);
   margin-bottom: 16px;
+}
+</style>
+
+<!-- 全局样式：通知跳转高亮闪动（需穿透 ActivityStream 子组件，不能用 scoped） -->
+<style>
+@keyframes stream-item-flash {
+  0%   { background: transparent; }
+  15%  { background: var(--tf-accent-bg, rgba(9, 105, 218, 0.12)); }
+  35%  { background: transparent; }
+  55%  { background: var(--tf-accent-bg, rgba(9, 105, 218, 0.12)); }
+  80%  { background: transparent; }
+  100% { background: transparent; }
+}
+.stream-item--flash {
+  animation: stream-item-flash 1.6s ease-in-out forwards !important;
+  border-radius: 6px !important;
 }
 </style>

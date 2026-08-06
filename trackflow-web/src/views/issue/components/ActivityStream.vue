@@ -36,7 +36,7 @@
     </div>
 
     <div class="stream-list">
-      <div v-for="item in sorted" :key="item.id" class="stream-item" @mouseenter="hoveredId = item.id" @mouseleave="hoveredId = ''">
+      <div v-for="item in sorted" :key="item.id" :id="item.id" class="stream-item" @mouseenter="hoveredId = item.id" @mouseleave="hoveredId = ''">
         <UserHoverCard :user-id="item.userId">
           <div v-if="item.userAvatar" class="avatar">
             <img :src="item.userAvatar" :alt="item.user" class="avatar-img" />
@@ -551,7 +551,7 @@ onBeforeUnmount(() => { editEditor.value?.destroy() })
 .check-mark { width: 16px; font-size: 12px; color: var(--tf-accent); }
 .dropdown-divider { height: 1px; background: var(--tf-border-light); margin: 4px 0; }
 
-.stream-item { display: flex; gap: 8px; padding: 12px 0; }
+.stream-item { display: flex; gap: 8px; padding: 12px 0; transition: background 0.2s; }
 .stream-item + .stream-item { border-top: 1px solid var(--tf-border-light); }
 .avatar {
   width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;

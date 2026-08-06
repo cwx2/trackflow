@@ -43,7 +43,28 @@ public class NotificationUrlBuilder {
     private String serverUrl;
 
     /**
-     * 构建前端路由相对路径。
+     * 构建前端路由相对路径（含可选的 hash 锚点）。
+     *
+     * @param resourceType 资源类型（issue/project/sprint）
+     * @param resourceId   资源 ID
+     * @param projectId    关联项目 ID（sprint 类型需要）
+     * @param sourceId     来源子资源 ID（如评论 ID），非 null 时附加 hash 锚点 #c_{sourceId}
+     * @return 前端路由路径，如 "/issues/DE4-123#c_456789"；无法构建时返回 null
+     */
+    public String buildPath(String resourceType, Long resourceId, Long projectId, Long sourceId) {
+        String path = buildPath(resourceType, resourceId, projectId);
+        if (path == null) {
+            return null;
+        }
+        // 仅 issue 类型支持评论锚点
+        if (sourceId != null && "issue".equals(resourceType)) {
+            return path + "#c_" + sourceId;
+        }
+        return path;
+    }
+
+    /**
+     * 构建前端路由相对路径（无 sourceId 的兼容版本）。
      *
      * @param resourceType 资源类型（issue/project/sprint）
      * @param resourceId   资源 ID
@@ -72,7 +93,21 @@ public class NotificationUrlBuilder {
     }
 
     /**
-     * 构建邮件中的完整 URL（baseUrl + 相对路径）。
+     * 构建邮件中的完整 URL（baseUrl + 相对路径 + 可选 hash 锚点）。
+     *
+     * @param resourceType 资源类型
+     * @param resourceId   资源 ID
+     * @param projectId    关联项目 ID
+     * @param sourceId     来源子资源 ID（如评论 ID），非 null 时附加 hash
+     * @return 完整 URL；无法构建时返回 null
+     */
+    public String buildFullUrl(String resourceType, Long resourceId, Long projectId, Long sourceId) {
+        String path = buildPath(resourceType, resourceId, projectId, sourceId);
+        return buildFullUrl(path);
+    }
+
+    /**
+     * 构建邮件中的完整 URL（baseUrl + 相对路径），无 hash 版。
      *
      * @param resourceType 资源类型
      * @param resourceId   资源 ID

@@ -33,7 +33,7 @@ public sealed interface IssueNotificationEvent extends NotificationEvent {
     /**
      * 工单 @mention 通知事件
      */
-    record Mentioned(Issue issue, String commentContent, Long commenterId) implements IssueNotificationEvent {}
+    record Mentioned(Issue issue, String commentContent, Long commenterId, Long commentId) implements IssueNotificationEvent {}
 
     /**
      * 工单取消/废弃通知事件（状态转换到 cancelled 类别时触发）
