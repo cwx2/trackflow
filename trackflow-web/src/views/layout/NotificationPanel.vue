@@ -596,8 +596,9 @@ function handleDeleteAllRead() {
 }
 
 .tab-item:not(.active) .tab-badge {
-  background: var(--tf-text-quaternary, var(--tf-text-tertiary));
-  opacity: 0.7;
+  background: var(--tf-bg-active, #3a3d42);
+  color: var(--tf-text-secondary);
+  opacity: 1;
 }
 
 /* Panel Body */

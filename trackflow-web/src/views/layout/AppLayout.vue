@@ -305,6 +305,11 @@ const sidebarCollapsed = ref(localStorage.getItem(SIDEBAR_KEY) === 'true')
 function toggleSidebar() {
   sidebarCollapsed.value = !sidebarCollapsed.value
   localStorage.setItem(SIDEBAR_KEY, String(sidebarCollapsed.value))
+  // 同步更新 CSS 变量，确保通知面板等依赖此变量的组件跟随移动
+  document.documentElement.style.setProperty(
+    '--tf-sidebar-width',
+    sidebarCollapsed.value ? '56px' : '200px'
+  )
 }
 
 // TabBar 仅在 Issue 相关路由显示（Issue 列表、Issue 详情）
@@ -453,6 +458,11 @@ function handleClickOutside(e: MouseEvent) {
 
 onMounted(() => {
   document.addEventListener('click', handleClickOutside)
+  // 初始化 CSS 变量，确保页面刷新时折叠态也能正确反映到面板定位
+  document.documentElement.style.setProperty(
+    '--tf-sidebar-width',
+    sidebarCollapsed.value ? '56px' : '200px'
+  )
   initNavBadge()
   initNotification()
   timerStore.init()
