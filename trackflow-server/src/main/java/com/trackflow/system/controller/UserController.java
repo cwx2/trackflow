@@ -18,6 +18,7 @@ import com.trackflow.system.service.UserService;
 import com.trackflow.system.vo.UserDataExportVO;
 import com.trackflow.system.vo.UserDetailVO;
 import com.trackflow.system.vo.UserProfileVO;
+import com.trackflow.system.vo.UserPublicProfileVO;
 import com.trackflow.system.vo.UserSummaryVO;
 import com.trackflow.system.vo.UserVO;
 import jakarta.validation.Valid;
@@ -170,5 +171,24 @@ public class UserController {
     public R<UserSummaryVO> getSummary(@PathVariable("id") Long id) {
         SysUser user = userService.getById(id);
         return R.ok(userConverter.toSummaryVO(user));
+    }
+
+    /**
+     * 获取用户公开资料（权限分级）
+     *
+     * 权限逻辑：
+     * - 系统管理员 → 完整信息
+     * - 有共同项目 → 基础公开信息
+     * - 无共同项目 → 403
+     *
+     * @param id 目标用户ID
+     * @return 公开资料（字段根据权限过滤）
+     */
+    @GetMapping("/{id}/public-profile")
+    @PreAuthorize("isAuthenticated()")
+    public R<UserPublicProfileVO> getPublicProfile(@PathVariable("id") Long id) {
+        Long requesterId = com.trackflow.common.util.SecurityUtils.getCurrentUserId();
+        UserPublicProfileVO profile = userService.getUserPublicProfile(id, requesterId);
+        return R.ok(profile);
     }
 }

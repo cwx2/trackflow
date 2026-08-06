@@ -295,6 +295,12 @@ const routes = [
         meta: { title: '通知' }
       },
       {
+        path: 'users/:userId',
+        name: 'UserPublicProfile',
+        component: () => import('@/views/users/UserProfileView.vue'),
+        meta: { title: '用户资料' }
+      },
+      {
         path: 'profile',
         redirect: '/settings/profile'
       },

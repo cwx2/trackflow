@@ -35,6 +35,7 @@ import com.trackflow.system.mapper.UserGroupRoleMapper;
 import com.trackflow.system.mapper.UserRoleMapper;
 import com.trackflow.system.vo.UserDataExportVO;
 import com.trackflow.system.vo.UserProfileVO;
+import com.trackflow.system.vo.UserPublicProfileVO;
 import com.trackflow.system.vo.UserVO;
 import com.trackflow.issue.entity.IssueAttachment;
 import com.trackflow.issue.entity.IssueComment;
@@ -647,6 +648,168 @@ public class UserService {
         profile.setRecentActivities(buildRecentActivities(userId));
 
         return profile;
+    }
+
+    /**
+     * 获取用户公开资料（权限分级）
+     *
+     * 权限逻辑：
+     * 1. 目标用户不存在 → 抛 RESOURCE_NOT_FOUND
+     * 2. 请求者为 system_admin → 返回完整信息（adminView=true）
+     * 3. 请求者与目标用户有共同项目 → 返回基础公开信息
+     * 4. 无共同项目 → 抛 PERMISSION_DENIED（403）
+     *
+     * @param targetUserId 目标用户 ID
+     * @param requesterId  请求者用户 ID
+     * @return 公开资料 VO
+     */
+    public UserPublicProfileVO getUserPublicProfile(Long targetUserId, Long requesterId) {
+        SysUser targetUser = userMapper.selectById(targetUserId);
+        if (targetUser == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "用户不存在: " + targetUserId);
+        }
+
+        boolean isAdmin = permissionService.isSystemAdmin(requesterId);
+
+        if (!isAdmin) {
+            // 检查是否有共同项目
+            List<Long> requesterProjectIds = projectMemberMapper.selectProjectIdsByUserId(requesterId);
+            List<Long> targetProjectIds = projectMemberMapper.selectProjectIdsByUserId(targetUserId);
+            // 取交集
+            List<Long> commonProjectIds = requesterProjectIds.stream()
+                    .filter(targetProjectIds::contains)
+                    .toList();
+            if (commonProjectIds.isEmpty()) {
+                throw new BusinessException(ErrorCode.ACCESS_DENIED, "您没有权限查看该用户的资料");
+            }
+            // 普通成员视角：返回基础信息 + 共同项目
+            return buildPublicProfileForMember(targetUser, commonProjectIds);
+        }
+
+        // 管理员视角：返回完整信息
+        return buildPublicProfileForAdmin(targetUser);
+    }
+
+    private UserPublicProfileVO buildPublicProfileForMember(SysUser targetUser, List<Long> commonProjectIds) {
+        UserPublicProfileVO vo = new UserPublicProfileVO();
+        vo.setId(String.valueOf(targetUser.getId()));
+        vo.setUsername(targetUser.getUsername());
+        vo.setDisplayName(targetUser.getDisplayName());
+        vo.setAvatarUrl(targetUser.getAvatarUrl());
+        vo.setAdminView(false);
+
+        // 共同项目列表（带目标用户在该项目的角色）
+        List<UserPublicProfileVO.CommonProjectInfo> commonProjects = new ArrayList<>();
+        if (!commonProjectIds.isEmpty()) {
+            List<Project> projects = projectMapper.selectBatchIds(commonProjectIds);
+            Map<Long, Project> projectMap = projects.stream()
+                    .collect(Collectors.toMap(Project::getId, p -> p));
+
+            List<ProjectMember> targetMemberships = projectMemberMapper.selectList(
+                    new LambdaQueryWrapper<ProjectMember>()
+                            .eq(ProjectMember::getUserId, targetUser.getId())
+                            .in(ProjectMember::getProjectId, commonProjectIds)
+            );
+
+            // 批量查角色
+            List<Long> roleIds = targetMemberships.stream()
+                    .map(ProjectMember::getRoleId).distinct().toList();
+            Map<Long, SysRole> roleMap = roleIds.isEmpty() ? Map.of() :
+                    roleMapper.selectBatchIds(roleIds).stream()
+                            .collect(Collectors.toMap(SysRole::getId, r -> r));
+
+            for (ProjectMember membership : targetMemberships) {
+                Project project = projectMap.get(membership.getProjectId());
+                SysRole role = roleMap.get(membership.getRoleId());
+                if (project == null) continue;
+
+                UserPublicProfileVO.CommonProjectInfo info = new UserPublicProfileVO.CommonProjectInfo();
+                info.setProjectId(String.valueOf(project.getId()));
+                info.setProjectName(project.getName());
+                info.setProjectKey(project.getKey());
+                info.setRoleName(role != null ? role.getName() : null);
+                info.setRoleCode(role != null ? role.getCode() : null);
+                commonProjects.add(info);
+            }
+        }
+        vo.setCommonProjects(commonProjects);
+        return vo;
+    }
+
+    private UserPublicProfileVO buildPublicProfileForAdmin(SysUser targetUser) {
+        UserPublicProfileVO vo = new UserPublicProfileVO();
+        vo.setId(String.valueOf(targetUser.getId()));
+        vo.setUsername(targetUser.getUsername());
+        vo.setDisplayName(targetUser.getDisplayName());
+        vo.setAvatarUrl(targetUser.getAvatarUrl());
+        vo.setAdminView(true);
+
+        // 管理员额外字段
+        vo.setEmail(targetUser.getEmail());
+        vo.setCreatedAt(targetUser.getCreatedAt());
+        vo.setStatus(targetUser.getStatus());
+        vo.setBanStatus(targetUser.getBanStatus());
+
+        // 全局角色
+        List<UserPublicProfileVO.RoleInfo> globalRoles = new ArrayList<>();
+        List<Long> directRoleIds = getUserGlobalRoleIds(targetUser.getId());
+        if (!directRoleIds.isEmpty()) {
+            List<SysRole> roles = roleMapper.selectBatchIds(directRoleIds);
+            for (SysRole role : roles) {
+                UserPublicProfileVO.RoleInfo info = new UserPublicProfileVO.RoleInfo();
+                info.setId(String.valueOf(role.getId()));
+                info.setName(role.getName());
+                info.setCode(role.getCode());
+                globalRoles.add(info);
+            }
+        }
+        vo.setGlobalRoles(globalRoles);
+
+        // 所有项目角色
+        List<UserPublicProfileVO.AllProjectRoleInfo> allProjectRoles = new ArrayList<>();
+        List<ProjectMember> memberships = projectMemberMapper.selectList(
+                new LambdaQueryWrapper<ProjectMember>().eq(ProjectMember::getUserId, targetUser.getId())
+        );
+        if (!memberships.isEmpty()) {
+            List<Long> projectIds = memberships.stream().map(ProjectMember::getProjectId).distinct().toList();
+            List<Project> projects = projectMapper.selectBatchIds(projectIds);
+            Map<Long, Project> projectMap = projects.stream()
+                    .collect(Collectors.toMap(Project::getId, p -> p));
+
+            List<Long> roleIds = memberships.stream().map(ProjectMember::getRoleId).distinct().toList();
+            Map<Long, SysRole> roleMap = roleIds.isEmpty() ? Map.of() :
+                    roleMapper.selectBatchIds(roleIds).stream()
+                            .collect(Collectors.toMap(SysRole::getId, r -> r));
+
+            for (ProjectMember membership : memberships) {
+                Project project = projectMap.get(membership.getProjectId());
+                SysRole role = roleMap.get(membership.getRoleId());
+                if (project == null) continue;
+
+                UserPublicProfileVO.AllProjectRoleInfo info = new UserPublicProfileVO.AllProjectRoleInfo();
+                info.setProjectId(String.valueOf(project.getId()));
+                info.setProjectName(project.getName());
+                info.setProjectKey(project.getKey());
+                info.setRoleName(role != null ? role.getName() : null);
+                info.setRoleCode(role != null ? role.getCode() : null);
+                allProjectRoles.add(info);
+            }
+        }
+        vo.setAllProjectRoles(allProjectRoles);
+
+        // 共同项目：管理员也看所有项目
+        List<UserPublicProfileVO.CommonProjectInfo> commonProjects = allProjectRoles.stream().map(apr -> {
+            UserPublicProfileVO.CommonProjectInfo cp = new UserPublicProfileVO.CommonProjectInfo();
+            cp.setProjectId(apr.getProjectId());
+            cp.setProjectName(apr.getProjectName());
+            cp.setProjectKey(apr.getProjectKey());
+            cp.setRoleName(apr.getRoleName());
+            cp.setRoleCode(apr.getRoleCode());
+            return cp;
+        }).toList();
+        vo.setCommonProjects(commonProjects);
+
+        return vo;
     }
 
     /**

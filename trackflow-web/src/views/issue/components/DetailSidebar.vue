@@ -201,14 +201,14 @@
 
         <!-- 只读字段（无 editType 或被权限限制） -->
         <a-tooltip v-else :content="field.tooltip || getReadonlyTooltip(field)" position="left" mini>
-          <div class="sb-value readonly-value" @click="onReadonlyFieldClick(field)">
+          <div class="sb-value readonly-value" :class="{ 'user-link': field.userId }" @click="field.userId ? navigateToUser(field.userId) : onReadonlyFieldClick(field)">
             <TimeProgressIndicator
               v-if="field.progress && field.progress.estimated > 0"
               :spent="field.progress.spent"
               :estimated="field.progress.estimated"
             />
             <span v-if="field.dot" class="val-dot" :style="{ background: field.dot }"></span>
-            <span class="val-text" :class="field.class">{{ field.value }}</span>
+            <span class="val-text" :class="[field.class, { 'val-text--linked': field.userId }]">{{ field.value }}</span>
             <!-- 设计上只读（累计/汇总）：显示计算器图标 —— 保留 SVG：Arco 无 icon-calculator 等效图标 -->
             <span v-if="field.readonlyReason === 'computed' || field.readonlyReason === 'derived'" class="readonly-info-icon" aria-hidden="true">
               <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor">
@@ -216,7 +216,7 @@
               </svg>
             </span>
             <!-- 权限不足：显示锁图标 -->
-            <span v-else class="readonly-lock-icon" aria-hidden="true">
+            <span v-else-if="!field.userId" class="readonly-lock-icon" aria-hidden="true">
               <icon-lock :size="12" />
             </span>
           </div>
@@ -238,6 +238,7 @@
 
 <script setup lang="ts">
 import { ref, computed, nextTick, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
 import TimeProgressIndicator from './TimeProgressIndicator.vue'
 
 export interface FieldOption {
@@ -288,6 +289,11 @@ export interface SidebarField {
    * 默认折叠，点击"显示更多字段"后展开。
    */
   isEmptyCustomField?: boolean
+  /**
+   * 关联的用户 ID（用于 reporter/assignee 字段）。
+   * 当有值时，字段值可点击跳转到该用户的公开资料页 /users/{userId}。
+   */
+  userId?: string
   /**
    * 只读字段的原因说明。
    * - 'computed': 由系统自动计算/累计的字段（如"已花时间"由工时记录累计）
@@ -481,6 +487,15 @@ function getReadonlyTooltip(field: SidebarField): string {
 function onReadonlyFieldClick(_field: SidebarField) {
   // 当前仅依靠 tooltip 提示，点击不做额外处理
   // 未来可扩展为显示详细权限说明弹窗
+}
+
+const sidebarRouter = useRouter()
+
+/**
+ * 跳转到用户公开资料页
+ */
+function navigateToUser(userId: string) {
+  sidebarRouter.push(`/users/${userId}`)
 }
 
 function getFilteredOptions(field: SidebarField) {
@@ -850,6 +865,24 @@ defineExpose({ highlightField })
 .sb-value.readonly-value:hover .readonly-lock-icon,
 .sb-value.readonly-value:hover .readonly-info-icon {
   opacity: 1;
+}
+
+/* 用户链接样式（可点击跳转到用户资料页） */
+.sb-value.user-link {
+  cursor: pointer;
+  opacity: 1;
+  color: var(--tf-text-secondary);
+}
+.sb-value.user-link:hover {
+  background: var(--tf-bg-hover);
+  border-radius: 3px;
+}
+.val-text--linked {
+  color: var(--tf-accent);
+  transition: color 150ms;
+}
+.sb-value.user-link:hover .val-text--linked {
+  text-decoration: underline;
 }
 
 /* ========== 值文本 ========== */

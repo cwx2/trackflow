@@ -33,6 +33,9 @@
             </div>
           </div>
           <div class="card-actions">
+            <button class="card-action-btn" @click.stop="viewUserProfile">
+              查看资料
+            </button>
             <button class="card-action-btn" @click.stop="viewUserIssues">
               查看该用户的工单
             </button>
@@ -100,6 +103,11 @@ async function fetchUser() {
 function viewUserIssues() {
   if (!props.userId) return
   router.push({ path: '/issues', query: { assignee: props.userId } })
+}
+
+function viewUserProfile() {
+  if (!props.userId) return
+  router.push({ path: `/users/${props.userId}` })
 }
 
 function initial(name?: string) {
@@ -192,6 +200,9 @@ function avatarBg(name?: string) {
   margin-top: 10px;
   padding-top: 10px;
   border-top: 1px solid var(--tf-border-light);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .card-action-btn {

@@ -38,6 +38,11 @@ export const userApi = {
     return request.get<any, R<UserProfileVO>>(`/users/${id}/profile`)
   },
 
+  /** 用户公开资料（权限分级，普通成员/管理员看到的内容不同） */
+  getPublicProfile(id: string) {
+    return request.get<any, R<UserPublicProfileVO>>(`/users/${id}/public-profile`)
+  },
+
   /** 禁用用户 */
   disable(id: string, data: { banStatus: string; banReason?: string }) {
     return request.put<any, R<void>>(`/users/${id}/disable`, data)
@@ -137,6 +142,47 @@ export interface UserProfileActivityInfo {
   createdAt: string
 }
 
+
+/** 用户公开资料 VO（权限分级） */
+export interface UserPublicProfileVO {
+  id: string
+  username: string
+  displayName: string
+  avatarUrl?: string
+  /** 与访问者共同参与的项目列表 */
+  commonProjects: UserPublicProfileCommonProject[]
+  /** 管理员额外字段（adminView=true 时有值） */
+  email?: string
+  createdAt?: string
+  status?: string
+  banStatus?: string
+  globalRoles?: UserPublicProfileRoleInfo[]
+  allProjectRoles?: UserPublicProfileAllProjectRole[]
+  /** 是否为管理员视角 */
+  adminView: boolean
+}
+
+export interface UserPublicProfileCommonProject {
+  projectId: string
+  projectName: string
+  projectKey: string
+  roleName?: string
+  roleCode?: string
+}
+
+export interface UserPublicProfileRoleInfo {
+  id: string
+  name: string
+  code: string
+}
+
+export interface UserPublicProfileAllProjectRole {
+  projectId: string
+  projectName: string
+  projectKey: string
+  roleName?: string
+  roleCode?: string
+}
 
 /** 用户数据导出 VO */
 export interface UserDataExportVO {
