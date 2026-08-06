@@ -28,4 +28,13 @@ public class SysUser extends BaseEntity {
     private LocalDateTime bannedAt;
     private Long bannedBy;
     private LocalDateTime lastLoginAt;
+
+    /** 用户本地时区 */
+    private String timezone;
+    /** 界面语言偏好 */
+    private String language;
+    /** 日期格式偏好 */
+    private String dateFormat;
+    /** 每周第一天 (MONDAY/SUNDAY) */
+    private String firstDayOfWeek;
 }

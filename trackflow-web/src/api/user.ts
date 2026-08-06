@@ -96,6 +96,10 @@ export interface UserProfileVO {
   bannedByName?: string
   lastLoginAt?: string
   createdAt: string
+  timezone?: string
+  language?: string
+  dateFormat?: string
+  firstDayOfWeek?: string
   globalRoles: UserProfileRoleInfo[]
   projectRoles: UserProfileProjectRoleInfo[]
   recentActivities: UserProfileActivityInfo[]

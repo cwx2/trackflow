@@ -27,6 +27,12 @@ public class UserProfileVO {
     private LocalDateTime lastLoginAt;
     private LocalDateTime createdAt;
 
+    // ===== 偏好设置 =====
+    private String timezone;
+    private String language;
+    private String dateFormat;
+    private String firstDayOfWeek;
+
     // ===== 全局角色 =====
     private List<RoleInfo> globalRoles;
 

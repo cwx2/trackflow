@@ -2,6 +2,15 @@ import request from './request'
 import type { R, UserInfoVO } from './types'
 import type { UserProfileVO } from './user'
 
+/** 更新个人资料请求体 */
+export interface UpdateMyProfileDTO {
+  displayName: string
+  timezone?: string
+  language?: string
+  dateFormat?: string
+  firstDayOfWeek?: string
+}
+
 /**
  * Auth 模块 API
  */
@@ -14,6 +23,11 @@ export const authApi = {
   /** 获取当前登录用户的个人资料（含注册日期等） */
   getMyProfile() {
     return request.get<any, R<UserProfileVO>>('/auth/me/profile')
+  },
+
+  /** 更新当前登录用户的个人资料 */
+  updateMyProfile(data: UpdateMyProfileDTO) {
+    return request.patch<any, R<UserProfileVO>>('/auth/me/profile', data)
   },
 
   /** 获取当前用户在指定项目中的权限列表 */

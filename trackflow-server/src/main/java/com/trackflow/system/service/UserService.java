@@ -19,6 +19,7 @@ import com.trackflow.project.mapper.ProjectMapper;
 import com.trackflow.project.mapper.ProjectMemberMapper;
 import com.trackflow.system.dto.CreateUserDTO;
 import com.trackflow.system.dto.DisableUserDTO;
+import com.trackflow.system.dto.UpdateMyProfileDTO;
 import com.trackflow.system.converter.UserConverter;
 import com.trackflow.system.entity.SysRole;
 import com.trackflow.system.entity.SysUser;
@@ -630,6 +631,12 @@ public class UserService {
         profile.setLastLoginAt(user.getLastLoginAt());
         profile.setCreatedAt(user.getCreatedAt());
 
+        // 偏好设置
+        profile.setTimezone(user.getTimezone());
+        profile.setLanguage(user.getLanguage());
+        profile.setDateFormat(user.getDateFormat());
+        profile.setFirstDayOfWeek(user.getFirstDayOfWeek());
+
         // 全局角色
         profile.setGlobalRoles(buildGlobalRoles(userId));
 
@@ -640,6 +647,54 @@ public class UserService {
         profile.setRecentActivities(buildRecentActivities(userId));
 
         return profile;
+    }
+
+    /**
+     * 更新当前用户的个人资料（仅允许修改自己的信息）
+     *
+     * @param userId 当前登录用户 ID
+     * @param dto    待更新的字段
+     * @return 更新后的完整用户档案
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public UserProfileVO updateMyProfile(Long userId, UpdateMyProfileDTO dto) {
+        SysUser user = getById(userId);
+
+        // 白名单校验 firstDayOfWeek
+        if (dto.getFirstDayOfWeek() != null) {
+            if (!"MONDAY".equals(dto.getFirstDayOfWeek()) && !"SUNDAY".equals(dto.getFirstDayOfWeek())) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "每周第一天只能是 MONDAY 或 SUNDAY");
+            }
+        }
+
+        // 白名单校验 language
+        if (dto.getLanguage() != null) {
+            if (!"zh-CN".equals(dto.getLanguage()) && !"en-US".equals(dto.getLanguage())) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "语言只支持 zh-CN 或 en-US");
+            }
+        }
+
+        // 更新字段
+        user.setDisplayName(dto.getDisplayName());
+        if (dto.getTimezone() != null) {
+            user.setTimezone(dto.getTimezone());
+        }
+        if (dto.getLanguage() != null) {
+            user.setLanguage(dto.getLanguage());
+        }
+        if (dto.getDateFormat() != null) {
+            user.setDateFormat(dto.getDateFormat());
+        }
+        if (dto.getFirstDayOfWeek() != null) {
+            user.setFirstDayOfWeek(dto.getFirstDayOfWeek());
+        }
+
+        userMapper.updateById(user);
+
+        log.info("用户 {} 更新个人资料: displayName={}, timezone={}, language={}",
+                user.getUsername(), dto.getDisplayName(), dto.getTimezone(), dto.getLanguage());
+
+        return getUserProfile(userId);
     }
 
     private List<UserProfileVO.RoleInfo> buildGlobalRoles(Long userId) {

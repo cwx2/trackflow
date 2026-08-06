@@ -10,12 +10,14 @@ import com.trackflow.common.model.R;
 import com.trackflow.common.util.SecurityUtils;
 import com.trackflow.common.util.WebUtils;
 import com.trackflow.project.service.ProjectService;
+import com.trackflow.system.dto.UpdateMyProfileDTO;
 import com.trackflow.system.entity.SysUser;
 import com.trackflow.system.mapper.SysUserMapper;
 import com.trackflow.system.service.SystemAuditService;
 import com.trackflow.system.service.UserService;
 import com.trackflow.system.vo.UserProfileVO;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -99,6 +101,21 @@ public class AuthController {
             throw new BusinessException(ErrorCode.AUTH_MISSING);
         }
         UserProfileVO profile = userService.getUserProfile(userId);
+        return R.ok(profile);
+    }
+
+    /**
+     * 更新当前登录用户的个人资料
+     * 只能修改自己的信息，无需管理员权限。
+     */
+    @PatchMapping("/me/profile")
+    @PreAuthorize("isAuthenticated()")
+    public R<UserProfileVO> updateMyProfile(@Valid @RequestBody UpdateMyProfileDTO dto) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        if (userId == null) {
+            throw new BusinessException(ErrorCode.AUTH_MISSING);
+        }
+        UserProfileVO profile = userService.updateMyProfile(userId, dto);
         return R.ok(profile);
     }
 
