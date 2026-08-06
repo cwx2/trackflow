@@ -712,7 +712,8 @@ onUnmounted(() => document.removeEventListener('click', handleClickOutside))
   position: absolute;
   bottom: 56px;
   left: 8px;
-  right: 8px;
+  width: 220px;
+  min-width: 180px;
   background: var(--tf-bg-elevated);
   border: 1px solid var(--tf-border);
   border-radius: 8px;
