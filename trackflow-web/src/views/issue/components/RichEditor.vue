@@ -1,6 +1,23 @@
 <template>
   <div class="rich-editor" :class="{ focused }">
     <div class="editor-toolbar" v-if="editor">
+      <div class="paragraph-style-select" ref="paragraphDropdownRef">
+        <button class="paragraph-style-btn" @click="toggleParagraphDropdown">
+          <span class="paragraph-style-label">{{ currentParagraphLabel }}</span>
+          <span class="paragraph-style-arrow">▾</span>
+        </button>
+        <div class="paragraph-style-dropdown" v-show="paragraphDropdownOpen">
+          <button
+            v-for="opt in paragraphOptions"
+            :key="opt.value"
+            :class="['paragraph-option', { active: currentParagraph === opt.value }]"
+            @click="applyParagraphStyle(opt.value)"
+          >
+            <span :class="['paragraph-option-label', `paragraph-preview-${opt.value}`]">{{ opt.label }}</span>
+          </button>
+        </div>
+      </div>
+      <div class="tb-divider"></div>
       <button
         v-for="btn in toolbar"
         :key="btn.name"
@@ -31,7 +48,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onBeforeUnmount, watch, nextTick } from 'vue'
+import { ref, computed, onBeforeUnmount, onMounted, watch, nextTick } from 'vue'
 import { useEditor, EditorContent } from '@tiptap/vue-3'
 import StarterKit from '@tiptap/starter-kit'
 import Link from '@tiptap/extension-link'
@@ -61,6 +78,88 @@ const mdSource = ref(props.modelValue || '')
 /** 防止 watch(modelValue) 和 onUpdate 相互触发的标志 */
 const isUpdatingFromInside = ref(false)
 
+// --- 段落样式下拉 ---
+const paragraphDropdownOpen = ref(false)
+const paragraphDropdownRef = ref<HTMLElement | null>(null)
+
+interface ParagraphOption {
+  value: string
+  label: string
+}
+
+const paragraphOptions: ParagraphOption[] = [
+  { value: 'paragraph', label: '普通文本' },
+  { value: 'heading1', label: '标题 1' },
+  { value: 'heading2', label: '标题 2' },
+  { value: 'heading3', label: '标题 3' },
+  { value: 'blockquote', label: '引用' },
+  { value: 'codeBlock', label: '代码块' },
+]
+
+/** 当前光标所在的段落类型 */
+const currentParagraph = ref('paragraph')
+
+const currentParagraphLabel = computed(() => {
+  const found = paragraphOptions.find(o => o.value === currentParagraph.value)
+  return found?.label ?? '普通文本'
+})
+
+function updateCurrentParagraph() {
+  if (!editor.value) return
+  if (editor.value.isActive('heading', { level: 1 })) currentParagraph.value = 'heading1'
+  else if (editor.value.isActive('heading', { level: 2 })) currentParagraph.value = 'heading2'
+  else if (editor.value.isActive('heading', { level: 3 })) currentParagraph.value = 'heading3'
+  else if (editor.value.isActive('blockquote')) currentParagraph.value = 'blockquote'
+  else if (editor.value.isActive('codeBlock')) currentParagraph.value = 'codeBlock'
+  else currentParagraph.value = 'paragraph'
+}
+
+function toggleParagraphDropdown() {
+  paragraphDropdownOpen.value = !paragraphDropdownOpen.value
+}
+
+function applyParagraphStyle(value: string) {
+  if (!editor.value) return
+  const chain = editor.value.chain().focus()
+  switch (value) {
+    case 'paragraph':
+      chain.setParagraph().run()
+      break
+    case 'heading1':
+      chain.toggleHeading({ level: 1 }).run()
+      break
+    case 'heading2':
+      chain.toggleHeading({ level: 2 }).run()
+      break
+    case 'heading3':
+      chain.toggleHeading({ level: 3 }).run()
+      break
+    case 'blockquote':
+      chain.toggleBlockquote().run()
+      break
+    case 'codeBlock':
+      chain.toggleCodeBlock().run()
+      break
+  }
+  paragraphDropdownOpen.value = false
+  updateCurrentParagraph()
+}
+
+function handleClickOutside(e: MouseEvent) {
+  if (paragraphDropdownRef.value && !paragraphDropdownRef.value.contains(e.target as Node)) {
+    paragraphDropdownOpen.value = false
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('click', handleClickOutside)
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('click', handleClickOutside)
+  editor.value?.destroy()
+})
+
 const editor = useEditor({
   content: markdownToEditorHtml(props.modelValue || ''),
   extensions: [
@@ -73,6 +172,7 @@ const editor = useEditor({
   onFocus: () => { focused.value = true },
   onBlur: () => { focused.value = false },
   onUpdate: ({ editor: ed }) => {
+    updateCurrentParagraph()
     // 在 inline 模式下，每次编辑都实时同步到父组件
     if (props.mode === 'inline') {
       const content = htmlToMarkdown(ed.getHTML())
@@ -82,6 +182,9 @@ const editor = useEditor({
       nextTick(() => { isUpdatingFromInside.value = false })
     }
   },
+  onSelectionUpdate: () => {
+    updateCurrentParagraph()
+  },
 })
 
 const toolbar = ref([
@@ -89,7 +192,6 @@ const toolbar = ref([
   { name: 'italic', icon: 'I', title: '斜体', action: () => editor.value?.chain().focus().toggleItalic().run(), isActive: () => editor.value?.isActive('italic') },
   { name: 'strike', icon: 'S', title: '删除线', action: () => editor.value?.chain().focus().toggleStrike().run(), isActive: () => editor.value?.isActive('strike') },
   { name: 'code', icon: '<>', title: '行内代码', action: () => editor.value?.chain().focus().toggleCode().run(), isActive: () => editor.value?.isActive('code') },
-  { name: 'h2', icon: 'H', title: '标题', action: () => editor.value?.chain().focus().toggleHeading({ level: 2 }).run(), isActive: () => editor.value?.isActive('heading', { level: 2 }) },
   { name: 'quote', icon: '\u275D', title: '引用', action: () => editor.value?.chain().focus().toggleBlockquote().run(), isActive: () => editor.value?.isActive('blockquote') },
   { name: 'bullet', icon: '\u2022', title: '无序列表', action: () => editor.value?.chain().focus().toggleBulletList().run(), isActive: () => editor.value?.isActive('bulletList') },
   { name: 'ordered', icon: '1.', title: '有序列表', action: () => editor.value?.chain().focus().toggleOrderedList().run(), isActive: () => editor.value?.isActive('orderedList') },
@@ -143,7 +245,7 @@ watch(() => props.modelValue, (val) => {
   }
 })
 
-onBeforeUnmount(() => { editor.value?.destroy() })
+
 </script>
 
 <style scoped>
@@ -162,11 +264,46 @@ onBeforeUnmount(() => { editor.value?.destroy() })
 .tb-btn.active { color: var(--tf-accent); background: var(--tf-bg-code); }
 .mode-btn { font-weight: 400; font-size: 11px; padding: 2px 8px; border: 1px solid var(--tf-border); }
 .tb-spacer { flex: 1; }
+.tb-divider { width: 1px; height: 18px; background: var(--tf-border); margin: 0 4px; }
+
+/* 段落样式下拉 */
+.paragraph-style-select { position: relative; }
+.paragraph-style-btn {
+  display: flex; align-items: center; gap: 4px;
+  font-size: 12px; padding: 3px 8px; border-radius: 3px;
+  background: none; border: 1px solid var(--tf-border); color: var(--tf-text-secondary);
+  cursor: pointer; white-space: nowrap; min-width: 80px;
+}
+.paragraph-style-btn:hover { color: var(--tf-text-primary); background: var(--tf-bg-code); }
+.paragraph-style-label { flex: 1; text-align: left; }
+.paragraph-style-arrow { font-size: 10px; color: var(--tf-text-tertiary); }
+
+.paragraph-style-dropdown {
+  position: absolute; top: calc(100% + 4px); left: 0; z-index: 10;
+  min-width: 140px; padding: 4px;
+  background: var(--tf-bg-elevated); border: 1px solid var(--tf-border);
+  border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+.paragraph-option {
+  display: block; width: 100%; text-align: left;
+  padding: 6px 10px; border-radius: 4px;
+  background: none; border: none; color: var(--tf-text-secondary);
+  cursor: pointer; font-size: 12px;
+}
+.paragraph-option:hover { background: var(--tf-bg-hover); color: var(--tf-text-primary); }
+.paragraph-option.active { color: var(--tf-accent); background: var(--tf-bg-code); }
+.paragraph-preview-heading1 { font-size: 16px; font-weight: 700; }
+.paragraph-preview-heading2 { font-size: 14px; font-weight: 600; }
+.paragraph-preview-heading3 { font-size: 13px; font-weight: 600; }
+.paragraph-preview-blockquote { font-style: italic; color: var(--tf-text-tertiary); }
+.paragraph-preview-codeBlock { font-family: 'JetBrains Mono', monospace; font-size: 11px; }
 
 .editor-content { min-height: 160px; max-height: 400px; overflow-y: auto; padding: 12px 14px; }
 .editor-content :deep(.tiptap-body) { outline: none; font-size: 13px; line-height: 1.6; color: var(--tf-text-primary); }
 .editor-content :deep(.tiptap-body p) { margin: 4px 0; }
+.editor-content :deep(.tiptap-body h1) { font-size: 1.5em; font-weight: 700; margin: 12px 0 6px; }
 .editor-content :deep(.tiptap-body h2) { font-size: 1.2em; margin: 10px 0 4px; }
+.editor-content :deep(.tiptap-body h3) { font-size: 1.05em; font-weight: 600; margin: 8px 0 4px; }
 .editor-content :deep(.tiptap-body code) { background: var(--tf-bg-code); padding: 1px 4px; border-radius: 2px; font-size: 12px; }
 .editor-content :deep(.tiptap-body pre) { background: var(--tf-bg-code); padding: 10px 12px; border-radius: 4px; overflow-x: auto; border: 1px solid var(--tf-border); margin: 8px 0; }
 .editor-content :deep(.tiptap-body pre code) { background: none; padding: 0; }
