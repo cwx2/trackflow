@@ -141,27 +141,31 @@ const routes = [
       {
         path: 'reports',
         component: () => import('@/views/report/ReportContainerView.vue'),
-        meta: { requiresReport: true },
+        meta: { requiresReport: true, title: '报表' },
         children: [
           {
             path: '',
             name: 'ReportOverview',
-            component: () => import('@/views/report/ReportDashboardView.vue')
+            component: () => import('@/views/report/ReportDashboardView.vue'),
+            meta: { title: '报表概览' }
           },
           {
             path: 'list',
             name: 'ReportList',
-            component: () => import('@/views/report/ReportListView.vue')
+            component: () => import('@/views/report/ReportListView.vue'),
+            meta: { title: '报表列表' }
           },
           {
             path: 'time',
             name: 'TimeReport',
-            component: () => import('@/views/report/TimeReportPage.vue')
+            component: () => import('@/views/report/TimeReportPage.vue'),
+            meta: { title: '时间报表' }
           },
           {
             path: 'estimation',
             name: 'EstimationReport',
-            component: () => import('@/views/report/EstimationReportPage.vue')
+            component: () => import('@/views/report/EstimationReportPage.vue'),
+            meta: { title: '估算报表' }
           },
           {
             path: 'dashboards',
@@ -170,7 +174,8 @@ const routes = [
           {
             path: ':id',
             name: 'ReportDetail',
-            component: () => import('@/views/report/ReportDetailView.vue')
+            component: () => import('@/views/report/ReportDetailView.vue'),
+            meta: { title: '报表详情' }
           }
         ]
       },
@@ -178,13 +183,13 @@ const routes = [
         path: 'admin',
         name: 'Admin',
         component: () => import('@/views/admin/AdminView.vue'),
-        meta: { requiresAdmin: true }
+        meta: { requiresAdmin: true, title: '系统管理' }
       },
       {
         path: 'admin/workflow',
         name: 'WorkflowEditor',
         component: () => import('@/views/admin/WorkflowEditor.vue'),
-        meta: { requiresAdmin: true, requiredPermission: 'system:manage_roles' }
+        meta: { requiresAdmin: true, requiredPermission: 'system:manage_roles', title: '工作流编辑' }
       },
       {
         path: 'admin/workflow-definitions',
