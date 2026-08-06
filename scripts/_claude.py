@@ -363,6 +363,15 @@ def _is_transient_stop_reason(stop_reason: str) -> bool:
     return stop_reason in _TRANSIENT_STOP_REASONS
 
 
+def _cleanup_temp(path: str | None) -> None:
+    """安全删除临时文件。"""
+    if path:
+        try:
+            os.unlink(path)
+        except Exception:
+            pass
+
+
 def _run_cli(cmd: list[str], label: str, req_stem: str | None = None,
              worker_id: str | None = None, stdin_data: bytes | None = None) -> tuple[bool, str]:
     """运行 Claude Code CLI，管理超时、熔断、输出解析。
@@ -372,6 +381,27 @@ def _run_cli(cmd: list[str], label: str, req_stem: str | None = None,
     """
     _wait_for_circuit(label)
     start = time.time()
+
+    # >20KB 用临时文件传 prompt（stdin pipe 在 Windows 上不可靠）
+    _use_temp = stdin_data and len(stdin_data) > 20000 and os.name == "nt"
+    _temp_file = None
+
+    if _use_temp:
+        import tempfile as _tempfile
+        try:
+            _tmp = _tempfile.NamedTemporaryFile(
+                mode="w", suffix=".txt", prefix="claude_prompt_",
+                encoding="utf-8", delete=False,
+            )
+            _temp_file = _tmp.name
+            _tmp.write(stdin_data.decode("utf-8", errors="replace"))
+            _tmp.flush()
+            _tmp.close()
+            # 把 prompt 放到文件后，命令行只需很短的文件路径引用
+            _short_prompt = f"请严格按照文件 {_temp_file} 中的完整指令执行任务。"
+            stdin_data = _short_prompt.encode("utf-8")
+        except Exception as e:
+            log.warning(f"[{label}] 临时文件创建失败: {e}，退回 stdin")
 
     try:
         process = subprocess.Popen(
@@ -384,9 +414,9 @@ def _run_cli(cmd: list[str], label: str, req_stem: str | None = None,
     except Exception as e:
         log.error(f"[{label}] 启动异常: {e}")
         _open_circuit(label)
+        _cleanup_temp(_temp_file)
         return False, "STARTUP_FAIL"
 
-    # communicate() 处理 stdin/stdout，支持超时，Windows 兼容
     try:
         stdout_bytes, _ = process.communicate(input=stdin_data, timeout=TIMEOUT_SECONDS)
     except subprocess.TimeoutExpired:
@@ -397,6 +427,7 @@ def _run_cli(cmd: list[str], label: str, req_stem: str | None = None,
         except subprocess.TimeoutExpired:
             log.error(f"[{label}] Claude Code 进程未能及时退出")
         _open_circuit(label)
+        _cleanup_temp(_temp_file)
         return False, "TIMEOUT"
     except Exception as e:
         log.error(f"[{label}] 进程通信异常: {e}")
@@ -405,7 +436,11 @@ def _run_cli(cmd: list[str], label: str, req_stem: str | None = None,
         except Exception:
             pass
         _open_circuit(label)
+        _cleanup_temp(_temp_file)
         return False, "PROCESS_ERROR"
+
+    # 清理临时文件
+    _cleanup_temp(_temp_file)
 
     elapsed = time.time() - start
     stdout = stdout_bytes.decode("utf-8", errors="replace")
