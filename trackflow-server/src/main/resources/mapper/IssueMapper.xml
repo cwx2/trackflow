@@ -235,7 +235,7 @@
     <select id="selectChildrenByParentId" resultType="com.trackflow.issue.mapper.result.ChildIssueRow">
         SELECT
             i.id, i.issue_key, i.title, i.issue_type, i.priority,
-            s.name AS status_name, s.color AS status_color, s.category AS status_category,
+            COALESCE(s.display_name, s.name) AS status_name, s.color AS status_color, s.category AS status_category,
             u.display_name AS assignee_name
         FROM issue i
         LEFT JOIN issue_status s ON s.id = i.status_id
@@ -373,7 +373,7 @@
             i.parent_id,
             pi.issue_key AS parent_issue_key,
             pi.title AS parent_title,
-            s.name AS status_name, s.color AS status_color,
+            COALESCE(s.display_name, s.name) AS status_name, s.color AS status_color,
             u.display_name AS assignee_name, u.avatar_url AS assignee_avatar_url,
             sp.name AS sprint_name
         FROM issue i
@@ -466,7 +466,7 @@
             i.parent_id,
             pi.issue_key AS parent_issue_key,
             pi.title AS parent_title,
-            s.name AS status_name, s.color AS status_color,
+            COALESCE(s.display_name, s.name) AS status_name, s.color AS status_color,
             u.display_name AS assignee_name, u.avatar_url AS assignee_avatar_url,
             sp.name AS sprint_name
         FROM issue i

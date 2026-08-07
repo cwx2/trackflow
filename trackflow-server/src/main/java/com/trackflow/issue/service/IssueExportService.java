@@ -1,7 +1,6 @@
 package com.trackflow.issue.service;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.trackflow.common.constant.IssuePriority;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.util.SecurityUtils;
@@ -299,14 +298,14 @@ public class IssueExportService {
 
         row.add(issue.getIssueKey());
         row.add(ctx.projectKeyMap().getOrDefault(issue.getProjectId(), ""));
-        row.add(localizeIssueType(issue.getIssueType()));
+        row.add(issue.getIssueType() != null ? issue.getIssueType() : "");
         row.add(issue.getTitle());
 
-        // 状态
+        // 状态（使用 displayName 优先，DB 迁移后数据已为中文）
         IssueStatus status = ctx.statusMap().get(issue.getStatusId());
-        row.add(status != null ? localizeStatusName(status.getName()) : "");
+        row.add(status != null ? status.getLocalizedName() : "");
 
-        row.add(localizePriority(issue.getPriority()));
+        row.add(issue.getPriority() != null ? issue.getPriority() : "");
         row.add(ctx.userNameMap().getOrDefault(issue.getAssigneeId(), ""));
         row.add(ctx.userNameMap().getOrDefault(issue.getReporterId(), ""));
         row.add(ctx.sprintNameMap().getOrDefault(issue.getSprintId(), ""));
@@ -349,56 +348,5 @@ public class IssueExportService {
         return html.replaceAll("<[^>]+>", "").replaceAll("&nbsp;", " ").replaceAll("&amp;", "&")
                 .replaceAll("&lt;", "<").replaceAll("&gt;", ">").replaceAll("&quot;", "\"")
                 .replaceAll("\\s+", " ").trim();
-    }
-
-    private String localizeStatusName(String name) {
-        if (name == null) return "";
-        return switch (name) {
-            case "Open" -> "打开";
-            case "In Progress" -> "进行中";
-            case "Done" -> "已完成";
-            case "Closed" -> "已关闭";
-            case "Reopened" -> "重新打开";
-            case "Resolved" -> "已解决";
-            case "To Be Discussed" -> "待讨论";
-            case "Submitted" -> "已提交";
-            case "In Review" -> "评审中";
-            case "Ready for Test" -> "待测试";
-            case "Testing" -> "测试中";
-            case "Verified" -> "已验证";
-            case "Blocked" -> "已阻塞";
-            case "Deferred" -> "已推迟";
-            case "Cancelled" -> "已取消";
-            case "Waiting for Reply" -> "等待回复";
-            case "Under Investigation" -> "调查中";
-            case "Draft" -> "草稿";
-            default -> name;
-        };
-    }
-
-    private String localizeIssueType(String type) {
-        if (type == null) return "";
-        return switch (type) {
-            case "task" -> "任务";
-            case "bug" -> "缺陷";
-            case "feature" -> "功能";
-            case "improvement" -> "改进";
-            case "epic" -> "史诗";
-            case "story" -> "用户故事";
-            case "subtask" -> "子任务";
-            default -> type;
-        };
-    }
-
-    private String localizePriority(String priority) {
-        if (priority == null) return "";
-        return switch (priority.toLowerCase()) {
-            case "show-stopper" -> "阻塞";
-            case "critical" -> "紧急";
-            case "high" -> "高";
-            case "medium", "normal" -> "普通";
-            case "low" -> "低";
-            default -> priority;
-        };
     }
 }

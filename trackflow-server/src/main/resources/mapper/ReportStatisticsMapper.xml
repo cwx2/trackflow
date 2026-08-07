@@ -43,7 +43,7 @@
 
     <!-- ========== 状态分布 ========== -->
     <select id="selectStatusDistribution" resultType="com.trackflow.report.mapper.result.StatusDistributionRow">
-        SELECT s.name AS status_name,
+        SELECT COALESCE(s.display_name, s.name) AS status_name,
                s.color AS status_color,
                s.category AS status_category,
                s.sort_order,
