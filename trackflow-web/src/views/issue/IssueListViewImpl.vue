@@ -216,20 +216,22 @@
         <div class="group-header" @click="toggleGroup('saved')">
           <span class="group-arrow">{{ expandedGroups.has('saved') ? '\u25BE' : '\u25B8' }}</span>
           <span class="group-title">已保存的搜索</span>
-          <a-button
-            type="text" size="mini" class="group-action-btn"
-            title="保存当前筛选为查询"
-            @click.stop="openCreateQueryModal"
-          >
-            <template #icon><icon-plus :size="12" /></template>
-          </a-button>
-          <a-button
-            type="text" size="mini" class="group-action-btn"
-            title="管理查询收藏"
-            @click.stop="openManageQueriesModal"
-          >
-            <template #icon><icon-settings :size="12" /></template>
-          </a-button>
+          <div class="group-actions">
+            <a-button
+              type="text" size="mini" class="group-action-btn"
+              title="保存当前筛选为查询"
+              @click.stop="openCreateQueryModal"
+            >
+              <template #icon><icon-plus :size="12" /></template>
+            </a-button>
+            <a-button
+              type="text" size="mini" class="group-action-btn"
+              title="管理查询收藏"
+              @click.stop="openManageQueriesModal"
+            >
+              <template #icon><icon-settings :size="12" /></template>
+            </a-button>
+          </div>
         </div>
         <div v-if="expandedGroups.has('saved')" class="group-items">
           <a-dropdown
@@ -4349,7 +4351,10 @@ onBeforeRouteLeave((_to, _from, next) => {
 
 /* Group action button */
 .group-action-btn { margin-left: auto; opacity: 0; transition: opacity 0.15s; }
+.group-actions { margin-left: auto; display: flex; gap: 2px; opacity: 0; transition: opacity 0.15s; }
+.group-actions .group-action-btn { margin-left: 0; opacity: 1; }
 .group-header:hover .group-action-btn { opacity: 1; }
+.group-header:hover .group-actions { opacity: 1; }
 
 /* Query delete button */
 .query-delete-btn { font-size: 10px; color: var(--tf-text-quaternary); cursor: pointer; padding: 2px 4px; border-radius: 3px; opacity: 0; transition: opacity 0.15s, color 0.15s, background 0.15s; flex-shrink: 0; }
