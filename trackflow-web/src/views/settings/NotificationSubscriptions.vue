@@ -117,7 +117,8 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, watch } from 'vue'
-import { Message, Modal } from '@arco-design/web-vue'
+import { Message } from '@arco-design/web-vue'
+import { useConfirmDelete } from '@/composables/useConfirmDelete'
 import { notificationSubscriptionApi } from '@/api'
 import type { NotificationSubscriptionVO, SubscriptionEventsVO } from '@/api/notificationSubscription'
 import { tagApi, queryApi, projectApi } from '@/api'
@@ -296,12 +297,10 @@ async function handleCreate() {
 }
 
 function handleDelete(sub: NotificationSubscriptionVO) {
-  Modal.confirm({
-    title: '删除订阅',
-    content: `确定要删除订阅「${sub.name}」吗？删除后将不再收到该规则匹配的通知。`,
-    okText: '删除',
-    okButtonProps: { status: 'danger' },
-    async onOk() {
+  const { confirmDelete } = useConfirmDelete()
+  confirmDelete({
+    itemName: `订阅「${sub.name}」`,
+    onConfirm: async () => {
       try {
         const res = await notificationSubscriptionApi.delete(sub.id)
         if (res.code === 0) {

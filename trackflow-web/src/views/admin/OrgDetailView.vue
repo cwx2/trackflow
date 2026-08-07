@@ -229,7 +229,8 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Modal, Message } from '@arco-design/web-vue'
+import { Message } from '@arco-design/web-vue'
+import { useConfirmDelete } from '@/composables/useConfirmDelete'
 import type { TableColumnData } from '@arco-design/web-vue'
 import { organizationApi, userApi, roleApi } from '@/api'
 import type { OrgDetailVO, OrgProjectVO, OrgAccessVO } from '@/api/organization'
@@ -412,13 +413,11 @@ async function submitAddProjects(done?: (closed: boolean) => void) {
 }
 
 function removeProject(project: OrgProjectVO) {
-  Modal.confirm({
-    title: '移除项目',
-    content: `确定要将项目"${project.name}"从此组织中移除吗？项目将变为独立项目。`,
-    okText: '移除',
-    cancelText: '取消',
-    okButtonProps: { status: 'danger' },
-    async onOk() {
+  const { confirmDelete } = useConfirmDelete()
+  confirmDelete({
+    itemName: `项目「${project.name}」`,
+    confirmText: '移除',
+    onConfirm: async () => {
       try {
         await organizationApi.removeProject(orgId.value, project.id)
         Message.success('项目已移除')

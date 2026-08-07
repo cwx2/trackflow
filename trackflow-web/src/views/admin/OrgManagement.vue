@@ -87,7 +87,8 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { Modal, Message } from '@arco-design/web-vue'
+import { Message } from '@arco-design/web-vue'
+import { useConfirmDelete } from '@/composables/useConfirmDelete'
 import type { TableColumnData } from '@arco-design/web-vue'
 import { organizationApi } from '@/api'
 import type { OrgVO, OrgProjectVO } from '@/api/organization'
@@ -163,13 +164,11 @@ async function submitOrg(done?: (closed: boolean) => void) {
 }
 
 async function deleteOrg(org: OrgVO) {
-  Modal.confirm({
-    title: '确认删除组织',
-    content: `确定要删除组织"${org.name}"吗？此操作不可撤销。`,
-    okText: '删除组织',
-    cancelText: '取消',
-    okButtonProps: { status: 'danger' },
-    async onOk() {
+  const { confirmDelete } = useConfirmDelete()
+  confirmDelete({
+    itemName: `组织「${org.name}」`,
+    confirmText: '删除组织',
+    onConfirm: async () => {
       try {
         await organizationApi.delete(org.id)
         Message.success('组织已删除')

@@ -349,7 +349,8 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
 import { IconSwap, IconUser, IconSearch, IconCalendar, IconFire, IconDelete, IconDownload, IconCode, IconTag, IconLink, IconClose, IconRightCircle } from '@arco-design/web-vue/es/icon'
-import { Modal, Message } from '@arco-design/web-vue'
+import { Message } from '@arco-design/web-vue'
+import { useConfirmDelete } from '@/composables/useConfirmDelete'
 import { issueApi, projectApi, sprintApi, tagApi } from '@/api'
 import { IssuePriorityBadge } from '@/components/base'
 import type { IssueVO, IssueTagVO, ProjectMemberVO, SprintVO, BatchAvailableStatusVO } from '@/api/types'
@@ -801,13 +802,11 @@ function handleBatchLink(targetIssue: IssueVO) {
 
 // ========== 批量删除 ==========
 function confirmBatchDelete() {
-  Modal.confirm({
-    title: '确认批量删除',
-    content: `确定要删除选中的 ${props.selectedCount} 个工单吗？工单将移入回收站，可随时恢复。`,
-    okText: '删除',
-    cancelText: '取消',
-    okButtonProps: { status: 'danger' },
-    onOk() {
+  const { confirmDelete } = useConfirmDelete()
+  confirmDelete({
+    itemName: `选中的 ${props.selectedCount} 个工单`,
+    confirmText: '删除',
+    onConfirm: () => {
       emit('batch-delete')
     }
   })

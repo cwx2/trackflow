@@ -225,7 +225,8 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue'
-import { Modal, Message } from '@arco-design/web-vue'
+import { Message } from '@arco-design/web-vue'
+import { useConfirmDelete } from '@/composables/useConfirmDelete'
 import { roleApi } from '@/api'
 import type { RoleVO, RoleUsersVO } from '@/api/types'
 import type { PermissionItem, PermissionGroup } from '@/api/role'
@@ -361,13 +362,11 @@ async function submitRole() {
 }
 
 async function deleteRole(role: RoleVO) {
-  Modal.confirm({
-    title: '确认删除角色',
-    content: `确定要删除角色"${role.name}"吗？此操作不可撤销。`,
-    okText: '删除角色',
-    cancelText: '取消',
-    okButtonProps: { status: 'danger' },
-    async onOk() {
+  const { confirmDelete } = useConfirmDelete()
+  confirmDelete({
+    itemName: `角色「${role.name}」`,
+    confirmText: '删除角色',
+    onConfirm: async () => {
       try {
         await roleApi.delete(role.id)
         Message.success('角色已删除')

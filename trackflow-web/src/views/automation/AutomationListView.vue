@@ -93,7 +93,8 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { Message, Modal } from '@arco-design/web-vue'
+import { Message } from '@arco-design/web-vue'
+import { useConfirmDelete } from '@/composables/useConfirmDelete'
 import { automationApi, type WorkflowVO, type CreateWorkflowDTO } from '@/api'
 
 const router = useRouter()
@@ -188,12 +189,10 @@ function goToHistory(id: string) {
 
 // 确认删除
 function confirmDelete(workflow: WorkflowVO) {
-  Modal.confirm({
-    title: '确认删除',
-    content: `确定要删除工作流「${workflow.name}」吗？此操作不可恢复。`,
-    okText: '删除',
-    okButtonProps: { status: 'danger' },
-    async onOk() {
+  const { confirmDelete: showConfirm } = useConfirmDelete()
+  showConfirm({
+    itemName: `工作流「${workflow.name}」`,
+    onConfirm: async () => {
       try {
         const res = await automationApi.delete(workflow.id)
         if (res.code === 0) {
