@@ -30,6 +30,8 @@ let pollTimer: ReturnType<typeof setInterval> | null = null
 let initialized = false
 let wsSubscription: StompSubscription | null = null
 let wsConnected = false
+let wsConnectCalled = false
+let wsDisconnectFn: (() => void) | null = null
 
 /**
  * 从 localStorage 恢复上次选择的标签页
@@ -284,10 +286,17 @@ export function useNotification() {
    * 订阅用户级通知 WebSocket 队列。
    * 收到推送时立即更新未读计数和通知列表（无需等待轮询周期）。
    * WebSocket 连接成功后停止 HTTP 轮询；断开后自动恢复轮询。
+   *
+   * 使用 wsConnectCalled flag 确保 connect() 最多调用一次，防止引用计数泄漏。
    */
   function subscribeNotifications() {
-    const { connect, getClient, status } = useWebSocket()
-    connect()
+    const { connect, disconnect, getClient, status } = useWebSocket()
+
+    if (!wsConnectCalled) {
+      wsConnectCalled = true
+      wsDisconnectFn = disconnect
+      connect()
+    }
 
     const doSubscribe = () => {
       unsubscribeNotifications()
@@ -355,6 +364,20 @@ export function useNotification() {
     }
   }
 
+  /**
+   * 完整清理 WebSocket：取消订阅 + 调用 disconnect() 使引用计数归零。
+   * 退出登录时调用，确保 globalClient 被 deactivate。
+   */
+  function cleanupWebSocket() {
+    unsubscribeNotifications()
+    wsConnected = false
+    if (wsConnectCalled && wsDisconnectFn) {
+      wsDisconnectFn()
+      wsConnectCalled = false
+      wsDisconnectFn = null
+    }
+  }
+
   /** 初始化（AppLayout onMounted 调用一次） */
   function init() {
     if (initialized) return
@@ -370,9 +393,8 @@ export function useNotification() {
         fetchUnreadCount()
         subscribeNotifications()
       } else {
-        unsubscribeNotifications()
+        cleanupWebSocket()
         stopPolling()
-        wsConnected = false
         unreadCount.value = 0
         categoryUnreadCounts.value = { all: 0, mention: 0, subscription: 0, system: 0 }
         notifications.value = []
