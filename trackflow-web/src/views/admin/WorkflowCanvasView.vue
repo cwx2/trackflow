@@ -71,6 +71,10 @@ const zoomPercent = ref(100)
 let lf: LogicFlow | null = null
 // 防止连线添加事件重复触发的锁
 let edgeAddLock = false
+// 标记是否已完成首次 fitView（避免重复触发）
+let initialFitDone = false
+// 用于在容器尺寸稳定后执行 fitView
+let resizeObserver: ResizeObserver | null = null
 
 // Category colors mapping
 const categoryColors: Record<string, string> = {
@@ -144,6 +148,64 @@ class StatusNodeModel extends HtmlNodeModel {
 
 const StatusNodeDef = { type: 'status-node', view: StatusNodeView, model: StatusNodeModel }
 
+// ========== 延迟 fitView 工具方法 ==========
+
+/**
+ * 在画布容器尺寸稳定后执行 fitView。
+ * 解决问题：Tab 切换/flex 布局尚未完成时 fitView 用错误尺寸计算 viewport。
+ * 策略：使用 setTimeout + requestAnimationFrame 双重保障，确保浏览器已完成 layout。
+ */
+function deferredFitView() {
+  if (!lf || !canvasRef.value) return
+
+  // 如果容器当前有有效尺寸，直接在下一帧执行
+  const { clientWidth, clientHeight } = canvasRef.value
+  if (clientWidth > 0 && clientHeight > 0) {
+    requestAnimationFrame(() => {
+      lf?.fitView()
+    })
+  } else {
+    // 容器尺寸为 0（可能被 v-show 隐藏），通过 ResizeObserver 监听首次有效尺寸
+    waitForContainerReady()
+  }
+}
+
+/**
+ * 通过 ResizeObserver 监听容器首次获得有效尺寸，然后执行 fitView。
+ * 适用于组件挂载时 Tab 未激活的场景。
+ */
+function waitForContainerReady() {
+  if (!canvasRef.value || !lf) return
+
+  // 清理旧的 observer
+  if (resizeObserver) {
+    resizeObserver.disconnect()
+    resizeObserver = null
+  }
+
+  resizeObserver = new ResizeObserver((entries) => {
+    for (const entry of entries) {
+      const { width, height } = entry.contentRect
+      if (width > 0 && height > 0) {
+        // 容器有了有效尺寸，执行 fitView
+        requestAnimationFrame(() => {
+          if (lf) {
+            lf.resize()
+            lf.fitView()
+            initialFitDone = true
+          }
+        })
+        // 只需要首次触发，之后断开 observer
+        resizeObserver?.disconnect()
+        resizeObserver = null
+        break
+      }
+    }
+  })
+
+  resizeObserver.observe(canvasRef.value)
+}
+
 // ========== LogicFlow 初始化 ==========
 
 function initLogicFlow() {
@@ -204,7 +266,8 @@ function renderCanvas() {
   if (!hasPositions) {
     nextTick(() => autoLayout(false))
   } else {
-    nextTick(() => lf?.fitView())
+    // 使用延迟 fitView，确保容器尺寸稳定后再执行
+    nextTick(() => deferredFitView())
   }
 }
 
@@ -367,7 +430,7 @@ function autoLayout(savePositions = true) {
     colIndex++
   }
 
-  nextTick(() => lf?.fitView())
+  nextTick(() => deferredFitView())
 
   // 批量持久化位置
   if (savePositions && positions.length > 0) {
@@ -412,6 +475,10 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   if (refreshTimer) clearTimeout(refreshTimer)
+  if (resizeObserver) {
+    resizeObserver.disconnect()
+    resizeObserver = null
+  }
   if (lf) {
     lf.destroy()
     lf = null
