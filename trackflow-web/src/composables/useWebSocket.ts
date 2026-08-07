@@ -30,6 +30,9 @@ let reconnectAttempts = 0
 const MAX_RECONNECT_ATTEMPTS = 5
 const RECONNECT_DELAY_BASE = 5000 // 5s base
 
+// Token 监听器清理函数（仅注册一次）
+let tokenWatchStopper: (() => void) | null = null
+
 /**
  * WebSocket 连接管理 composable。
  * 
@@ -112,6 +115,23 @@ export function useWebSocket() {
     globalStatus.value = 'connecting'
     globalClient.activate()
 
+    // 注册 token 变化监听（仅一次），token 刷新后同步更新 connectHeaders
+    if (!tokenWatchStopper) {
+      tokenWatchStopper = watch(
+        () => authStore.accessToken,
+        (newToken) => {
+          if (newToken && globalClient) {
+            globalClient.connectHeaders = { token: newToken }
+            // 如果连接已断开且仍有使用者，用新 token 重连
+            if (!globalClient.connected && !globalClient.active && connectionRefCount > 0) {
+              reconnectAttempts = 0 // 重置重连计数（新 token 应能成功）
+              globalClient.activate()
+            }
+          }
+        }
+      )
+    }
+
     return globalClient
   }
 
@@ -125,6 +145,11 @@ export function useWebSocket() {
       globalClient = null
       globalStatus.value = 'disconnected'
       reconnectAttempts = 0
+      // 清理 token 监听器
+      if (tokenWatchStopper) {
+        tokenWatchStopper()
+        tokenWatchStopper = null
+      }
     }
   }
 
