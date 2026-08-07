@@ -192,14 +192,6 @@
         </div>
       </div>
       <p v-if="sorted.length === 0" class="empty">暂无活动</p>
-      <!-- Load more button -->
-      <div v-if="props.hasMore" class="load-more-wrap">
-        <button class="load-more-btn" :disabled="props.loadingMore" @click="emit('loadMore')">
-          <template v-if="props.loadingMore">加载中...</template>
-          <template v-else>加载更多活动<span v-if="remainingActivities > 0" class="load-more-hint">（还有 {{ remainingActivities }} 条未加载）</span><span v-else-if="props.totalActivities" class="load-more-hint">（共 {{ props.totalActivities }} 条）</span></template>
-        </button>
-        <p v-if="current !== 'all'" class="load-more-filter-hint">当前仅显示「{{ filters.find(f => f.key === current)?.label }}」，加载的内容为全部类型的活动记录</p>
-      </div>
     </div>
 
     <!-- Delete confirmation modal -->
@@ -297,7 +289,6 @@ const emit = defineEmits<{
   permanentlyDeleteComment: [commentId: string]
   replyComment: [item: ActivityItem]
   addTime: []
-  loadMore: []
 }>()
 
 const filters = [
@@ -387,12 +378,6 @@ watch(() => props.loadingMore, (newVal, oldVal) => {
       }
     })
   }
-})
-
-/** 剩余未加载的活动记录数量 */
-const remainingActivities = computed(() => {
-  if (!props.totalActivities || !props.loadedActivities) return 0
-  return Math.max(0, props.totalActivities - props.loadedActivities)
 })
 
 /**
@@ -619,6 +604,13 @@ function scrollToComment(commentId: string) {
 }
 
 onBeforeUnmount(() => { editEditor.value?.destroy() })
+
+// Expose current filter state for parent "load more" fixed bar
+const currentFilterLabel = computed(() => filters.find(f => f.key === current.value)?.label ?? '全部')
+defineExpose({
+  currentFilter: current,
+  currentFilterLabel,
+})
 </script>
 
 <style scoped>
@@ -943,42 +935,4 @@ onBeforeUnmount(() => { editEditor.value?.destroy() })
 }
 
 .empty { color: var(--tf-text-muted); font-size: 12px; text-align: center; padding: 24px 0; }
-
-.load-more-wrap {
-  display: flex;
-  justify-content: center;
-  padding: 12px 0 8px;
-}
-
-.load-more-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 6px 16px;
-  font-size: 12px;
-  color: var(--tf-text-secondary);
-  background: var(--tf-bg-surface);
-  border: 1px solid var(--tf-border);
-  border-radius: 6px;
-  cursor: pointer;
-  transition: background 150ms, color 150ms;
-}
-.load-more-btn:hover:not(:disabled) {
-  color: var(--tf-text-primary);
-  background: var(--tf-bg-hover);
-}
-.load-more-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-.load-more-hint {
-  color: var(--tf-text-muted);
-  margin-left: 4px;
-}
-.load-more-filter-hint {
-  margin: 6px 0 0;
-  font-size: 11px;
-  color: var(--tf-text-tertiary);
-  text-align: center;
-}
 </style>

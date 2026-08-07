@@ -77,6 +77,7 @@
           <template #activity>
             <div ref="activityStreamRef" class="activity-stream-anchor">
             <ActivityStream
+              ref="activityStreamCompRef"
               :items="activityItems"
               :current-user-id="currentUserId"
               :can-manage-comments="canManageComments"
@@ -92,11 +93,19 @@
               @permanently-delete-comment="onPermanentlyDeleteComment"
               @reply-comment="onReplyComment"
               @add-time="openTimeDialog"
-              @load-more="loadMoreActivities"
             />
             </div>
           </template>
         </DetailMainContent>
+
+        <!-- Fixed "Load More" bar between scroll area and comment input -->
+        <div v-if="activityHasMore" class="load-more-fixed">
+          <button class="load-more-btn" :disabled="activityLoadingMore" @click="loadMoreActivities">
+            <template v-if="activityLoadingMore">加载中...</template>
+            <template v-else>加载更多活动<span v-if="remainingActivitiesCount > 0" class="load-more-hint">（还有 {{ remainingActivitiesCount }} 条未加载）</span><span v-else-if="activityTotal" class="load-more-hint">（共 {{ activityTotal }} 条）</span></template>
+          </button>
+          <p v-if="activityStreamCompRef?.currentFilter !== 'all'" class="load-more-filter-hint">当前仅显示「{{ activityStreamCompRef?.currentFilterLabel }}」，加载的内容为全部类型的活动记录</p>
+        </div>
 
         <CommentInput
           v-if="canCommentEffective"
@@ -308,6 +317,15 @@ const sidebarCollapsed = ref<boolean>(localStorage.getItem(SIDEBAR_COLLAPSED_KEY
 
 // Comment input ref (for reply functionality)
 const commentInputRef = ref<InstanceType<typeof CommentInput> | null>(null)
+
+// ActivityStream component ref (for accessing currentFilter in fixed load-more bar)
+const activityStreamCompRef = ref<InstanceType<typeof ActivityStream> | null>(null)
+
+// Remaining activities count for the fixed load-more bar
+const remainingActivitiesCount = computed(() => {
+  if (!activityTotal.value || !activities.value.length) return 0
+  return Math.max(0, activityTotal.value - activities.value.length)
+})
 
 // User groups for 'group' type custom fields
 const allUserGroups = ref<Array<{ id: string; name: string }>>([])
@@ -871,6 +889,48 @@ onBeforeRouteLeave((_to, _from, next) => {
   flex-direction: column;
   min-width: 0;
   overflow: hidden;
+}
+
+.load-more-fixed {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 24px;
+  border-top: 1px solid var(--tf-border-light);
+  background: var(--tf-bg-body);
+}
+
+.load-more-fixed .load-more-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 16px;
+  font-size: 12px;
+  color: var(--tf-text-secondary);
+  background: var(--tf-bg-surface);
+  border: 1px solid var(--tf-border);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 150ms, color 150ms;
+}
+.load-more-fixed .load-more-btn:hover:not(:disabled) {
+  color: var(--tf-text-primary);
+  background: var(--tf-bg-hover);
+}
+.load-more-fixed .load-more-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.load-more-fixed .load-more-hint {
+  color: var(--tf-text-muted);
+  margin-left: 4px;
+}
+.load-more-fixed .load-more-filter-hint {
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: var(--tf-text-tertiary);
+  text-align: center;
 }
 
 .comment-input-fixed {
