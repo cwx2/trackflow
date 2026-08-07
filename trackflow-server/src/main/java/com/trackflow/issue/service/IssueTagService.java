@@ -169,7 +169,7 @@ public class IssueTagService {
         if (issue != null) {
             Long currentUserId = SecurityUtils.getCurrentUserId();
             eventPublisher.publishEvent(new IssueNotificationEvent.FieldUpdated(
-                    issue, "tags", null, tag.getName(), currentUserId));
+                    issue, "tags", null, tag.getName(), currentUserId, null));
         }
     }
 
@@ -232,7 +232,7 @@ public class IssueTagService {
                     .map(tagNameMap::get)
                     .collect(java.util.stream.Collectors.joining(", "));
             eventPublisher.publishEvent(new IssueNotificationEvent.FieldUpdated(
-                    issue, "tags", null, addedNames, currentUserId));
+                    issue, "tags", null, addedNames, currentUserId, null));
         }
     }
 
@@ -257,7 +257,7 @@ public class IssueTagService {
         if (issue != null && tag != null) {
             Long currentUserId = SecurityUtils.getCurrentUserId();
             eventPublisher.publishEvent(new IssueNotificationEvent.FieldUpdated(
-                    issue, "tags", tag.getName(), null, currentUserId));
+                    issue, "tags", tag.getName(), null, currentUserId, null));
         }
     }
 

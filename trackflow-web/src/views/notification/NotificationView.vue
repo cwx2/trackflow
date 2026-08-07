@@ -393,20 +393,34 @@ function handleToggleUnread() {
   toggleUnreadOnly()
 }
 
+/**
+ * 根据通知类型构建 sourceId 对应的 hash 锚点（不含 # 前缀）。
+ * - 评论类通知（issue_commented, mention）→ "c_{sourceId}"（评论 ID）
+ * - 其他活动类通知 → "a_{sourceId}"（活动记录 ID）
+ */
+function buildSourceHash(item: NotificationVO): string {
+  if (!item.sourceId) return ''
+  const commentTypes = ['issue_commented', 'mention']
+  if (commentTypes.includes(item.type || '')) {
+    return `c_${item.sourceId}`
+  }
+  return `a_${item.sourceId}`
+}
+
 function handleItemClick(item: NotificationVO) {
   if (!item.isRead) {
     markRead(item.id)
   }
-  // 构建跳转 URL：如果 resourceUrl 不含 hash 但有 sourceId，则补全评论锚点
+  // 构建跳转 URL：如果 resourceUrl 不含 hash 但有 sourceId，则根据通知类型补全对应锚点
   let targetUrl = item.resourceUrl || ''
   if (targetUrl && item.sourceId && !targetUrl.includes('#')) {
-    targetUrl = `${targetUrl}#c_${item.sourceId}`
+    targetUrl = `${targetUrl}#${buildSourceHash(item)}`
   }
   // 优先使用后端返回的 resourceUrl（通用化导航）
   if (targetUrl) {
     router.push(targetUrl)
   } else if (item.resourceType === 'issue' && item.resourceId) {
-    const hash = item.sourceId ? `#c_${item.sourceId}` : ''
+    const hash = item.sourceId ? `#${buildSourceHash(item)}` : ''
     router.push(`/issues/${item.resourceId}${hash}`)
   } else if (item.resourceType === 'project' && item.resourceId) {
     router.push(`/projects/${item.resourceId}`)

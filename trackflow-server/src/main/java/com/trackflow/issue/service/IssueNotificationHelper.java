@@ -128,7 +128,7 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
      * 将 DB 操作从 N×3 次降至常数级（最多 4 组 × 2-3 次）。
      */
     @Async("notificationExecutor")
-    public void notifyCommented(Issue issue, Long commenterId) {
+    public void notifyCommented(Issue issue, Long commenterId, Long commentId) {
         try {
             // 根据评论者的 notifyOwnChanges 偏好决定是否排除自己
             boolean excludeSelf = !preferenceService.isNotifyOwnChanges(commenterId, issue.getProjectId());
@@ -150,9 +150,9 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
             String content = String.format("%s 在工单 [%s] %s 中添加了评论",
                     commenterName, issue.getIssueKey(), issue.getTitle());
 
-            // 按 reason 分组后批量调用（最多 3 组：assigned/reporter/commenter）
+            // 按 reason 分组后批量调用（最多 3 组：assigned/reporter/commenter）；传入 commentId 作为 sourceId
             batchNotifyByReason(enabledUserIds, recipientReasons, commenterId, title, content,
-                    NotificationType.issue_commented, "issue", issue.getId(), issue.getProjectId());
+                    NotificationType.issue_commented, "issue", issue.getId(), issue.getProjectId(), commentId);
 
             log.debug("[IssueNotification] 已发送评论通知: issue={}, recipients={}",
                     issue.getIssueKey(), enabledUserIds.size());
@@ -180,7 +180,7 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
      * 将 DB 操作从 N×3 次降至常数级。
      */
     @Async("notificationExecutor")
-    public void notifyStatusChanged(Issue issue, Long oldStatusId, Long newStatusId, Long operatorId) {
+    public void notifyStatusChanged(Issue issue, Long oldStatusId, Long newStatusId, Long operatorId, Long activityId) {
         try {
             // 根据操作者的 notifyOwnChanges 偏好决定是否排除自己
             boolean excludeSelf = !preferenceService.isNotifyOwnChanges(operatorId, issue.getProjectId());
@@ -215,9 +215,9 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
                 return;
             }
 
-            // 按 reason 分组后批量调用（最多 2 组：assigned/reporter）
+            // 按 reason 分组后批量调用（最多 2 组：assigned/reporter）；传入 activityId 作为 sourceId
             batchNotifyByReason(enabledUserIds, recipientReasons, operatorId, title, content,
-                    NotificationType.issue_status_changed, "issue", issue.getId(), issue.getProjectId());
+                    NotificationType.issue_status_changed, "issue", issue.getId(), issue.getProjectId(), activityId);
 
             log.debug("[IssueNotification] 已发送状态变更通知: issue={}, eventType={}, recipients={}",
                     issue.getIssueKey(), eventType, enabledUserIds.size());
@@ -453,7 +453,7 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
      * 使用 ISSUE_UPDATED 偏好检查——用户可独立控制是否接收此类通知。
      */
     @Async("notificationExecutor")
-    public void notifyFieldUpdated(Issue issue, String fieldName, String oldValue, String newValue, Long operatorId) {
+    public void notifyFieldUpdated(Issue issue, String fieldName, String oldValue, String newValue, Long operatorId, Long activityId) {
         try {
             boolean excludeSelf = !preferenceService.isNotifyOwnChanges(operatorId, issue.getProjectId());
             Long excludeUserId = excludeSelf ? operatorId : null;
@@ -488,7 +488,7 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
             }
 
             batchNotifyByReason(enabledUserIds, recipientReasons, operatorId, title, content,
-                    NotificationType.issue_updated, "issue", issue.getId(), issue.getProjectId());
+                    NotificationType.issue_updated, "issue", issue.getId(), issue.getProjectId(), activityId);
 
             log.debug("[IssueNotification] 已发送字段变更通知: issue={}, field={}, recipients={}",
                     issue.getIssueKey(), fieldName, enabledUserIds.size());
@@ -517,7 +517,7 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
      * @param operatorId 操作者 ID
      */
     @Async("notificationExecutor")
-    public void notifyMultiFieldUpdated(Issue issue, Map<String, String[]> changes, Long operatorId) {
+    public void notifyMultiFieldUpdated(Issue issue, Map<String, String[]> changes, Long operatorId, Long activityId) {
         try {
             if (changes == null || changes.isEmpty()) {
                 return;
@@ -527,7 +527,7 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
             if (changes.size() == 1) {
                 Map.Entry<String, String[]> entry = changes.entrySet().iterator().next();
                 String[] vals = entry.getValue();
-                notifyFieldUpdated(issue, entry.getKey(), vals[0], vals[1], operatorId);
+                notifyFieldUpdated(issue, entry.getKey(), vals[0], vals[1], operatorId, activityId);
                 return;
             }
 
@@ -568,7 +568,7 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
             String content = sb.toString().stripTrailing();
 
             batchNotifyByReason(enabledUserIds, recipientReasons, operatorId, title, content,
-                    NotificationType.issue_updated, "issue", issue.getId(), issue.getProjectId());
+                    NotificationType.issue_updated, "issue", issue.getId(), issue.getProjectId(), activityId);
 
             log.debug("[IssueNotification] 已发送多字段变更通知: issue={}, fields={}, recipients={}",
                     issue.getIssueKey(), changes.keySet(), enabledUserIds.size());
@@ -590,7 +590,7 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
      * 附件上传通知：通知负责人、报告人和关注者。
      */
     @Async("notificationExecutor")
-    public void notifyAttachmentAdded(Issue issue, String fileName, Long operatorId) {
+    public void notifyAttachmentAdded(Issue issue, String fileName, Long operatorId, Long activityId) {
         try {
             boolean excludeSelf = !preferenceService.isNotifyOwnChanges(operatorId, issue.getProjectId());
             Long excludeUserId = excludeSelf ? operatorId : null;
@@ -607,7 +607,7 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
                     operatorName, issue.getIssueKey(), issue.getTitle(), fileName);
 
             batchNotifyByReason(enabledUserIds, recipientReasons, operatorId, title, content,
-                    NotificationType.issue_updated, "issue", issue.getId(), issue.getProjectId());
+                    NotificationType.issue_updated, "issue", issue.getId(), issue.getProjectId(), activityId);
 
             log.debug("[IssueNotification] 已发送附件上传通知: issue={}, file={}, recipients={}",
                     issue.getIssueKey(), fileName, enabledUserIds.size());
@@ -627,7 +627,7 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
      * 关联变更通知：通知负责人、报告人和关注者。
      */
     @Async("notificationExecutor")
-    public void notifyLinkChanged(Issue issue, String targetIssueKey, String linkType, boolean added, Long operatorId) {
+    public void notifyLinkChanged(Issue issue, String targetIssueKey, String linkType, boolean added, Long operatorId, Long activityId) {
         try {
             boolean excludeSelf = !preferenceService.isNotifyOwnChanges(operatorId, issue.getProjectId());
             Long excludeUserId = excludeSelf ? operatorId : null;
@@ -646,7 +646,7 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
                     targetIssueKey, getLinkTypeLabel(linkType));
 
             batchNotifyByReason(enabledUserIds, recipientReasons, operatorId, title, content,
-                    NotificationType.issue_updated, "issue", issue.getId(), issue.getProjectId());
+                    NotificationType.issue_updated, "issue", issue.getId(), issue.getProjectId(), activityId);
 
             log.debug("[IssueNotification] 已发送关联变更通知: issue={}, target={}, type={}, added={}, recipients={}",
                     issue.getIssueKey(), targetIssueKey, linkType, added, enabledUserIds.size());
@@ -892,6 +892,27 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
     private void batchNotifyByReason(Set<Long> enabledUserIds, Map<Long, NotificationReason> recipientReasons,
                                      Long actorId, String title, String content,
                                      NotificationType type, String resourceType, Long resourceId, Long projectId) {
+        batchNotifyByReason(enabledUserIds, recipientReasons, actorId, title, content, type, resourceType, resourceId, projectId, null);
+    }
+
+    /**
+     * 按 reason 分组后批量调用 notifyBatch（含 sourceId 用于精准定位）。
+     *
+     * @param enabledUserIds   通过偏好过滤后的接收者集合
+     * @param recipientReasons 接收者 → reason 映射
+     * @param actorId          操作者 ID
+     * @param title            通知标题
+     * @param content          通知内容
+     * @param type             通知类型
+     * @param resourceType     关联资源类型
+     * @param resourceId       关联资源 ID
+     * @param projectId        项目 ID
+     * @param sourceId         定位用 sourceId（评论 ID 或活动记录 ID），可为 null
+     */
+    private void batchNotifyByReason(Set<Long> enabledUserIds, Map<Long, NotificationReason> recipientReasons,
+                                     Long actorId, String title, String content,
+                                     NotificationType type, String resourceType, Long resourceId, Long projectId,
+                                     Long sourceId) {
         // 按 reason 分组（只保留通过偏好过滤的用户）
         Map<NotificationReason, Set<Long>> grouped = enabledUserIds.stream()
                 .collect(Collectors.groupingBy(
@@ -901,7 +922,7 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
         // 每组一次批量调用（最多 3 组：assigned/reporter/commenter）
         for (Map.Entry<NotificationReason, Set<Long>> entry : grouped.entrySet()) {
             notificationService.notifyBatch(entry.getValue(), actorId, title, content,
-                    type, entry.getKey(), resourceType, resourceId, projectId);
+                    type, entry.getKey(), resourceType, resourceId, projectId, sourceId);
         }
     }
 

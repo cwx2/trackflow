@@ -32,22 +32,26 @@ public class IssueActivityService {
 
     /**
      * 记录活动（简化版，无显示值）
+     *
+     * @return 新创建的活动记录 ID
      */
-    public void recordActivity(Long issueId, Long userId, String action,
+    public Long recordActivity(Long issueId, Long userId, String action,
                                String fieldName, String oldValue, String newValue) {
-        recordActivity(issueId, userId, action, fieldName, oldValue, newValue, null, null);
+        return recordActivity(issueId, userId, action, fieldName, oldValue, newValue, null, null);
     }
 
     /**
      * 记录活动（完整版，含显示值）
+     *
+     * @return 新创建的活动记录 ID；若为无效变更（同值跳过）则返回 null
      */
-    public void recordActivity(Long issueId, Long userId, String action,
+    public Long recordActivity(Long issueId, Long userId, String action,
                                String fieldName, String oldValue, String newValue,
                                String oldDisplayValue, String newDisplayValue) {
         // Skip no-op changes: if both old and new values are present and identical, don't record
         if (oldValue != null && newValue != null && oldValue.equals(newValue)
                 && "updated".equals(action)) {
-            return;
+            return null;
         }
         IssueActivity activity = new IssueActivity();
         activity.setIssueId(issueId);
@@ -63,6 +67,7 @@ public class IssueActivityService {
         }
         activity.setCreatedAt(LocalDateTime.now());
         activityMapper.insert(activity);
+        return activity.getId();
     }
 
     /**

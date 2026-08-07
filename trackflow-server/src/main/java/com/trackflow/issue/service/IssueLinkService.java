@@ -167,16 +167,16 @@ public class IssueLinkService {
         Long currentUserId = SecurityUtils.getCurrentUserId();
         String reverseType = getReverseLinkType(linkType);
 
-        recordActivity(issueId, currentUserId, "link_added", "link",
+        Long sourceActivityId = recordActivity(issueId, currentUserId, "link_added", "link",
                 null, linkType + " " + targetIssue.getIssueKey());
-        recordActivity(targetIssueId, currentUserId, "link_added", "link",
+        Long targetActivityId = recordActivity(targetIssueId, currentUserId, "link_added", "link",
                 null, reverseType + " " + sourceIssue.getIssueKey());
 
         // 发布通知事件（双向：source 和 target 的负责人/关注者都应收到通知）
         eventPublisher.publishEvent(new IssueNotificationEvent.LinkChanged(
-                sourceIssue, targetIssue.getIssueKey(), linkType, true, currentUserId));
+                sourceIssue, targetIssue.getIssueKey(), linkType, true, currentUserId, sourceActivityId));
         eventPublisher.publishEvent(new IssueNotificationEvent.LinkChanged(
-                targetIssue, sourceIssue.getIssueKey(), reverseType, true, currentUserId));
+                targetIssue, sourceIssue.getIssueKey(), reverseType, true, currentUserId, targetActivityId));
 
         // 触发 link_added 工作流规则（双向：source 和 target 都触发）
         eventPublisher.publishEvent(new WorkflowRuleEvent.LinkAdded(
@@ -211,17 +211,17 @@ public class IssueLinkService {
         String targetKey = targetIssue != null ? targetIssue.getIssueKey() : "unknown";
         String sourceKey = sourceIssue != null ? sourceIssue.getIssueKey() : "unknown";
 
-        recordActivity(link.getSourceIssueId(), currentUserId, "link_removed", "link",
+        Long srcActId = recordActivity(link.getSourceIssueId(), currentUserId, "link_removed", "link",
                 linkType + " " + targetKey, null);
-        recordActivity(link.getTargetIssueId(), currentUserId, "link_removed", "link",
+        Long tgtActId = recordActivity(link.getTargetIssueId(), currentUserId, "link_removed", "link",
                 reverseType + " " + sourceKey, null);
 
         // 发布通知事件（双向）
         if (sourceIssue != null && targetIssue != null) {
             eventPublisher.publishEvent(new IssueNotificationEvent.LinkChanged(
-                    sourceIssue, targetKey, linkType, false, currentUserId));
+                    sourceIssue, targetKey, linkType, false, currentUserId, srcActId));
             eventPublisher.publishEvent(new IssueNotificationEvent.LinkChanged(
-                    targetIssue, sourceKey, reverseType, false, currentUserId));
+                    targetIssue, sourceKey, reverseType, false, currentUserId, tgtActId));
 
             // 触发 link_removed 工作流规则（双向）
             eventPublisher.publishEvent(new WorkflowRuleEvent.LinkRemoved(
@@ -389,8 +389,10 @@ public class IssueLinkService {
 
     /**
      * 记录活动日志
+     *
+     * @return 新创建的活动记录 ID
      */
-    private void recordActivity(Long issueId, Long userId, String action,
+    private Long recordActivity(Long issueId, Long userId, String action,
                                 String fieldName, String oldValue, String newValue) {
         IssueActivity activity = new IssueActivity();
         activity.setIssueId(issueId);
@@ -401,5 +403,6 @@ public class IssueLinkService {
         activity.setNewValue(newValue);
         activity.setCreatedAt(LocalDateTime.now());
         activityMapper.insert(activity);
+        return activity.getId();
     }
 }

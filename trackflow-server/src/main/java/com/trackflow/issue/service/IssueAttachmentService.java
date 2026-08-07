@@ -139,9 +139,8 @@ public class IssueAttachmentService {
         attachment.setCreatedAt(LocalDateTime.now());
         attachmentMapper.insert(attachment);
 
-        activityService.recordActivity(issueId, currentUserId, "attachment_added", "attachment", null, safeFileName);
-
-        eventPublisher.publishEvent(new IssueNotificationEvent.AttachmentAdded(issue, safeFileName, currentUserId));
+        Long attachActId = activityService.recordActivity(issueId, currentUserId, "attachment_added", "attachment", null, safeFileName);
+        eventPublisher.publishEvent(new IssueNotificationEvent.AttachmentAdded(issue, safeFileName, currentUserId, attachActId));
         eventPublisher.publishEvent(new WorkflowRuleEvent.AttachmentAdded(issueId, issue.getProjectId(), attachment.getId()));
 
         return attachment;

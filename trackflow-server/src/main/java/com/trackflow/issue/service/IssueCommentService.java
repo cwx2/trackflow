@@ -107,7 +107,7 @@ public class IssueCommentService {
         activityService.recordActivity(issueId, currentUserId, "commented", null, null, null);
 
         // 通知报告人+负责人+之前评论者 — 事务提交后触发
-        eventPublisher.publishEvent(new IssueNotificationEvent.Commented(issue, currentUserId));
+        eventPublisher.publishEvent(new IssueNotificationEvent.Commented(issue, currentUserId, comment.getId()));
 
         // 解析评论中的 @mention 并通知被提及的用户 — 事务提交后触发
         eventPublisher.publishEvent(new IssueNotificationEvent.Mentioned(issue, content, currentUserId, comment.getId()));

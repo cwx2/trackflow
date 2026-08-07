@@ -22,13 +22,17 @@ public sealed interface IssueNotificationEvent extends NotificationEvent {
 
     /**
      * 工单状态变更通知事件
+     *
+     * @param activityId 对应 IssueActivity 记录的 ID，用于通知精准定位（可为 null）
      */
-    record StatusChanged(Issue issue, Long oldStatusId, Long newStatusId, Long operatorId) implements IssueNotificationEvent {}
+    record StatusChanged(Issue issue, Long oldStatusId, Long newStatusId, Long operatorId, Long activityId) implements IssueNotificationEvent {}
 
     /**
      * 工单评论通知事件
+     *
+     * @param commentId 评论 ID，用于通知精准定位到具体评论
      */
-    record Commented(Issue issue, Long commenterId) implements IssueNotificationEvent {}
+    record Commented(Issue issue, Long commenterId, Long commentId) implements IssueNotificationEvent {}
 
     /**
      * 工单 @mention 通知事件
@@ -59,8 +63,9 @@ public sealed interface IssueNotificationEvent extends NotificationEvent {
      * @param oldValue    旧值（显示用，可为 null）
      * @param newValue    新值（显示用，可为 null）
      * @param operatorId  操作者 ID
+     * @param activityId  对应 IssueActivity 记录的 ID，用于通知精准定位（可为 null）
      */
-    record FieldUpdated(Issue issue, String fieldName, String oldValue, String newValue, Long operatorId) implements IssueNotificationEvent {}
+    record FieldUpdated(Issue issue, String fieldName, String oldValue, String newValue, Long operatorId, Long activityId) implements IssueNotificationEvent {}
 
     /**
      * 工单多字段同时变更通知事件。
@@ -74,8 +79,9 @@ public sealed interface IssueNotificationEvent extends NotificationEvent {
      * @param issue       变更后的 Issue 实体
      * @param changes     变更字段映射：fieldName → [oldValue, newValue]
      * @param operatorId  操作者 ID
+     * @param activityId  最后一条活动记录 ID，用于通知精准定位（可为 null）
      */
-    record MultiFieldUpdated(Issue issue, java.util.Map<String, String[]> changes, Long operatorId) implements IssueNotificationEvent {}
+    record MultiFieldUpdated(Issue issue, java.util.Map<String, String[]> changes, Long operatorId, Long activityId) implements IssueNotificationEvent {}
 
     /**
      * 附件上传通知事件。
@@ -83,8 +89,9 @@ public sealed interface IssueNotificationEvent extends NotificationEvent {
      * @param issue      所属工单
      * @param fileName   上传的文件名
      * @param operatorId 操作者 ID
+     * @param activityId 对应 IssueActivity 记录的 ID，用于通知精准定位（可为 null）
      */
-    record AttachmentAdded(Issue issue, String fileName, Long operatorId) implements IssueNotificationEvent {}
+    record AttachmentAdded(Issue issue, String fileName, Long operatorId, Long activityId) implements IssueNotificationEvent {}
 
     /**
      * 工单关联变更通知事件（创建或删除关联）。
@@ -94,8 +101,9 @@ public sealed interface IssueNotificationEvent extends NotificationEvent {
      * @param linkType      关联类型（如 blocks, relates_to）
      * @param added         true=创建关联, false=删除关联
      * @param operatorId    操作者 ID
+     * @param activityId    对应 IssueActivity 记录的 ID，用于通知精准定位（可为 null）
      */
-    record LinkChanged(Issue issue, String targetIssueKey, String linkType, boolean added, Long operatorId) implements IssueNotificationEvent {}
+    record LinkChanged(Issue issue, String targetIssueKey, String linkType, boolean added, Long operatorId, Long activityId) implements IssueNotificationEvent {}
 
     /**
      * 工时记录通知事件。

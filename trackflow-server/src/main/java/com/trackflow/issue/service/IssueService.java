@@ -1443,7 +1443,7 @@ public class IssueService {
         // 发布合并的字段变更通知事件（事务提交后触发，一次操作只产生一条通知）
         if (!fieldChanges.isEmpty()) {
             eventPublisher.publishEvent(new IssueNotificationEvent.MultiFieldUpdated(
-                    issue, fieldChanges, currentUserId));
+                    issue, fieldChanges, currentUserId, null));
         }
 
         // 失效 Dashboard 缓存 — 事务提交后触发
@@ -2264,11 +2264,11 @@ public class IssueService {
         String oldStatusDisplayName = oldStatus != null ? oldStatus.getLocalizedName() : String.valueOf(oldStatusId);
         String newStatusDisplayName = newStatus.getLocalizedName();
         String activityAction = isUndo ? "status_reverted" : "status_changed";
-        recordActivity(id, currentUserId, activityAction, "status",
+        Long statusActivityId = recordActivity(id, currentUserId, activityAction, "status",
                 oldStatusDisplayName, newStatusDisplayName);
 
         // 通知报告人+负责人状态已变更 — 事务提交后触发
-        eventPublisher.publishEvent(new IssueNotificationEvent.StatusChanged(issue, oldStatusId, newStatusId, currentUserId));
+        eventPublisher.publishEvent(new IssueNotificationEvent.StatusChanged(issue, oldStatusId, newStatusId, currentUserId, statusActivityId));
 
         // 触发 field_changed 自动化规则（status_id 字段）— 对标 YouTrack On-change 规则可监听 State 字段
         eventPublisher.publishEvent(new WorkflowRuleEvent.FieldChanged(
@@ -2398,7 +2398,7 @@ public class IssueService {
         recordActivity(issueId, currentUserId, "commented", null, null, null);
 
         // 通知报告人+负责人+之前评论者 — 事务提交后触发
-        eventPublisher.publishEvent(new IssueNotificationEvent.Commented(issue, currentUserId));
+        eventPublisher.publishEvent(new IssueNotificationEvent.Commented(issue, currentUserId, comment.getId()));
 
         // 解析评论中的 @mention 并通知被提及的用户 — 事务提交后触发
         eventPublisher.publishEvent(new IssueNotificationEvent.Mentioned(issue, content, currentUserId, comment.getId()));
@@ -2858,10 +2858,10 @@ public class IssueService {
         attachmentMapper.insert(attachment);
 
         // 记录活动
-        recordActivity(issueId, currentUserId, "attachment_added", "attachment", null, safeFileName);
+        Long attachActivityId = recordActivity(issueId, currentUserId, "attachment_added", "attachment", null, safeFileName);
 
         // 发布通知事件
-        eventPublisher.publishEvent(new IssueNotificationEvent.AttachmentAdded(issue, safeFileName, currentUserId));
+        eventPublisher.publishEvent(new IssueNotificationEvent.AttachmentAdded(issue, safeFileName, currentUserId, attachActivityId));
 
         // 触发 attachment_added 工作流规则
         eventPublisher.publishEvent(new WorkflowRuleEvent.AttachmentAdded(issueId, issue.getProjectId(), attachment.getId()));
@@ -3170,15 +3170,15 @@ public class IssueService {
         }
     }
 
-    private void recordActivity(Long issueId, Long userId, String action,
+    private Long recordActivity(Long issueId, Long userId, String action,
                                 String fieldName, String oldValue, String newValue) {
-        activityService.recordActivity(issueId, userId, action, fieldName, oldValue, newValue);
+        return activityService.recordActivity(issueId, userId, action, fieldName, oldValue, newValue);
     }
 
-    private void recordActivity(Long issueId, Long userId, String action,
+    private Long recordActivity(Long issueId, Long userId, String action,
                                 String fieldName, String oldValue, String newValue,
                                 String oldDisplayValue, String newDisplayValue) {
-        activityService.recordActivity(issueId, userId, action, fieldName, oldValue, newValue, oldDisplayValue, newDisplayValue);
+        return activityService.recordActivity(issueId, userId, action, fieldName, oldValue, newValue, oldDisplayValue, newDisplayValue);
     }
 
     /**

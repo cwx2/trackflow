@@ -48,7 +48,7 @@ public class IssueNotificationEventListener {
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void handleStatusChanged(IssueNotificationEvent.StatusChanged event) {
         if (NotificationContext.isSilent()) return;
-        notificationHelper.notifyStatusChanged(event.issue(), event.oldStatusId(), event.newStatusId(), event.operatorId());
+        notificationHelper.notifyStatusChanged(event.issue(), event.oldStatusId(), event.newStatusId(), event.operatorId(), event.activityId());
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
@@ -56,7 +56,7 @@ public class IssueNotificationEventListener {
         // 自动关注：评论工单后
         watcherService.autoWatchOnComment(event.issue().getId(), event.commenterId());
         if (NotificationContext.isSilent()) return;
-        notificationHelper.notifyCommented(event.issue(), event.commenterId());
+        notificationHelper.notifyCommented(event.issue(), event.commenterId(), event.commentId());
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
@@ -82,7 +82,7 @@ public class IssueNotificationEventListener {
         // 自动关注：修改工单后
         watcherService.autoWatchOnUpdate(event.issue().getId(), event.operatorId());
         if (NotificationContext.isSilent()) return;
-        notificationHelper.notifyFieldUpdated(event.issue(), event.fieldName(), event.oldValue(), event.newValue(), event.operatorId());
+        notificationHelper.notifyFieldUpdated(event.issue(), event.fieldName(), event.oldValue(), event.newValue(), event.operatorId(), event.activityId());
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
@@ -90,7 +90,7 @@ public class IssueNotificationEventListener {
         // 自动关注：修改工单后
         watcherService.autoWatchOnUpdate(event.issue().getId(), event.operatorId());
         if (NotificationContext.isSilent()) return;
-        notificationHelper.notifyMultiFieldUpdated(event.issue(), event.changes(), event.operatorId());
+        notificationHelper.notifyMultiFieldUpdated(event.issue(), event.changes(), event.operatorId(), event.activityId());
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
@@ -98,7 +98,7 @@ public class IssueNotificationEventListener {
         // 自动关注：上传附件后
         watcherService.autoWatchOnUpdate(event.issue().getId(), event.operatorId());
         if (NotificationContext.isSilent()) return;
-        notificationHelper.notifyAttachmentAdded(event.issue(), event.fileName(), event.operatorId());
+        notificationHelper.notifyAttachmentAdded(event.issue(), event.fileName(), event.operatorId(), event.activityId());
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
@@ -106,7 +106,7 @@ public class IssueNotificationEventListener {
         // 自动关注：修改关联后
         watcherService.autoWatchOnUpdate(event.issue().getId(), event.operatorId());
         if (NotificationContext.isSilent()) return;
-        notificationHelper.notifyLinkChanged(event.issue(), event.targetIssueKey(), event.linkType(), event.added(), event.operatorId());
+        notificationHelper.notifyLinkChanged(event.issue(), event.targetIssueKey(), event.linkType(), event.added(), event.operatorId(), event.activityId());
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
