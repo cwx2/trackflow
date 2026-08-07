@@ -45,23 +45,16 @@
             选择每周的工作日。非工作日在时间表中以灰色标注，不显示配额，燃尽图理想线在非工作日不下降。
           </p>
         </div>
-        <div class="workdays-grid">
-          <label
+        <a-checkbox-group v-model="form.workingDays" class="workdays-grid" @change="onWorkingDaysChange">
+          <a-checkbox
             v-for="day in allDays"
             :key="day.value"
+            :value="day.value"
             class="workday-item"
-            :class="{ checked: form.workingDays.includes(day.value) }"
           >
-            <input
-              type="checkbox"
-              :value="day.value"
-              :checked="form.workingDays.includes(day.value)"
-              @change="toggleWorkday(day.value)"
-              class="workday-checkbox"
-            />
-            <span class="workday-label">{{ day.label }}</span>
-          </label>
-        </div>
+            {{ day.label }}
+          </a-checkbox>
+        </a-checkbox-group>
         <p class="field-hint">至少选择一个工作日。</p>
       </div>
 
@@ -116,19 +109,17 @@
           </p>
         </div>
 
-        <div class="recalc-options">
-          <label
+        <a-radio-group v-model="selectedStrategy" direction="vertical" class="recalc-options">
+          <div
             class="recalc-option"
             :class="{ selected: selectedStrategy === 'PRESERVE_MINUTES' }"
             @click="selectedStrategy = 'PRESERVE_MINUTES'"
           >
-            <input
-              type="radio"
-              name="strategy"
-              value="PRESERVE_MINUTES"
-              v-model="selectedStrategy"
-              class="recalc-radio"
-            />
+            <a-radio value="PRESERVE_MINUTES">
+              <template #radio="{ checked }">
+                <span class="recalc-radio-dot" :class="{ 'is-checked': checked }"></span>
+              </template>
+            </a-radio>
             <div class="recalc-option-content">
               <span class="recalc-option-title">保留分钟数</span>
               <span class="recalc-option-desc">
@@ -136,20 +127,18 @@
                 例如：480 分钟原来显示为 1d，修改后显示为 {{ formatMinutesPreview(480, form.hoursPerDay) }}。
               </span>
             </div>
-          </label>
+          </div>
 
-          <label
+          <div
             class="recalc-option"
             :class="{ selected: selectedStrategy === 'PRESERVE_DAYS' }"
             @click="selectedStrategy = 'PRESERVE_DAYS'"
           >
-            <input
-              type="radio"
-              name="strategy"
-              value="PRESERVE_DAYS"
-              v-model="selectedStrategy"
-              class="recalc-radio"
-            />
+            <a-radio value="PRESERVE_DAYS">
+              <template #radio="{ checked }">
+                <span class="recalc-radio-dot" :class="{ 'is-checked': checked }"></span>
+              </template>
+            </a-radio>
             <div class="recalc-option-content">
               <span class="recalc-option-title">保留天数</span>
               <span class="recalc-option-desc">
@@ -160,28 +149,37 @@
                 ⚠ 此操作将修改数据库中的实际数值，建议提前备份数据库。
               </span>
             </div>
-          </label>
-        </div>
+          </div>
+        </a-radio-group>
 
         <!-- Example table -->
         <div class="recalc-example">
           <div class="recalc-example-title">换算示例</div>
-          <table class="recalc-table">
-            <thead>
-              <tr>
-                <th>当前值</th>
-                <th>保留分钟数</th>
-                <th>保留天数</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="example in recalcExamples" :key="example.minutes">
-                <td>{{ formatMinutes(example.minutes, originalSettings.hoursPerDay) }}</td>
-                <td>{{ formatMinutes(example.minutes, form.hoursPerDay) }}</td>
-                <td>{{ formatMinutes(Math.round(example.minutes * form.hoursPerDay / originalSettings.hoursPerDay), form.hoursPerDay) }}</td>
-              </tr>
-            </tbody>
-          </table>
+          <a-table
+            :data="recalcExamples"
+            :pagination="false"
+            :bordered="false"
+            size="small"
+            class="recalc-table"
+          >
+            <template #columns>
+              <a-table-column title="当前值" data-index="current">
+                <template #cell="{ record }">
+                  <span class="mono-text">{{ formatMinutes(record.minutes, originalSettings.hoursPerDay) }}</span>
+                </template>
+              </a-table-column>
+              <a-table-column title="保留分钟数" data-index="preserveMinutes">
+                <template #cell="{ record }">
+                  <span class="mono-text">{{ formatMinutes(record.minutes, form.hoursPerDay) }}</span>
+                </template>
+              </a-table-column>
+              <a-table-column title="保留天数" data-index="preserveDays">
+                <template #cell="{ record }">
+                  <span class="mono-text">{{ formatMinutes(Math.round(record.minutes * form.hoursPerDay / originalSettings.hoursPerDay), form.hoursPerDay) }}</span>
+                </template>
+              </a-table-column>
+            </template>
+          </a-table>
         </div>
 
         <div class="recalc-actions">
@@ -201,7 +199,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, nextTick } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { systemSettingApi } from '@/api/systemSetting'
 import type { TimeTrackingSettingsVO, UpdateTimeTrackingSettingsDTO } from '@/api/systemSetting'
@@ -218,6 +216,7 @@ const form = reactive({
 
 // Original values for reset and comparison
 let originalSettings: TimeTrackingSettingsVO = { hoursPerDay: 8, workingDays: [1, 2, 3, 4, 5] }
+let lastValidWorkingDays: number[] = [1, 2, 3, 4, 5]
 
 const allDays = [
   { value: 1, label: '周一' },
@@ -240,18 +239,20 @@ const recalcExamples = computed(() => {
   ]
 })
 
-function toggleWorkday(day: number) {
-  const idx = form.workingDays.indexOf(day)
-  if (idx >= 0) {
-    if (form.workingDays.length <= 1) {
-      Message.warning('至少需要保留一个工作日')
-      return
-    }
-    form.workingDays.splice(idx, 1)
-  } else {
-    form.workingDays.push(day)
-    form.workingDays.sort((a, b) => a - b)
+function onWorkingDaysChange(values: (string | number | boolean)[]) {
+  const numValues = values as number[]
+  if (numValues.length === 0) {
+    // Prevent unchecking the last day — restore previous state
+    Message.warning('至少需要保留一个工作日')
+    // v-model already set to empty, so we revert on next tick
+    nextTick(() => {
+      form.workingDays = lastValidWorkingDays.slice()
+    })
+    return
   }
+  const sorted = numValues.sort((a, b) => a - b)
+  form.workingDays = sorted
+  lastValidWorkingDays = sorted.slice()
 }
 
 /**
@@ -284,6 +285,7 @@ async function loadSettings() {
       form.hoursPerDay = res.data.hoursPerDay
       form.workingDays = [...res.data.workingDays]
       originalSettings = { ...res.data }
+      lastValidWorkingDays = [...res.data.workingDays]
     }
   } catch (e) {
     Message.error('加载时间追踪设置失败')
@@ -355,6 +357,7 @@ async function doSave(strategy?: 'PRESERVE_MINUTES' | 'PRESERVE_DAYS') {
 function resetForm() {
   form.hoursPerDay = originalSettings.hoursPerDay
   form.workingDays = [...originalSettings.workingDays]
+  lastValidWorkingDays = [...originalSettings.workingDays]
 }
 
 onMounted(loadSettings)
@@ -471,37 +474,27 @@ onMounted(loadSettings)
   flex-wrap: wrap;
 }
 
-.workday-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+.workdays-grid :deep(.arco-checkbox) {
   padding: 8px 14px;
   border-radius: 6px;
   border: 1px solid var(--tf-border-light);
   background: var(--tf-bg-surface);
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s;
-  user-select: none;
+  margin-right: 0;
 }
 
-.workday-item:hover {
+.workdays-grid :deep(.arco-checkbox:hover) {
   border-color: var(--tf-border);
   background: var(--tf-bg-hover);
 }
 
-.workday-item.checked {
+.workdays-grid :deep(.arco-checkbox-checked) {
   border-color: var(--tf-accent);
   background: var(--tf-accent-bg);
 }
 
-.workday-checkbox {
-  width: 14px;
-  height: 14px;
-  accent-color: var(--tf-accent);
-  cursor: pointer;
-}
-
-.workday-label {
+.workdays-grid :deep(.arco-checkbox-label) {
   font-size: 13px;
   color: var(--tf-text-primary);
   font-weight: 500;
@@ -570,6 +563,11 @@ onMounted(loadSettings)
   flex-direction: column;
   gap: 12px;
   margin-bottom: 20px;
+  width: 100%;
+}
+
+.recalc-options :deep(.arco-radio-group) {
+  width: 100%;
 }
 
 .recalc-option {
@@ -593,10 +591,23 @@ onMounted(loadSettings)
   background: var(--tf-accent-bg);
 }
 
-.recalc-radio {
+.recalc-option :deep(.arco-radio) {
   margin-top: 2px;
   flex-shrink: 0;
-  accent-color: var(--tf-accent);
+}
+
+.recalc-radio-dot {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--tf-border);
+  transition: border-color 0.15s;
+}
+
+.recalc-radio-dot.is-checked {
+  border-color: var(--tf-accent);
+  background: radial-gradient(circle, var(--tf-accent) 40%, transparent 40%);
 }
 
 .recalc-option-content {
@@ -634,28 +645,20 @@ onMounted(loadSettings)
   margin-bottom: 8px;
 }
 
-.recalc-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 12px;
-}
-
-.recalc-table th,
-.recalc-table td {
-  padding: 8px 12px;
-  text-align: left;
-  border-bottom: 1px solid var(--tf-border-light);
-}
-
-.recalc-table th {
+.recalc-table :deep(.arco-table-th) {
   font-weight: 500;
   color: var(--tf-text-tertiary);
+  font-size: 12px;
   background: var(--tf-bg-surface);
 }
 
-.recalc-table td {
-  color: var(--tf-text-primary);
+.recalc-table :deep(.arco-table-td) {
+  font-size: 12px;
+}
+
+.mono-text {
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  color: var(--tf-text-primary);
 }
 
 .recalc-actions {
