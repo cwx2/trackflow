@@ -9,220 +9,217 @@
     </div>
 
     <!-- 角色列表 -->
-    <div class="data-table">
-      <div class="table-header">
-        <div class="col" style="width:60px">ID</div>
-        <div class="col" style="width:150px">名称</div>
-        <div class="col" style="width:120px">编码</div>
-        <div class="col" style="width:100px">类型</div>
-        <div class="col" style="width:80px">用户数</div>
-        <div class="col" style="flex:1">描述</div>
-        <div class="col" style="width:80px">内置</div>
-        <div class="col" style="width:260px">操作</div>
-      </div>
-      <div class="table-body">
-        <div v-for="role in roles" :key="role.id" class="table-row">
-          <div class="col" style="width:60px">{{ role.id }}</div>
-          <div class="col" style="width:150px">
-            <span class="role-name">{{ role.name }}</span>
-          </div>
-          <div class="col" style="width:120px">
-            <code class="code-tag">{{ role.code }}</code>
-          </div>
-          <div class="col" style="width:100px">
-            <span class="type-badge" :class="role.roleType">{{ role.roleType }}</span>
-          </div>
-          <div class="col" style="width:80px">
-            <span
-              class="user-count-badge"
-              :class="{ clickable: role.userCount > 0 }"
-              @click="role.userCount > 0 && openUsersDialog(role)"
-            >
-              {{ role.userCount ?? 0 }} 人
-            </span>
-          </div>
-          <div class="col" style="flex:1">{{ role.description || '—' }}</div>
-          <div class="col" style="width:80px">
-            <span v-if="role.builtin" class="builtin-tag">是</span>
-          </div>
-          <div class="col" style="width:260px">
-            <a-button type="text" size="mini" @click="openUsersDialog(role)">用户</a-button>
-            <a-button type="text" size="mini" @click="openPermDialog(role)">权限</a-button>
-            <a-button type="text" size="mini" @click="openCloneDialog(role)">克隆</a-button>
-            <a-button type="text" size="mini" @click="editRole(role)" :disabled="role.builtin">编辑</a-button>
-            <a-button type="text" size="mini" status="danger" @click="deleteRole(role)" :disabled="role.builtin">删除</a-button>
-          </div>
-        </div>
-      </div>
-    </div>
+    <a-table
+      :data="roles"
+      :columns="tableColumns"
+      :pagination="false"
+      :bordered="false"
+      row-key="id"
+      size="medium"
+      class="role-table"
+    >
+      <template #name="{ record }">
+        <span class="role-name">{{ record.name }}</span>
+      </template>
+      <template #code="{ record }">
+        <code class="code-tag">{{ record.code }}</code>
+      </template>
+      <template #roleType="{ record }">
+        <span class="type-badge" :class="record.roleType">{{ record.roleType === 'global' ? '全局' : '项目级' }}</span>
+      </template>
+      <template #userCount="{ record }">
+        <span
+          class="user-count-badge"
+          :class="{ clickable: record.userCount > 0 }"
+          @click="record.userCount > 0 && openUsersDialog(record)"
+        >
+          {{ record.userCount ?? 0 }} 人
+        </span>
+      </template>
+      <template #builtin="{ record }">
+        <span v-if="record.builtin" class="builtin-tag">是</span>
+        <span v-else>—</span>
+      </template>
+      <template #actions="{ record }">
+        <a-button type="text" size="mini" @click="openUsersDialog(record)">用户</a-button>
+        <a-button type="text" size="mini" @click="openPermDialog(record)">权限</a-button>
+        <a-button type="text" size="mini" @click="openCloneDialog(record)">克隆</a-button>
+        <a-button type="text" size="mini" @click="editRole(record)" :disabled="record.builtin">编辑</a-button>
+        <a-button type="text" size="mini" status="danger" @click="deleteRole(record)" :disabled="record.builtin">删除</a-button>
+      </template>
+    </a-table>
 
     <!-- 创建/编辑角色弹窗 -->
-    <div class="modal-overlay" v-if="showCreateDialog" @click.self="showCreateDialog = false">
-      <div class="modal-sm">
-        <div class="modal-header">
-          <h3>{{ editingRole ? '编辑角色' : '创建角色' }}</h3>
-          <button class="btn-close" @click="showCreateDialog = false">✕</button>
-        </div>
-        <div class="modal-body">
-          <div class="form-row">
-            <label class="form-label">名称 *</label>
-            <input v-model="roleForm.name" class="form-input" />
-          </div>
-          <div class="form-row" v-if="!editingRole">
-            <label class="form-label">编码 *</label>
-            <input v-model="roleForm.code" class="form-input" placeholder="例如 qa_lead" />
-          </div>
-          <div class="form-row" v-if="!editingRole">
-            <label class="form-label">类型 *</label>
-            <a-select v-model="roleForm.roleType" size="small">
-              <a-option value="project">项目级</a-option>
-              <a-option value="global">全局</a-option>
-            </a-select>
-          </div>
-          <div class="form-row">
-            <label class="form-label">描述</label>
-            <input v-model="roleForm.description" class="form-input" />
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button class="btn-cancel" @click="showCreateDialog = false">取消</button>
-          <button class="btn-submit" @click="submitRole">{{ editingRole ? '更新' : '创建' }}</button>
-        </div>
-      </div>
-    </div>
+    <a-modal
+      v-model:visible="showCreateDialog"
+      :title="editingRole ? '编辑角色' : '创建角色'"
+      :ok-text="editingRole ? '更新' : '创建角色'"
+      cancel-text="取消"
+      :width="420"
+      @ok="submitRole"
+      @cancel="showCreateDialog = false"
+    >
+      <a-form :model="roleForm" layout="vertical" size="medium">
+        <a-form-item label="名称" required>
+          <a-input v-model="roleForm.name" placeholder="角色名称" />
+        </a-form-item>
+        <a-form-item v-if="!editingRole" label="编码" required>
+          <a-input v-model="roleForm.code" placeholder="例如 qa_lead" />
+        </a-form-item>
+        <a-form-item v-if="!editingRole" label="类型" required>
+          <a-radio-group v-model="roleForm.roleType">
+            <a-radio value="project">项目级</a-radio>
+            <a-radio value="global">全局</a-radio>
+          </a-radio-group>
+        </a-form-item>
+        <a-form-item label="描述">
+          <a-input v-model="roleForm.description" placeholder="角色描述（可选）" />
+        </a-form-item>
+      </a-form>
+    </a-modal>
 
-    <!-- 权限分配弹窗 -->
-    <div class="modal-overlay" v-if="showPermDialog" @click.self="showPermDialog = false">
-      <div class="modal-lg">
-        <div class="modal-header">
-          <h3>权限配置 — {{ permRole?.name }}</h3>
+    <!-- 权限配置抽屉 -->
+    <a-drawer
+      v-model:visible="showPermDialog"
+      :title="`权限配置 — ${permRole?.name || ''}`"
+      :width="560"
+      :footer="!permRole?.builtin"
+      @cancel="showPermDialog = false"
+    >
+      <template #title>
+        <div class="drawer-title-row">
+          <span>权限配置 — {{ permRole?.name }}</span>
           <span v-if="permRole?.builtin" class="builtin-badge">内置角色</span>
-          <button class="btn-close" @click="showPermDialog = false">✕</button>
         </div>
-        <div class="modal-body">
-          <!-- 内置角色只读提示 -->
-          <div v-if="permRole?.builtin" class="builtin-hint">
-            <span class="hint-icon">🔒</span>
-            <span class="hint-text">内置角色的权限不可修改。如需定制权限，请使用"克隆"功能创建副本后修改。</span>
-          </div>
-          <div v-for="group in filteredPermissionGroups" :key="group.category" class="perm-group">
-            <h4 class="perm-category">{{ CATEGORY_LABELS[group.category] || group.category }}</h4>
-            <div class="perm-list">
-              <label
-                v-for="perm in group.permissions"
-                :key="perm.code"
-                class="perm-item"
-                :class="{ readonly: permRole?.builtin, ungrantable: !permRole?.builtin && !rolePerms.includes(perm.code) && !canGrantPermission(perm.code) }"
-                :title="!permRole?.builtin && !canGrantPermission(perm.code) && !rolePerms.includes(perm.code) ? getUngrantableTooltip(perm.code) : ''"
-              >
-                <input
-                  type="checkbox"
-                  :checked="rolePerms.includes(perm.code)"
-                  @change="togglePerm(perm.code)"
-                  :disabled="permRole?.builtin || (!rolePerms.includes(perm.code) && !canGrantPermission(perm.code))"
-                />
-                <span class="perm-name">{{ perm.name }}</span>
-                <span class="perm-code">{{ perm.code }}</span>
-                <span v-if="!permRole?.builtin && !canGrantPermission(perm.code) && !rolePerms.includes(perm.code)" class="perm-lock">🔒</span>
-              </label>
-            </div>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button class="btn-cancel" @click="showPermDialog = false">{{ permRole?.builtin ? '关闭' : '取消' }}</button>
-          <button v-if="!permRole?.builtin" class="btn-submit" @click="savePermissions">保存权限</button>
+      </template>
+
+      <!-- 内置角色只读提示 -->
+      <a-alert v-if="permRole?.builtin" type="warning" class="builtin-alert">
+        <template #icon><icon-lock /></template>
+        内置角色的权限不可修改。如需定制权限，请使用"克隆"功能创建副本后修改。
+      </a-alert>
+
+      <div v-for="group in filteredPermissionGroups" :key="group.category" class="perm-group">
+        <h4 class="perm-category">{{ CATEGORY_LABELS[group.category] || group.category }}</h4>
+        <div class="perm-list">
+          <label
+            v-for="perm in group.permissions"
+            :key="perm.code"
+            class="perm-item"
+            :class="{ readonly: permRole?.builtin, ungrantable: !permRole?.builtin && !rolePerms.includes(perm.code) && !canGrantPermission(perm.code) }"
+            :title="!permRole?.builtin && !canGrantPermission(perm.code) && !rolePerms.includes(perm.code) ? getUngrantableTooltip(perm.code) : ''"
+          >
+            <a-checkbox
+              :model-value="rolePerms.includes(perm.code)"
+              :disabled="permRole?.builtin || (!rolePerms.includes(perm.code) && !canGrantPermission(perm.code))"
+              @change="togglePerm(perm.code)"
+            />
+            <span class="perm-name">{{ perm.name }}</span>
+            <span class="perm-code">{{ perm.code }}</span>
+            <span v-if="!permRole?.builtin && !canGrantPermission(perm.code) && !rolePerms.includes(perm.code)" class="perm-lock">🔒</span>
+          </label>
         </div>
       </div>
-    </div>
+
+      <template #footer>
+        <div class="drawer-footer">
+          <a-button @click="showPermDialog = false">取消</a-button>
+          <a-button type="primary" @click="savePermissions">保存权限</a-button>
+        </div>
+      </template>
+    </a-drawer>
 
     <!-- 克隆角色弹窗 -->
-    <div class="modal-overlay" v-if="showCloneDialog" @click.self="showCloneDialog = false">
-      <div class="modal-sm">
-        <div class="modal-header">
-          <h3>克隆角色 — {{ cloneSource?.name }}</h3>
-          <button class="btn-close" @click="showCloneDialog = false">✕</button>
-        </div>
-        <div class="modal-body">
-          <div class="clone-hint">将创建一个新角色，自动继承原角色的全部权限配置。</div>
-          <div class="form-row">
-            <label class="form-label">新角色名称 *</label>
-            <input v-model="cloneForm.name" class="form-input" />
-          </div>
-          <div class="form-row">
-            <label class="form-label">新角色编码 *</label>
-            <input v-model="cloneForm.code" class="form-input" placeholder="英文小写+下划线" />
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button class="btn-cancel" @click="showCloneDialog = false">取消</button>
-          <button class="btn-submit" @click="submitClone" :disabled="cloneLoading">{{ cloneLoading ? '克隆中...' : '克隆角色' }}</button>
-        </div>
-      </div>
-    </div>
+    <a-modal
+      v-model:visible="showCloneDialog"
+      :title="`克隆角色 — ${cloneSource?.name || ''}`"
+      ok-text="克隆角色"
+      cancel-text="取消"
+      :width="420"
+      :ok-loading="cloneLoading"
+      @ok="submitClone"
+      @cancel="showCloneDialog = false"
+    >
+      <a-alert type="info" style="margin-bottom: 16px;">
+        将创建一个新角色，自动继承原角色的全部权限配置。
+      </a-alert>
+      <a-form :model="cloneForm" layout="vertical" size="medium">
+        <a-form-item label="新角色名称" required>
+          <a-input v-model="cloneForm.name" placeholder="角色名称" />
+        </a-form-item>
+        <a-form-item label="新角色编码" required>
+          <a-input v-model="cloneForm.code" placeholder="英文小写+下划线" />
+        </a-form-item>
+      </a-form>
+    </a-modal>
 
     <!-- 已分配用户弹窗 -->
-    <div class="modal-overlay" v-if="showUsersDialog" @click.self="showUsersDialog = false">
-      <div class="modal-lg">
-        <div class="modal-header">
-          <h3>已分配用户 — {{ usersData?.roleName }}</h3>
+    <a-modal
+      v-model:visible="showUsersDialog"
+      :title="`已分配用户 — ${usersData?.roleName || ''}`"
+      :footer="false"
+      :width="600"
+      @cancel="showUsersDialog = false"
+    >
+      <template #title>
+        <div class="modal-title-row">
+          <span>已分配用户 — {{ usersData?.roleName }}</span>
           <span class="users-total">共 {{ usersData?.totalUserCount ?? 0 }} 人</span>
-          <button class="btn-close" @click="showUsersDialog = false">✕</button>
         </div>
-        <div class="modal-body">
-          <div v-if="usersLoading" class="users-loading">
-            <span class="spinner"></span> 加载中...
-          </div>
+      </template>
 
-          <!-- 全局角色：直接显示用户列表 -->
-          <template v-else-if="usersData?.roleType === 'global'">
-            <div v-if="usersData.globalUsers.length === 0" class="users-empty">
-              <div class="empty-icon">👤</div>
-              <div class="empty-title">暂无用户</div>
-              <div class="empty-desc">该角色尚未分配给任何用户</div>
-            </div>
-            <div v-else class="users-list">
-              <div v-for="user in usersData.globalUsers" :key="user.id" class="user-item">
-                <div class="user-avatar">{{ user.displayName?.charAt(0) || '?' }}</div>
-                <div class="user-info">
-                  <div class="user-name">{{ user.displayName }}</div>
-                  <div class="user-meta">{{ user.username }} · {{ user.email || '—' }}</div>
-                </div>
+      <a-spin :loading="usersLoading" style="width: 100%;">
+        <!-- 全局角色：直接显示用户列表 -->
+        <template v-if="usersData?.roleType === 'global'">
+          <div v-if="usersData.globalUsers.length === 0" class="users-empty">
+            <a-empty description="该角色尚未分配给任何用户">
+              <template #image><icon-user style="font-size: 48px; color: var(--color-text-3);" /></template>
+            </a-empty>
+          </div>
+          <div v-else class="users-list">
+            <div v-for="user in usersData.globalUsers" :key="user.id" class="user-item">
+              <div class="user-avatar">{{ user.displayName?.charAt(0) || '?' }}</div>
+              <div class="user-info">
+                <div class="user-name">{{ user.displayName }}</div>
+                <div class="user-meta">{{ user.username }} · {{ user.email || '—' }}</div>
               </div>
             </div>
-          </template>
+          </div>
+        </template>
 
-          <!-- 项目角色：按项目分组显示 -->
-          <template v-else-if="usersData?.roleType === 'project'">
-            <div v-if="usersData.projectGroups.length === 0" class="users-empty">
-              <div class="empty-icon">👤</div>
-              <div class="empty-title">暂无用户</div>
-              <div class="empty-desc">该角色尚未在任何项目中分配给用户</div>
-            </div>
-            <div v-else class="project-groups">
-              <div v-for="group in usersData.projectGroups" :key="group.projectId" class="project-group">
-                <div class="project-group-header">
-                  <span class="project-key-tag">{{ group.projectKey }}</span>
-                  <span class="project-group-name">{{ group.projectName }}</span>
-                  <span class="project-group-count">{{ group.users.length }} 人</span>
-                </div>
-                <div class="users-list">
-                  <div v-for="user in group.users" :key="user.id" class="user-item">
-                    <div class="user-avatar">{{ user.displayName?.charAt(0) || '?' }}</div>
-                    <div class="user-info">
-                      <div class="user-name">{{ user.displayName }}</div>
-                      <div class="user-meta">{{ user.username }} · {{ user.email || '—' }}</div>
-                    </div>
+        <!-- 项目角色：按项目分组显示 -->
+        <template v-else-if="usersData?.roleType === 'project'">
+          <div v-if="usersData.projectGroups.length === 0" class="users-empty">
+            <a-empty description="该角色尚未在任何项目中分配给用户">
+              <template #image><icon-user style="font-size: 48px; color: var(--color-text-3);" /></template>
+            </a-empty>
+          </div>
+          <div v-else class="project-groups">
+            <div v-for="group in usersData.projectGroups" :key="group.projectId" class="project-group">
+              <div class="project-group-header">
+                <span class="project-key-tag">{{ group.projectKey }}</span>
+                <span class="project-group-name">{{ group.projectName }}</span>
+                <span class="project-group-count">{{ group.users.length }} 人</span>
+              </div>
+              <div class="users-list">
+                <div v-for="user in group.users" :key="user.id" class="user-item">
+                  <div class="user-avatar">{{ user.displayName?.charAt(0) || '?' }}</div>
+                  <div class="user-info">
+                    <div class="user-name">{{ user.displayName }}</div>
+                    <div class="user-meta">{{ user.username }} · {{ user.email || '—' }}</div>
                   </div>
                 </div>
               </div>
             </div>
-          </template>
-        </div>
-        <div class="modal-footer">
-          <button class="btn-cancel" @click="showUsersDialog = false">关闭</button>
-        </div>
-      </div>
-    </div>
+          </div>
+        </template>
+
+        <!-- 加载中但无数据 -->
+        <template v-else-if="!usersLoading">
+          <a-empty description="暂无数据" />
+        </template>
+      </a-spin>
+    </a-modal>
   </div>
 </template>
 
@@ -245,6 +242,17 @@ const CATEGORY_LABELS: Record<string, string> = {
   rule: '规则权限',
 }
 
+const tableColumns = [
+  { title: 'ID', dataIndex: 'id', width: 60 },
+  { title: '名称', slotName: 'name', width: 150 },
+  { title: '编码', slotName: 'code', width: 120 },
+  { title: '类型', slotName: 'roleType', width: 100 },
+  { title: '用户数', slotName: 'userCount', width: 80 },
+  { title: '描述', dataIndex: 'description', ellipsis: true },
+  { title: '内置', slotName: 'builtin', width: 80 },
+  { title: '操作', slotName: 'actions', width: 260 },
+]
+
 const roles = ref<RoleVO[]>([])
 const showCreateDialog = ref(false)
 const editingRole = ref<RoleVO | null>(null)
@@ -255,7 +263,7 @@ const permRole = ref<RoleVO | null>(null)
 const rolePerms = ref<string[]>([])
 const permissionGroups = ref<PermissionGroup[]>([])
 const grantablePermissions = ref<Set<string>>(new Set())
-const isFullAdmin = ref(false) // operator is system_admin (can grant everything)
+const isFullAdmin = ref(false)
 
 /**
  * 根据角色类型过滤可见的权限组：
@@ -265,14 +273,12 @@ const isFullAdmin = ref(false) // operator is system_admin (can grant everything
  */
 const filteredPermissionGroups = computed(() => {
   if (!permRole.value) return permissionGroups.value
-  const roleType = permRole.value.roleType // 'global' or 'project'
+  const roleType = permRole.value.roleType
   return permissionGroups.value
     .map(group => ({
       ...group,
       permissions: group.permissions.filter(p => {
-        // global 角色只看 global scope 权限
         if (roleType === 'global') return p.scope === 'global'
-        // project 角色看 project scope + global scope 中的 project:create
         return p.scope === 'project' || p.code === 'project:create'
       })
     }))
@@ -284,7 +290,6 @@ const cloneSource = ref<RoleVO | null>(null)
 const cloneForm = reactive({ name: '', code: '' })
 const cloneLoading = ref(false)
 
-// 已分配用户弹窗状态
 const showUsersDialog = ref(false)
 const usersData = ref<RoleUsersVO | null>(null)
 const usersLoading = ref(false)
@@ -320,22 +325,12 @@ async function loadGrantablePermissions() {
   }
 }
 
-/**
- * 判断操作者是否可以授予指定权限。
- * - 如果权限已经在角色中（非新增），允许（保持）
- * - 如果是 system_admin，允许所有
- * - 否则检查操作者是否持有该权限
- */
 function canGrantPermission(permCode: string): boolean {
   if (isFullAdmin.value) return true
-  // 如果操作者持有该权限，则可以授予
   if (grantablePermissions.value.has(permCode)) return true
   return false
 }
 
-/**
- * 获取不可授予权限的 tooltip 文本
- */
 function getUngrantableTooltip(permCode: string): string {
   if (canGrantPermission(permCode)) return ''
   return '您不能授予自己不持有的权限'
@@ -420,11 +415,10 @@ async function openPermDialog(role: RoleVO) {
 }
 
 function togglePerm(perm: string) {
-  // 移除权限始终允许，添加权限需要检查 grantability
   if (rolePerms.value.includes(perm)) {
     rolePerms.value = rolePerms.value.filter(p => p !== perm)
   } else {
-    if (!canGrantPermission(perm)) return // 不可授予则不响应
+    if (!canGrantPermission(perm)) return
     rolePerms.value.push(perm)
   }
 }
@@ -460,13 +454,11 @@ onMounted(() => {
 .admin-page { padding: 24px; height: 100%; overflow-y: auto; }
 .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
 .page-title { font-size: 18px; font-weight: 600; color: var(--text-bright); }
-.btn-create { height: 32px; padding: 0 16px; background: var(--accent-blue); color: #fff; border: none; border-radius: var(--radius-md); font-size: var(--font-size-sm); font-weight: 500; cursor: pointer; }
 
-.data-table { border: 1px solid var(--border-color); border-radius: 6px; overflow: hidden; }
-.table-header { display: flex; padding: 8px 12px; background: var(--bg-tertiary); border-bottom: 1px solid var(--border-color); font-size: var(--font-size-xs); color: var(--text-secondary); text-transform: uppercase; }
-.table-row { display: flex; padding: 10px 12px; border-bottom: 1px solid var(--border-light); align-items: center; }
-.table-row:hover { background: var(--bg-hover); }
-.col { padding: 0 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--font-size-sm); }
+/* Table custom cell styles */
+.role-table :deep(.arco-table-th) { font-size: var(--font-size-xs); color: var(--text-secondary); text-transform: uppercase; background: var(--bg-tertiary); }
+.role-table :deep(.arco-table-td) { font-size: var(--font-size-sm); }
+.role-table :deep(.arco-table-tr:hover .arco-table-td) { background: var(--bg-hover); }
 
 .role-name { color: var(--text-bright); font-weight: 500; }
 .code-tag { font-size: var(--font-size-xs); background: var(--bg-tertiary); padding: 2px 6px; border-radius: var(--radius-sm); color: var(--accent-blue); }
@@ -479,63 +471,31 @@ onMounted(() => {
 .user-count-badge.clickable { cursor: pointer; color: var(--accent-blue); }
 .user-count-badge.clickable:hover { background: rgba(33,150,243,0.15); }
 
-.btn-sm { height: 24px; padding: 0 8px; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-primary); font-size: var(--font-size-xs); cursor: pointer; margin-right: 4px; }
-.btn-sm:hover { background: var(--bg-hover); }
-.btn-sm.danger { color: var(--accent-red); }
-.btn-sm:disabled { opacity: 0.3; cursor: not-allowed; }
-
-/* Modals */
-.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 1000; }
-.modal-sm { width: 420px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; }
-.modal-lg { width: 600px; max-height: 80vh; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; display: flex; flex-direction: column; }
-.modal-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--border-color); gap: 12px; }
-.modal-header h3 { font-size: 15px; color: var(--text-bright); font-weight: 500; }
-.btn-close { background: none; border: none; color: var(--text-secondary); font-size: 16px; cursor: pointer; }
-.modal-body { padding: 16px 18px; overflow-y: auto; flex: 1; }
-.modal-footer { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 18px; border-top: 1px solid var(--border-color); }
-
-.form-row { margin-bottom: 14px; }
-.form-label { display: block; font-size: var(--font-size-sm); color: var(--text-secondary); margin-bottom: 4px; }
-.form-input { width: 100%; height: 32px; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 0 10px; color: var(--text-primary); font-size: var(--font-size-md); outline: none; }
-.form-input:focus { border-color: var(--accent-blue); }
-
-.btn-cancel { height: 30px; padding: 0 14px; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: var(--radius-md); color: var(--text-primary); font-size: var(--font-size-sm); cursor: pointer; }
-.btn-submit { height: 30px; padding: 0 14px; background: var(--accent-blue); color: #fff; border: none; border-radius: var(--radius-md); font-size: var(--font-size-sm); font-weight: 500; cursor: pointer; }
+/* Drawer title */
+.drawer-title-row { display: flex; align-items: center; gap: 12px; }
+.builtin-badge { font-size: var(--font-size-xs); background: rgba(255,152,0,0.15); color: var(--accent-orange); padding: 2px 8px; border-radius: var(--radius-sm); font-weight: 500; }
+.builtin-alert { margin-bottom: 16px; }
 
 /* Permission groups */
-.perm-group { margin-bottom: 16px; }
-
-/* Built-in role hint */
-.builtin-badge { font-size: var(--font-size-xs); background: rgba(255,152,0,0.15); color: var(--accent-orange); padding: 2px 8px; border-radius: var(--radius-sm); font-weight: 500; margin-left: auto; margin-right: 8px; }
-.builtin-hint { display: flex; align-items: flex-start; gap: 8px; padding: 10px 12px; margin-bottom: 14px; background: rgba(255,152,0,0.08); border: 1px solid rgba(255,152,0,0.2); border-radius: var(--radius-md); }
-.hint-icon { font-size: 14px; flex-shrink: 0; line-height: 1.5; }
-.hint-text { font-size: var(--font-size-sm); color: var(--text-secondary); line-height: 1.5; }
+.perm-group { margin-bottom: 20px; }
+.perm-category { font-size: var(--font-size-sm); color: var(--accent-blue); text-transform: capitalize; margin-bottom: 10px; font-weight: 500; }
+.perm-list { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.perm-item { display: flex; align-items: center; gap: 6px; font-size: var(--font-size-sm); color: var(--text-primary); cursor: pointer; padding: 4px 0; }
 .perm-item.readonly { opacity: 0.6; cursor: not-allowed; }
-.perm-item.readonly input { cursor: not-allowed; }
 .perm-item.ungrantable { opacity: 0.5; cursor: not-allowed; }
-.perm-item.ungrantable input { cursor: not-allowed; }
-.perm-lock { font-size: 11px; margin-left: 4px; opacity: 0.7; }
-
-/* Clone dialog */
-.clone-hint { font-size: var(--font-size-sm); color: var(--text-secondary); margin-bottom: 14px; line-height: 1.5; }
-.perm-category { font-size: var(--font-size-sm); color: var(--accent-blue); text-transform: capitalize; margin-bottom: 8px; font-weight: 500; }
-.perm-list { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-.perm-item { display: flex; align-items: center; gap: 6px; font-size: var(--font-size-sm); color: var(--text-primary); cursor: pointer; }
-.perm-item input { accent-color: var(--accent-blue); }
 .perm-name { color: var(--text-primary); }
 .perm-code { font-size: var(--font-size-xs); color: var(--text-tertiary); margin-left: 2px; }
+.perm-lock { font-size: 11px; margin-left: 4px; opacity: 0.7; }
 
-/* Users dialog */
-.users-total { font-size: var(--font-size-sm); color: var(--text-secondary); margin-left: auto; }
-.users-loading { display: flex; align-items: center; gap: 8px; padding: 24px; justify-content: center; font-size: var(--font-size-sm); color: var(--text-secondary); }
-.spinner { width: 16px; height: 16px; border: 2px solid var(--border-color); border-top-color: var(--accent-blue); border-radius: 50%; animation: spin 0.6s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
+/* Drawer footer */
+.drawer-footer { display: flex; justify-content: flex-end; gap: 8px; }
 
-.users-empty { display: flex; flex-direction: column; align-items: center; padding: 32px 16px; }
-.empty-icon { font-size: 32px; margin-bottom: 12px; opacity: 0.6; }
-.empty-title { font-size: var(--font-size-md); color: var(--text-bright); font-weight: 500; margin-bottom: 4px; }
-.empty-desc { font-size: var(--font-size-sm); color: var(--text-secondary); }
+/* Modal title row */
+.modal-title-row { display: flex; align-items: center; gap: 12px; }
+.users-total { font-size: var(--font-size-sm); color: var(--text-secondary); }
 
+/* Users */
+.users-empty { padding: 24px 0; }
 .users-list { display: flex; flex-direction: column; gap: 2px; }
 .user-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: var(--radius-md); transition: background 100ms; }
 .user-item:hover { background: var(--bg-hover); }
