@@ -124,12 +124,11 @@
 
     <!-- 分页 -->
     <AdminPagination
+      v-model:current="page"
+      v-model:page-size="pageSize"
       :total="total"
-      :page="page"
-      :page-size="pageSize"
-      :page-size-options="[20, 50, 100, 200]"
-      @page-change="(p: number) => { page = p; loadLogs() }"
-      @page-size-change="onPageSizeChange"
+      @change="loadLogs"
+      @page-size-change="loadLogs"
     />
   </AdminPageLayout>
 </template>
@@ -176,12 +175,6 @@ function onDateRangeChange(val: (string | undefined)[] | undefined) {
 }
 
 function resetAndLoad() {
-  page.value = 1
-  loadLogs()
-}
-
-function onPageSizeChange(size: number) {
-  pageSize.value = size
   page.value = 1
   loadLogs()
 }

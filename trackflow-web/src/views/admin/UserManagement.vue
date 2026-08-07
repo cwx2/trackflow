@@ -135,12 +135,11 @@
 
     <!-- 分页 -->
     <AdminPagination
+      v-model:current="page"
+      v-model:page-size="pageSize"
       :total="total"
-      :page="page"
-      :page-size="pageSize"
-      :page-size-options="[20, 50, 100, 200]"
-      @page-change="(p: number) => { page = p; loadUsers() }"
-      @page-size-change="(size: number) => { pageSize = size; page = 1; loadUsers() }"
+      @change="loadUsers"
+      @page-size-change="loadUsers"
     />
 
     <!-- 新建用户弹窗 -->

@@ -84,19 +84,15 @@
     </a-spin>
 
     <!-- 分页 -->
-    <div v-if="total > 0" class="pagination-bar">
-      <a-pagination
-        :total="total"
-        :current="currentPage"
-        :page-size="pageSize"
-        size="small"
-        show-total
-        show-page-size
-        :page-size-options="[10, 20, 50]"
-        @change="onPageChange"
-        @page-size-change="onPageSizeChange"
-      />
-    </div>
+    <AdminPagination
+      v-model:current="currentPage"
+      v-model:page-size="pageSize"
+      :total="total"
+      :page-size-options="[10, 20, 50]"
+      inline
+      @change="loadActivities"
+      @page-size-change="loadActivities"
+    />
   </a-drawer>
 </template>
 
@@ -106,6 +102,7 @@ import { Message } from '@arco-design/web-vue'
 import { IconPlusCircle, IconMinusCircle, IconHistory } from '@arco-design/web-vue/es/icon'
 import { workflowApi } from '@/api'
 import { localizeIssueType } from '@/utils/fieldLabels'
+import { AdminPagination } from '@/components/admin'
 import type { WorkflowActivityVO } from '@/api/types'
 
 const props = defineProps<{
@@ -176,17 +173,6 @@ async function loadActivities() {
 }
 
 function onFilterChange() {
-  currentPage.value = 1
-  loadActivities()
-}
-
-function onPageChange(page: number) {
-  currentPage.value = page
-  loadActivities()
-}
-
-function onPageSizeChange(size: number) {
-  pageSize.value = size
   currentPage.value = 1
   loadActivities()
 }
@@ -319,11 +305,5 @@ watch(() => props.visible, (val) => {
 .empty-state p {
   margin-top: 6px;
   font-size: 12px;
-}
-
-.pagination-bar {
-  margin-top: 16px;
-  display: flex;
-  justify-content: center;
 }
 </style>
