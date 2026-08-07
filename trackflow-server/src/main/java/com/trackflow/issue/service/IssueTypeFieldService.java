@@ -186,7 +186,7 @@ public class IssueTypeFieldService {
                 .filter(opt -> Boolean.TRUE.equals(opt.getIsDefault()))
                 .map(CustomFieldOption::getValue)
                 .findFirst()
-                .orElse("Task");
+                .orElse("任务");
     }
 
     /**
@@ -200,6 +200,6 @@ public class IssueTypeFieldService {
                 .filter(opt -> Boolean.TRUE.equals(opt.getIsDefault()))
                 .map(CustomFieldOption::getValue)
                 .findFirst()
-                .orElse("Task");
+                .orElse("任务");
     }
 }

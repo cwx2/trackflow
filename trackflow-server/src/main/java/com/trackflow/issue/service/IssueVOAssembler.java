@@ -119,7 +119,7 @@ public class IssueVOAssembler {
             if (issue.getStatusId() != null) {
                 IssueStatus status = statusMap.get(issue.getStatusId());
                 if (status != null) {
-                    voList.get(i).setStatusName(status.getName());
+                    voList.get(i).setStatusName(status.getLocalizedName());
                     voList.get(i).setStatusColor(status.getColor());
                 }
             }

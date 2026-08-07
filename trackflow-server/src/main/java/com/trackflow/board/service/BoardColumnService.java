@@ -363,7 +363,7 @@ public class BoardColumnService {
             BoardColumnVO vo = new BoardColumnVO();
             vo.setStatusId(String.valueOf(status.getId()));
             vo.setFieldValue(String.valueOf(status.getId()));
-            vo.setStatusName(status.getName());
+            vo.setStatusName(status.getLocalizedName());
             vo.setStatusCode(status.getCode());
             vo.setStatusColor(status.getColor());
             vo.setStatusCategory(status.getCategory());
@@ -407,7 +407,7 @@ public class BoardColumnService {
             BoardColumnVO vo = new BoardColumnVO();
             vo.setStatusId(String.valueOf(status.getId()));
             vo.setFieldValue(String.valueOf(status.getId()));
-            vo.setStatusName(status.getName());
+            vo.setStatusName(status.getLocalizedName());
             vo.setStatusCode(status.getCode());
             vo.setStatusColor(status.getColor());
             vo.setStatusCategory(status.getCategory());
