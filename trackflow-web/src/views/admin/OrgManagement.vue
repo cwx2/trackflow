@@ -17,26 +17,33 @@
       row-key="id"
       size="medium"
       class="org-table"
+      :row-class="() => 'clickable-row'"
       :scroll="{ y: '100%' }"
+      @row-click="navigateToOrg"
     >
       <template #code="{ record }">
         <code class="code-tag">{{ record.code }}</code>
       </template>
       <template #name="{ record }">
-        <span class="org-name">{{ record.name }}</span>
+        <span class="org-name-link">{{ record.name }}</span>
       </template>
       <template #description="{ record }">
-        {{ record.description || '—' }}
+        <span class="description-text">{{ record.description || '—' }}</span>
       </template>
       <template #createdAt="{ record }">
         <span class="time-text">{{ formatDate(record.createdAt) }}</span>
       </template>
       <template #actions="{ record }">
-        <a-button type="text" size="mini" @click="editOrg(record)">编辑</a-button>
-        <a-button type="text" size="mini" status="danger" @click="deleteOrg(record)">删除</a-button>
+        <a-button type="text" size="mini" @click.stop="editOrg(record)">编辑</a-button>
+        <a-button type="text" size="mini" status="danger" @click.stop="deleteOrg(record)">删除</a-button>
       </template>
       <template #empty>
-        <a-empty description="暂无组织数据" />
+        <a-empty description="暂无组织">
+          <template #extra>
+            <p class="empty-state-hint">组织用于对项目和团队进行分组管理</p>
+            <a-button type="primary" size="small" @click="openCreateDialog">新建组织</a-button>
+          </template>
+        </a-empty>
       </template>
     </a-table>
 
@@ -73,10 +80,9 @@ import { organizationApi } from '@/api'
 import type { OrgVO } from '@/api/organization'
 
 const columns: TableColumnData[] = [
-  { title: 'ID', dataIndex: 'id', width: 60 },
   { title: '编码', slotName: 'code', width: 120 },
   { title: '名称', slotName: 'name', width: 200 },
-  { title: '描述', slotName: 'description' },
+  { title: '描述', slotName: 'description', ellipsis: true, tooltip: true },
   { title: '创建时间', slotName: 'createdAt', width: 150 },
   { title: '操作', slotName: 'actions', width: 140 },
 ]
@@ -97,6 +103,11 @@ function openCreateDialog() {
   editing.value = null
   form.name = ''; form.code = ''; form.description = ''
   showDialog.value = true
+}
+
+/** 点击行跳转组织详情（排除按钮点击） */
+function navigateToOrg(record: any) {
+  editOrg(record)
 }
 
 function editOrg(org: OrgVO) {
@@ -160,7 +171,14 @@ onMounted(loadOrgs)
 .org-table :deep(.arco-table-content-scroll) { flex: 1; min-height: 0; overflow: hidden; }
 .org-table :deep(.arco-table-body) { flex: 1; max-height: none !important; overflow-y: auto !important; }
 
-.org-name { color: var(--text-bright); font-weight: 500; }
+/* Clickable row styles */
+.org-table :deep(.arco-table-tr.clickable-row) { cursor: pointer; }
+.org-table :deep(.arco-table-tr.clickable-row:hover .arco-table-td) { background: var(--bg-hover); }
+
+.org-name-link { color: var(--accent-blue); font-weight: 500; cursor: pointer; transition: color 150ms; }
+.org-name-link:hover { text-decoration: underline; }
 .code-tag { font-size: var(--font-size-xs); background: var(--bg-tertiary); padding: 2px 6px; border-radius: var(--radius-sm); color: var(--accent-blue); }
+.description-text { color: var(--text-secondary); }
 .time-text { font-size: var(--font-size-xs); color: var(--text-secondary); }
+.empty-state-hint { color: var(--text-tertiary); margin-bottom: 12px; font-size: 13px; }
 </style>
