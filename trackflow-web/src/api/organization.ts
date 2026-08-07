@@ -58,7 +58,7 @@ export const organizationApi = {
   },
 
   /** 创建组织 */
-  create(data: { name: string; code: string; description?: string; projectIds?: number[] }) {
+  create(data: { name: string; code: string; description?: string; projectIds?: string[] }) {
     return request.post<any, R<OrgVO>>('/organizations', data)
   },
 
@@ -80,7 +80,7 @@ export const organizationApi = {
   },
 
   /** 添加项目到组织 */
-  addProjects(orgId: string, projectIds: number[]) {
+  addProjects(orgId: string, projectIds: string[]) {
     return request.post<any, R<void>>(`/organizations/${orgId}/projects`, { projectIds })
   },
 
@@ -102,7 +102,7 @@ export const organizationApi = {
   },
 
   /** 授予组织级访问权限 */
-  grantAccess(orgId: string, data: { userId: number; roleId: number }) {
+  grantAccess(orgId: string, data: { userId: string; roleId: string }) {
     return request.post<any, R<OrgAccessVO>>(`/organizations/${orgId}/access`, data)
   },
 

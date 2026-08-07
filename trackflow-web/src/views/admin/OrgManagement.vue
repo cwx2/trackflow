@@ -150,7 +150,7 @@ async function submitOrg(done?: (closed: boolean) => void) {
     if (editing.value) {
       await organizationApi.update(editing.value.id, { name: form.name, description: form.description })
     } else {
-      const projectIds = form.projectIds.length > 0 ? form.projectIds.map(Number) : undefined
+      const projectIds = form.projectIds.length > 0 ? form.projectIds : undefined
       await organizationApi.create({ name: form.name, code: form.code, description: form.description, projectIds })
     }
     Message.success(editing.value ? '组织已更新' : '组织已创建')

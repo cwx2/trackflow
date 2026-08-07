@@ -399,7 +399,7 @@ function openAddProjectDialog() {
 
 async function submitAddProjects(done?: (closed: boolean) => void) {
   try {
-    await organizationApi.addProjects(orgId.value, selectedProjectIds.value.map(Number))
+    await organizationApi.addProjects(orgId.value, selectedProjectIds.value)
     Message.success('项目已添加')
     if (done) done(true)
     loadProjects()
@@ -442,8 +442,8 @@ function openGrantAccessDialog() {
 async function submitGrantAccess(done?: (closed: boolean) => void) {
   try {
     await organizationApi.grantAccess(orgId.value, {
-      userId: Number(grantForm.userId),
-      roleId: Number(grantForm.roleId)
+      userId: grantForm.userId,
+      roleId: grantForm.roleId
     })
     Message.success('权限已授予')
     if (done) done(true)

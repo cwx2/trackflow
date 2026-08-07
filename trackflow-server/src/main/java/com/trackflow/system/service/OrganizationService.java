@@ -209,8 +209,12 @@ public class OrganizationService {
         if (!orgId.equals(project.getOrgId())) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "该项目不属于此组织");
         }
-        project.setOrgId(null);
-        projectMapper.updateById(project);
+        // 使用 LambdaUpdateWrapper 显式将 org_id 设为 null（updateById 默认跳过 null 字段）
+        com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<Project> updateWrapper =
+                new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<>();
+        updateWrapper.eq(Project::getId, projectId)
+                .set(Project::getOrgId, null);
+        projectMapper.update(null, updateWrapper);
     }
 
     /**
