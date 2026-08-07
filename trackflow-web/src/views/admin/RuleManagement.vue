@@ -117,6 +117,7 @@
           :bordered="false"
           size="medium"
           @page-change="onLogPageChange"
+          @page-size-change="onLogPageSizeChange"
         >
           <template #columns>
             <a-table-column title="工单" :width="140">
@@ -346,7 +347,7 @@ const logFilter = reactive({
   ruleId: undefined as string | undefined,
   dateRange: undefined as [string, string] | undefined
 })
-const logPagination = reactive({ current: 1, pageSize: 20, total: 0 })
+const logPagination = reactive({ current: 1, pageSize: 20, total: 0, showPageSize: true, pageSizeOptions: [20, 50, 100] })
 
 // Stats filters
 const statsFilter = reactive({
@@ -454,6 +455,12 @@ async function loadStatistics() {
 
 function onLogPageChange(page: number) {
   logPagination.current = page
+  loadLogs()
+}
+
+function onLogPageSizeChange(size: number) {
+  logPagination.pageSize = size
+  logPagination.current = 1
   loadLogs()
 }
 

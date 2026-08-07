@@ -86,6 +86,7 @@
           size="small"
           @selection-change="onSelectionChange"
           @page-change="onPageChange"
+          @page-size-change="onPageSizeChange"
         >
           <template #issueKey="{ record }">
             <span class="issue-key">{{ record.issueKey }}</span>
@@ -186,7 +187,8 @@ const paginationConfig = computed(() => ({
   pageSize: pageSize.value,
   total: total.value,
   showTotal: true,
-  showPageSize: false
+  showPageSize: true,
+  pageSizeOptions: [20, 50, 100, 200]
 }))
 
 function formatTime(dt: string) {
@@ -257,6 +259,12 @@ async function setRetention(days: number) {
 
 function onPageChange(page: number) {
   currentPage.value = page
+  loadTrash()
+}
+
+function onPageSizeChange(size: number) {
+  pageSize.value = size
+  currentPage.value = 1
   loadTrash()
 }
 

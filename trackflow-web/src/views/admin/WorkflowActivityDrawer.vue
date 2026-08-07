@@ -84,13 +84,17 @@
     </a-spin>
 
     <!-- 分页 -->
-    <div v-if="total > pageSize" class="pagination-bar">
+    <div v-if="total > 0" class="pagination-bar">
       <a-pagination
         :total="total"
         :current="currentPage"
         :page-size="pageSize"
         size="small"
+        show-total
+        show-page-size
+        :page-size-options="[10, 20, 50]"
         @change="onPageChange"
+        @page-size-change="onPageSizeChange"
       />
     </div>
   </a-drawer>
@@ -117,7 +121,7 @@ const loading = ref(false)
 const activities = ref<WorkflowActivityVO[]>([])
 const total = ref(0)
 const currentPage = ref(1)
-const pageSize = 10
+const pageSize = ref(10)
 
 // 筛选
 const dateRange = ref<string[]>([])
@@ -136,7 +140,7 @@ async function loadActivities() {
   try {
     const params: Record<string, any> = {
       page: currentPage.value,
-      pageSize
+      pageSize: pageSize.value
     }
     if (filterUserId.value) {
       params.userId = filterUserId.value
@@ -178,6 +182,12 @@ function onFilterChange() {
 
 function onPageChange(page: number) {
   currentPage.value = page
+  loadActivities()
+}
+
+function onPageSizeChange(size: number) {
+  pageSize.value = size
+  currentPage.value = 1
   loadActivities()
 }
 

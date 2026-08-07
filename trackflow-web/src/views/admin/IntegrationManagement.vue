@@ -119,6 +119,7 @@
             :pagination="logsPagination"
             row-key="id"
             @page-change="handleLogsPageChange"
+            @page-size-change="handleLogsPageSizeChange"
           >
             <template #columns>
               <a-table-column title="适配器" data-index="adapterType" :width="100">
@@ -356,7 +357,9 @@ const logFilters = reactive({
 const logsPagination = reactive({
   total: 0,
   current: 1,
-  pageSize: 20
+  pageSize: 20,
+  showPageSize: true,
+  pageSizeOptions: [20, 50, 100]
 })
 
 async function fetchLogs() {
@@ -386,6 +389,12 @@ async function fetchLogs() {
 
 function handleLogsPageChange(page: number) {
   logsPagination.current = page
+  fetchLogs()
+}
+
+function handleLogsPageSizeChange(size: number) {
+  logsPagination.pageSize = size
+  logsPagination.current = 1
   fetchLogs()
 }
 

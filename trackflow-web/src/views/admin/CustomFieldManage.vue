@@ -78,6 +78,7 @@
                 :row-selection="rowSelection"
                 v-model:selected-keys="selectedKeys"
                 @page-change="onPageChange"
+                @page-size-change="onPageSizeChange"
                 @row-click="onRowClick"
               >
               <template #columns>
@@ -850,7 +851,7 @@ import DefaultValueInput from './components/DefaultValueInput.vue'
 const activeTab = ref('list')
 const fieldList = ref<CustomFieldDefinitionVO[]>([])
 const loading = ref(false)
-const pagination = reactive({ current: 1, pageSize: 20, total: 0 })
+const pagination = reactive({ current: 1, pageSize: 20, total: 0, showPageSize: true, pageSizeOptions: [20, 50, 100] })
 const projectList = ref<any[]>([])
 const issueTypeOptions = ref<Array<{ value: string; label: string }>>([])
 
@@ -1054,6 +1055,12 @@ async function loadIssueTypes() {
 
 function onPageChange(page: number) {
   pagination.current = page
+  loadList()
+}
+
+function onPageSizeChange(size: number) {
+  pagination.pageSize = size
+  pagination.current = 1
   loadList()
 }
 

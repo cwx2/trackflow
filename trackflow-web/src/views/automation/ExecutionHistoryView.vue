@@ -33,11 +33,12 @@
           v-else
           :data="executions"
           :columns="columns"
-          :pagination="{ total: total, current: page, pageSize: pageSize, showTotal: true }"
+          :pagination="{ total: total, current: page, pageSize: pageSize, showTotal: true, showPageSize: true, pageSizeOptions: [20, 50, 100] }"
           :bordered="false"
           row-key="id"
           class="execution-table"
           @page-change="handlePageChange"
+          @page-size-change="handlePageSizeChange"
         >
           <template #status="{ record }">
             <a-tag :color="statusColor(record.status)" size="small">
@@ -159,6 +160,12 @@ function openDetail(execution: ExecutionVO) {
 
 function handlePageChange(p: number) {
   page.value = p
+  loadExecutions()
+}
+
+function handlePageSizeChange(size: number) {
+  pageSize.value = size
+  page.value = 1
   loadExecutions()
 }
 

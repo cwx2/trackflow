@@ -183,24 +183,18 @@
       </div>
 
       <!-- 分页 -->
-      <div v-if="totalCount > pageSize" class="page-pagination">
-        <button
-          class="pagination-btn"
-          :disabled="currentPage <= 1"
-          @click="changePage(currentPage - 1)"
-        >
-          ← 上一页
-        </button>
-        <span class="pagination-info">
-          第 {{ currentPage }} / {{ totalPages }} 页
-        </span>
-        <button
-          class="pagination-btn"
-          :disabled="currentPage >= totalPages"
-          @click="changePage(currentPage + 1)"
-        >
-          下一页 →
-        </button>
+      <div v-if="totalCount > 0" class="page-pagination">
+        <a-pagination
+          :total="totalCount"
+          :current="currentPage"
+          :page-size="pageSize"
+          size="small"
+          show-total
+          show-page-size
+          :page-size-options="[20, 50, 100, 200]"
+          @change="changePage"
+          @page-size-change="changePageSize"
+        />
       </div>
     </div>
   </div>
@@ -239,10 +233,8 @@ const {
   panelVisible
 } = useNotification()
 
-const pageSize = 50
+const pageSize = ref(50)
 const currentPage = ref(1)
-
-const totalPages = computed(() => Math.ceil(totalCount.value / pageSize))
 
 /** 用户所属项目列表（用于过滤下拉） */
 const projects = ref<{ id: string; name: string }[]>([])
@@ -451,7 +443,13 @@ function handleDeleteAllRead() {
 
 function changePage(page: number) {
   currentPage.value = page
-  fetchNotifications(page, pageSize)
+  fetchNotifications(page, pageSize.value)
+}
+
+function changePageSize(size: number) {
+  pageSize.value = size
+  currentPage.value = 1
+  fetchNotifications(1, size)
 }
 
 onMounted(() => {
@@ -460,7 +458,7 @@ onMounted(() => {
     panelVisible.value = false
   }
   // Load data for full page view
-  fetchNotifications(1, pageSize)
+  fetchNotifications(1, pageSize.value)
   fetchCategoryUnreadCounts()
   loadProjects()
 })
@@ -902,35 +900,10 @@ onMounted(() => {
 .page-pagination {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 16px;
+  justify-content: flex-end;
   padding: 20px 0;
   border-top: 1px solid var(--tf-border-light);
   margin-top: 8px;
-}
-
-.pagination-btn {
-  padding: 6px 14px;
-  border: 1px solid var(--tf-border);
-  background: transparent;
-  border-radius: 6px;
-  color: var(--tf-text-secondary);
-  font-size: 12px;
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s;
-}
-.pagination-btn:hover:not(:disabled) {
-  background: var(--tf-bg-hover);
-  color: var(--tf-text-primary);
-}
-.pagination-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.pagination-info {
-  font-size: 12px;
-  color: var(--tf-text-tertiary);
 }
 
 /* Notification Item Wrapper */
