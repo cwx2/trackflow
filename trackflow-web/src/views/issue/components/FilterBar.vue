@@ -946,6 +946,7 @@ function emitFilters() {
         break
       case 'reporter':
         if (chip.values.includes('me')) filters.reportedByMe = 'true'
+        else if (!isNegative) filters.reporterId = chip.values.join(',')
         break
       case 'tag':
         if (!isNegative) filters.tagId = chip.values.join(',')

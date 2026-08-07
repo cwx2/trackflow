@@ -4188,6 +4188,30 @@ function applyDashboardFilter() {
   } else if (route.query.assignee) {
     const assigneeUserId = String(route.query.assignee)
     filters.assigneeId = assigneeUserId
+    const assigneeLabel = route.query.assigneeName
+      ? String(route.query.assigneeName)
+      : assigneeUserId
+    chips.push({
+      fieldKey: 'assignee',
+      operator: 'equals',
+      values: [assigneeUserId],
+      valueLabels: [assigneeLabel]
+    })
+  }
+
+  // reporter={userId}: 筛选某个用户报告的工单
+  if (route.query.reporter) {
+    const reporterUserId = String(route.query.reporter)
+    filters.reporterId = reporterUserId
+    const reporterLabel = route.query.reporterName
+      ? String(route.query.reporterName)
+      : reporterUserId
+    chips.push({
+      fieldKey: 'reporter',
+      operator: 'equals',
+      values: [reporterUserId],
+      valueLabels: [reporterLabel]
+    })
   }
 
   // keyword: 关键字搜索（支持 URL 分享和书签）

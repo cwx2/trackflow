@@ -31,8 +31,11 @@
             <button class="card-action-btn" @click.stop="viewUserProfile">
               查看资料
             </button>
-            <button class="card-action-btn" @click.stop="viewUserIssues">
-              查看该用户的工单
+            <button class="card-action-btn" @click.stop="viewReportedIssues">
+              查看报告的工单
+            </button>
+            <button class="card-action-btn" @click.stop="viewAssignedIssues">
+              查看负责的工单
             </button>
           </div>
         </template>
@@ -96,9 +99,26 @@ async function fetchUser() {
   }
 }
 
-function viewUserIssues() {
+function viewReportedIssues() {
   if (!props.userId) return
-  router.push({ path: '/issues', query: { assignee: props.userId } })
+  router.push({
+    path: '/issues',
+    query: {
+      reporter: props.userId,
+      reporterName: userInfo.value?.displayName || ''
+    }
+  })
+}
+
+function viewAssignedIssues() {
+  if (!props.userId) return
+  router.push({
+    path: '/issues',
+    query: {
+      assignee: props.userId,
+      assigneeName: userInfo.value?.displayName || ''
+    }
+  })
 }
 
 function viewUserProfile() {
