@@ -54,6 +54,7 @@
 <script setup lang="ts">
 import { ref, computed, onBeforeUnmount, onMounted, nextTick } from 'vue'
 import { useEditor, EditorContent } from '@tiptap/vue-3'
+import { Extension } from '@tiptap/core'
 import StarterKit from '@tiptap/starter-kit'
 import Link from '@tiptap/extension-link'
 import Placeholder from '@tiptap/extension-placeholder'
@@ -129,6 +130,34 @@ onMounted(async () => {
 // 追踪 IME 组合输入状态，防止在中文输入法未提交时误触发提交
 const isComposing = ref(false)
 
+// 自定义 Enter 发送扩展：Enter 发送评论，Shift+Enter / Ctrl+Enter 换行
+const SubmitOnEnter = Extension.create({
+  name: 'submitOnEnter',
+  addKeyboardShortcuts() {
+    return {
+      'Enter': () => {
+        // IME 组合输入状态下不拦截（让输入法完成确认）
+        if (isComposing.value || this.editor.view.composing) return false
+        // 编辑器为空时不发送
+        if (this.editor.isEmpty) return true
+        // 触发提交
+        submit()
+        return true
+      },
+      'Shift-Enter': ({ editor }) => {
+        // 插入硬换行
+        editor.commands.setHardBreak()
+        return true
+      },
+      'Ctrl-Enter': ({ editor }) => {
+        // 备用换行快捷键
+        editor.commands.setHardBreak()
+        return true
+      },
+    }
+  },
+})
+
 const editor = useEditor({
   content: '',
   extensions: [
@@ -157,6 +186,7 @@ const editor = useEditor({
       },
       suggestion,
     }),
+    SubmitOnEnter,
   ],
   editorProps: {
     attributes: { class: 'tiptap-comment' },
