@@ -616,7 +616,7 @@ public class IssueService {
             if (issue.getStatusId() != null) {
                 IssueStatus status = statusMap.get(issue.getStatusId());
                 if (status != null) {
-                    vo.setStatusName(status.getName());
+                    vo.setStatusName(status.getLocalizedName());
                     vo.setStatusColor(status.getColor());
                 }
             }

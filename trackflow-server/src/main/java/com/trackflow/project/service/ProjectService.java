@@ -2030,7 +2030,7 @@ public class ProjectService {
                     if (status == null) return null;
                     var dist = new ProjectStatisticsVO.StatusDistribution();
                     dist.setStatusId(entry.getKey().toString());
-                    dist.setStatusName(status.getName());
+                    dist.setStatusName(status.getLocalizedName());
                     dist.setStatusColor(status.getColor());
                     dist.setCategory(status.getCategory());
                     dist.setClosed(Boolean.TRUE.equals(status.getIsClosed()));
