@@ -10,7 +10,7 @@
 
     <!-- 加载中 -->
     <div v-if="loading" class="loading-state">
-      <div class="loading-spinner"></div>
+      <a-spin :size="20" />
       <span>加载用户信息...</span>
     </div>
 
@@ -20,8 +20,8 @@
       <h3>加载失败</h3>
       <p>{{ error }}</p>
       <div class="error-actions">
-        <button class="btn-secondary" @click="router.push('/admin/users')">返回用户列表</button>
-        <button class="btn-primary" @click="loadProfile">重试</button>
+        <a-button @click="router.push('/admin/users')">返回用户列表</a-button>
+        <a-button type="primary" @click="loadProfile">重试</a-button>
       </div>
     </div>
 
@@ -90,21 +90,23 @@
               <icon-launch :size="12" class="external-icon" />
             </a>
           </div>
-          <button
-            class="btn-secondary"
+          <a-button
+            size="small"
             @click="handleExportUserData"
             :disabled="exporting"
-          >{{ exporting ? '导出中...' : '导出用户数据' }}</button>
-          <button
+            :loading="exporting"
+          >{{ exporting ? '导出中...' : '导出用户数据' }}</a-button>
+          <a-button
             v-if="profile.status === 'active'"
-            class="btn-secondary danger"
+            size="small"
+            status="danger"
             @click="handleDisable"
-          >禁用用户</button>
-          <button
+          >禁用用户</a-button>
+          <a-button
             v-else
-            class="btn-secondary"
+            size="small"
             @click="handleEnable"
-          >启用用户</button>
+          >启用用户</a-button>
         </div>
       </div>
 
@@ -114,7 +116,7 @@
         <div class="section-card">
           <div class="section-header">
             <h2 class="section-title">系统角色</h2>
-            <button class="btn-text" @click="showRoleDialog = true">管理</button>
+            <a-button type="text" size="small" @click="showRoleDialog = true">管理</a-button>
           </div>
           <div class="section-body">
             <div v-if="profile.globalRoles.length === 0" class="empty-hint">
@@ -135,7 +137,7 @@
             <h2 class="section-title">已加入的项目</h2>
             <div class="section-header-right">
               <span class="section-count">{{ profile.projectRoles.length }} 个项目</span>
-              <button class="btn-text" @click="openAssignRoleDialog">赋予角色</button>
+              <a-button type="text" size="small" @click="openAssignRoleDialog">赋予角色</a-button>
             </div>
           </div>
           <div class="section-body">
@@ -154,12 +156,16 @@
                   <span v-if="pr.source === 'group'" class="role-source-tag" :title="`通过组「${pr.groupName}」继承`">
                     组继承
                   </span>
-                  <button
+                  <a-button
                     v-if="pr.source !== 'group'"
+                    type="text"
+                    size="mini"
                     class="btn-revoke"
                     title="撤销此角色"
                     @click="revokeProjectRole(pr)"
-                  >×</button>
+                  >
+                    <template #icon><icon-close :size="12" /></template>
+                  </a-button>
                 </div>
               </div>
             </div>
@@ -196,29 +202,27 @@
     </template>
 
     <!-- 角色管理弹窗 -->
-    <div class="modal-overlay" v-if="showRoleDialog" @click.self="showRoleDialog = false">
-      <div class="modal-sm">
-        <div class="modal-header">
-          <h3>管理全局角色 — {{ profile?.displayName }}</h3>
-          <button class="btn-close" @click="showRoleDialog = false">×</button>
-        </div>
-        <div class="modal-body">
-          <div class="role-list">
-            <div v-for="role in globalRoles" :key="role.id" class="role-item">
-              <label class="role-check">
-                <input
-                  type="checkbox"
-                  :checked="currentRoleIds.includes(String(role.id))"
-                  @change="toggleRole(role.id)"
-                />
-                <span class="role-name">{{ role.name }}</span>
-                <span class="role-code">{{ role.code }}</span>
-              </label>
-            </div>
-          </div>
+    <a-modal
+      v-model:visible="showRoleDialog"
+      :width="420"
+      :footer="false"
+      @cancel="showRoleDialog = false"
+    >
+      <template #title>管理全局角色 — {{ profile?.displayName }}</template>
+      <div class="role-list">
+        <div v-for="role in globalRoles" :key="role.id" class="role-item">
+          <label class="role-check">
+            <input
+              type="checkbox"
+              :checked="currentRoleIds.includes(String(role.id))"
+              @change="toggleRole(role.id)"
+            />
+            <span class="role-name">{{ role.name }}</span>
+            <span class="role-code">{{ role.code }}</span>
+          </label>
         </div>
       </div>
-    </div>
+    </a-modal>
 
     <!-- 赋予项目角色弹窗 -->
     <a-modal
@@ -665,15 +669,6 @@ onMounted(() => {
   color: var(--text-secondary);
   font-size: var(--font-size-sm);
 }
-.loading-spinner {
-  width: 20px;
-  height: 20px;
-  border: 2px solid var(--border-color);
-  border-top-color: var(--accent-blue);
-  border-radius: 50%;
-  animation: spin 0.6s linear infinite;
-}
-@keyframes spin { to { transform: rotate(360deg); } }
 
 .error-state {
   text-align: center;
@@ -761,54 +756,13 @@ onMounted(() => {
 }
 .separator { margin: 0 6px; }
 
+/* Actions section */
 .actions-section {
   flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
-
-/* 按钮 */
-.btn-primary {
-  height: 32px;
-  padding: 0 14px;
-  background: var(--accent-blue);
-  color: #fff;
-  border: none;
-  border-radius: var(--radius-md);
-  font-size: var(--font-size-sm);
-  cursor: pointer;
-  transition: opacity 150ms;
-}
-.btn-primary:hover { opacity: 0.9; }
-.btn-primary:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.btn-secondary {
-  height: 32px;
-  padding: 0 14px;
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  font-size: var(--font-size-sm);
-  cursor: pointer;
-  transition: background 150ms;
-}
-.btn-secondary:hover { background: var(--bg-hover); }
-.btn-secondary.danger { color: var(--accent-red); border-color: var(--accent-red); }
-.btn-secondary.danger:hover { background: rgba(244,67,54,0.08); }
-
-.btn-text {
-  background: none;
-  border: none;
-  color: var(--accent-blue);
-  font-size: var(--font-size-sm);
-  cursor: pointer;
-  padding: 2px 6px;
-  border-radius: var(--radius-sm);
-  transition: background 150ms;
-}
-.btn-text:hover { background: var(--bg-hover); }
 
 /* 信息区块 */
 .profile-sections {
@@ -928,27 +882,13 @@ onMounted(() => {
   white-space: nowrap;
 }
 .btn-revoke {
-  display: none;
-  width: 20px;
-  height: 20px;
-  padding: 0;
-  border: none;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--text-muted);
-  font-size: 14px;
-  line-height: 1;
-  cursor: pointer;
-  transition: background 150ms, color 150ms;
-  align-items: center;
-  justify-content: center;
+  display: none !important;
 }
 .project-role-item:hover .btn-revoke {
-  display: flex;
+  display: inline-flex !important;
 }
 .btn-revoke:hover {
-  background: rgba(244,67,54,0.1);
-  color: var(--accent-red);
+  color: var(--accent-red) !important;
 }
 
 /* 活动列表 */
@@ -998,83 +938,10 @@ onMounted(() => {
   flex-shrink: 0;
 }
 
-/* 角色管理弹窗 */
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.6);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
-.modal-sm {
-  width: 420px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-}
-.modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 18px;
-  border-bottom: 1px solid var(--border-color);
-}
-.modal-header h3 {
-  font-size: 15px;
-  color: var(--text-bright);
-  font-weight: 500;
-}
-.btn-close {
-  background: none;
-  border: none;
-  color: var(--text-secondary);
-  font-size: 16px;
-  cursor: pointer;
-}
-.modal-body {
-  padding: 16px 18px;
+/* 角色管理弹窗内容 */
+.role-list {
   max-height: 300px;
   overflow-y: auto;
-}
-.modal-footer {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  padding: 12px 18px;
-  border-top: 1px solid var(--border-color);
-}
-.assign-role-form {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-.form-field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.form-label {
-  font-size: var(--font-size-xs);
-  color: var(--text-secondary);
-  font-weight: 500;
-}
-.form-select {
-  height: 32px;
-  padding: 0 10px;
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  font-size: var(--font-size-sm);
-  appearance: auto;
-  cursor: pointer;
-}
-.form-select:focus {
-  outline: none;
-  border-color: var(--accent-blue);
 }
 .role-item { margin-bottom: 8px; }
 .role-check {
@@ -1090,6 +957,15 @@ onMounted(() => {
 .role-code {
   font-size: var(--font-size-xs);
   color: var(--text-muted);
+}
+
+/* 弹窗 footer（赋予项目角色） */
+.modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 16px;
 }
 
 /* Ban info section */
