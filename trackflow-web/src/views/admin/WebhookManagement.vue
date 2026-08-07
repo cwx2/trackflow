@@ -40,7 +40,10 @@
         <div class="empty-icon">🪝</div>
         <p class="empty-title">暂无 Webhook</p>
         <p class="empty-desc">创建 Webhook 来接收项目事件通知</p>
-        <button class="btn-create-sm" @click="openCreateDialog">创建 Webhook</button>
+        <a-button type="outline" size="small" style="margin-top: 12px" @click="openCreateDialog">
+          <template #icon><icon-plus /></template>
+          创建 Webhook
+        </a-button>
       </div>
 
       <div v-else class="webhook-list">
@@ -67,123 +70,122 @@
             </div>
           </div>
           <div class="webhook-actions">
-            <a-button type="text" size="mini" @click="viewLogs(wh)" title="查看投递日志">📋 日志</a-button>
-            <a-button type="text" size="mini" @click="testWebhook(wh)" :disabled="testingId === wh.id" title="发送测试请求">
-              {{ testingId === wh.id ? '⏳' : '🧪' }} 测试
+            <a-button type="text" size="mini" @click="viewLogs(wh)" title="查看投递日志">
+              <template #icon><icon-file /></template>
+              日志
             </a-button>
-            <a-button type="text" size="mini" @click="openEditDialog(wh)">✏️ 编辑</a-button>
-            <a-button type="text" size="mini" status="danger" @click="confirmDelete(wh)">🗑️ 删除</a-button>
+            <a-button type="text" size="mini" @click="testWebhook(wh)" :disabled="testingId === wh.id" title="发送测试请求">
+              <template #icon><icon-thunderbolt /></template>
+              {{ testingId === wh.id ? '测试中...' : '测试' }}
+            </a-button>
+            <a-button type="text" size="mini" @click="openEditDialog(wh)" title="编辑">
+              <template #icon><icon-edit /></template>
+              编辑
+            </a-button>
+            <a-button type="text" size="mini" status="danger" @click="confirmDelete(wh)" title="删除">
+              <template #icon><icon-delete /></template>
+              删除
+            </a-button>
           </div>
         </div>
       </div>
     </template>
 
     <!-- 创建/编辑弹窗 -->
-    <div class="modal-overlay" v-if="showFormDialog" @click.self="showFormDialog = false">
-      <div class="modal-md">
-        <div class="modal-header">
-          <h3>{{ editingWebhook ? '编辑 Webhook' : '创建 Webhook' }}</h3>
-          <button class="btn-close" @click="showFormDialog = false">✕</button>
-        </div>
-        <div class="modal-body">
-          <div class="form-row">
-            <label class="form-label">名称 *</label>
-            <input v-model="formData.name" class="form-input" placeholder="例如：CI/CD 通知" />
-          </div>
-          <div class="form-row">
-            <label class="form-label">URL *</label>
-            <input v-model="formData.url" class="form-input" placeholder="https://example.com/webhook" />
-          </div>
-          <div class="form-row">
-            <label class="form-label">Secret（可选）</label>
-            <input v-model="formData.secret" class="form-input" type="password" placeholder="用于签名验证的密钥" />
-          </div>
-          <div class="form-row">
-            <label class="form-label">触发事件 *</label>
+    <a-modal
+      v-model:visible="showFormDialog"
+      :title="editingWebhook ? '编辑 Webhook' : '创建 Webhook'"
+      :width="520"
+      :ok-text="editingWebhook ? '保存修改' : '创建 Webhook'"
+      cancel-text="取消"
+      :ok-loading="submitting"
+      :ok-button-props="{ disabled: !canSubmit }"
+      @before-ok="submitForm"
+    >
+      <a-form :model="formData" layout="vertical" size="medium">
+        <a-form-item label="名称" required>
+          <a-input v-model="formData.name" placeholder="例如：CI/CD 通知" />
+        </a-form-item>
+        <a-form-item label="URL" required>
+          <a-input v-model="formData.url" placeholder="https://example.com/webhook" />
+        </a-form-item>
+        <a-form-item label="Secret（可选）">
+          <a-input-password v-model="formData.secret" placeholder="用于签名验证的密钥" />
+        </a-form-item>
+        <a-form-item label="触发事件" required>
+          <a-checkbox-group v-model="formData.selectedEvents" direction="vertical">
             <div class="event-checkboxes">
-              <label v-for="ev in availableEvents" :key="ev.value" class="checkbox-item">
-                <input type="checkbox" :value="ev.value" v-model="formData.selectedEvents" />
-                <span class="checkbox-label">{{ ev.label }}</span>
-              </label>
+              <a-checkbox v-for="ev in availableEvents" :key="ev.value" :value="ev.value">
+                {{ ev.label }}
+              </a-checkbox>
             </div>
-          </div>
-          <div class="form-row">
-            <label class="form-label">启用</label>
-            <label class="switch-label">
-              <input type="checkbox" v-model="formData.active" />
-              <span class="switch-text">{{ formData.active ? '已启用' : '已禁用' }}</span>
-            </label>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button class="btn-cancel" @click="showFormDialog = false">取消</button>
-          <button class="btn-submit" @click="submitForm" :disabled="!canSubmit || submitting">
-            {{ editingWebhook ? '保存修改' : '创建 Webhook' }}
-          </button>
-        </div>
-      </div>
-    </div>
+          </a-checkbox-group>
+        </a-form-item>
+        <a-form-item label="启用状态">
+          <a-switch v-model="formData.active" checked-text="启用" unchecked-text="禁用" />
+        </a-form-item>
+      </a-form>
+    </a-modal>
 
     <!-- 投递日志弹窗 -->
-    <div class="modal-overlay" v-if="showLogDialog" @click.self="showLogDialog = false">
-      <div class="modal-lg">
-        <div class="modal-header">
-          <h3>投递日志 — {{ logWebhookName }}</h3>
-          <button class="btn-close" @click="showLogDialog = false">✕</button>
+    <a-modal
+      v-model:visible="showLogDialog"
+      :title="`投递日志 — ${logWebhookName}`"
+      :width="700"
+      :footer="false"
+    >
+      <div v-if="logsLoading" class="loading-state">
+        <a-spin :size="20" />
+        <span>加载中...</span>
+      </div>
+      <div v-else-if="logs.length === 0" class="empty-section">
+        暂无投递记录
+      </div>
+      <div v-else class="log-list">
+        <div v-for="log in logs" :key="log.id" class="log-item" @click="toggleLogDetail(log.id)">
+          <div class="log-summary">
+            <span class="log-status" :class="log.success ? 'success' : 'failed'">
+              {{ log.success ? '✓' : '✗' }}
+            </span>
+            <span class="log-event">{{ log.event }}</span>
+            <span class="log-code" v-if="log.responseStatus">HTTP {{ log.responseStatus }}</span>
+            <span class="log-time">{{ formatDateTime(log.createdAt) }}</span>
+          </div>
+          <div v-if="expandedLogId === log.id" class="log-detail">
+            <div class="log-detail-row" v-if="log.responseBody">
+              <span class="detail-label">响应内容：</span>
+              <pre class="detail-code">{{ log.responseBody }}</pre>
+            </div>
+          </div>
         </div>
-        <div class="modal-body">
-          <div v-if="logsLoading" class="loading-state">
-            <a-spin :size="20" />
-            <span>加载中...</span>
-          </div>
-          <div v-else-if="logs.length === 0" class="empty-section">
-            暂无投递记录
-          </div>
-          <div v-else class="log-list">
-            <div v-for="log in logs" :key="log.id" class="log-item" @click="toggleLogDetail(log.id)">
-              <div class="log-summary">
-                <span class="log-status" :class="log.success ? 'success' : 'failed'">
-                  {{ log.success ? '✓' : '✗' }}
-                </span>
-                <span class="log-event">{{ log.event }}</span>
-                <span class="log-code" v-if="log.responseStatus">HTTP {{ log.responseStatus }}</span>
-                <span class="log-time">{{ formatDateTime(log.createdAt) }}</span>
-              </div>
-              <div v-if="expandedLogId === log.id" class="log-detail">
-                <div class="log-detail-row" v-if="log.responseBody">
-                  <span class="detail-label">响应内容：</span>
-                  <pre class="detail-code">{{ log.responseBody }}</pre>
-                </div>
-              </div>
-            </div>
-            <!-- 分页 -->
-            <div v-if="logPagination.totalPages > 1" class="log-pagination">
-              <button class="btn-sm" :disabled="logPagination.page <= 1" @click="loadLogs(logPagination.page - 1)">上一页</button>
-              <span class="page-info">{{ logPagination.page }} / {{ logPagination.totalPages }}</span>
-              <button class="btn-sm" :disabled="logPagination.page >= logPagination.totalPages" @click="loadLogs(logPagination.page + 1)">下一页</button>
-            </div>
-          </div>
+        <!-- 分页 -->
+        <div v-if="logPagination.total > logPagination.pageSize" class="log-pagination">
+          <a-pagination
+            :current="logPagination.page"
+            :page-size="logPagination.pageSize"
+            :total="logPagination.total"
+            size="small"
+            :show-total="true"
+            @change="loadLogs"
+          />
         </div>
       </div>
-    </div>
+    </a-modal>
 
     <!-- 删除确认弹窗 -->
-    <div class="modal-overlay" v-if="showDeleteDialog" @click.self="showDeleteDialog = false">
-      <div class="modal-sm">
-        <div class="modal-header">
-          <h3>确认删除</h3>
-          <button class="btn-close" @click="showDeleteDialog = false">✕</button>
-        </div>
-        <div class="modal-body">
-          <p>确定要删除 Webhook <strong>{{ deletingWebhook?.name }}</strong> 吗？</p>
-          <p class="warning-text">此操作不可撤销，投递日志也将被清除。</p>
-        </div>
-        <div class="modal-footer">
-          <button class="btn-cancel" @click="showDeleteDialog = false">取消</button>
-          <button class="btn-danger" @click="doDelete" :disabled="deleting">删除 Webhook</button>
-        </div>
-      </div>
-    </div>
+    <a-modal
+      v-model:visible="showDeleteDialog"
+      title="确认删除"
+      :width="420"
+      ok-text="删除 Webhook"
+      cancel-text="取消"
+      :ok-loading="deleting"
+      :ok-button-props="{ status: 'danger' }"
+      @before-ok="doDelete"
+    >
+      <p>确定要删除 Webhook <strong>{{ deletingWebhook?.name }}</strong> 吗？</p>
+      <p class="warning-text">此操作不可撤销，投递日志也将被清除。</p>
+    </a-modal>
   </div>
 </template>
 
@@ -226,7 +228,7 @@ const logWebhookName = ref('')
 const logs = ref<WebhookLogVO[]>([])
 const logsLoading = ref(false)
 const expandedLogId = ref<string | null>(null)
-const logPagination = ref({ page: 1, totalPages: 1 })
+const logPagination = ref({ page: 1, pageSize: 20, total: 0 })
 
 // === Constants ===
 const availableEvents = [
@@ -315,8 +317,11 @@ function openEditDialog(wh: WebhookVO) {
   showFormDialog.value = true
 }
 
-async function submitForm() {
-  if (!canSubmit.value) return
+async function submitForm(done: (closed: boolean) => void) {
+  if (!canSubmit.value) {
+    done(false)
+    return
+  }
   submitting.value = true
   const eventsJson = JSON.stringify(formData.value.selectedEvents)
 
@@ -341,10 +346,11 @@ async function submitForm() {
       })
       Message.success('Webhook 已创建')
     }
-    showFormDialog.value = false
+    done(true)
     await loadWebhooks()
   } catch (e: any) {
     Message.error(e.response?.data?.message || '操作失败')
+    done(false)
   } finally {
     submitting.value = false
   }
@@ -355,16 +361,20 @@ function confirmDelete(wh: WebhookVO) {
   showDeleteDialog.value = true
 }
 
-async function doDelete() {
-  if (!deletingWebhook.value) return
+async function doDelete(done: (closed: boolean) => void) {
+  if (!deletingWebhook.value) {
+    done(false)
+    return
+  }
   deleting.value = true
   try {
     await webhookApi.delete(deletingWebhook.value.id)
     Message.success('Webhook 已删除')
-    showDeleteDialog.value = false
+    done(true)
     await loadWebhooks()
   } catch (e: any) {
     Message.error(e.response?.data?.message || '删除失败')
+    done(false)
   } finally {
     deleting.value = false
   }
@@ -399,12 +409,13 @@ async function viewLogs(wh: WebhookVO) {
 async function loadLogs(page: number) {
   logsLoading.value = true
   try {
-    const res = await webhookApi.getDeliveryLogs(logWebhookId.value, page, 20)
+    const res = await webhookApi.getDeliveryLogs(logWebhookId.value, page, logPagination.value.pageSize)
     if (res.code === 0 && res.data) {
       logs.value = res.data.list
       logPagination.value = {
         page: res.data.pagination.page,
-        totalPages: res.data.pagination.totalPages
+        pageSize: res.data.pagination.pageSize || 20,
+        total: res.data.pagination.total
       }
     }
   } catch (e) {
@@ -476,65 +487,6 @@ onMounted(async () => {
   font-size: 12px;
   color: var(--tf-text-tertiary);
   font-weight: 500;
-}
-
-.filter-select {
-  min-width: 240px;
-}
-
-/* Buttons */
-.btn-create {
-  height: 32px;
-  padding: 0 14px;
-  background: var(--tf-accent);
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: opacity 0.15s;
-}
-.btn-create:hover { opacity: 0.9; }
-
-.btn-create-sm {
-  height: 28px;
-  padding: 0 12px;
-  background: var(--tf-accent);
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  margin-top: 12px;
-}
-.btn-create-sm:hover { opacity: 0.9; }
-
-.btn-sm {
-  height: 28px;
-  padding: 0 10px;
-  background: var(--tf-bg-surface);
-  color: var(--tf-text-secondary);
-  border: 1px solid var(--tf-border-light);
-  border-radius: 4px;
-  font-size: 12px;
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s;
-  white-space: nowrap;
-}
-.btn-sm:hover {
-  background: var(--tf-bg-hover);
-  color: var(--tf-text-primary);
-}
-.btn-sm:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-.btn-sm.danger:hover {
-  color: var(--tf-error);
-  border-color: var(--tf-error);
 }
 
 /* Empty & Loading */
@@ -676,189 +628,19 @@ onMounted(async () => {
 
 .webhook-actions {
   display: flex;
-  gap: 6px;
+  gap: 4px;
   flex-shrink: 0;
   margin-left: 16px;
 }
 
-/* Modal */
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 100;
-}
-
-.modal-sm, .modal-md, .modal-lg {
-  background: var(--tf-bg-elevated);
-  border: 1px solid var(--tf-border-light);
-  border-radius: 12px;
-  display: flex;
-  flex-direction: column;
-  max-height: 80vh;
-}
-.modal-sm { width: 420px; }
-.modal-md { width: 520px; }
-.modal-lg { width: 700px; }
-
-.modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 20px 24px 16px;
-  border-bottom: 1px solid var(--tf-border-light);
-}
-.modal-header h3 {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--tf-text-primary);
-  margin: 0;
-}
-
-.btn-close {
-  width: 28px;
-  height: 28px;
-  border: none;
-  background: none;
-  color: var(--tf-text-tertiary);
-  font-size: 16px;
-  cursor: pointer;
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.btn-close:hover {
-  background: var(--tf-bg-hover);
-  color: var(--tf-text-primary);
-}
-
-.modal-body {
-  padding: 20px 24px;
-  overflow-y: auto;
-  flex: 1;
-}
-
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  padding: 16px 24px 20px;
-  border-top: 1px solid var(--tf-border-light);
-}
-
-/* Form */
-.form-row {
-  margin-bottom: 16px;
-}
-
-.form-label {
-  display: block;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--tf-text-secondary);
-  margin-bottom: 6px;
-}
-
-.form-input {
-  width: 100%;
-  height: 32px;
-  padding: 0 10px;
-  border: 1px solid var(--tf-border-light);
-  border-radius: 6px;
-  background: var(--tf-bg-body);
-  color: var(--tf-text-primary);
-  font-size: 13px;
-  outline: none;
-  transition: border-color 0.15s;
-}
-.form-input:focus {
-  border-color: var(--tf-accent);
-}
-
+/* Form events grid */
 .event-checkboxes {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
 }
 
-.checkbox-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  cursor: pointer;
-}
-.checkbox-item input[type="checkbox"] {
-  width: 14px;
-  height: 14px;
-  accent-color: var(--tf-accent);
-}
-.checkbox-label {
-  font-size: 12px;
-  color: var(--tf-text-secondary);
-}
-
-.switch-label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  cursor: pointer;
-}
-.switch-label input[type="checkbox"] {
-  width: 14px;
-  height: 14px;
-  accent-color: var(--tf-accent);
-}
-.switch-text {
-  font-size: 12px;
-  color: var(--tf-text-secondary);
-}
-
-.btn-cancel {
-  height: 32px;
-  padding: 0 14px;
-  background: none;
-  border: 1px solid var(--tf-border-light);
-  border-radius: 6px;
-  color: var(--tf-text-secondary);
-  font-size: 13px;
-  cursor: pointer;
-}
-.btn-cancel:hover {
-  background: var(--tf-bg-hover);
-}
-
-.btn-submit {
-  height: 32px;
-  padding: 0 14px;
-  background: var(--tf-accent);
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-}
-.btn-submit:hover { opacity: 0.9; }
-.btn-submit:disabled { opacity: 0.4; cursor: not-allowed; }
-
-.btn-danger {
-  height: 32px;
-  padding: 0 14px;
-  background: var(--tf-error, #f85149);
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-}
-.btn-danger:hover { opacity: 0.9; }
-.btn-danger:disabled { opacity: 0.4; cursor: not-allowed; }
-
+/* Warning text in delete dialog */
 .warning-text {
   font-size: 12px;
   color: var(--tf-text-tertiary);
@@ -965,14 +747,8 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
   padding-top: 12px;
   border-top: 1px solid var(--tf-border-light);
   margin-top: 12px;
-}
-
-.page-info {
-  font-size: 12px;
-  color: var(--tf-text-tertiary);
 }
 </style>
