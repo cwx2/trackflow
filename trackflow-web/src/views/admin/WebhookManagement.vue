@@ -166,7 +166,10 @@
             :total="logPagination.total"
             size="small"
             :show-total="true"
+            show-page-size
+            :page-size-options="[20, 50, 100]"
             @change="loadLogs"
+            @page-size-change="onLogPageSizeChange"
           />
         </div>
       </div>
@@ -423,6 +426,11 @@ async function loadLogs(page: number) {
   } finally {
     logsLoading.value = false
   }
+}
+
+function onLogPageSizeChange(size: number) {
+  logPagination.value.pageSize = size
+  loadLogs(1)
 }
 
 function toggleLogDetail(id: string) {

@@ -138,7 +138,10 @@
         :page-size="pageSize"
         size="small"
         show-total
+        show-page-size
+        :page-size-options="[20, 50, 100, 200]"
         @change="(p: number) => { page = p; loadLogs() }"
+        @page-size-change="onPageSizeChange"
       />
     </div>
   </div>
@@ -153,7 +156,7 @@ import { Message } from '@arco-design/web-vue'
 const logs = ref<AuditLogVO[]>([])
 const total = ref(0)
 const page = ref(1)
-const pageSize = 20
+const pageSize = ref(20)
 const loading = ref(false)
 const exporting = ref(false)
 
@@ -189,10 +192,16 @@ function resetAndLoad() {
   loadLogs()
 }
 
+function onPageSizeChange(size: number) {
+  pageSize.value = size
+  page.value = 1
+  loadLogs()
+}
+
 async function loadLogs() {
   loading.value = true
   try {
-    const params: any = { page: page.value, pageSize }
+    const params: any = { page: page.value, pageSize: pageSize.value }
     if (filters.action) params.action = filters.action
     if (filters.targetType) params.targetType = filters.targetType
     if (filters.startDate) params.startDate = filters.startDate

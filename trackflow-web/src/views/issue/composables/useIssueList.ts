@@ -51,7 +51,7 @@ export function useIssueList() {
   const issues = ref<IssueVO[]>([])
   const totalIssues = ref(0)
   const currentPage = ref(1)
-  const pageSize = 20
+  const pageSize = ref(20)
   const loading = ref(false)
   const loadError = ref(false)
   const sortState = ref<SortState>({ field: null, direction: null })
@@ -105,7 +105,7 @@ export function useIssueList() {
     try {
       const params: Record<string, any> = {
         page: currentPage.value,
-        pageSize,
+        pageSize: pageSize.value,
         sort: sortParam.value
       }
 
@@ -186,6 +186,11 @@ export function useIssueList() {
     currentPage.value = page
   }
 
+  function changePageSize(size: number) {
+    pageSize.value = size
+    currentPage.value = 1
+  }
+
   /**
    * 更新本地单条 Issue 数据（内联编辑后刷新）
    */
@@ -235,6 +240,7 @@ export function useIssueList() {
     toggleSort,
     loadIssues,
     goPage,
+    changePageSize,
     updateLocalIssue,
     removeLocalIssue
   }

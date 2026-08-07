@@ -884,7 +884,7 @@
 
       <!-- Pagination -->
       <div class="pagination-bar" v-if="totalIssues > 0">
-        <a-pagination v-model:current="currentPage" :total="totalIssues" :page-size="pageSize" size="small" show-total @change="goPage" />
+        <a-pagination v-model:current="currentPage" :total="totalIssues" :page-size="pageSize" size="small" show-total show-page-size :page-size-options="[20, 50, 100, 200]" @change="goPage" @page-size-change="changePageSize" />
       </div>
     </section>
 
@@ -1039,7 +1039,7 @@ const route = useRoute()
 // Composables
 const {
   issues, totalIssues, currentPage, pageSize, loading, loadError,
-  sortState, loadIssues, goPage, updateLocalIssue, removeLocalIssue
+  sortState, loadIssues, goPage, changePageSize, updateLocalIssue, removeLocalIssue
 } = useIssueList()
 
 const {
@@ -3770,6 +3770,7 @@ function selectProject(p: any) {
 }
 
 watch(currentPage, () => refreshList())
+watch(pageSize, () => refreshList())
 watch(sortState, () => refreshList(), { deep: true })
 
 // Reset keyboard focus when issues list changes (pagination, filter, sort)

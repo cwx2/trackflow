@@ -144,7 +144,10 @@
         :page-size="pageSize"
         size="small"
         show-total
+        show-page-size
+        :page-size-options="[20, 50, 100, 200]"
         @change="(p: number) => { page = p; loadUsers() }"
+        @page-size-change="(size: number) => { pageSize = size; page = 1; loadUsers() }"
       />
     </div>
 
@@ -375,8 +378,8 @@ const currentUserId = computed(() => authStore.user?.userId)
 const users = ref<any[]>([])
 const total = ref(0)
 const page = ref(1)
-const pageSize = 20
-const totalPages = computed(() => Math.ceil(total.value / pageSize))
+const pageSize = ref(20)
+const totalPages = computed(() => Math.ceil(total.value / pageSize.value))
 const loading = ref(false)
 
 const filters = reactive({ keyword: '', roleId: '', status: '', banStatus: '' })
@@ -468,7 +471,7 @@ function debounceLoad() {
 async function loadUsers() {
   loading.value = true
   try {
-    const params: any = { page: page.value, pageSize }
+    const params: any = { page: page.value, pageSize: pageSize.value }
     if (filters.keyword) params.keyword = filters.keyword
     if (filters.roleId) params.roleId = filters.roleId
     if (filters.status) params.status = filters.status
