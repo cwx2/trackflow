@@ -99,7 +99,7 @@
               :show-file-list="false"
               multiple
               :accept="'image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.tar,.gz,.7z'"
-              :before-upload="onBeforeUpload"
+              :on-before-upload="onBeforeUpload"
             >
               <template #upload-button>
                 <div class="upload-trigger">
