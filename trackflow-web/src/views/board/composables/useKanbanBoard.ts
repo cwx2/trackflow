@@ -849,7 +849,7 @@ function groupByAssignee(allIssues: BoardIssue[]): SwimlaneRow[] {
 }
 
 function groupByPriority(allIssues: BoardIssue[]): SwimlaneRow[] {
-  const priorities = ['Critical', 'High', 'Normal', 'Low']
+  const priorities = ['紧急', '高', '普通', '低']
   const groups = new Map<string, BoardIssue[]>()
   for (const p of priorities) groups.set(p, [])
 

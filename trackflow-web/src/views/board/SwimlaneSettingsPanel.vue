@@ -343,10 +343,10 @@ const availableValues = ref<ValueOption[]>([])
 const loadingValues = ref(false)
 
 // 预定义的优先级和类型列表
-const PRIORITIES = ['Critical', 'High', 'Normal', 'Low']
-const PRIORITY_LABELS: Record<string, string> = { Critical: '紧急', High: '高', Normal: '普通', Low: '低' }
-const TYPES = ['Bug', 'Task', 'Feature', 'Story', 'Epic']
-const TYPE_LABELS: Record<string, string> = { Task: '任务', Bug: '缺陷', Feature: '需求', Epic: '史诗', Story: '故事' }
+const PRIORITIES = ['紧急', '高', '普通', '低']
+const PRIORITY_LABELS: Record<string, string> = { '紧急': '紧急', '高': '高', '普通': '普通', '低': '低' }
+const TYPES = ['缺陷', '任务', '需求', '故事', '史诗']
+const TYPE_LABELS: Record<string, string> = { '任务': '任务', '缺陷': '缺陷', '需求': '需求', '史诗': '史诗', '故事': '故事' }
 
 /** Issues 模式下可作为泳道行的 Issue 类型（层级较高的类型） */
 const PARENT_ISSUE_TYPES = [

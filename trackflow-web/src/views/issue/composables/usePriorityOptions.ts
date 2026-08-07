@@ -22,7 +22,7 @@ export interface PriorityOption {
 const cache = new Map<string, { options: PriorityOption[]; timestamp: number }>()
 const CACHE_TTL = 5 * 60 * 1000 // 5 分钟缓存
 
-/** 中文标签映射（回退用） */
+/** 中文标签映射（回退用，兼容历史英文值） */
 const FALLBACK_LABELS: Record<string, string> = {
   'Show-stopper': '阻塞',
   'Critical': '紧急',
@@ -30,10 +30,21 @@ const FALLBACK_LABELS: Record<string, string> = {
   'Medium': '普通',
   'Normal': '普通',
   'Low': '低',
+  '阻塞': '阻塞',
+  '紧急': '紧急',
+  '高': '高',
+  '普通': '普通',
+  '低': '低',
 }
 
 /** 回退颜色映射（API 不可用时） */
 const FALLBACK_COLORS: Record<string, string> = {
+  '阻塞': '#b91c1c',
+  '紧急': '#ef4444',
+  '高': '#f59e0b',
+  '普通': '#6366f1',
+  '低': '#64748b',
+  // 兼容历史英文值
   'Show-stopper': '#b91c1c',
   'Critical': '#ef4444',
   'High': '#f59e0b',
@@ -44,11 +55,11 @@ const FALLBACK_COLORS: Record<string, string> = {
 
 /** 默认优先级选项（API 不可用时的回退） */
 const FALLBACK_OPTIONS: PriorityOption[] = [
-  { value: 'Show-stopper', label: '阻塞', color: '#b91c1c', description: '阻塞性问题，必须立即解决', isDefault: false },
-  { value: 'Critical', label: '紧急', color: '#ef4444', description: '严重问题，影响核心功能', isDefault: false },
-  { value: 'High', label: '高', color: '#f59e0b', description: '高优先级，需要尽快处理', isDefault: false },
-  { value: 'Normal', label: '普通', color: '#6366f1', description: '普通优先级，按计划处理', isDefault: true },
-  { value: 'Low', label: '低', color: '#64748b', description: '低优先级，有空再处理', isDefault: false },
+  { value: '阻塞', label: '阻塞', color: '#b91c1c', description: '阻塞性问题，必须立即解决', isDefault: false },
+  { value: '紧急', label: '紧急', color: '#ef4444', description: '严重问题，影响核心功能', isDefault: false },
+  { value: '高', label: '高', color: '#f59e0b', description: '高优先级，需要尽快处理', isDefault: false },
+  { value: '普通', label: '普通', color: '#6366f1', description: '普通优先级，按计划处理', isDefault: true },
+  { value: '低', label: '低', color: '#64748b', description: '低优先级，有空再处理', isDefault: false },
 ]
 
 /**

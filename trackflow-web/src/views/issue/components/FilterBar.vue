@@ -645,11 +645,11 @@ async function loadValueOptions(fieldKey: string) {
 
       case 'priority':
         valueOptions.value = [
-          { id: 'Show-stopper', label: priorityLabelMap['Show-stopper'] || 'Show-stopper', color: '#b91c1c' },
-          { id: 'Critical', label: priorityLabelMap['Critical'] || 'Critical', color: '#ef4444' },
-          { id: 'High', label: priorityLabelMap['High'] || 'High', color: '#f59e0b' },
-          { id: 'Normal', label: priorityLabelMap['Normal'] || 'Normal', color: '#6366f1' },
-          { id: 'Low', label: priorityLabelMap['Low'] || 'Low', color: '#64748b' },
+          { id: '阻塞', label: '阻塞', color: '#b91c1c' },
+          { id: '紧急', label: '紧急', color: '#ef4444' },
+          { id: '高', label: '高', color: '#f59e0b' },
+          { id: '普通', label: '普通', color: '#6366f1' },
+          { id: '低', label: '低', color: '#64748b' },
         ]
         break
 

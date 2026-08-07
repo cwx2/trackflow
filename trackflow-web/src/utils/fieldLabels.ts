@@ -53,7 +53,9 @@ export function localizeFieldName(name?: string | null): string | undefined {
 
 /**
  * Issue 类型英文值 → 中文映射
- * 统一用于系统中所有展示 Issue 类型名称的位置（列表、详情、筛选器、看板、自定义字段等）
+ * 
+ * @deprecated 自 V274 数据迁移后，数据库中已存储中文值。
+ * 保留此映射仅用于兼容可能残留的历史英文值（如活动记录中未迁移的旧数据）。
  */
 export const issueTypeLabelMap: Record<string, string> = {
   Bug: '缺陷',
@@ -65,8 +67,10 @@ export const issueTypeLabelMap: Record<string, string> = {
 
 /**
  * 本地化 Issue 类型名称
- * @param type 英文类型值（如 "Bug"、"Task"）
- * @returns 中文类型名（如 "缺陷"、"任务"），未匹配时返回原值
+ * V274 后数据库已存中文，此函数直接返回输入值。
+ * 仅在遇到残留英文值时做兼容翻译。
+ * @param type 类型值（中文或历史英文值）
+ * @returns 中文类型名
  */
 export function localizeIssueType(type?: string | null): string {
   if (!type) return '未知'
@@ -75,6 +79,9 @@ export function localizeIssueType(type?: string | null): string {
 
 /**
  * 优先级英文值 → 中文映射
+ * 
+ * @deprecated 自 V274 数据迁移后，数据库中已存储中文值。
+ * 保留此映射仅用于兼容可能残留的历史英文值。
  */
 export const priorityLabelMap: Record<string, string> = {
   'Show-stopper': '阻塞',
@@ -89,12 +96,20 @@ export const priorityLabelMap: Record<string, string> = {
   medium: '普通',
   normal: '普通',
   low: '低',
+  // 中文值映射到自身（确保无论输入格式如何都能正确返回）
+  '阻塞': '阻塞',
+  '紧急': '紧急',
+  '高': '高',
+  '普通': '普通',
+  '低': '低',
 }
 
 /**
  * 本地化优先级名称
- * @param priority 英文优先级值（如 "Normal"、"High"）
- * @returns 中文优先级名（如 "普通"、"高"），未匹配时返回原值
+ * V274 后数据库已存中文，此函数直接返回输入值。
+ * 仅在遇到残留英文值时做兼容翻译。
+ * @param priority 优先级值（中文或历史英文值）
+ * @returns 中文优先级名
  */
 export function localizePriority(priority?: string | null): string {
   if (!priority) return '普通'
@@ -103,7 +118,9 @@ export function localizePriority(priority?: string | null): string {
 
 /**
  * 状态英文名 → 中文映射
- * 覆盖 issue_status 表中的所有预置状态
+ * 
+ * @deprecated 自 V274 后，后端 API 返回 displayName（中文）或已本地化的 statusName。
+ * 保留此映射仅用于兼容可能残留的历史英文值（如活动记录中旧的 status 变更值）。
  */
 export const statusLabelMap: Record<string, string> = {
   'Open': '待处理',
@@ -129,9 +146,10 @@ export const statusLabelMap: Record<string, string> = {
 
 /**
  * 本地化状态名称
- * 统一用于系统中所有展示状态名称的位置（列表、详情、下拉、看板、筛选器等）
- * @param name 英文状态名（如 "Open"、"In Progress"）
- * @returns 中文状态名（如 "待处理"、"进行中"），未匹配时返回原值
+ * V274 后后端已返回中文 statusName（通过 COALESCE(display_name, name)），
+ * 此函数用于兼容可能残留的英文值。
+ * @param name 状态名（中文或历史英文名）
+ * @returns 中文状态名
  */
 export function localizeStatusName(name?: string | null): string {
   if (!name) return '未知'
@@ -355,10 +373,20 @@ export const queryFieldKeyToLabel: Record<string, string> = {
 }
 
 /**
- * 优先级中文→英文反向映射
+ * 优先级中文→存储值的反向映射（用于查询解析）
+ * V274 后存储值也是中文，所以此映射变为中文→中文的直通映射。
+ * 保留是为了兼容 useApplyCommand 等引用它的代码。
  */
-export const priorityReverseLabelMap: Record<string, string> = Object.fromEntries(
-  Object.entries(priorityLabelMap)
-    .filter(([k]) => k[0] === k[0].toUpperCase()) // 只取 Pascal case 的键
-    .map(([k, v]) => [v, k])
-)
+export const priorityReverseLabelMap: Record<string, string> = {
+  '阻塞': '阻塞',
+  '紧急': '紧急',
+  '高': '高',
+  '普通': '普通',
+  '低': '低',
+  // 兼容可能的英文输入
+  'Show-stopper': '阻塞',
+  'Critical': '紧急',
+  'High': '高',
+  'Normal': '普通',
+  'Low': '低',
+}

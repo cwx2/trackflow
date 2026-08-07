@@ -99,10 +99,11 @@ function getBuiltinFields(): FieldDef[] {
     {
       key: 'priority', label: '优先级', queryKey: '优先级', valueType: 'enum',
       getValues: () => [
-        { id: 'Critical', label: '紧急' },
-        { id: 'High', label: '高' },
-        { id: 'Normal', label: '普通' },
-        { id: 'Low', label: '低' },
+        { id: '阻塞', label: '阻塞' },
+        { id: '紧急', label: '紧急' },
+        { id: '高', label: '高' },
+        { id: '普通', label: '普通' },
+        { id: '低', label: '低' },
       ]
     },
     {

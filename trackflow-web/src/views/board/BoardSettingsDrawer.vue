@@ -404,7 +404,7 @@ const PRIORITY_COLORS: Record<string, string> = {
   Normal: '#3b82f6',
   Low: '#9ca3af'
 }
-const PRIORITY_VALUES = ['Critical', 'High', 'Normal', 'Low']
+const PRIORITY_VALUES = ['紧急', '高', '普通', '低']
 const editablePriorityWip = ref<PriorityWipLocal[]>(
   PRIORITY_VALUES.map(v => ({ fieldValue: v, wipMin: undefined, wipMax: undefined }))
 )

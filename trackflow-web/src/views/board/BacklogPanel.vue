@@ -73,10 +73,10 @@
           style="width: 90px"
           @change="applyFilter"
         >
-          <a-option value="Critical">紧急</a-option>
-          <a-option value="High">高</a-option>
-          <a-option value="Normal">普通</a-option>
-          <a-option value="Low">低</a-option>
+          <a-option value="紧急">紧急</a-option>
+          <a-option value="高">高</a-option>
+          <a-option value="普通">普通</a-option>
+          <a-option value="低">低</a-option>
         </a-select>
       </div>
 

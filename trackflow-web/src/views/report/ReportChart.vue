@@ -173,14 +173,16 @@ const statusColors: Record<string, string> = {
 
 /** 优先级色 */
 const priorityColors: Record<string, string> = {
+  '阻塞': '#ff1744',
+  '紧急': '#f85149',
+  '高': '#f0883e',
+  '普通': '#58a6ff',
+  '低': '#3fb950',
+  // 兼容历史英文值
   'Critical': '#f85149',
   'High': '#f0883e',
   'Normal': '#58a6ff',
   'Low': '#3fb950',
-  'critical': '#f85149',
-  'high': '#f0883e',
-  'normal': '#58a6ff',
-  'low': '#3fb950'
 }
 
 /** 通用色板（轮循） */

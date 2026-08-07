@@ -57,19 +57,19 @@ export function useIssueDetailData() {
 
   // Options loaded dynamically
   const dynamicPriorityOptions = ref<Array<{ value: string; label: string; color: string }>>([
-    { value: 'Show-stopper', label: '阻塞', color: '#b91c1c' },
-    { value: 'Critical', label: '紧急', color: '#ef4444' },
-    { value: 'High', label: '高', color: '#f59e0b' },
-    { value: 'Normal', label: '普通', color: '#6366f1' },
-    { value: 'Low', label: '低', color: '#64748b' },
+    { value: '阻塞', label: '阻塞', color: '#b91c1c' },
+    { value: '紧急', label: '紧急', color: '#ef4444' },
+    { value: '高', label: '高', color: '#f59e0b' },
+    { value: '普通', label: '普通', color: '#6366f1' },
+    { value: '低', label: '低', color: '#64748b' },
   ])
 
   const dynamicIssueTypeOptions = ref<Array<{ value: string; label: string; color: string }>>([
-    { value: 'Bug', label: '缺陷', color: '#ef4444' },
-    { value: 'Task', label: '任务', color: '#6366f1' },
-    { value: 'Feature', label: '需求', color: '#22c55e' },
-    { value: 'Epic', label: '史诗', color: '#a855f7' },
-    { value: 'Story', label: '故事', color: '#3b82f6' },
+    { value: '缺陷', label: '缺陷', color: '#ef4444' },
+    { value: '任务', label: '任务', color: '#6366f1' },
+    { value: '需求', label: '需求', color: '#22c55e' },
+    { value: '史诗', label: '史诗', color: '#a855f7' },
+    { value: '故事', label: '故事', color: '#3b82f6' },
   ])
 
   // Time tracking

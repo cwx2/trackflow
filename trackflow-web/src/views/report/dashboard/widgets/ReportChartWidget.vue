@@ -53,8 +53,8 @@ const statusColors: Record<string, string> = {
 }
 
 const priorityColors: Record<string, string> = {
-  'Critical': '#f85149', 'High': '#f0883e', 'Normal': '#58a6ff', 'Low': '#3fb950',
-  'critical': '#f85149', 'high': '#f0883e', 'normal': '#58a6ff', 'low': '#3fb950'
+  '阻塞': '#ff1744', '紧急': '#f85149', '高': '#f0883e', '普通': '#58a6ff', '低': '#3fb950',
+  'Critical': '#f85149', 'High': '#f0883e', 'Normal': '#58a6ff', 'Low': '#3fb950'
 }
 
 function getItemColor(label: string, groupBy: string, idx: number): string {

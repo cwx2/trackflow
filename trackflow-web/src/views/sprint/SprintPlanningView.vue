@@ -97,16 +97,16 @@
             </a-input>
             <div class="filter-row">
               <a-select v-model="backlogFilterType" placeholder="类型" size="mini" allow-clear style="flex:1" @change="loadBacklog">
-                <a-option value="Task">任务</a-option>
-                <a-option value="Bug">缺陷</a-option>
-                <a-option value="Feature">需求</a-option>
-                <a-option value="Story">故事</a-option>
+                <a-option value="任务">任务</a-option>
+                <a-option value="缺陷">缺陷</a-option>
+                <a-option value="需求">需求</a-option>
+                <a-option value="故事">故事</a-option>
               </a-select>
               <a-select v-model="backlogFilterPriority" placeholder="优先级" size="mini" allow-clear style="flex:1" @change="loadBacklog">
-                <a-option value="Critical">紧急</a-option>
-                <a-option value="High">高</a-option>
-                <a-option value="Normal">普通</a-option>
-                <a-option value="Low">低</a-option>
+                <a-option value="紧急">紧急</a-option>
+                <a-option value="高">高</a-option>
+                <a-option value="普通">普通</a-option>
+                <a-option value="低">低</a-option>
               </a-select>
               <a-select v-model="backlogFilterAssignee" placeholder="负责人" size="mini" allow-clear style="flex:1" @change="loadBacklog">
                 <a-option value="unassigned">未分配</a-option>

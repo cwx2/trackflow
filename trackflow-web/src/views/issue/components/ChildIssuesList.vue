@@ -60,6 +60,12 @@ defineProps<{
 
 /** 优先级 position 映射（value → 从 1 开始的序号） */
 const PRIORITY_ORDER: Record<string, number> = {
+  '阻塞': 1,
+  '紧急': 2,
+  '高': 3,
+  '普通': 4,
+  '低': 5,
+  // 兼容历史英文值
   'Show-stopper': 1,
   'Critical': 2,
   'High': 3,

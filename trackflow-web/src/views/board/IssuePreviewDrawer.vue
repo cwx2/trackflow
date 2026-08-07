@@ -301,10 +301,10 @@ const availableTransitions = ref<IssueStatusVO[]>([])
 
 const editingPriority = ref(false)
 const priorityOptions = [
-  { value: 'Critical', label: '紧急', icon: '🔴' },
-  { value: 'High', label: '高', icon: '🟠' },
-  { value: 'Normal', label: '普通', icon: '🔵' },
-  { value: 'Low', label: '低', icon: '⚪' }
+  { value: '紧急', label: '紧急', icon: '🔴' },
+  { value: '高', label: '高', icon: '🟠' },
+  { value: '普通', label: '普通', icon: '🔵' },
+  { value: '低', label: '低', icon: '⚪' }
 ]
 
 const editingAssignee = ref(false)

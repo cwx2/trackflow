@@ -221,11 +221,17 @@ function typeLabel(issueType?: string): string {
 // ─── 优先级图标 ──────────────────────────────────────
 
 function priorityIcon(priority?: string): string {
-  switch (priority?.toLowerCase()) {
-    case 'critical': return '🔴'
-    case 'high': return '🟠'
-    case 'normal': return '🔵'
-    case 'low': return '🟢'
+  switch (priority) {
+    case '阻塞': return '⛔'
+    case '紧急': return '🔴'
+    case '高': return '🟠'
+    case '普通': return '🔵'
+    case '低': return '🟢'
+    // 兼容历史英文值
+    case 'Critical': return '🔴'
+    case 'High': return '🟠'
+    case 'Normal': return '🔵'
+    case 'Low': return '🟢'
     default: return '⚪'
   }
 }

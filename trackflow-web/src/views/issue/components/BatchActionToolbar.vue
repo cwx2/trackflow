@@ -646,11 +646,11 @@ onMounted(async () => {
 // ========== 优先级下拉 ==========
 const showPriorityDropdown = ref(false)
 const priorityOptions = ref([
-  { value: 'Show-stopper', label: '阻塞', color: '#b91c1c' },
-  { value: 'Critical', label: '紧急', color: '#ef4444' },
-  { value: 'High', label: '高', color: '#f59e0b' },
-  { value: 'Normal', label: '普通', color: '#6366f1' },
-  { value: 'Low', label: '低', color: '#64748b' },
+  { value: '阻塞', label: '阻塞', color: '#b91c1c' },
+  { value: '紧急', label: '紧急', color: '#ef4444' },
+  { value: '高', label: '高', color: '#f59e0b' },
+  { value: '普通', label: '普通', color: '#6366f1' },
+  { value: '低', label: '低', color: '#64748b' },
 ])
 
 // Load dynamic priority options when project changes
