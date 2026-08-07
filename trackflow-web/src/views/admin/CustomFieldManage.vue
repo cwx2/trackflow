@@ -12,16 +12,27 @@
       <a-tab-pane key="list" title="字段列表">
         <!-- 字段列表 + 详情侧边栏 -->
         <div class="cf-body">
-          <div class="cf-table" :class="{ 'has-detail': !!selectedField }">
-            <!-- 搜索框 + 批量操作工具栏 -->
-            <div class="cf-toolbar">
-              <a-input-search
-                v-model="searchKeyword"
-                placeholder="搜索字段名称..."
-                size="small"
-                allow-clear
-                style="width: 220px"
-              />
+          <AdminDataTable
+            :class="{ 'has-detail': !!selectedField }"
+            :data="filteredFieldList"
+            :loading="loading"
+            :total="pagination.total"
+            v-model:current="pagination.current"
+            v-model:page-size="pagination.pageSize"
+            v-model:search-keyword="searchKeyword"
+            v-model:selected-keys="selectedKeys"
+            :selectable="true"
+            :page-size-options="[20, 50, 100]"
+            search-placeholder="搜索字段名称..."
+            empty-title="暂无自定义字段"
+            empty-description="点击右上角「创建自定义字段」添加第一个字段"
+            @page-change="onPageChange"
+            @page-size-change="onPageSizeChange"
+            @search="onSearch"
+            @row-click="onRowClick"
+          >
+            <!-- 筛选器 -->
+            <template #toolbar-filters>
               <a-select
                 v-model="filterFieldFormat"
                 placeholder="按类型筛选"
@@ -33,145 +44,128 @@
                 <a-option value="">全部类型</a-option>
                 <a-option v-for="t in fieldTypeOptions" :key="t.value" :value="t.value">{{ t.label }}</a-option>
               </a-select>
-              <div v-if="selectedKeys.length > 0" class="batch-toolbar">
-                <span class="batch-count">已选 {{ selectedKeys.length }} 项</span>
-                <a-button size="mini" type="outline" @click="batchToggleAutoAttach(true)">
-                  <template #icon><icon-check /></template>
-                  启用 Auto-attach
-                </a-button>
-                <a-button size="mini" type="outline" @click="batchToggleAutoAttach(false)">
-                  禁用 Auto-attach
-                </a-button>
-                <a-button size="mini" type="outline" @click="batchTogglePrivate(true)">
-                  <template #icon><icon-lock /></template>
-                  设为私有
-                </a-button>
-                <a-button size="mini" type="outline" @click="batchTogglePrivate(false)">
-                  <template #icon><icon-unlock /></template>
-                  取消私有
-                </a-button>
-                <a-button size="mini" type="outline" @click="batchToggleHidden(true)">
-                  <template #icon><icon-eye-invisible /></template>
-                  隐藏于列表
-                </a-button>
-                <a-button size="mini" type="outline" @click="batchToggleHidden(false)">
-                  <template #icon><icon-eye /></template>
-                  显示于列表
-                </a-button>
-                <a-button size="mini" type="outline" status="danger" @click="batchDeleteConfirm">
-                  <template #icon><icon-delete /></template>
-                  批量删除
-                </a-button>
-                <a-button size="mini" type="text" @click="selectedKeys = []">
-                  取消选择
-                </a-button>
-              </div>
-            </div>
-            <div class="cf-table-scroll">
-              <a-table
-                :data="filteredFieldList"
-                :loading="loading"
-                :pagination="false"
-                row-key="id"
-                size="small"
-                :row-selection="rowSelection"
-                v-model:selected-keys="selectedKeys"
-                @row-click="onRowClick"
-              >
-              <template #columns>
-                <a-table-column title="字段名称" data-index="name" :width="180">
-                  <template #cell="{ record }">
-                    <span class="clickable-name">{{ record.name }}</span>
-                    <a-tag v-if="record.isBuiltIn" size="small" color="arcoblue" style="margin-left: 6px">内置</a-tag>
-                  </template>
-                </a-table-column>
-                <a-table-column title="类型" data-index="fieldFormat" :width="100">
-                  <template #cell="{ record }">
-                    <a-tag size="small">{{ formatTypeLabel(record.fieldFormat) }}</a-tag>
-                  </template>
-                </a-table-column>
-                <a-table-column title="默认值" :width="120">
-                  <template #cell="{ record }">
-                    <span v-if="record.defaultValue" class="default-value-cell">{{ record.defaultValue }}</span>
-                    <span v-else class="text-muted">—</span>
-                  </template>
-                </a-table-column>
-                <a-table-column title="选项值" :width="260">
-                  <template #cell="{ record }">
-                    <template v-if="(record.fieldFormat === 'list' || record.fieldFormat === 'state' || record.fieldFormat === 'ownedField' || record.fieldFormat === 'version' || record.fieldFormat === 'build') && record.options && record.options.length > 0">
-                      <div class="options-inline">
-                        <template v-for="(opt, idx) in record.options.filter(o => !o.isArchived).slice(0, MAX_INLINE_OPTIONS)" :key="opt.id">
-                          <span
-                            class="option-inline-tag"
-                            :style="opt.color ? { background: opt.color + '26', color: opt.color, borderColor: opt.color + '66' } : {}"
-                          >{{ opt.value }}</span>
-                        </template>
+            </template>
+
+            <!-- 批量操作 -->
+            <template #toolbar-batch="{ count }">
+              <span class="batch-count">已选 {{ count }} 项</span>
+              <a-button size="mini" type="outline" @click="batchToggleAutoAttach(true)">
+                <template #icon><icon-check /></template>
+                启用 Auto-attach
+              </a-button>
+              <a-button size="mini" type="outline" @click="batchToggleAutoAttach(false)">
+                禁用 Auto-attach
+              </a-button>
+              <a-button size="mini" type="outline" @click="batchTogglePrivate(true)">
+                <template #icon><icon-lock /></template>
+                设为私有
+              </a-button>
+              <a-button size="mini" type="outline" @click="batchTogglePrivate(false)">
+                <template #icon><icon-unlock /></template>
+                取消私有
+              </a-button>
+              <a-button size="mini" type="outline" @click="batchToggleHidden(true)">
+                <template #icon><icon-eye-invisible /></template>
+                隐藏于列表
+              </a-button>
+              <a-button size="mini" type="outline" @click="batchToggleHidden(false)">
+                <template #icon><icon-eye /></template>
+                显示于列表
+              </a-button>
+              <a-button size="mini" type="outline" status="danger" @click="batchDeleteConfirm">
+                <template #icon><icon-delete /></template>
+                批量删除
+              </a-button>
+              <a-button size="mini" type="text" @click="selectedKeys = []">
+                取消选择
+              </a-button>
+            </template>
+
+            <!-- 表格列 -->
+            <template #columns>
+              <a-table-column title="字段名称" data-index="name" :width="180">
+                <template #cell="{ record }">
+                  <span class="clickable-name">{{ record.name }}</span>
+                  <a-tag v-if="record.isBuiltIn" size="small" color="arcoblue" style="margin-left: 6px">内置</a-tag>
+                </template>
+              </a-table-column>
+              <a-table-column title="类型" data-index="fieldFormat" :width="100">
+                <template #cell="{ record }">
+                  <a-tag size="small">{{ formatTypeLabel(record.fieldFormat) }}</a-tag>
+                </template>
+              </a-table-column>
+              <a-table-column title="默认值" :width="120">
+                <template #cell="{ record }">
+                  <span v-if="record.defaultValue" class="default-value-cell">{{ record.defaultValue }}</span>
+                  <span v-else class="text-muted">—</span>
+                </template>
+              </a-table-column>
+              <a-table-column title="选项值" :width="260">
+                <template #cell="{ record }">
+                  <template v-if="(record.fieldFormat === 'list' || record.fieldFormat === 'state' || record.fieldFormat === 'ownedField' || record.fieldFormat === 'version' || record.fieldFormat === 'build') && record.options && record.options.length > 0">
+                    <div class="options-inline">
+                      <template v-for="(opt, idx) in record.options.filter(o => !o.isArchived).slice(0, MAX_INLINE_OPTIONS)" :key="opt.id">
                         <span
-                          v-if="record.options.filter(o => !o.isArchived).length > MAX_INLINE_OPTIONS"
-                          class="option-more-tag"
-                        >+{{ record.options.filter(o => !o.isArchived).length - MAX_INLINE_OPTIONS }}</span>
-                      </div>
-                    </template>
-                    <span v-else class="text-muted">—</span>
-                  </template>
-                </a-table-column>
-                <a-table-column title="属性" :width="140">
-                  <template #cell="{ record }">
-                    <div class="field-badges">
-                      <span v-if="record.isRequired" class="field-badge field-badge--required">必填</span>
-                      <span v-if="record.isForAll" class="field-badge field-badge--global">全局</span>
-                      <span v-if="record.isPrivate" class="field-badge field-badge--private">私有</span>
-                      <span v-if="record.isHiddenInList" class="field-badge field-badge--hidden">隐藏</span>
+                          class="option-inline-tag"
+                          :style="opt.color ? { background: opt.color + '26', color: opt.color, borderColor: opt.color + '66' } : {}"
+                        >{{ opt.value }}</span>
+                      </template>
+                      <span
+                        v-if="record.options.filter(o => !o.isArchived).length > MAX_INLINE_OPTIONS"
+                        class="option-more-tag"
+                      >+{{ record.options.filter(o => !o.isArchived).length - MAX_INLINE_OPTIONS }}</span>
                     </div>
                   </template>
-                </a-table-column>
-                <a-table-column title="使用项目" :width="140">
-                  <template #cell="{ record }">
-                    <a-tooltip v-if="record.isForAll" :content="`全局字段，适用于系统全部 ${projectList.length} 个项目`">
-                      <span class="project-usage-tag project-usage-global">
-                        <icon-apps size="12" />
-                        全部 {{ projectList.length }} 个
-                      </span>
-                    </a-tooltip>
-                    <a-tooltip
-                      v-else-if="(record.projectIds || []).length > 0"
-                      :content="getProjectNamesText(record.projectIds)"
-                    >
-                      <span class="project-usage-tag project-usage-specific">
-                        <icon-folder size="12" />
-                        {{ (record.projectIds || []).length }} 个项目
-                      </span>
-                    </a-tooltip>
-                    <span v-else class="text-muted text-xs">未使用</span>
-                  </template>
-                </a-table-column>
-                <a-table-column title="适用类型" :width="140">
-                  <template #cell="{ record }">
-                    <span v-if="!record.issueTypes || record.issueTypes.length === 0" class="text-muted">所有类型</span>
-                    <span v-else>{{ record.issueTypes.map(t => localizeIssueType(t)).join(', ') }}</span>
-                  </template>
-                </a-table-column>
-                <a-table-column title="操作" :width="120" align="center">
-                  <template #cell="{ record }">
-                    <a-button type="text" size="mini" @click.stop="openEdit(record)">编辑</a-button>
-                    <a-tooltip v-if="record.isBuiltIn" content="内置字段不可删除">
-                      <a-button type="text" size="mini" status="danger" disabled>删除</a-button>
-                    </a-tooltip>
-                    <a-button v-else type="text" size="mini" status="danger" @click.stop="confirmDelete(record)">删除</a-button>
-                  </template>
-                </a-table-column>
-              </template>
-            </a-table>
-            </div>
-            <AdminPagination
-              :total="pagination.total"
-              :page="pagination.current"
-              :page-size="pagination.pageSize"
-              :page-size-options="[20, 50, 100]"
-              @page-change="onPageChange"
-              @page-size-change="onPageSizeChange"
-            />
-          </div>
+                  <span v-else class="text-muted">—</span>
+                </template>
+              </a-table-column>
+              <a-table-column title="属性" :width="140">
+                <template #cell="{ record }">
+                  <div class="field-badges">
+                    <span v-if="record.isRequired" class="field-badge field-badge--required">必填</span>
+                    <span v-if="record.isForAll" class="field-badge field-badge--global">全局</span>
+                    <span v-if="record.isPrivate" class="field-badge field-badge--private">私有</span>
+                    <span v-if="record.isHiddenInList" class="field-badge field-badge--hidden">隐藏</span>
+                  </div>
+                </template>
+              </a-table-column>
+              <a-table-column title="使用项目" :width="140">
+                <template #cell="{ record }">
+                  <a-tooltip v-if="record.isForAll" :content="`全局字段，适用于系统全部 ${projectList.length} 个项目`">
+                    <span class="project-usage-tag project-usage-global">
+                      <icon-apps size="12" />
+                      全部 {{ projectList.length }} 个
+                    </span>
+                  </a-tooltip>
+                  <a-tooltip
+                    v-else-if="(record.projectIds || []).length > 0"
+                    :content="getProjectNamesText(record.projectIds)"
+                  >
+                    <span class="project-usage-tag project-usage-specific">
+                      <icon-folder size="12" />
+                      {{ (record.projectIds || []).length }} 个项目
+                    </span>
+                  </a-tooltip>
+                  <span v-else class="text-muted text-xs">未使用</span>
+                </template>
+              </a-table-column>
+              <a-table-column title="适用类型" :width="140">
+                <template #cell="{ record }">
+                  <span v-if="!record.issueTypes || record.issueTypes.length === 0" class="text-muted">所有类型</span>
+                  <span v-else>{{ record.issueTypes.map(t => localizeIssueType(t)).join(', ') }}</span>
+                </template>
+              </a-table-column>
+              <a-table-column title="操作" :width="120" align="center">
+                <template #cell="{ record }">
+                  <a-button type="text" size="mini" @click.stop="openEdit(record)">编辑</a-button>
+                  <a-tooltip v-if="record.isBuiltIn" content="内置字段不可删除">
+                    <a-button type="text" size="mini" status="danger" disabled>删除</a-button>
+                  </a-tooltip>
+                  <a-button v-else type="text" size="mini" status="danger" @click.stop="confirmDelete(record)">删除</a-button>
+                </template>
+              </a-table-column>
+            </template>
+          </AdminDataTable>
 
           <!-- 字段详情侧边栏 -->
           <div v-if="selectedField" class="cf-detail-sidebar">
@@ -840,7 +834,7 @@ import type { CustomFieldDefinitionVO, CustomFieldUsageVO, OptionUsageItemVO, Us
 import { localizeIssueType } from '@/utils/fieldLabels'
 import FieldsInProjects from './FieldsInProjects.vue'
 import DefaultValueInput from './components/DefaultValueInput.vue'
-import { AdminPageLayout, AdminPagination } from '@/components/admin'
+import { AdminPageLayout, AdminDataTable } from '@/components/admin'
 
 
 const activeTab = ref('list')
@@ -866,10 +860,6 @@ const filteredFieldList = computed(() => {
   return fieldList.value.filter(f => f.name.toLowerCase().includes(kw))
 })
 const selectedKeys = ref<string[]>([])
-const rowSelection = reactive({
-  type: 'checkbox' as const,
-  showCheckedAll: true
-})
 
 
 
@@ -1057,6 +1047,11 @@ function onPageSizeChange(size: number) {
   pagination.pageSize = size
   pagination.current = 1
   loadList()
+}
+
+function onSearch(_keyword: string) {
+  // 搜索关键词变化时重置到第 1 页（filteredFieldList 是前端计算属性，不需要重新请求）
+  pagination.current = 1
 }
 
 async function onRowClick(record: CustomFieldDefinitionVO) {
@@ -1768,64 +1763,8 @@ onMounted(() => {
   overflow: hidden;
 }
 
-.cf-table {
-  background: var(--tf-bg-surface);
-  border-radius: 6px;
-  border: 1px solid var(--tf-border);
+.has-detail {
   flex: 1;
-  min-width: 0;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-.cf-table.has-detail {
-  flex: 1;
-}
-
-.cf-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--tf-border);
-  flex-wrap: wrap;
-  flex-shrink: 0;
-  background: var(--tf-bg-surface);
-}
-
-.cf-table-scroll {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-}
-
-/* Override Arco's internal scrollbar/content containers that create intermediate
-   scroll contexts and break position:sticky on table headers. */
-.cf-table-scroll :deep(.arco-scrollbar) {
-  overflow: visible;
-}
-
-.cf-table-scroll :deep(.arco-scrollbar-container) {
-  overflow: visible !important;
-}
-
-.cf-table-scroll :deep(.arco-table-content-scroll-x) {
-  overflow: visible !important;
-}
-
-.cf-table-scroll :deep(.arco-table-th) {
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  background: var(--tf-bg-surface);
-}
-
-.batch-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
 }
 
 .batch-count {
