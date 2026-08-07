@@ -58,64 +58,80 @@
     </div>
 
     <!-- 用户列表 -->
-    <div class="data-table">
-      <div class="table-header">
-        <div class="col" style="width:240px">
-          <span class="col-sortable" :class="{ active: sortField === 'displayName' }" @click="toggleSort('displayName')">
-            用户
-            <icon-caret-up v-if="sortField === 'displayName'" class="sort-icon" :class="{ desc: sortDesc }" :size="10" />
-          </span>
-        </div>
-        <div class="col" style="flex:1">邮箱</div>
-        <div class="col" style="width:140px">系统角色</div>
-        <div class="col" style="width:80px">状态</div>
-        <div class="col" style="width:150px">
-          <span class="col-sortable" :class="{ active: sortField === 'lastLoginAt' }" @click="toggleSort('lastLoginAt')">
-            最近登录
-            <icon-caret-up v-if="sortField === 'lastLoginAt'" class="sort-icon" :class="{ desc: sortDesc }" :size="10" />
-          </span>
-        </div>
-        <div class="col" style="width:120px">操作</div>
-      </div>
-      <div class="table-body">
-        <div v-for="user in users" :key="user.id" class="table-row clickable-row" @click="navigateToUser(user, $event)">
-          <div class="col user-col" style="width:240px">
-            <span class="user-avatar" :style="{ background: getAvatarColor(user.displayName || user.username) }">
-              {{ getInitial(user.displayName || user.username) }}
+    <a-table
+      :data="users"
+      :pagination="false"
+      :bordered="false"
+      :loading="loading"
+      size="medium"
+      row-key="id"
+      class="user-table"
+      :row-class="() => 'clickable-row'"
+      @row-click="navigateToUser"
+    >
+      <template #columns>
+        <a-table-column title="用户" :width="240" data-index="displayName">
+          <template #title>
+            <span class="col-sortable" :class="{ active: sortField === 'displayName' }" @click="toggleSort('displayName')">
+              用户
+              <icon-caret-up v-if="sortField === 'displayName'" class="sort-icon" :class="{ desc: sortDesc }" :size="10" />
             </span>
-            <div class="user-info">
-              <router-link :to="`/admin/users/${user.id}`" class="username-link">{{ user.displayName || user.username }}</router-link>
-              <span class="user-login">{{ user.username }}</span>
+          </template>
+          <template #cell="{ record }">
+            <div class="user-col">
+              <span class="user-avatar" :style="{ background: getAvatarColor(record.displayName || record.username) }">
+                {{ getInitial(record.displayName || record.username) }}
+              </span>
+              <div class="user-info">
+                <router-link :to="`/admin/users/${record.id}`" class="username-link" @click.stop>{{ record.displayName || record.username }}</router-link>
+                <span class="user-login">{{ record.username }}</span>
+              </div>
             </div>
-          </div>
-          <div class="col" style="flex:1">{{ user.email || '—' }}</div>
-          <div class="col" style="width:140px">
-            <template v-if="user.globalRoles && user.globalRoles.length > 0">
-              <span v-for="role in user.globalRoles" :key="role.id" class="role-badge">{{ role.name }}</span>
+          </template>
+        </a-table-column>
+        <a-table-column title="邮箱" data-index="email">
+          <template #cell="{ record }">{{ record.email || '—' }}</template>
+        </a-table-column>
+        <a-table-column title="系统角色" :width="140">
+          <template #cell="{ record }">
+            <template v-if="record.globalRoles && record.globalRoles.length > 0">
+              <span v-for="role in record.globalRoles" :key="role.id" class="role-badge">{{ role.name }}</span>
             </template>
             <span v-else class="text-muted">—</span>
-          </div>
-          <div class="col" style="width:80px">
-            <span class="status-tag" :class="user.status">{{ user.status === 'active' ? '启用' : getBanStatusLabel(user.banStatus) }}</span>
-          </div>
-          <div class="col" style="width:150px">
-            <span class="time-text">{{ formatDate(user.lastLoginAt) }}</span>
-          </div>
-          <div class="col" style="width:120px">
-            <a-button v-if="user.status === 'active' && user.id !== currentUserId" type="text" size="mini" status="danger" @click="disableUser(user)">禁用</a-button>
-            <a-button v-else-if="user.status !== 'active'" type="text" size="mini" @click="enableUser(user)">启用</a-button>
-            <a-button type="text" size="mini" @click="openRoleDialog(user)">角色</a-button>
-          </div>
-        </div>
-        <div v-if="users.length === 0 && !loading" class="empty-state">
-          <a-empty description="暂无用户">
-            <template #extra>
-              <p class="empty-state-hint">点击"新建用户"按钮添加第一个用户</p>
-            </template>
-          </a-empty>
-        </div>
-      </div>
-    </div>
+          </template>
+        </a-table-column>
+        <a-table-column title="状态" :width="80">
+          <template #cell="{ record }">
+            <span class="status-tag" :class="record.status">{{ record.status === 'active' ? '启用' : getBanStatusLabel(record.banStatus) }}</span>
+          </template>
+        </a-table-column>
+        <a-table-column title="最近登录" :width="150">
+          <template #title>
+            <span class="col-sortable" :class="{ active: sortField === 'lastLoginAt' }" @click="toggleSort('lastLoginAt')">
+              最近登录
+              <icon-caret-up v-if="sortField === 'lastLoginAt'" class="sort-icon" :class="{ desc: sortDesc }" :size="10" />
+            </span>
+          </template>
+          <template #cell="{ record }">
+            <span class="time-text">{{ formatDate(record.lastLoginAt) }}</span>
+          </template>
+        </a-table-column>
+        <a-table-column title="操作" :width="120" align="center">
+          <template #cell="{ record }">
+            <a-button v-if="record.status === 'active' && record.id !== currentUserId" type="text" size="mini" status="danger" @click.stop="disableUser(record)">禁用</a-button>
+            <a-button v-else-if="record.status !== 'active'" type="text" size="mini" @click.stop="enableUser(record)">启用</a-button>
+            <a-button type="text" size="mini" @click.stop="openRoleDialog(record)">角色</a-button>
+          </template>
+        </a-table-column>
+      </template>
+      <template #empty>
+        <a-empty description="暂无用户">
+          <template #extra>
+            <p class="empty-state-hint">点击"新建用户"按钮添加第一个用户</p>
+          </template>
+        </a-empty>
+      </template>
+    </a-table>
 
     <!-- 分页 -->
     <div class="pagination-wrapper" v-if="total > 0">
@@ -183,161 +199,160 @@
     </a-modal>
 
     <!-- 角色管理弹窗 -->
-    <div class="modal-overlay" v-if="showRoleDialog" @click.self="showRoleDialog = false">
-      <div class="modal-role-panel">
-        <div class="modal-header">
-          <h3>管理角色 — {{ selectedUser?.displayName }}</h3>
-          <button class="btn-close" @click="showRoleDialog = false">×</button>
+    <a-modal
+      v-model:visible="showRoleDialog"
+      :title="`管理角色 — ${selectedUser?.displayName || ''}`"
+      :width="520"
+      :footer="false"
+      unmount-on-close
+      class="role-modal"
+      @cancel="showRoleDialog = false"
+    >
+      <!-- 加载中 -->
+      <div v-if="roleLoading" class="role-loading">
+        <a-spin />
+        <span>加载角色信息...</span>
+      </div>
+
+      <template v-else>
+        <!-- 系统角色区域 -->
+        <div class="role-section">
+          <div class="role-section-header">
+            <h4 class="role-section-title">系统角色</h4>
+            <span class="role-section-hint">赋予用户系统级管理权限</span>
+          </div>
+          <div class="role-list">
+            <div v-for="role in globalRoles" :key="role.id" class="role-item">
+              <a-checkbox
+                :model-value="userRoleIds.includes(String(role.id))"
+                :disabled="savingRoles"
+                @change="() => toggleRole(role.id)"
+              >
+                <span class="role-name">{{ role.name }}</span>
+                <span class="role-code">{{ role.code }}</span>
+              </a-checkbox>
+            </div>
+          </div>
+          <!-- 批量保存按钮 -->
+          <div v-if="hasRoleChanges" class="role-save-bar">
+            <span class="role-save-hint">系统角色已修改，请保存</span>
+            <a-button size="mini" type="primary" :loading="savingRoles" @click="saveRoles">
+              保存角色
+            </a-button>
+          </div>
         </div>
-        <div class="modal-body">
-          <!-- 加载中 -->
-          <div v-if="roleLoading" class="role-loading">
-            <div class="loading-spinner"></div>
-            <span>加载角色信息...</span>
+
+        <!-- 自动分配的项目角色区域 -->
+        <div class="role-section">
+          <div class="role-section-header">
+            <h4 class="role-section-title">自动分配的项目角色</h4>
+            <span class="role-section-hint">用户将以此角色自动加入所有项目（包括新建项目）</span>
           </div>
 
-          <template v-else>
-            <!-- 系统角色区域 -->
-            <div class="role-section">
-              <div class="role-section-header">
-                <h4 class="role-section-title">系统角色</h4>
-                <span class="role-section-hint">赋予用户系统级管理权限</span>
+          <div class="global-project-role-list">
+            <div v-for="gm in userGlobalMembers" :key="gm.id" class="global-project-role-item">
+              <div class="global-project-role-info">
+                <span class="global-tag">自动</span>
+                <span class="global-project-role-name">{{ gm.roleName }}</span>
+                <span class="global-project-role-code">{{ gm.roleCode }}</span>
               </div>
-              <div class="role-list">
-                <div v-for="role in globalRoles" :key="role.id" class="role-item">
-                  <label class="role-check">
-                    <input 
-                      type="checkbox" 
-                      :checked="userRoleIds.includes(String(role.id))" 
-                      :disabled="savingRoles"
-                      @change="toggleRole(role.id)" 
-                    />
-                    <span class="role-name">{{ role.name }}</span>
-                    <span class="role-code">{{ role.code }}</span>
-                  </label>
-                </div>
-              </div>
-              <!-- 批量保存按钮 -->
-              <div v-if="hasRoleChanges" class="role-save-bar">
-                <span class="role-save-hint">系统角色已修改，请保存</span>
-                <button class="btn-sm-action primary" :disabled="savingRoles" @click="saveRoles">
-                  {{ savingRoles ? '保存中...' : '保存角色' }}
-                </button>
-              </div>
+              <a-button type="text" size="mini" status="danger" title="撤销自动分配" @click="revokeGlobalMember(gm)">
+                <template #icon><icon-close :size="14" /></template>
+              </a-button>
             </div>
-
-            <!-- 自动分配的项目角色区域 -->
-            <div class="role-section">
-              <div class="role-section-header">
-                <h4 class="role-section-title">自动分配的项目角色</h4>
-                <span class="role-section-hint">用户将以此角色自动加入所有项目（包括新建项目）</span>
-              </div>
-
-              <div class="global-project-role-list">
-                <div v-for="gm in userGlobalMembers" :key="gm.id" class="global-project-role-item">
-                  <div class="global-project-role-info">
-                    <span class="global-tag">自动</span>
-                    <span class="global-project-role-name">{{ gm.roleName }}</span>
-                    <span class="global-project-role-code">{{ gm.roleCode }}</span>
-                  </div>
-                  <button class="btn-icon-sm danger" title="撤销自动分配" @click="revokeGlobalMember(gm)">
-                    <icon-close :size="14" />
-                  </button>
-                </div>
-                <div v-if="userGlobalMembers.length === 0" class="role-empty-inline">
-                  未设置自动分配角色
-                </div>
-              </div>
-
-              <!-- 添加自动分配的项目角色 -->
-              <div class="add-global-member-section">
-                <a-button v-if="!showAddGlobalMember" type="text" size="mini" @click="showAddGlobalMember = true">
-                  <template #icon><icon-plus :size="12" /></template>
-                  添加自动分配角色
-                </a-button>
-                <div v-else class="add-global-member-form">
-                  <a-select v-model="addGlobalRoleId" placeholder="选择角色..." size="mini" style="flex: 1; min-width: 120px">
-                    <a-option v-for="r in availableGlobalProjectRoles" :key="r.id" :value="r.id">{{ r.name }}</a-option>
-                  </a-select>
-                  <a-button size="mini" type="primary" :disabled="!addGlobalRoleId" @click="assignGlobalMember">确认</a-button>
-                  <a-button size="mini" @click="showAddGlobalMember = false; addGlobalRoleId = ''">取消</a-button>
-                </div>
-              </div>
+            <div v-if="userGlobalMembers.length === 0" class="role-empty-inline">
+              未设置自动分配角色
             </div>
+          </div>
 
-            <!-- 已加入的项目区域 -->
-            <div class="role-section">
-              <div class="role-section-header">
-                <h4 class="role-section-title">已加入的项目</h4>
-                <span class="role-section-count">{{ userProjectRoles.length }} 个项目</span>
-              </div>
-              <div class="role-section-desc">用户在各个具体项目中的成员角色</div>
-
-              <div v-if="userProjectRoles.length === 0" class="role-empty">
-                <span class="role-empty-icon">📁</span>
-                <span>未加入任何项目</span>
-              </div>
-
-              <div v-else class="project-role-list">
-                <div v-for="pr in userProjectRoles" :key="`${pr.projectId}-${pr.roleCode}`" class="project-role-item">
-                  <div class="project-role-info">
-                    <span class="project-role-key">{{ pr.projectKey }}</span>
-                    <span class="project-role-name">{{ pr.projectName }}</span>
-                    <span v-if="pr.source === 'group'" class="source-tag group" :title="pr.groupName ? `来源: ${pr.groupName}` : '通过用户组继承'">
-                      组继承
-                    </span>
-                  </div>
-                  <div class="project-role-actions">
-                    <a-select
-                      :model-value="pr.roleCode"
-                      size="mini"
-                      style="width: 110px"
-                      :disabled="pr.source === 'group'"
-                      :title="pr.source === 'group' ? '通过用户组继承的角色不可直接修改' : ''"
-                      @change="(val: string) => changeProjectRole(pr, val)"
-                    >
-                      <a-option v-for="r in projectRoles" :key="r.id" :value="r.code">{{ r.name }}</a-option>
-                    </a-select>
-                    <button
-                      v-if="pr.source !== 'group'"
-                      class="btn-icon-sm danger"
-                      title="移除成员"
-                      @click="removeFromProject(pr)"
-                    >
-                      <icon-close :size="14" />
-                    </button>
-                    <span v-else class="btn-icon-sm disabled" title="通过用户组继承的角色不可直接移除">
-                      <!-- 保留：Arco 无等效的禁用圆圈图标，使用 icon-close-circle 代替 -->
-                      <icon-close-circle :size="14" style="opacity: 0.3" />
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <!-- 添加到项目 -->
-              <div class="add-project-section">
-                <a-button v-if="!showAddProject" type="text" size="mini" @click="showAddProject = true">
-                  <template #icon><icon-plus :size="12" /></template>
-                  添加到项目
-                </a-button>
-                <div v-else class="add-project-form">
-                  <a-select v-model="addProjectId" placeholder="选择项目..." size="mini" style="flex: 1; min-width: 120px">
-                    <a-option v-for="p in availableProjects" :key="p.id" :value="p.id">
-                      {{ p.key }} — {{ p.name }}
-                    </a-option>
-                  </a-select>
-                  <a-select v-model="addProjectRoleId" placeholder="选择角色..." size="mini" style="flex: 1; min-width: 120px">
-                    <a-option v-for="r in projectRoles" :key="r.id" :value="r.id">{{ r.name }}</a-option>
-                  </a-select>
-                  <a-button size="mini" type="primary" :disabled="!addProjectId || !addProjectRoleId" @click="addToProject">确认</a-button>
-                  <a-button size="mini" @click="cancelAddProject">取消</a-button>
-                </div>
-              </div>
+          <!-- 添加自动分配的项目角色 -->
+          <div class="add-global-member-section">
+            <a-button v-if="!showAddGlobalMember" type="text" size="mini" @click="showAddGlobalMember = true">
+              <template #icon><icon-plus :size="12" /></template>
+              添加自动分配角色
+            </a-button>
+            <div v-else class="add-global-member-form">
+              <a-select v-model="addGlobalRoleId" placeholder="选择角色..." size="mini" style="flex: 1; min-width: 120px">
+                <a-option v-for="r in availableGlobalProjectRoles" :key="r.id" :value="r.id">{{ r.name }}</a-option>
+              </a-select>
+              <a-button size="mini" type="primary" :disabled="!addGlobalRoleId" @click="assignGlobalMember">确认</a-button>
+              <a-button size="mini" @click="showAddGlobalMember = false; addGlobalRoleId = ''">取消</a-button>
             </div>
-          </template>
+          </div>
         </div>
-      </div>
-    </div>
+
+        <!-- 已加入的项目区域 -->
+        <div class="role-section">
+          <div class="role-section-header">
+            <h4 class="role-section-title">已加入的项目</h4>
+            <span class="role-section-count">{{ userProjectRoles.length }} 个项目</span>
+          </div>
+          <div class="role-section-desc">用户在各个具体项目中的成员角色</div>
+
+          <div v-if="userProjectRoles.length === 0" class="role-empty">
+            <span class="role-empty-icon">📁</span>
+            <span>未加入任何项目</span>
+          </div>
+
+          <div v-else class="project-role-list">
+            <div v-for="pr in userProjectRoles" :key="`${pr.projectId}-${pr.roleCode}`" class="project-role-item">
+              <div class="project-role-info">
+                <span class="project-role-key">{{ pr.projectKey }}</span>
+                <span class="project-role-name">{{ pr.projectName }}</span>
+                <span v-if="pr.source === 'group'" class="source-tag group" :title="pr.groupName ? `来源: ${pr.groupName}` : '通过用户组继承'">
+                  组继承
+                </span>
+              </div>
+              <div class="project-role-actions">
+                <a-select
+                  :model-value="pr.roleCode"
+                  size="mini"
+                  style="width: 110px"
+                  :disabled="pr.source === 'group'"
+                  :title="pr.source === 'group' ? '通过用户组继承的角色不可直接修改' : ''"
+                  @change="(val: string) => changeProjectRole(pr, val)"
+                >
+                  <a-option v-for="r in projectRoles" :key="r.id" :value="r.code">{{ r.name }}</a-option>
+                </a-select>
+                <a-button
+                  v-if="pr.source !== 'group'"
+                  type="text"
+                  size="mini"
+                  status="danger"
+                  title="移除成员"
+                  @click="removeFromProject(pr)"
+                >
+                  <template #icon><icon-close :size="14" /></template>
+                </a-button>
+                <span v-else class="btn-icon-sm disabled" title="通过用户组继承的角色不可直接移除">
+                  <icon-close-circle :size="14" style="opacity: 0.3" />
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 添加到项目 -->
+          <div class="add-project-section">
+            <a-button v-if="!showAddProject" type="text" size="mini" @click="showAddProject = true">
+              <template #icon><icon-plus :size="12" /></template>
+              添加到项目
+            </a-button>
+            <div v-else class="add-project-form">
+              <a-select v-model="addProjectId" placeholder="选择项目..." size="mini" style="flex: 1; min-width: 120px">
+                <a-option v-for="p in availableProjects" :key="p.id" :value="p.id">
+                  {{ p.key }} — {{ p.name }}
+                </a-option>
+              </a-select>
+              <a-select v-model="addProjectRoleId" placeholder="选择角色..." size="mini" style="flex: 1; min-width: 120px">
+                <a-option v-for="r in projectRoles" :key="r.id" :value="r.id">{{ r.name }}</a-option>
+              </a-select>
+              <a-button size="mini" type="primary" :disabled="!addProjectId || !addProjectRoleId" @click="addToProject">确认</a-button>
+              <a-button size="mini" @click="cancelAddProject">取消</a-button>
+            </div>
+          </div>
+        </div>
+      </template>
+    </a-modal>
   </div>
 </template>
 
@@ -379,13 +394,8 @@ function toggleSort(field: string) {
 }
 
 /** 点击行跳转用户详情（排除按钮和链接的点击） */
-function navigateToUser(user: any, event: MouseEvent) {
-  const target = event.target as HTMLElement
-  // 排除点击按钮、链接、下拉框的情况，这些元素有自己的交互行为
-  if (target.closest('button') || target.closest('a') || target.closest('select')) {
-    return
-  }
-  router.push(`/admin/users/${user.id}`)
+function navigateToUser(record: any) {
+  router.push(`/admin/users/${record.id}`)
 }
 
 // 创建用户
@@ -892,25 +902,10 @@ onMounted(() => {
 .page-title { font-size: 18px; font-weight: 600; color: var(--text-bright); }
 .header-actions { display: flex; align-items: center; gap: 12px; }
 .header-filters { display: flex; gap: 8px; }
-.filter-input { height: 32px; width: 260px; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 0 10px; color: var(--text-primary); font-size: var(--font-size-sm); outline: none; }
-.filter-input:focus { border-color: var(--accent-blue); }
-.filter-select { height: 32px; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 0 10px; color: var(--text-primary); font-size: var(--font-size-sm); }
 
-.btn-primary { display: flex; align-items: center; height: 32px; padding: 0 14px; background: var(--accent-blue); border: none; border-radius: var(--radius-md); color: #fff; font-size: var(--font-size-sm); font-weight: 500; cursor: pointer; white-space: nowrap; transition: background 150ms; }
-.btn-primary:hover { background: var(--accent-blue-hover, #4a9af5); }
-.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
-.btn-secondary { height: 32px; padding: 0 14px; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: var(--radius-md); color: var(--text-primary); font-size: var(--font-size-sm); cursor: pointer; transition: background 150ms; }
-.btn-secondary:hover { background: var(--bg-hover); }
-
-.data-table { border: 1px solid var(--border-color); border-radius: 6px; overflow: hidden; }
-.table-header { display: flex; padding: 8px 12px; background: var(--bg-tertiary); border-bottom: 1px solid var(--border-color); font-size: var(--font-size-xs); color: var(--text-secondary); text-transform: uppercase; }
-.table-row { display: flex; padding: 10px 12px; border-bottom: 1px solid var(--border-light); align-items: center; }
-.table-row:hover { background: var(--bg-hover); }
-.table-row:last-child { border-bottom: none; }
-.table-row.clickable-row { cursor: pointer; transition: background 150ms ease; }
-.table-row.clickable-row:hover { background: var(--bg-hover); }
-.table-row.clickable-row:active { background: var(--bg-active, var(--bg-hover)); }
-.col { padding: 0 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--font-size-sm); }
+/* User Table */
+.user-table :deep(.arco-table-tr.clickable-row) { cursor: pointer; }
+.user-table :deep(.arco-table-tr.clickable-row:hover .arco-table-td) { background: var(--bg-hover); }
 
 .username-link { color: var(--accent-blue); font-weight: 500; text-decoration: none; }
 .username-link:hover { text-decoration: underline; }
@@ -926,53 +921,23 @@ onMounted(() => {
 .status-tag.disabled { background: rgba(244,67,54,0.15); color: var(--accent-red); }
 .time-text { font-size: var(--font-size-xs); color: var(--text-secondary); }
 
-.btn-sm { height: 24px; padding: 0 8px; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-primary); font-size: var(--font-size-xs); cursor: pointer; margin-right: 4px; }
-.btn-sm:hover { background: var(--bg-hover); }
-.btn-sm.danger { color: var(--accent-red); border-color: var(--accent-red); }
-
 .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px 24px; color: var(--text-muted); }
 .empty-state-hint { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
 
-.pagination { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; font-size: var(--font-size-sm); color: var(--text-secondary); }
-.page-btns { display: flex; align-items: center; gap: 8px; }
-.btn-page { width: 28px; height: 28px; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: var(--radius-md); color: var(--text-primary); cursor: pointer; }
-.btn-page:disabled { opacity: 0.3; cursor: not-allowed; }
-
 /* Modal */
-.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 1000; }
-.modal-sm { width: 420px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; }
-.modal-md { width: 480px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; }
-.modal-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--border-color); }
-.modal-header h3 { font-size: 15px; color: var(--text-bright); font-weight: 500; }
-.btn-close { background: none; border: none; color: var(--text-secondary); font-size: 18px; cursor: pointer; padding: 0 4px; }
-.btn-close:hover { color: var(--text-primary); }
-.modal-body { padding: 16px 18px; }
 .modal-footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border-light); }
 
 /* Form */
-.form-group { margin-bottom: 16px; }
-.form-label { display: block; font-size: var(--font-size-xs); font-weight: 500; color: var(--text-secondary); margin-bottom: 6px; }
-.required { color: var(--accent-red); }
-.form-input { width: 100%; height: 36px; background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 0 10px; color: var(--text-primary); font-size: var(--font-size-sm); outline: none; box-sizing: border-box; transition: border-color 150ms; }
-.form-input:focus { border-color: var(--accent-blue); }
-.form-hint { display: block; font-size: 11px; color: var(--text-muted); margin-top: 4px; }
 .form-error { display: flex; align-items: center; gap: 6px; padding: 8px 12px; background: rgba(244,67,54,0.1); border: 1px solid rgba(244,67,54,0.3); border-radius: var(--radius-md); color: var(--accent-red); font-size: var(--font-size-xs); margin-top: 12px; }
 
 .role-item { margin-bottom: 8px; }
-.role-check { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: var(--font-size-sm); color: var(--text-primary); }
-.role-check.loading { cursor: wait; opacity: 0.7; }
-.role-check input { accent-color: var(--accent-blue); }
-.role-check input:disabled { cursor: wait; }
-.checkbox-spinner { width: 14px; height: 14px; border: 2px solid var(--border-color); border-top-color: var(--accent-blue); border-radius: 50%; animation: spin 0.6s linear infinite; flex-shrink: 0; }
-.role-code { font-size: var(--font-size-xs); color: var(--text-muted); margin-left: auto; }
+.role-item .role-code { font-size: var(--font-size-xs); color: var(--text-muted); margin-left: 8px; }
+.role-item .role-name { font-size: var(--font-size-sm); color: var(--text-primary); }
 
-/* Role Panel */
-.modal-role-panel { width: 520px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; max-height: 80vh; display: flex; flex-direction: column; }
-.modal-role-panel .modal-body { overflow-y: auto; flex: 1; padding: 0; }
+/* Role Panel (inside a-modal) */
+.role-modal :deep(.arco-modal-body) { padding: 0; max-height: 60vh; overflow-y: auto; }
 
 .role-loading { display: flex; align-items: center; gap: 10px; padding: 32px; justify-content: center; color: var(--text-secondary); font-size: var(--font-size-sm); }
-.loading-spinner { width: 16px; height: 16px; border: 2px solid var(--border-color); border-top-color: var(--accent-blue); border-radius: 50%; animation: spin 0.6s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
 
 .role-section { padding: 16px 18px; }
 .role-section + .role-section { border-top: 1px solid var(--border-light); }
@@ -993,27 +958,12 @@ onMounted(() => {
 .source-tag { font-size: 10px; font-weight: 500; padding: 2px 6px; border-radius: 3px; flex-shrink: 0; }
 .source-tag.group { color: #a371f7; background: rgba(163,113,247,0.12); }
 .project-role-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
-.project-role-select { height: 26px; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 0 6px; color: var(--text-primary); font-size: var(--font-size-xs); cursor: pointer; outline: none; }
-.project-role-select:focus { border-color: var(--accent-blue); }
-.project-role-select:disabled { opacity: 0.5; cursor: not-allowed; background: var(--bg-secondary); }
 
-.btn-icon-sm { width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; background: none; border: none; border-radius: var(--radius-sm); color: var(--text-muted); cursor: pointer; transition: all 150ms; }
-.btn-icon-sm:hover { background: var(--bg-hover); color: var(--text-primary); }
-.btn-icon-sm.danger:hover { background: rgba(244,67,54,0.1); color: var(--accent-red); }
-.btn-icon-sm.disabled { cursor: not-allowed; opacity: 0.4; }
+.btn-icon-sm.disabled { width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; cursor: not-allowed; opacity: 0.4; }
 
 /* Add to Project */
 .add-project-section { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-light); }
-.btn-text-sm { display: flex; align-items: center; background: none; border: none; color: var(--accent-blue); font-size: var(--font-size-xs); cursor: pointer; padding: 4px 0; transition: opacity 150ms; }
-.btn-text-sm:hover { opacity: 0.8; }
 .add-project-form { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.add-project-select { height: 28px; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 0 8px; color: var(--text-primary); font-size: var(--font-size-xs); flex: 1; min-width: 120px; outline: none; }
-.add-project-select:focus { border-color: var(--accent-blue); }
-.btn-sm-action { height: 28px; padding: 0 10px; background: var(--accent-blue); border: none; border-radius: var(--radius-sm); color: #fff; font-size: var(--font-size-xs); cursor: pointer; transition: opacity 150ms; white-space: nowrap; }
-.btn-sm-action:hover { opacity: 0.9; }
-.btn-sm-action:disabled { opacity: 0.4; cursor: not-allowed; }
-.btn-sm-action.secondary { background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-primary); }
-.btn-sm-action.secondary:hover { background: var(--bg-hover); }
 
 /* Role badges */
 .role-badge { display: inline-flex; align-items: center; height: 20px; padding: 0 7px; background: rgba(88,166,255,0.12); color: var(--accent-blue); font-size: 11px; font-weight: 500; border-radius: 3px; white-space: nowrap; margin-right: 4px; }
@@ -1026,9 +976,6 @@ onMounted(() => {
 /* Role Save Bar */
 .role-save-bar { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; padding: 10px 12px; background: rgba(88,166,255,0.08); border-radius: var(--radius-sm); }
 .role-save-hint { font-size: 12px; color: var(--accent-blue); }
-.btn-sm-action.primary { background: var(--accent-blue); color: #fff; font-weight: 500; }
-.btn-sm-action.primary:hover { opacity: 0.9; }
-.btn-sm-action.primary:disabled { opacity: 0.4; cursor: not-allowed; }
 
 .global-project-role-list { display: flex; flex-direction: column; gap: 4px; }
 .global-project-role-item { display: flex; align-items: center; justify-content: space-between; padding: 6px 8px; border-radius: var(--radius-sm); transition: background 150ms; }
