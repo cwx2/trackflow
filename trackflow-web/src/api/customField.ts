@@ -226,6 +226,16 @@ export const customFieldApi = {
     return request.put<any, R<void>>(`/projects/${projectId}/settings/custom-fields/${fieldId}/filter-rules`, data)
   },
 
+  // ========== 数字徽章配置 ==========
+
+  /** 设置整数字段在项目中的数字徽章显示配置 */
+  setFieldBadgeConfig(projectId: string, fieldId: string, data: {
+    showAsBadge: boolean
+    badgeColorRules?: string | null
+  }) {
+    return request.put<any, R<void>>(`/projects/${projectId}/settings/custom-fields/${fieldId}/badge`, data)
+  },
+
   // ========== 内联添加选项值 ==========
 
   /** 内联添加枚举字段选项值（工单详情页/创建表单快捷入口） */

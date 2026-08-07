@@ -113,6 +113,19 @@ public class CustomFieldDefinitionVO {
      */
     private Boolean requiresExplicitSelection;
 
+    // ===== 数字徽章配置（项目级别） =====
+
+    /**
+     * 是否在工单列表标题左侧以数字徽章形式展示该字段值（仅整数字段有效）。
+     */
+    private Boolean showAsBadge;
+
+    /**
+     * 徽章颜色规则 JSON 数组字符串。
+     * 格式: [{"max":1,"color":"#ef4444"},{"max":3,"color":"#f97316"},{"color":"#3b82f6"}]
+     */
+    private String badgeColorRules;
+
     // ===== 值依赖过滤（项目级别） =====
 
     /**

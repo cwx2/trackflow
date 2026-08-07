@@ -8,6 +8,7 @@ import com.trackflow.customfield.dto.CustomFieldQuery;
 import com.trackflow.customfield.dto.ReplaceFieldDTO;
 import com.trackflow.customfield.dto.ReorderCustomFieldDTO;
 import com.trackflow.customfield.dto.ReorderProjectFieldsDTO;
+import com.trackflow.customfield.dto.SetBadgeConfigDTO;
 import com.trackflow.customfield.dto.SetFieldConditionDTO;
 import com.trackflow.customfield.dto.SetFieldFilterRulesDTO;
 import com.trackflow.customfield.dto.SetFieldProjectOverrideDTO;
@@ -421,6 +422,24 @@ public class CustomFieldController {
             @PathVariable("fieldId") Long fieldId,
             @Valid @RequestBody SetFieldProjectOverrideDTO dto) {
         customFieldService.setFieldProjectOverride(projectId, fieldId, dto.getIsRequired(), dto.getDefaultValue(), dto.getCanBeEmpty());
+        return R.ok();
+    }
+
+    // ========== 数字徽章配置端点 ==========
+
+    /**
+     * 设置整数字段在项目中的数字徽章显示配置。
+     * <p>
+     * 开启后，该字段的值将在工单列表标题左侧以数字徽章形式展示（对标 YouTrack 数字优先级效果）。
+     * 仅对整数（integer）类型字段有效。
+     */
+    @PutMapping("/projects/{projectId}/settings/custom-fields/{fieldId}/badge")
+    @PreAuthorize("@perm.check(#projectId, 'project:manage_custom_fields')")
+    public R<Void> setFieldBadgeConfig(
+            @PathVariable("projectId") Long projectId,
+            @PathVariable("fieldId") Long fieldId,
+            @Valid @RequestBody SetBadgeConfigDTO dto) {
+        customFieldService.setFieldBadgeConfig(projectId, fieldId, dto.getShowAsBadge(), dto.getBadgeColorRules());
         return R.ok();
     }
 

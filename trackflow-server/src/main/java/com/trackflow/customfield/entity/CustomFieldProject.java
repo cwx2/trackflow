@@ -102,6 +102,20 @@ public class CustomFieldProject implements Serializable {
     private Boolean hasIndependentOptions;
 
     /**
+     * 是否在工单列表标题左侧以数字徽章形式展示该字段值。
+     * 仅对整数（integer）类型字段有效。
+     */
+    private Boolean showAsBadge;
+
+    /**
+     * 徽章颜色规则 JSON 数组。
+     * 按数值区间配置颜色，格式: [{"max":1,"color":"#ef4444"},{"max":3,"color":"#f97316"},{"color":"#3b82f6"}]
+     * 匹配逻辑：从头到尾遍历，第一个满足 value <= max 的规则生效；无 max 的规则为默认兜底。
+     */
+    @TableField(typeHandler = JsonbTypeHandler.class)
+    private String badgeColorRules;
+
+    /**
      * 是否允许字段为空（项目级覆盖）。
      * <ul>
      *   <li>true (默认): 字段可以为空</li>

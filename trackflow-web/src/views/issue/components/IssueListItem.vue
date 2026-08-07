@@ -48,6 +48,15 @@
     <!-- Issue key -->
     <router-link :to="`/issues/${issue.issueKey}`" class="item-key" @click.stop>{{ issue.issueKey }}</router-link>
 
+    <!-- Integer badge(s) from configured custom fields -->
+    <span
+      v-for="badge in intBadges"
+      :key="badge.fieldId"
+      class="item-int-badge"
+      :style="{ background: badge.color }"
+      :title="`${badge.fieldName}: ${badge.value}`"
+    >{{ badge.value }}</span>
+
     <!-- Title -->
     <span class="item-title">{{ issue.title }}</span>
 
@@ -198,6 +207,9 @@ interface IssueListItemIssue extends IssueVO {
   description?: string
 }
 
+import type { BadgeFieldConfig, BadgeColorRule } from './badgeTypes'
+export type { BadgeFieldConfig, BadgeColorRule }
+
 interface SprintGroup {
   label: string
   items: SprintVO[]
@@ -218,12 +230,15 @@ const props = withDefaults(defineProps<{
   sprintOptions?: SprintVO[] | null
   /** Sprint 选项是否正在加载 */
   sprintOptionsLoading?: boolean
+  /** 数字徽章字段配置（整数类型字段且 showAsBadge=true 的配置列表，最多 2 个） */
+  badgeFields?: BadgeFieldConfig[]
 }>(), {
   showCheckbox: true,
   showDragHandle: false,
   focused: false,
   sprintOptions: null,
-  sprintOptionsLoading: false
+  sprintOptionsLoading: false,
+  badgeFields: () => []
 })
 
 const emit = defineEmits<{
@@ -276,6 +291,46 @@ function handleSprintClick() {
 // Limit custom fields shown (max 4)
 const limitedCustomFieldDetails = computed((): CustomFieldValueVO[] => {
   return (props.issue.customFieldDetails || []).slice(0, 4)
+})
+
+// Integer badge rendering
+interface BadgeItem {
+  fieldId: string
+  fieldName: string
+  value: number
+  color: string
+}
+
+const DEFAULT_BADGE_COLOR = '#3b82f6'
+
+function resolveBadgeColor(value: number, rules?: BadgeColorRule[] | null): string {
+  if (!rules || rules.length === 0) return DEFAULT_BADGE_COLOR
+  for (const rule of rules) {
+    if (rule.max != null && value <= rule.max) return rule.color
+    if (rule.max == null) return rule.color // fallback rule (no max = default)
+  }
+  return DEFAULT_BADGE_COLOR
+}
+
+const intBadges = computed<BadgeItem[]>(() => {
+  if (!props.badgeFields || props.badgeFields.length === 0) return []
+  const details = props.issue.customFieldDetails
+  if (!details || details.length === 0) return []
+  const result: BadgeItem[] = []
+  for (const cfg of props.badgeFields) {
+    const detail = details.find(d => d.customFieldId === cfg.fieldId)
+    if (!detail || !detail.value) continue
+    const numValue = Number(detail.value)
+    if (isNaN(numValue) || numValue === 0) continue
+    result.push({
+      fieldId: cfg.fieldId,
+      fieldName: cfg.fieldName,
+      value: numValue,
+      color: resolveBadgeColor(numValue, cfg.colorRules)
+    })
+    if (result.length >= 2) break
+  }
+  return result
 })
 
 // Tags: max 3 visible, rest as +N
@@ -484,6 +539,22 @@ function truncateDescription(desc?: string): string {
 }
 .item-key:hover {
   text-decoration: underline;
+}
+
+/* Integer badge (数字徽章) */
+.item-int-badge {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1;
 }
 
 /* Title */

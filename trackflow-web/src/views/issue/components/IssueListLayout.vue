@@ -70,6 +70,7 @@
             :show-drag-handle="draggable"
             :sprint-options="canEditIssue(issue) ? (sprintOptionsCache[issue.projectId] ?? []) : null"
             :sprint-options-loading="sprintLoadingIds.has(issue.id)"
+            :badge-fields="badgeFieldsMap[issue.projectId] || []"
             @click="$emit('item-click', issue)"
             @dblclick="$emit('item-dblclick', issue)"
             @select="toggleSelect(issue)"
@@ -103,6 +104,7 @@
             :show-drag-handle="draggable"
             :sprint-options="canEditIssue(issue) ? (sprintOptionsCache[issue.projectId] ?? []) : null"
             :sprint-options-loading="sprintLoadingIds.has(issue.id)"
+            :badge-fields="badgeFieldsMap[issue.projectId] || []"
             @click="$emit('item-click', issue)"
             @dblclick="$emit('item-dblclick', issue)"
             @select="toggleSelect(issue)"
@@ -132,6 +134,7 @@
               :show-drag-handle="draggable"
               :sprint-options="canEditIssue(node.issue) ? (sprintOptionsCache[node.issue.projectId] ?? []) : null"
               :sprint-options-loading="sprintLoadingIds.has(node.issue.id)"
+              :badge-fields="badgeFieldsMap[node.issue.projectId] || []"
               @click="$emit('item-click', node.issue)"
               @dblclick="$emit('item-dblclick', node.issue)"
               @toggle-expand="toggleExpand(node.issue)"
@@ -161,6 +164,7 @@
             :show-drag-handle="draggable"
             :sprint-options="canEditIssue(issue) ? (sprintOptionsCache[issue.projectId] ?? []) : null"
             :sprint-options-loading="sprintLoadingIds.has(issue.id)"
+            :badge-fields="badgeFieldsMap[issue.projectId] || []"
             @click="$emit('item-click', issue)"
             @dblclick="$emit('item-dblclick', issue)"
             @select="toggleSelect(issue)"
@@ -182,6 +186,7 @@ import type { IssueVO, SprintVO } from '@/api/types'
 import type { DensityLevel, StructureMode } from '../composables'
 import type { SortState } from '../composables/useIssueList'
 import IssueListItem from './IssueListItem.vue'
+import type { BadgeFieldConfig } from './badgeTypes'
 
 interface IssueWithDesc extends IssueVO {
   description?: string
@@ -208,6 +213,8 @@ const props = withDefaults(defineProps<{
   sprintLoadingIds?: Set<string>
   /** 判断 issue 是否可编辑的函数（用于权限控制） */
   canEditIssue?: (issue: IssueWithDesc) => boolean
+  /** 数字徽章字段配置（按 projectId 分组） */
+  badgeFieldsMap?: Record<string, BadgeFieldConfig[]>
 }>(), {
   showCheckbox: true,
   draggable: false,
@@ -217,7 +224,8 @@ const props = withDefaults(defineProps<{
   focusedIssueId: null,
   sprintOptionsCache: () => ({}),
   sprintLoadingIds: () => new Set(),
-  canEditIssue: () => true
+  canEditIssue: () => true,
+  badgeFieldsMap: () => ({})
 })
 
 const emit = defineEmits<{

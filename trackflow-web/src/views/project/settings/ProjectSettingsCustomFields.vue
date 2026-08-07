@@ -370,6 +370,45 @@
               <a-divider :margin="16" />
               <h5 class="condition-title">高级操作</h5>
 
+              <!-- 数字徽章配置（仅整数字段显示） -->
+              <div v-if="selectedField && (selectedField.fieldFormat === 'int' || selectedField.fieldFormat === 'integer')" class="advanced-action-row badge-config-section">
+                <div class="condition-row">
+                  <label class="condition-label">列表数字徽章</label>
+                  <a-switch
+                    :model-value="badgeForm.showAsBadge"
+                    size="small"
+                    @change="(val: boolean) => { badgeForm.showAsBadge = val; saveBadgeConfig() }"
+                  />
+                  <span class="visibility-hint">在工单列表标题左侧显示数字徽章</span>
+                </div>
+                <div v-if="badgeForm.showAsBadge" class="badge-color-rules-section">
+                  <label class="condition-label">颜色规则</label>
+                  <div v-for="(rule, idx) in badgeForm.colorRules" :key="idx" class="badge-rule-row">
+                    <span v-if="rule.max != null" class="badge-rule-label">≤ {{ rule.max }}</span>
+                    <span v-else class="badge-rule-label">默认</span>
+                    <input
+                      type="color"
+                      :value="rule.color"
+                      class="badge-color-input"
+                      @change="(e: Event) => { rule.color = (e.target as HTMLInputElement).value; saveBadgeConfig() }"
+                    />
+                    <span class="badge-color-preview" :style="{ background: rule.color }">{{ idx + 1 }}</span>
+                    <a-button
+                      type="text"
+                      size="mini"
+                      @click="removeBadgeRule(idx)"
+                    >
+                      <icon-delete :size="12" />
+                    </a-button>
+                  </div>
+                  <a-button type="text" size="mini" @click="addBadgeRule">
+                    <template #icon><icon-plus :size="12" /></template>
+                    添加规则
+                  </a-button>
+                  <span class="visibility-hint">按 ≤max 从小到大匹配，无 max 的规则为默认色。不配规则时统一蓝色。</span>
+                </div>
+              </div>
+
               <!-- 创建独立副本 -->
               <div class="advanced-action-row">
                 <a-button
@@ -643,6 +682,60 @@ const overrideForm = reactive({
   defaultValue: '' as string
 })
 
+// Badge config management (integer fields only)
+interface BadgeColorRuleForm {
+  max?: number | null
+  color: string
+}
+const badgeForm = reactive({
+  showAsBadge: false,
+  colorRules: [] as BadgeColorRuleForm[]
+})
+
+function initBadgeForm(field: CustomFieldDefinitionVO | null) {
+  if (!field || (field.fieldFormat !== 'int' && field.fieldFormat !== 'integer')) {
+    badgeForm.showAsBadge = false
+    badgeForm.colorRules = []
+    return
+  }
+  badgeForm.showAsBadge = field.showAsBadge || false
+  if (field.badgeColorRules) {
+    try {
+      badgeForm.colorRules = JSON.parse(field.badgeColorRules)
+    } catch {
+      badgeForm.colorRules = []
+    }
+  } else {
+    badgeForm.colorRules = []
+  }
+}
+
+function addBadgeRule() {
+  badgeForm.colorRules.push({ max: null, color: '#3b82f6' })
+}
+
+function removeBadgeRule(idx: number) {
+  badgeForm.colorRules.splice(idx, 1)
+  saveBadgeConfig()
+}
+
+async function saveBadgeConfig() {
+  if (!selectedField.value || !props.project?.id) return
+  const rulesJson = badgeForm.colorRules.length > 0 ? JSON.stringify(badgeForm.colorRules) : null
+  try {
+    await customFieldApi.setFieldBadgeConfig(props.project.id, selectedField.value.id, {
+      showAsBadge: badgeForm.showAsBadge,
+      badgeColorRules: rulesJson
+    })
+    // Update local field state
+    selectedField.value.showAsBadge = badgeForm.showAsBadge
+    selectedField.value.badgeColorRules = rulesJson
+    Message.success('徽章配置已保存')
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '保存徽章配置失败')
+  }
+}
+
 // Field type display names
 const fieldTypeMap: Record<string, string> = {
   string: '文本(单行)',
@@ -825,6 +918,8 @@ function selectField(field: CustomFieldDefinitionVO) {
     overrideForm.defaultValueMode = 'inherit'
     overrideForm.defaultValue = ''
   }
+  // Populate badge config form
+  initBadgeForm(field)
 }
 
 function onConditionFieldChange() {
@@ -1715,6 +1810,49 @@ onMounted(() => {
   flex-direction: column;
   gap: 4px;
   margin-bottom: 12px;
+}
+
+.badge-config-section {
+  margin-bottom: 16px;
+}
+
+.badge-color-rules-section {
+  margin-top: 8px;
+}
+
+.badge-rule-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.badge-rule-label {
+  font-size: 11px;
+  color: var(--tf-text-tertiary);
+  min-width: 40px;
+}
+
+.badge-color-input {
+  width: 24px;
+  height: 20px;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  background: transparent;
+}
+
+.badge-color-preview {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
 }
 
 .advanced-action-hint {

@@ -1180,6 +1180,71 @@ public class CustomFieldService {
                 projectId, fieldId, isRequired, defaultValue, canBeEmpty);
     }
 
+    // ========== 数字徽章配置 ==========
+
+    /**
+     * 设置整数字段在项目中的数字徽章显示配置。
+     * <p>
+     * 开启后，该字段的值将在工单列表标题左侧以数字徽章形式展示。
+     * 仅对整数（integer）类型字段有效。
+     *
+     * @param projectId       项目ID
+     * @param fieldId         字段ID（必须为整数类型）
+     * @param showAsBadge     是否显示为徽章
+     * @param badgeColorRules 颜色规则 JSON 字符串
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void setFieldBadgeConfig(Long projectId, Long fieldId, Boolean showAsBadge, String badgeColorRules) {
+        CustomFieldDefinition field = definitionMapper.selectById(fieldId);
+        if (field == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "字段不存在");
+        }
+
+        // 仅整数类型字段支持数字徽章
+        if (!"int".equals(field.getFieldFormat()) && !"integer".equals(field.getFieldFormat())) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "仅整数类型字段支持数字徽章显示");
+        }
+
+        CustomFieldProject mapping = projectMapper.selectOne(
+                new LambdaQueryWrapper<CustomFieldProject>()
+                        .eq(CustomFieldProject::getCustomFieldId, fieldId)
+                        .eq(CustomFieldProject::getProjectId, projectId));
+
+        if (mapping == null) {
+            if (!Boolean.TRUE.equals(field.getIsForAll())) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "字段未附加到此项目");
+            }
+            mapping = new CustomFieldProject();
+            mapping.setCustomFieldId(fieldId);
+            mapping.setProjectId(projectId);
+            mapping.setPosition(0);
+            mapping.setShowAsBadge(showAsBadge != null ? showAsBadge : false);
+            mapping.setBadgeColorRules(badgeColorRules);
+            mapping.setIsExcluded(false);
+            mapping.setHasIndependentOptions(false);
+            projectMapper.insert(mapping);
+        } else {
+            projectMapper.update(null, new LambdaUpdateWrapper<CustomFieldProject>()
+                    .eq(CustomFieldProject::getId, mapping.getId())
+                    .set(CustomFieldProject::getShowAsBadge, showAsBadge != null ? showAsBadge : false)
+                    .set(CustomFieldProject::getBadgeColorRules, badgeColorRules));
+        }
+
+        // 验证同一项目最多 2 个徽章字段
+        if (Boolean.TRUE.equals(showAsBadge)) {
+            Long badgeCount = projectMapper.selectCount(
+                    new LambdaQueryWrapper<CustomFieldProject>()
+                            .eq(CustomFieldProject::getProjectId, projectId)
+                            .eq(CustomFieldProject::getShowAsBadge, true)
+                            .ne(CustomFieldProject::getIsExcluded, true));
+            if (badgeCount > 2) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "同一项目最多配置 2 个徽章字段");
+            }
+        }
+
+        log.info("Updated field badge config: project={}, field={}, showAsBadge={}", projectId, fieldId, showAsBadge);
+    }
+
     // ========== 值过滤规则配置（Filter values based on）==========
 
     /**
@@ -1609,6 +1674,7 @@ public class CustomFieldService {
             vo.setOptions(optVOs);
             enrichConditionInfo(vo, mapping);
             enrichEditableInfo(vo, mapping, userRoleIds);
+            enrichBadgeConfig(vo, mapping);
             enrichEffectiveValues(vo, field, mapping);
         }
         return voList;
@@ -1641,6 +1707,7 @@ public class CustomFieldService {
             enrichConditionInfo(vo, mapping);
             enrichVisibilityConfig(vo, mapping);
             enrichProjectOverride(vo, mapping);
+            enrichBadgeConfig(vo, mapping);
             enrichEffectiveValues(vo, field, mapping);
         }
         return voList;
@@ -1850,6 +1917,15 @@ public class CustomFieldService {
         if (mapping != null) {
             vo.setVisibleToRoles(parseRoleIds(mapping.getVisibleToRoles()));
             vo.setUpdatableByRoles(parseRoleIds(mapping.getUpdatableByRoles()));
+        }
+    }
+
+    private void enrichBadgeConfig(CustomFieldDefinitionVO vo, CustomFieldProject mapping) {
+        if (mapping != null) {
+            vo.setShowAsBadge(Boolean.TRUE.equals(mapping.getShowAsBadge()));
+            vo.setBadgeColorRules(mapping.getBadgeColorRules());
+        } else {
+            vo.setShowAsBadge(false);
         }
     }
 

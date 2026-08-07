@@ -70,6 +70,10 @@ export interface CustomFieldDefinitionVO {
    * 此模式下前端应显示 "Set value" 提示，且不自动预填默认选项。
    */
   requiresExplicitSelection?: boolean
+  /** 是否在工单列表标题左侧以数字徽章形式展示该字段值（仅整数字段有效） */
+  showAsBadge?: boolean
+  /** 徽章颜色规则 JSON 字符串，格式: [{"max":1,"color":"#ef4444"},{"max":3,"color":"#f97316"},{"color":"#3b82f6"}] */
+  badgeColorRules?: string | null
 }
 
 /**

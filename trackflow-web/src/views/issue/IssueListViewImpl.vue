@@ -864,6 +864,7 @@
         :sprint-options-cache="sprintOptionsCache"
         :sprint-loading-ids="listSprintLoadingIds"
         :can-edit-issue="canEditIssue"
+        :badge-fields-map="badgeFieldsMap"
         @item-click="onListItemClick"
         @item-dblclick="onListItemDblClick"
         @item-contextmenu="onListItemContextMenu"
@@ -998,7 +999,7 @@ import { useRouter, useRoute, onBeforeRouteLeave } from 'vue-router'
 import { IconPlus, IconSearch, IconLoading, IconEdit, IconPenFill, IconShareExternal, IconPushpin, IconDelete, IconLock, IconCheckCircle, IconEye, IconLayout, IconExpand, IconDownload, IconFile, IconCode, IconCopy, IconLink, IconCalendar, IconRight, IconSettings, IconMinusCircle, IconExclamationCircleFill } from '@arco-design/web-vue/es/icon'
 import { Message, Modal } from '@arco-design/web-vue'
 import axios from 'axios'
-import { projectApi, issueApi, queryApi, sprintApi, tagApi } from '@/api'
+import { projectApi, issueApi, queryApi, sprintApi, tagApi, customFieldApi } from '@/api'
 import type { IssueVO, IssueStatusVO, ProjectMemberVO, SprintVO, CustomFieldValueVO } from '@/api/types'
 import type { TagPanelItemVO, AvailableTagVO } from '@/api/tag'
 import type { TableData } from '@arco-design/web-vue'
@@ -2437,6 +2438,43 @@ const assigneeOptionsLoading = ref(false)
 const sprintOptionsLoading = reactive<Record<string, boolean>>({})
 const sprintOptionsCache = reactive<Record<string, SprintVO[]>>({})
 
+// Badge fields map (projectId → badge field configs)
+import type { BadgeFieldConfig, BadgeColorRule } from './components/badgeTypes'
+const badgeFieldsMap = reactive<Record<string, BadgeFieldConfig[]>>({})
+const badgeFieldsLoadedProjects = new Set<string>()
+
+/**
+ * 加载项目的徽章字段配置。
+ * 从项目自定义字段中筛选 showAsBadge=true 且类型为整数的字段。
+ */
+async function loadBadgeFields(projectIds: string[]) {
+  const toLoad = projectIds.filter(pid => pid && !badgeFieldsLoadedProjects.has(pid))
+  if (toLoad.length === 0) return
+  for (const pid of toLoad) {
+    badgeFieldsLoadedProjects.add(pid)
+    try {
+      const res = await customFieldApi.listByProject(pid)
+      const fields = (res.data || []).filter(
+        (f: any) => f.showAsBadge && (f.fieldFormat === 'int' || f.fieldFormat === 'integer')
+      )
+      if (fields.length > 0) {
+        badgeFieldsMap[pid] = fields.slice(0, 2).map((f: any) => {
+          let colorRules: BadgeColorRule[] | null = null
+          if (f.badgeColorRules) {
+            try { colorRules = JSON.parse(f.badgeColorRules) } catch { /* ignore */ }
+          }
+          return { fieldId: f.id, fieldName: f.name, colorRules }
+        })
+      }
+    } catch { /* non-critical, silently ignore */ }
+  }
+}
+
+/** 在工单加载后自动加载相关项目的徽章字段配置 */
+function loadBadgeFieldsForIssues() {
+  const projectIds = [...new Set(issues.value.map(i => i.projectId).filter(Boolean))]
+  if (projectIds.length > 0) loadBadgeFields(projectIds)
+}
 const priorityOptions = ref([
   { value: 'Show-stopper', label: '阻塞', color: '#b91c1c' },
   { value: 'Critical', label: '紧急', color: '#ef4444' },
@@ -3420,7 +3458,7 @@ function buildFilters() {
   Object.assign(filters, globalFilterParams.value)
   return filters
 }
-function refreshList() { loadIssues(buildFilters()).then(() => { loadPermissions(); preloadSprintNames() }) }
+function refreshList() { loadIssues(buildFilters()).then(() => { loadPermissions(); preloadSprintNames(); loadBadgeFieldsForIssues() }) }
 
 /**
  * 检查工单是否仍满足当前筛选条件
