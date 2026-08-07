@@ -1210,10 +1210,27 @@ public class CustomFieldService {
                         .eq(CustomFieldProject::getCustomFieldId, fieldId)
                         .eq(CustomFieldProject::getProjectId, projectId));
 
-        if (mapping == null) {
-            if (!Boolean.TRUE.equals(field.getIsForAll())) {
-                throw new BusinessException(ErrorCode.BAD_REQUEST, "字段未附加到此项目");
+        if (mapping == null && !Boolean.TRUE.equals(field.getIsForAll())) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "字段未附加到此项目");
+        }
+
+        // 先校验：如果要开启徽章，检查同一项目是否已达上限（最多 2 个）
+        if (Boolean.TRUE.equals(showAsBadge)) {
+            boolean alreadyEnabled = mapping != null && Boolean.TRUE.equals(mapping.getShowAsBadge());
+            if (!alreadyEnabled) {
+                Long badgeCount = projectMapper.selectCount(
+                        new LambdaQueryWrapper<CustomFieldProject>()
+                                .eq(CustomFieldProject::getProjectId, projectId)
+                                .eq(CustomFieldProject::getShowAsBadge, true)
+                                .ne(CustomFieldProject::getIsExcluded, true));
+                if (badgeCount >= 2) {
+                    throw new BusinessException(ErrorCode.BAD_REQUEST, "同一项目最多配置 2 个徽章字段");
+                }
             }
+        }
+
+        // 校验通过后再执行保存
+        if (mapping == null) {
             mapping = new CustomFieldProject();
             mapping.setCustomFieldId(fieldId);
             mapping.setProjectId(projectId);
@@ -1227,18 +1244,6 @@ public class CustomFieldService {
             mapping.setShowAsBadge(showAsBadge != null ? showAsBadge : false);
             mapping.setBadgeColorRules(badgeColorRules);
             projectMapper.updateById(mapping);
-        }
-
-        // 验证同一项目最多 2 个徽章字段
-        if (Boolean.TRUE.equals(showAsBadge)) {
-            Long badgeCount = projectMapper.selectCount(
-                    new LambdaQueryWrapper<CustomFieldProject>()
-                            .eq(CustomFieldProject::getProjectId, projectId)
-                            .eq(CustomFieldProject::getShowAsBadge, true)
-                            .ne(CustomFieldProject::getIsExcluded, true));
-            if (badgeCount > 2) {
-                throw new BusinessException(ErrorCode.BAD_REQUEST, "同一项目最多配置 2 个徽章字段");
-            }
         }
 
         log.info("Updated field badge config: project={}, field={}, showAsBadge={}", projectId, fieldId, showAsBadge);
