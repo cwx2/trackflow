@@ -1,14 +1,14 @@
 <template>
-  <!-- Modal mode: when NOT full page -->
   <a-modal
-    v-if="!isFullPage"
     :visible="visible"
     :footer="false"
-    :closable="true"
+    :closable="!isFullPage"
+    :mask="!isFullPage"
     :mask-closable="false"
+    :render-to-body="!isFullPage"
     unmount-on-close
-    :width="1100"
-    modal-class="issue-create-panel-modal"
+    :width="isFullPage ? '100%' : 1100"
+    :modal-class="isFullPage ? 'issue-create-panel-modal issue-create-panel-modal--fullpage' : 'issue-create-panel-modal'"
     @cancel="close"
   >
     <template #title>
@@ -43,7 +43,7 @@
           </div>
         </template>
       </a-trigger>
-      <a-tooltip content="在全屏页面中查看" position="bottom" mini>
+      <a-tooltip v-if="!isFullPage" content="在全屏页面中查看" position="bottom" mini>
         <span class="fullscreen-btn" @click.stop="goFullscreen">
           <icon-fullscreen />
         </span>
@@ -2546,4 +2546,67 @@ onMounted(() => {
 <style>
 /* Global style for the modal (unscoped to target modal wrapper) */
 .issue-create-panel-modal .arco-modal-body { padding: 0 20px 16px; }
+
+/* Full-page mode: transform modal into inline page content */
+.issue-create-panel-modal--fullpage {
+  position: static !important;
+}
+.issue-create-panel-modal--fullpage .arco-modal-wrapper {
+  position: static !important;
+  overflow: visible !important;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.issue-create-panel-modal--fullpage .arco-modal {
+  position: static !important;
+  top: auto !important;
+  margin: 0 !important;
+  width: 100% !important;
+  max-width: none !important;
+  max-height: none !important;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  transform: none !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  animation: none !important;
+}
+.issue-create-panel-modal--fullpage .arco-modal-header {
+  padding: 16px 24px 12px;
+  border-bottom: 1px solid var(--color-border-2, var(--tf-border-light));
+  flex-shrink: 0;
+}
+.issue-create-panel-modal--fullpage .arco-modal-header .arco-modal-title {
+  font-size: 18px;
+  font-weight: 600;
+}
+.issue-create-panel-modal--fullpage .arco-modal-close-btn {
+  display: none !important;
+}
+.issue-create-panel-modal--fullpage .arco-modal-body {
+  flex: 1;
+  overflow: hidden;
+  padding: 0 24px 16px !important;
+}
+.issue-create-panel-modal--fullpage .arco-modal-body .create-panel {
+  height: 100%;
+  min-height: 0;
+}
+/* Disable modal mask in fullpage mode (backup, in case mask="false" doesn't fully suppress) */
+.issue-create-panel-modal--fullpage .arco-modal-mask {
+  display: none !important;
+}
+/* When render-to-body=false, the modal container div stays inline */
+.issue-create-page .arco-modal-container {
+  position: static !important;
+  height: 100%;
+}
+.issue-create-page .arco-modal-container .arco-modal-wrapper {
+  position: static !important;
+  overflow: hidden !important;
+  height: 100%;
+}
 </style>
