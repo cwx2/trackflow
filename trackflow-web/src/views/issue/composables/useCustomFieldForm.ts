@@ -57,11 +57,20 @@ export function useCustomFieldForm(
       }
 
       // 为新字段填充默认值（优先使用项目级覆盖）
+      const listTypeFormats = new Set(['list', 'ownedField', 'version', 'state'])
       for (const field of newFields) {
         if (!(field.id in newValues)) {
           const effectiveDefault = field.effectiveDefaultValue ?? field.defaultValue
           if (effectiveDefault) {
-            newValues[field.id] = effectiveDefault
+            // 对于列表类型字段，默认值必须是有效的数字 ID，否则忽略
+            if (listTypeFormats.has(field.fieldFormat)) {
+              if (/^\d+$/.test(effectiveDefault)) {
+                newValues[field.id] = effectiveDefault
+              }
+              // 非数字默认值（如文本名称 "Normal"）忽略，避免后端验证失败
+            } else {
+              newValues[field.id] = effectiveDefault
+            }
           }
         }
       }

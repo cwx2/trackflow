@@ -1953,6 +1953,28 @@ public class CustomFieldService {
                 ? (mapping.getDefaultValue().isEmpty() ? null : mapping.getDefaultValue())
                 : field.getDefaultValue();
         
+        // 对于 list/ownedField/version/state 类型字段，如果默认值不是数字 ID，
+        // 尝试通过选项名称匹配转换为选项 ID（防御性处理旧数据或误配置）
+        boolean isListType = "list".equals(field.getFieldFormat()) || "ownedField".equals(field.getFieldFormat())
+                || "version".equals(field.getFieldFormat()) || "state".equals(field.getFieldFormat());
+        if (isListType && effectiveDefault != null && !effectiveDefault.isBlank() && !effectiveDefault.matches("^\\d+$")) {
+            // 默认值是文本名称而非数字 ID，尝试按名称查找选项
+            CustomFieldOption matchedOption = optionMapper.selectOne(
+                    new LambdaQueryWrapper<CustomFieldOption>()
+                            .eq(CustomFieldOption::getCustomFieldId, field.getId())
+                            .eq(CustomFieldOption::getValue, effectiveDefault)
+                            .eq(CustomFieldOption::getIsArchived, false)
+                            .last("LIMIT 1"));
+            if (matchedOption != null) {
+                effectiveDefault = String.valueOf(matchedOption.getId());
+                log.debug("自定义字段 {} 默认值从文本 '{}' 解析为选项 ID: {}", field.getId(), field.getDefaultValue(), effectiveDefault);
+            } else {
+                // 文本名无法匹配到选项，清空默认值以防止验证失败
+                log.warn("自定义字段 {} 默认值 '{}' 无法匹配到有效选项，已忽略", field.getId(), effectiveDefault);
+                effectiveDefault = null;
+            }
+        }
+        
         // 对于 list/ownedField 类型字段，如果没有显式默认值，检查选项表中是否有 isDefault=true 的选项
         if ((effectiveDefault == null || effectiveDefault.isBlank()) && ("list".equals(field.getFieldFormat()) || "ownedField".equals(field.getFieldFormat()))) {
             List<CustomFieldOption> defaultOptions = optionMapper.selectList(

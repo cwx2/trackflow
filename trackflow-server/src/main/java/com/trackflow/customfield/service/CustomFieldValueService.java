@@ -785,7 +785,14 @@ public class CustomFieldValueService {
     private String resolveDefaultValueWithOverride(CustomFieldDefinition field, CustomFieldProject projectMapping) {
         if (projectMapping != null && projectMapping.getDefaultValue() != null) {
             String projectDefault = projectMapping.getDefaultValue();
-            return projectDefault.isEmpty() ? null : projectDefault;
+            if (projectDefault.isEmpty()) return null;
+            // 防御性检查：list 类型字段的默认值必须是数字 ID
+            if (CustomFieldOptionService.isEnumLikeFormat(field.getFieldFormat()) && !projectDefault.matches("^\\d+$")) {
+                log.warn("项目级默认值非数字 ID（字段 {}，值 '{}'），忽略并回退到选项表默认值", field.getId(), projectDefault);
+                // 回退到选项表的 isDefault 标记
+                return resolveDefaultValue(field);
+            }
+            return projectDefault;
         }
         
         // 检查"无默认值但必填"模式（canBeEmpty=false 且无项目级默认值）
