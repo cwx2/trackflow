@@ -151,6 +151,8 @@ export function useIssueDetailData() {
   // ============ WebSocket 实时更新 ============
   const activityStreamRef = ref<HTMLElement | null>(null)
   const realtimeUpdateBanner = ref<{ visible: boolean; message: string }>({ visible: false, message: '' })
+  /** 远端新评论到达并数据刷新完成后的回调，由父组件注册用于触发高亮 */
+  const onRemoteCommentAdded = ref<(() => void) | null>(null)
   let inactiveUpdateCount = 0
   const originalTitle = ref('')
 
@@ -204,7 +206,9 @@ export function useIssueDetailData() {
         if ('statusId' in event.changes) { loadTransitions() }
         showRealtimeNotification(`${event.operatorName || '其他用户'} 更新了此工单`, false)
       } else if (event.action === 'COMMENT_ADDED') {
-        loadCommentsAndActivities()
+        loadCommentsAndActivities().then(() => {
+          onRemoteCommentAdded.value?.()
+        })
         showRealtimeNotification(`${event.operatorName || '其他用户'} 添加了新评论`, true)
       } else if (event.action === 'ATTACHMENT_CHANGED') {
         loadAttachments()
@@ -467,7 +471,7 @@ export function useIssueDetailData() {
     canEditIssueEffective, canChangeStatusEffective, canCommentEffective, canMoveIssue,
 
     // WebSocket / realtime
-    activityStreamRef, realtimeUpdateBanner, scrollToActivity,
+    activityStreamRef, realtimeUpdateBanner, scrollToActivity, onRemoteCommentAdded,
 
     // Data loading
     loadAll, loadTransitions, loadCommentsAndActivities, loadMoreActivities,

@@ -642,7 +642,7 @@
         :stripe="false"
         column-resizable
         size="medium"
-        :scroll="{ x: tableMinWidth }"
+        :scroll="{ x: tableMinWidth, y: '100%' }"
         @row-click="onRowClick"
         @row-dblclick="onRowDblClick"
         @row-contextmenu="onTableRowContextMenu"
@@ -4753,7 +4753,8 @@ onBeforeRouteLeave((_to, _from, next) => {
 /* Table wrapper for context menu */
 .issue-table-wrapper {
   flex: 1;
-  overflow: auto;
+  min-height: 0;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
 }

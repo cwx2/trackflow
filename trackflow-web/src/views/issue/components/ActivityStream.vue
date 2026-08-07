@@ -601,6 +601,20 @@ const currentFilterLabel = computed(() => filters.find(f => f.key === current.va
 defineExpose({
   currentFilter: current,
   currentFilterLabel,
+  scrollToComment,
+  highlightLatest() {
+    // 高亮并滚动到最新一条评论（发布后自动跳转用）
+    const lastComment = [...props.items].reverse().find(i => i.type === 'comment' && !i.isDeleted)
+    if (!lastComment) return
+    const domId = lastComment.id
+    nextTick(() => {
+      const el = document.getElementById(domId)
+      if (!el) return
+      el.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+      highlightedId.value = domId
+      setTimeout(() => { highlightedId.value = '' }, 2500)
+    })
+  }
 })
 </script>
 

@@ -117,7 +117,7 @@
           :timer-running="timerStore.isRunning"
           :timer-issue-match="timerStore.issueId === issue?.id"
           :timer-elapsed="timerStore.elapsedDisplay"
-          @submit="onAddComment"
+          @submit="handleAddComment"
           @add-time="openTimeDialog"
           @start-timer="handleStartTimer"
           @stop-timer="handleStopTimerFromDetail"
@@ -306,7 +306,7 @@ const {
   canManageComments, canManageCustomFieldsComputed,
   isReporter, isAssignee,
   canEditIssueEffective, canChangeStatusEffective, canCommentEffective, canMoveIssue,
-  activityStreamRef, realtimeUpdateBanner, scrollToActivity,
+  activityStreamRef, realtimeUpdateBanner, scrollToActivity, onRemoteCommentAdded,
   loadAll, loadMoreActivities, loadAttachments, loadLinks,
   loadIssueProjectAttributes, loadTimeFormPermissions,
 } = data
@@ -371,6 +371,18 @@ const {
   openTimeDialog, handleStartTimer, handleStopTimerFromDetail, submitTimeEntry,
   onPasteUpload,
 } = actions
+
+// ============ Comment submit with auto-scroll ============
+/**
+ * 发布评论后自动滚动到新评论并高亮。
+ * onAddComment 负责 API 调用和数据刷新，刷新完成后再高亮。
+ */
+async function handleAddComment(content: string, visibleToGroupIds?: string[]) {
+  await onAddComment(content, visibleToGroupIds)
+  // loadAll 已完成，nextTick 后 DOM 已更新，调高亮
+  await nextTick()
+  activityStreamCompRef.value?.highlightLatest()
+}
 
 // ============ Reply & Copy Comment Link ============
 /**
