@@ -278,120 +278,152 @@
     <a-drawer
       :visible="drawerVisible"
       :title="editingId ? '编辑自定义字段' : '创建自定义字段'"
-      :width="480"
+      :width="640"
       @cancel="drawerVisible = false"
       @ok="handleSave"
       :ok-loading="saving"
       unmount-on-close
     >
-      <a-form :model="form" layout="vertical" size="small">
-        <a-form-item label="字段名称" required>
-          <a-input v-model="form.name" placeholder="例如: 到期版本" :max-length="256" />
-        </a-form-item>
+      <div class="drawer-sections">
+        <!-- ▌ 基础信息 -->
+        <div class="form-section">
+          <div class="form-section-title">基础信息</div>
+          <a-form :model="form" layout="vertical" size="small">
+            <a-form-item label="字段名称" required>
+              <a-input v-model="form.name" placeholder="例如: 到期版本" :max-length="256" />
+            </a-form-item>
 
-        <a-form-item label="字段类型" required>
-          <template v-if="editingId">
-            <!-- 编辑模式：显示当前类型 + 转换按钮 -->
-            <div class="field-type-edit-row">
-              <a-tag size="small">{{ formatTypeLabel(form.fieldFormat) }}</a-tag>
-              <a-button
-                type="text"
-                size="mini"
-                :loading="loadingConversions"
-                @click="openConvertTypeModal"
-              >
-                转换类型
-              </a-button>
-            </div>
-          </template>
-          <template v-else>
-            <!-- 创建模式：正常选择 -->
-            <a-select v-model="form.fieldFormat" placeholder="选择字段类型">
-              <a-option v-for="t in fieldTypeOptions" :key="t.value" :value="t.value">{{ t.label }}</a-option>
-            </a-select>
-          </template>
-        </a-form-item>
-
-        <a-form-item label="必填">
-          <a-switch v-model="form.isRequired" />
-        </a-form-item>
-
-        <a-form-item label="全局可用">
-          <a-switch v-model="form.isForAll" />
-          <div class="form-help">开启后所有项目均可使用此字段</div>
-        </a-form-item>
-
-        <a-form-item label="隐藏于工单列表">
-          <a-switch v-model="form.isHiddenInList" />
-          <div class="form-help">开启后，此字段默认不出现在工单列表的列选择器中（用户仍可通过个人设置手动添加）</div>
-        </a-form-item>
-
-        <a-form-item label="字段别名">
-          <a-input-tag
-            v-model="form.aliases"
-            placeholder="输入别名后按回车添加"
-            :max-tag-count="10"
-            allow-clear
-          />
-          <div class="form-help">设置一个或多个别名，用户可在搜索和命令中使用别名代替字段名。例如：Assignee 字段的别名可以是 "for"、"分配给"。</div>
-        </a-form-item>
-
-        <a-form-item label="默认值">
-          <DefaultValueInput
-            v-model="form.defaultValue"
-            :field-format="form.fieldFormat"
-          />
-        </a-form-item>
-
-        <!-- string 类型额外配置 -->
-        <template v-if="form.fieldFormat === 'string'">
-          <a-form-item label="最小长度">
-            <a-input-number v-model="form.minLength" :min="0" />
-          </a-form-item>
-          <a-form-item label="最大长度">
-            <a-input-number v-model="form.maxLength" :min="0" />
-          </a-form-item>
-          <a-form-item label="正则验证">
-            <a-input v-model="form.regexp" placeholder="可选正则表达式" />
-          </a-form-item>
-        </template>
-
-        <!-- text 类型额外配置 -->
-        <template v-if="form.fieldFormat === 'text'">
-          <a-form-item label="最大长度">
-            <a-input-number v-model="form.maxLength" :min="0" placeholder="0 表示不限制" />
-            <div class="form-help">支持 Markdown 格式的多行文本</div>
-          </a-form-item>
-        </template>
-
-        <!-- list/state/version/build 类型选项管理 -->
-        <template v-if="form.fieldFormat === 'list' || form.fieldFormat === 'state' || form.fieldFormat === 'ownedField' || form.fieldFormat === 'version' || form.fieldFormat === 'build'">
-          <a-form-item v-if="form.fieldFormat === 'list' || form.fieldFormat === 'ownedField' || form.fieldFormat === 'version' || form.fieldFormat === 'build'" label="多值选择">
-            <a-switch v-model="form.isMulti" :disabled="isMultiDisabled" />
-            <div class="form-help">
-              <template v-if="isMultiDisabled">
-                该字段已被工单使用，无法切换单选/多选模式
+            <a-form-item label="字段类型" required>
+              <template v-if="editingId">
+                <div class="field-type-edit-row">
+                  <a-tag size="small">{{ formatTypeLabel(form.fieldFormat) }}</a-tag>
+                  <a-button
+                    type="text"
+                    size="mini"
+                    :loading="loadingConversions"
+                    @click="openConvertTypeModal"
+                  >
+                    转换类型
+                  </a-button>
+                </div>
               </template>
               <template v-else>
-                开启后允许选择多个选项值（如影响版本、标签等）
+                <a-select v-model="form.fieldFormat" placeholder="选择字段类型">
+                  <a-option v-for="t in fieldTypeOptions" :key="t.value" :value="t.value">{{ t.label }}</a-option>
+                </a-select>
               </template>
+            </a-form-item>
+
+            <a-form-item label="字段别名">
+              <a-input-tag
+                v-model="form.aliases"
+                placeholder="输入别名后按回车添加"
+                :max-tag-count="10"
+                allow-clear
+              />
+              <div class="form-help">设置一个或多个别名，用户可在搜索和命令中使用别名代替字段名。例如：Assignee 字段的别名可以是 "for"、"分配给"。</div>
+            </a-form-item>
+
+            <a-form-item label="默认值">
+              <DefaultValueInput
+                v-model="form.defaultValue"
+                :field-format="form.fieldFormat"
+              />
+            </a-form-item>
+          </a-form>
+        </div>
+
+        <!-- ▌ 字段行为 -->
+        <div class="form-section">
+          <div class="form-section-title">字段行为</div>
+          <div class="behavior-section">
+            <div class="behavior-item">
+              <div class="behavior-item-main">
+                <a-switch v-model="form.isRequired" size="small" />
+                <span class="behavior-label">必填</span>
+              </div>
+              <span class="behavior-desc">需要用户明确填写此字段，否则无法提交工单</span>
             </div>
-          </a-form-item>
+            <div class="behavior-item">
+              <div class="behavior-item-main">
+                <a-switch v-model="form.isForAll" size="small" />
+                <span class="behavior-label">全局可用</span>
+              </div>
+              <span class="behavior-desc">开启后，所有项目均可使用此字段</span>
+            </div>
+            <div class="behavior-item">
+              <div class="behavior-item-main">
+                <a-switch v-model="form.isHiddenInList" size="small" />
+                <span class="behavior-label">隐藏于工单列表</span>
+              </div>
+              <span class="behavior-desc">默认不出现在工单列表的列选择器中（用户可通过个人设置手动添加）</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- ▌ 类型特有配置 -->
+        <div v-if="form.fieldFormat === 'string'" class="form-section">
+          <div class="form-section-title">文本校验</div>
+          <a-form :model="form" layout="vertical" size="small">
+            <a-form-item label="最小长度">
+              <a-input-number v-model="form.minLength" :min="0" />
+            </a-form-item>
+            <a-form-item label="最大长度">
+              <a-input-number v-model="form.maxLength" :min="0" />
+            </a-form-item>
+            <a-form-item label="正则验证">
+              <a-input v-model="form.regexp" placeholder="可选正则表达式" />
+            </a-form-item>
+          </a-form>
+        </div>
+
+        <div v-if="form.fieldFormat === 'text'" class="form-section">
+          <div class="form-section-title">文本配置</div>
+          <a-form :model="form" layout="vertical" size="small">
+            <a-form-item label="最大长度">
+              <a-input-number v-model="form.maxLength" :min="0" placeholder="0 表示不限制" />
+              <div class="form-help">支持 Markdown 格式的多行文本</div>
+            </a-form-item>
+          </a-form>
+        </div>
+
+        <!-- ▌ 选项值集 -->
+        <div v-if="form.fieldFormat === 'list' || form.fieldFormat === 'state' || form.fieldFormat === 'ownedField' || form.fieldFormat === 'version' || form.fieldFormat === 'build'" class="form-section">
+          <div class="form-section-title">
+            <span>选项值集</span>
+            <a-button type="text" size="mini" @click="form.options.push({ value: '', isDefault: false })">
+              <template #icon><icon-plus /></template>
+              添加
+            </a-button>
+          </div>
+
+          <!-- 多值选择 -->
+          <div v-if="form.fieldFormat === 'list' || form.fieldFormat === 'ownedField' || form.fieldFormat === 'version' || form.fieldFormat === 'build'" class="behavior-item" style="margin-bottom: 12px;">
+            <div class="behavior-item-main">
+              <a-switch v-model="form.isMulti" size="small" :disabled="isMultiDisabled" />
+              <span class="behavior-label">多值选择</span>
+            </div>
+            <span class="behavior-desc">
+              <template v-if="isMultiDisabled">该字段已被工单使用，无法切换单选/多选模式</template>
+              <template v-else>开启后允许选择多个选项值（如影响版本、标签等）</template>
+            </span>
+          </div>
 
           <!-- 值集来源选择（仅创建模式显示） -->
-          <a-form-item v-if="!editingId" label="值集来源">
+          <div v-if="!editingId" style="margin-bottom: 12px;">
             <a-radio-group v-model="valueSetSource" type="button" size="small">
               <a-radio value="new">新建值集</a-radio>
               <a-radio value="copy">从已有字段复制</a-radio>
             </a-radio-group>
-          </a-form-item>
+          </div>
 
-          <!-- 从已有字段复制：选择源字段 -->
-          <a-form-item v-if="valueSetSource === 'copy' && !editingId" label="选择源字段">
+          <!-- 从已有字段复制：选择源字段（仅创建模式） -->
+          <div v-if="valueSetSource === 'copy' && !editingId" style="margin-bottom: 12px;">
             <a-select
               v-model="form.copyOptionsFromFieldId"
               placeholder="选择一个枚举类型字段"
               allow-clear
+              size="small"
               @change="onSourceFieldChange"
             >
               <a-option v-for="f in enumFieldList" :key="f.id" :value="f.id">
@@ -399,264 +431,310 @@
               </a-option>
             </a-select>
             <div class="form-help">选择后将复制该字段的所有选项作为独立副本，后续修改互不影响</div>
-          </a-form-item>
-
-          <!-- 编辑模式下的"从其他字段复制值"操作 -->
-          <a-form-item v-if="editingId" label="从其他字段复制值">
-            <div class="copy-from-row">
-              <a-select
-                :model-value="copyFromFieldId ?? undefined"
-                @update:model-value="(v) => { copyFromFieldId = (v as string) ?? null }"
-                placeholder="选择源字段追加选项"
-                allow-clear
-                style="flex: 1"
-              >
-                <a-option v-for="f in enumFieldList.filter(x => x.id !== editingId)" :key="f.id" :value="f.id">
-                  {{ f.name }}（{{ (f.options || []).filter(o => !o.isArchived).length }} 个选项）
-                </a-option>
-              </a-select>
-              <a-button type="outline" size="small" :disabled="!copyFromFieldId" @click="handleCopyFrom">
-                复制
-              </a-button>
-            </div>
-            <div class="form-help">将源字段的选项追加到当前选项列表中（跳过同名选项）</div>
-          </a-form-item>
-
-          <!-- 编辑模式下的"合并其他字段值集"操作（Merge with） -->
-          <a-form-item v-if="editingId" label="合并其他字段值集 (Merge with)">
-            <div class="copy-from-row">
-              <a-select
-                :model-value="mergeFromFieldId ?? undefined"
-                @update:model-value="(v) => { mergeFromFieldId = (v as string) ?? null }"
-                placeholder="选择字段合并其选项到当前字段"
-                allow-clear
-                style="flex: 1"
-              >
-                <a-option v-for="f in enumFieldList.filter(x => x.id !== editingId)" :key="f.id" :value="f.id">
-                  {{ f.name }}（{{ (f.options || []).filter(o => !o.isArchived).length }} 个选项）
-                </a-option>
-              </a-select>
-              <a-button type="outline" size="small" status="warning" :disabled="!mergeFromFieldId" :loading="merging" @click="handleMergeFrom">
-                合并
-              </a-button>
-            </div>
-            <div class="form-help">将源字段的所有活跃选项合并到当前字段的值集中（已归档选项跳过，同名选项跳过）。操作立即生效。</div>
-          </a-form-item>
+          </div>
 
           <!-- 选项预览（从字段复制后） -->
-          <a-form-item v-if="valueSetSource === 'copy' && !editingId && previewOptions.length > 0" label="选项预览">
-            <div class="options-preview">
-              <a-tag v-for="opt in previewOptions" :key="opt.value" size="small" :color="opt.color || undefined">
-                {{ opt.value }}
-              </a-tag>
-            </div>
-          </a-form-item>
+          <div v-if="valueSetSource === 'copy' && !editingId && previewOptions.length > 0" class="options-preview" style="margin-bottom: 12px;">
+            <a-tag v-for="opt in previewOptions" :key="opt.value" size="small" :color="opt.color || undefined">
+              {{ opt.value }}
+            </a-tag>
+          </div>
 
-          <a-form-item :label="valueSetSource === 'copy' && !editingId ? '调整选项（可修改复制后的选项）' : '选项列表'">
-            <!-- 排序工具栏 -->
-            <div v-if="form.options.length > 1" class="options-sort-toolbar">
-              <a-button size="mini" type="text" @click="sortOptionsByName('asc')">
-                <template #icon><icon-sort-ascending /></template>
-                按名称升序
-              </a-button>
-              <a-button size="mini" type="text" @click="sortOptionsByName('desc')">
-                <template #icon><icon-sort-descending /></template>
-                按名称降序
-              </a-button>
-              <a-button v-if="form.fieldFormat === 'version'" size="mini" type="text" @click="sortOptionsByReleaseDate">
-                <template #icon><icon-sort-descending /></template>
-                按发布日期
-              </a-button>
-              <a-button v-if="form.fieldFormat === 'build'" size="mini" type="text" @click="sortOptionsByAssembleDate">
-                <template #icon><icon-sort-descending /></template>
-                按构建日期
-              </a-button>
-              <div v-if="form.fieldFormat === 'version'" class="options-archive-toggle">
-                <a-switch v-model="showReleasedInDrawer" size="small" />
-                <span class="archive-toggle-label">显示已发布</span>
-              </div>
-              <div v-if="editingId && archivedOptionCount > 0" class="options-archive-toggle">
-                <a-switch v-model="showArchivedInDrawer" size="small" />
-                <span class="archive-toggle-label">显示已归档 ({{ archivedOptionCount }})</span>
-              </div>
+          <!-- 排序工具栏 -->
+          <div v-if="form.options.length > 1" class="options-sort-toolbar">
+            <a-button size="mini" type="text" @click="sortOptionsByName('asc')">
+              <template #icon><icon-sort-ascending /></template>
+              升序
+            </a-button>
+            <a-button size="mini" type="text" @click="sortOptionsByName('desc')">
+              <template #icon><icon-sort-descending /></template>
+              降序
+            </a-button>
+            <a-button v-if="form.fieldFormat === 'version'" size="mini" type="text" @click="sortOptionsByReleaseDate">
+              <template #icon><icon-sort-descending /></template>
+              按发布日期
+            </a-button>
+            <a-button v-if="form.fieldFormat === 'build'" size="mini" type="text" @click="sortOptionsByAssembleDate">
+              <template #icon><icon-sort-descending /></template>
+              按构建日期
+            </a-button>
+            <div v-if="form.fieldFormat === 'version'" class="options-archive-toggle">
+              <a-switch v-model="showReleasedInDrawer" size="small" />
+              <span class="archive-toggle-label">显示已发布</span>
             </div>
-            <div class="options-list">
+            <div v-if="editingId && archivedOptionCount > 0" class="options-archive-toggle">
+              <a-switch v-model="showArchivedInDrawer" size="small" />
+              <span class="archive-toggle-label">显示已归档 ({{ archivedOptionCount }})</span>
+            </div>
+          </div>
+
+          <!-- 选项列表（两层布局：主行 + 属性行） -->
+          <div class="options-list">
+            <div
+              v-for="(opt, idx) in visibleFormOptions"
+              :key="opt.id || `new-${idx}`"
+              class="option-item"
+            >
+              <!-- 主行：拖拽 + 颜色 + 输入框 + 描述按钮 + 删除 -->
               <div
-                v-for="(opt, idx) in visibleFormOptions"
-                :key="opt.id || `new-${idx}`"
-                class="option-item"
+                class="option-main-row"
+                :class="{
+                  'option-main-row--dragging': optionDragIndex === idx,
+                  'option-main-row--drop-above': optionDropIndex === idx && optionDropPosition === 'above',
+                  'option-main-row--drop-below': optionDropIndex === idx && optionDropPosition === 'below',
+                  'option-main-row--archived': opt.isArchived
+                }"
+                :draggable="!opt.isArchived && form.options.filter(o => !o.isArchived).length > 1"
+                @dragstart="onOptionDragStart($event, idx)"
+                @dragover="onOptionDragOver($event, idx)"
+                @dragleave="onOptionDragLeave"
+                @drop="onOptionDrop($event, idx)"
+                @dragend="onOptionDragEnd"
               >
-                <div
-                  class="option-row"
-                  :class="{
-                    'option-row--dragging': optionDragIndex === idx,
-                    'option-row--drop-above': optionDropIndex === idx && optionDropPosition === 'above',
-                    'option-row--drop-below': optionDropIndex === idx && optionDropPosition === 'below',
-                    'option-row--archived': opt.isArchived
-                  }"
-                  :draggable="!opt.isArchived && form.options.filter(o => !o.isArchived).length > 1"
-                  @dragstart="onOptionDragStart($event, idx)"
-                  @dragover="onOptionDragOver($event, idx)"
-                  @dragleave="onOptionDragLeave"
-                  @drop="onOptionDrop($event, idx)"
-                  @dragend="onOptionDragEnd"
-                >
-                  <span v-if="!opt.isArchived && form.options.filter(o => !o.isArchived).length > 1" class="option-drag-handle" title="拖拽排序">⠿</span>
-                  <span v-else-if="opt.isArchived" class="option-archived-icon" title="已归档">📦</span>
-                  <a-input v-model="opt.value" placeholder="选项值" size="mini" style="flex:1" :disabled="opt.isArchived" />
-                  <a-trigger v-if="!opt.isArchived" trigger="click" :popup-translate="[0, 4]">
-                    <span
-                      class="color-swatch"
-                      :style="{ background: opt.color || 'transparent', border: opt.color ? 'none' : '1px dashed var(--tf-border)' }"
-                      title="设置颜色"
-                    ></span>
-                    <template #content>
-                      <div class="color-palette">
-                        <span
-                          v-for="c in presetColors"
-                          :key="c"
-                          class="color-palette-item"
-                          :class="{ active: opt.color === c }"
-                          :style="{ background: c }"
-                          @click="opt.color = c"
-                        ></span>
-                        <span
-                          class="color-palette-item color-palette-clear"
-                          :class="{ active: !opt.color }"
-                          @click="opt.color = undefined"
-                          title="无颜色"
-                        >✕</span>
-                      </div>
-                    </template>
-                  </a-trigger>
-                  <!-- 描述按钮 -->
-                  <a-button
-                    v-if="!opt.isArchived"
-                    type="text"
-                    size="mini"
-                    :class="{ 'desc-btn-active': opt.description }"
-                    :title="opt.description ? `描述: ${opt.description}` : '添加描述'"
-                    @click.stop="toggleDescriptionRow(idx)"
-                  >
-                    <icon-info-circle />
-                  </a-button>
-                  <a-checkbox v-if="!opt.isArchived" v-model="opt.isDefault" size="small">默认</a-checkbox>
-                  <!-- state 类型显示 isResolved 开关 -->
-                  <a-checkbox v-if="!opt.isArchived && form.fieldFormat === 'state'" v-model="opt.isResolved" size="small">已解决</a-checkbox>
-                  <!-- ownedField 类型显示 owner 用户选择器 -->
-                  <a-select
-                    v-if="!opt.isArchived && form.fieldFormat === 'ownedField'"
-                    v-model="opt.ownerUserId"
-                    placeholder="Owner"
-                    allow-clear
-                    size="mini"
-                    style="width: 120px"
-                  >
-                    <a-option v-for="u in ownerUserList" :key="u.id" :value="u.id">{{ u.displayName }}</a-option>
-                  </a-select>
-                  <!-- version 类型显示已发布开关 -->
-                  <a-date-picker
-                    v-if="!opt.isArchived && form.fieldFormat === 'version'"
-                    v-model="opt.releaseDate"
-                    placeholder="发布日期"
-                    size="mini"
-                    style="width: 130px"
-                    allow-clear
-                  />
-                  <a-checkbox v-if="!opt.isArchived && form.fieldFormat === 'version'" v-model="opt.isReleased" size="small">已发布</a-checkbox>
-                  <!-- build 类型显示构建日期 -->
-                  <a-date-picker
-                    v-if="!opt.isArchived && form.fieldFormat === 'build'"
-                    v-model="opt.assembleDate"
-                    placeholder="构建日期"
-                    size="mini"
-                    style="width: 130px"
-                    allow-clear
-                  />
-                  <!-- 选项使用统计（仅编辑模式且有 optionId 时显示） -->
+                <span v-if="!opt.isArchived && form.options.filter(o => !o.isArchived).length > 1" class="option-drag-handle" title="拖拽排序">⠿</span>
+                <span v-else-if="opt.isArchived" class="option-archived-icon" title="已归档">📦</span>
+                <span v-else class="option-drag-handle" style="visibility: hidden">⠿</span>
+                <a-trigger v-if="!opt.isArchived" trigger="click" :popup-translate="[0, 4]">
                   <span
-                    v-if="editingId && opt.id && optionUsageMap[opt.id] !== undefined"
-                    class="option-usage-count"
-                    :class="{ 'option-unused': optionUsageMap[opt.id] === 0 }"
-                    :title="optionUsageMap[opt.id] > 0 ? `被 ${optionUsageMap[opt.id]} 个工单引用` : '未被任何工单使用'"
+                    class="color-swatch"
+                    :style="{ background: opt.color || 'transparent', border: opt.color ? 'none' : '1px dashed var(--tf-border)' }"
+                    title="设置颜色"
+                  ></span>
+                  <template #content>
+                    <div class="color-palette">
+                      <span
+                        v-for="c in presetColors"
+                        :key="c"
+                        class="color-palette-item"
+                        :class="{ active: opt.color === c }"
+                        :style="{ background: c }"
+                        @click="opt.color = c"
+                      ></span>
+                      <span
+                        class="color-palette-item color-palette-clear"
+                        :class="{ active: !opt.color }"
+                        @click="opt.color = undefined"
+                        title="无颜色"
+                      >✕</span>
+                    </div>
+                  </template>
+                </a-trigger>
+                <span v-else class="color-swatch color-swatch--archived" :style="{ background: opt.color || 'var(--tf-bg-surface)' }"></span>
+                <a-input v-model="opt.value" placeholder="选项值" size="mini" class="option-name-input" :disabled="opt.isArchived" />
+                <!-- 描述按钮 -->
+                <a-button
+                  v-if="!opt.isArchived"
+                  type="text"
+                  size="mini"
+                  :class="{ 'desc-btn-active': opt.description }"
+                  :title="opt.description ? `描述: ${opt.description}` : '添加描述'"
+                  @click.stop="toggleDescriptionRow(idx)"
+                >
+                  <icon-info-circle />
+                </a-button>
+                <!-- ownedField 类型显示 owner 用户选择器 -->
+                <a-select
+                  v-if="!opt.isArchived && form.fieldFormat === 'ownedField'"
+                  v-model="opt.ownerUserId"
+                  placeholder="Owner"
+                  allow-clear
+                  size="mini"
+                  style="width: 120px"
+                >
+                  <a-option v-for="u in ownerUserList" :key="u.id" :value="u.id">{{ u.displayName }}</a-option>
+                </a-select>
+                <!-- version 类型显示发布日期 -->
+                <a-date-picker
+                  v-if="!opt.isArchived && form.fieldFormat === 'version'"
+                  v-model="opt.releaseDate"
+                  placeholder="发布日期"
+                  size="mini"
+                  style="width: 130px"
+                  allow-clear
+                />
+                <!-- build 类型显示构建日期 -->
+                <a-date-picker
+                  v-if="!opt.isArchived && form.fieldFormat === 'build'"
+                  v-model="opt.assembleDate"
+                  placeholder="构建日期"
+                  size="mini"
+                  style="width: 130px"
+                  allow-clear
+                />
+                <!-- 归档/取消归档按钮 -->
+                <a-button
+                  v-if="editingId && opt.id && !opt.isArchived"
+                  type="text" size="mini"
+                  title="归档（隐藏选项但保留已有数据）"
+                  @click.stop="handleArchiveOption(opt)"
+                >
+                  <icon-eye-invisible />
+                </a-button>
+                <a-button
+                  v-if="editingId && opt.id && opt.isArchived"
+                  type="text" size="mini" status="success"
+                  title="取消归档（恢复选项可选）"
+                  @click.stop="handleUnarchiveOption(opt)"
+                >
+                  <icon-eye />
+                </a-button>
+                <!-- 删除按钮 -->
+                <a-button
+                  v-if="!opt.isArchived"
+                  type="text" size="mini" status="danger"
+                  :disabled="editingId && opt.id && optionUsageMap[opt.id] !== undefined && optionUsageMap[opt.id] > 0"
+                  :title="editingId && opt.id && optionUsageMap[opt.id] > 0 ? `该选项被 ${optionUsageMap[opt.id]} 个工单使用，无法删除` : '删除选项'"
+                  @click="handleDeleteOption(opt, idx)"
+                >
+                  <icon-delete />
+                </a-button>
+              </div>
+              <!-- 属性行：默认/已解决/已发布/使用统计 -->
+              <div v-if="!opt.isArchived" class="option-attr-row">
+                <span
+                  class="option-attr-tag"
+                  :class="{ active: opt.isDefault }"
+                  @click="opt.isDefault = !opt.isDefault"
+                >
+                  <icon-star-fill v-if="opt.isDefault" /><icon-star v-else />
+                  默认
+                </span>
+                <span
+                  v-if="form.fieldFormat === 'state'"
+                  class="option-attr-tag"
+                  :class="{ active: opt.isResolved }"
+                  @click="opt.isResolved = !opt.isResolved"
+                >
+                  <icon-check-circle-fill v-if="opt.isResolved" /><icon-check-circle v-else />
+                  已解决
+                </span>
+                <span
+                  v-if="form.fieldFormat === 'version'"
+                  class="option-attr-tag"
+                  :class="{ active: opt.isReleased }"
+                  @click="opt.isReleased = !opt.isReleased"
+                >
+                  <icon-check-circle-fill v-if="opt.isReleased" /><icon-check-circle v-else />
+                  已发布
+                </span>
+                <span
+                  v-if="editingId && opt.id && optionUsageMap[opt.id] !== undefined"
+                  class="option-usage-badge"
+                  :class="{ unused: optionUsageMap[opt.id] === 0 }"
+                >
+                  {{ optionUsageMap[opt.id] > 0 ? `${optionUsageMap[opt.id]} 个工单` : '未使用' }}
+                </span>
+              </div>
+              <!-- 描述输入行 -->
+              <div v-if="expandedDescriptionIdx === idx && !opt.isArchived" class="option-desc-row">
+                <a-textarea
+                  v-model="opt.description"
+                  placeholder="输入选项描述，将在下拉选择时以 tooltip 形式展示"
+                  :auto-size="{ minRows: 1, maxRows: 3 }"
+                  :max-length="1024"
+                  show-word-limit
+                  size="mini"
+                />
+              </div>
+            </div>
+            <a-button type="dashed" size="mini" long @click="form.options.push({ value: '', isDefault: false })">
+              <template #icon><icon-plus /></template>
+              添加选项
+            </a-button>
+          </div>
+
+          <!-- 高级操作（可折叠卡片） -->
+          <div v-if="editingId" class="options-advanced-ops">
+            <div class="advanced-op-card">
+              <div class="advanced-op-header" @click="showCopyFromPanel = !showCopyFromPanel">
+                <span class="advanced-op-title">从其他字段复制选项</span>
+                <a-button type="text" size="mini">
+                  {{ showCopyFromPanel ? '收起' : '展开' }}
+                </a-button>
+              </div>
+              <div v-if="showCopyFromPanel" class="advanced-op-body">
+                <p class="advanced-op-desc">将源字段的选项追加到当前选项列表中（跳过同名选项）</p>
+                <div class="advanced-op-controls">
+                  <a-select
+                    :model-value="copyFromFieldId ?? undefined"
+                    @update:model-value="(v: any) => { copyFromFieldId = (v as string) ?? null }"
+                    placeholder="选择源字段"
+                    allow-clear
+                    size="small"
+                    style="flex: 1"
                   >
-                    {{ optionUsageMap[opt.id] > 0 ? optionUsageMap[opt.id] : '未使用' }}
-                  </span>
-                  <!-- 归档/取消归档按钮 -->
-                  <a-button
-                    v-if="editingId && opt.id && !opt.isArchived"
-                    type="text" size="mini"
-                    title="归档（隐藏选项但保留已有数据）"
-                    @click.stop="handleArchiveOption(opt)"
-                  >
-                    <icon-eye-invisible />
+                    <a-option v-for="f in enumFieldList.filter(x => x.id !== editingId)" :key="f.id" :value="f.id">
+                      {{ f.name }}（{{ (f.options || []).filter(o => !o.isArchived).length }} 个选项）
+                    </a-option>
+                  </a-select>
+                  <a-button size="small" type="outline" :disabled="!copyFromFieldId" @click="handleCopyFrom">
+                    追加选项
                   </a-button>
-                  <a-button
-                    v-if="editingId && opt.id && opt.isArchived"
-                    type="text" size="mini" status="success"
-                    title="取消归档（恢复选项可选）"
-                    @click.stop="handleUnarchiveOption(opt)"
-                  >
-                    <icon-eye />
-                  </a-button>
-                  <!-- 删除按钮（仅非归档选项显示） -->
-                  <a-button
-                    v-if="!opt.isArchived"
-                    type="text" size="mini" status="danger"
-                    :disabled="editingId && opt.id && optionUsageMap[opt.id] !== undefined && optionUsageMap[opt.id] > 0"
-                    :title="editingId && opt.id && optionUsageMap[opt.id] > 0 ? `该选项被 ${optionUsageMap[opt.id]} 个工单使用，无法删除` : '删除选项'"
-                    @click="handleDeleteOption(opt, idx)"
-                  >
-                    <icon-delete />
-                  </a-button>
-                </div>
-                <!-- 描述输入行 -->
-                <div v-if="expandedDescriptionIdx === idx && !opt.isArchived" class="option-desc-row">
-                  <a-textarea
-                    v-model="opt.description"
-                    placeholder="输入选项描述，将在下拉选择时以 tooltip 形式展示"
-                    :auto-size="{ minRows: 1, maxRows: 3 }"
-                    :max-length="1024"
-                    show-word-limit
-                    size="mini"
-                  />
                 </div>
               </div>
-              <a-button type="dashed" size="mini" long @click="form.options.push({ value: '', isDefault: false })">
-                <template #icon><icon-plus /></template>
-                添加选项
-              </a-button>
             </div>
-          </a-form-item>
-        </template>
-
-        <!-- 项目关联 -->
-        <a-form-item :label="form.isForAll ? '附加到项目（可选）' : '关联项目'">
-          <CheckboxGroupEnhanced
-            v-model="form.projectIds"
-            :options="projectCheckboxOptions"
-            :search-threshold="8"
-            :scroll-threshold="10"
-          />
-          <div v-if="form.isForAll" class="form-help">
-            全局字段已对所有项目生效。此处选择的项目将额外创建项目级配置记录，便于后续设置条件显示、角色权限等。
+            <div class="advanced-op-card">
+              <div class="advanced-op-header" @click="showMergePanel = !showMergePanel">
+                <span class="advanced-op-title">合并其他字段值集</span>
+                <a-button type="text" size="mini">
+                  {{ showMergePanel ? '收起' : '展开' }}
+                </a-button>
+              </div>
+              <div v-if="showMergePanel" class="advanced-op-body">
+                <p class="advanced-op-desc">将源字段的所有活跃选项合并到当前值集（已归档和同名选项跳过，操作立即生效）</p>
+                <div class="advanced-op-controls">
+                  <a-select
+                    :model-value="mergeFromFieldId ?? undefined"
+                    @update:model-value="(v: any) => { mergeFromFieldId = (v as string) ?? null }"
+                    placeholder="选择源字段"
+                    allow-clear
+                    size="small"
+                    style="flex: 1"
+                  >
+                    <a-option v-for="f in enumFieldList.filter(x => x.id !== editingId)" :key="f.id" :value="f.id">
+                      {{ f.name }}（{{ (f.options || []).filter(o => !o.isArchived).length }} 个选项）
+                    </a-option>
+                  </a-select>
+                  <a-button size="small" status="warning" type="outline" :disabled="!mergeFromFieldId" :loading="merging" @click="handleMergeFrom">
+                    立即合并
+                  </a-button>
+                </div>
+              </div>
+            </div>
           </div>
-          <div v-else class="form-help">
-            不选则字段不关联任何项目，可在项目字段管理中手动添加。
-          </div>
-        </a-form-item>
+        </div>
 
-        <!-- Issue 类型关联 -->
-        <a-form-item label="适用 Issue 类型">
-          <CheckboxGroupEnhanced
-            v-model="form.issueTypes"
-            :options="issueTypeCheckboxOptions"
-            :search-threshold="8"
-            :scroll-threshold="10"
-          />
-          <div class="form-help">不选则适用所有类型</div>
-        </a-form-item>
-      </a-form>
+        <!-- ▌ 关联设置 -->
+        <div class="form-section">
+          <div class="form-section-title">关联设置</div>
+          <a-form :model="form" layout="vertical" size="small">
+            <a-form-item :label="form.isForAll ? '附加到项目（可选）' : '关联项目'">
+              <CheckboxGroupEnhanced
+                v-model="form.projectIds"
+                :options="projectCheckboxOptions"
+                :search-threshold="8"
+                :scroll-threshold="10"
+              />
+              <div v-if="form.isForAll" class="form-help">
+                全局字段已对所有项目生效。此处选择的项目将额外创建项目级配置记录，便于后续设置条件显示、角色权限等。
+              </div>
+              <div v-else class="form-help">
+                不选则字段不关联任何项目，可在项目字段管理中手动添加。
+              </div>
+            </a-form-item>
+
+            <a-form-item label="适用 Issue 类型">
+              <CheckboxGroupEnhanced
+                v-model="form.issueTypes"
+                :options="issueTypeCheckboxOptions"
+                :search-threshold="8"
+                :scroll-threshold="10"
+              />
+              <div class="form-help">不选则适用所有类型</div>
+            </a-form-item>
+          </a-form>
+        </div>
+      </div>
     </a-drawer>
 
     <!-- 类型转换确认对话框 -->
@@ -802,6 +880,9 @@ const showArchivedInDetail = ref(false)
 const showArchivedInDrawer = ref(false)
 /** 当前展开描述输入的选项索引（-1 表示全部收起） */
 const expandedDescriptionIdx = ref(-1)
+/** 高级操作面板折叠状态 */
+const showCopyFromPanel = ref(false)
+const showMergePanel = ref(false)
 
 /** 侧边栏选项过滤 */
 const detailFilteredOptions = computed(() => {
@@ -1006,6 +1087,8 @@ function resetForm() {
   showArchivedInDrawer.value = false
   showReleasedInDrawer.value = true
   expandedDescriptionIdx.value = -1
+  showCopyFromPanel.value = false
+  showMergePanel.value = false
 }
 
 // Reset defaultValue when field format changes during creation
@@ -1988,47 +2071,105 @@ onMounted(() => {
 .options-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 0;
 }
 
-.option-row {
+.option-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--tf-border-light, color-mix(in srgb, var(--tf-border) 50%, transparent));
+}
+.option-item:last-child { border-bottom: none; }
+
+.option-main-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 4px;
+  gap: 6px;
+  height: 32px;
+  padding: 0 4px;
   border-radius: 4px;
   transition: background 150ms, box-shadow 150ms;
 }
 
-.option-row[draggable="true"] {
+.option-main-row[draggable="true"] {
   cursor: grab;
 }
 
-.option-row[draggable="true"]:active {
+.option-main-row[draggable="true"]:active {
   cursor: grabbing;
 }
 
-.option-row--dragging {
+.option-main-row--dragging {
   opacity: 0.4;
   background: var(--tf-bg-surface);
 }
 
-.option-row--drop-above {
+.option-main-row--drop-above {
   box-shadow: 0 -2px 0 0 var(--tf-accent);
 }
 
-.option-row--drop-below {
+.option-main-row--drop-below {
   box-shadow: 0 2px 0 0 var(--tf-accent);
 }
 
-.option-row--archived {
+.option-main-row--archived {
   opacity: 0.6;
   background: var(--tf-bg-body);
   border: 1px dashed var(--tf-border);
 }
 
-.option-row--archived .option-drag-handle {
+.option-main-row--archived .option-drag-handle {
   visibility: hidden;
+}
+
+.option-name-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.option-attr-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0 0 28px;
+  min-height: 22px;
+}
+
+.option-attr-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  cursor: pointer;
+  font-size: 11px;
+  border-radius: 3px;
+  padding: 1px 6px;
+  color: var(--tf-text-tertiary);
+  border: 1px solid var(--tf-border);
+  background: transparent;
+  transition: all 150ms;
+  user-select: none;
+  line-height: 1.4;
+}
+.option-attr-tag:hover {
+  border-color: var(--tf-text-secondary);
+  color: var(--tf-text-secondary);
+}
+.option-attr-tag.active {
+  color: var(--tf-accent);
+  border-color: var(--tf-accent);
+  background: color-mix(in srgb, var(--tf-accent) 10%, transparent);
+}
+
+.option-usage-badge {
+  font-size: 11px;
+  color: var(--tf-text-tertiary);
+  margin-left: auto;
+}
+.option-usage-badge.unused {
+  color: var(--tf-text-quaternary);
+  font-style: italic;
 }
 
 .option-archived-icon {
@@ -2058,11 +2199,6 @@ onMounted(() => {
   font-size: 11px;
   color: var(--tf-text-tertiary);
   white-space: nowrap;
-  min-width: 36px;
-  text-align: center;
-  padding: 1px 6px;
-  border-radius: 3px;
-  background: var(--tf-bg-surface);
 }
 
 .option-usage-count:not(.option-unused) {
@@ -2151,14 +2287,8 @@ onMounted(() => {
   border: 1px solid var(--tf-border);
 }
 
-.option-item {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
 .option-desc-row {
-  margin-left: 26px;
+  margin-left: 28px;
   padding: 4px 4px 4px 0;
 }
 
@@ -2168,6 +2298,130 @@ onMounted(() => {
 
 .desc-btn-active {
   color: var(--tf-accent) !important;
+}
+
+/* ========== 抽屉分区样式 ========== */
+
+.drawer-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.form-section {
+  padding: 16px 0;
+  border-bottom: 1px solid var(--tf-border);
+}
+.form-section:first-child {
+  padding-top: 0;
+}
+.form-section:last-child {
+  border-bottom: none;
+}
+
+.form-section-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--tf-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 12px;
+}
+
+/* ========== 字段行为区块 ========== */
+
+.behavior-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.behavior-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--tf-border-light, color-mix(in srgb, var(--tf-border) 50%, transparent));
+}
+.behavior-item:last-child { border-bottom: none; }
+
+.behavior-item-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.behavior-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--tf-text-primary);
+}
+
+.behavior-desc {
+  font-size: 12px;
+  color: var(--tf-text-tertiary);
+  padding-left: 38px;
+  line-height: 1.4;
+}
+
+/* ========== 高级操作卡片 ========== */
+
+.options-advanced-ops {
+  margin-top: 12px;
+  border-top: 1px solid var(--tf-border-light, color-mix(in srgb, var(--tf-border) 50%, transparent));
+  padding-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.advanced-op-card {
+  border: 1px solid var(--tf-border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.advanced-op-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background: var(--tf-bg-surface);
+  cursor: pointer;
+  transition: background 150ms;
+}
+.advanced-op-header:hover {
+  background: var(--tf-bg-hover);
+}
+
+.advanced-op-title {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--tf-text-secondary);
+}
+
+.advanced-op-body {
+  padding: 8px 10px 10px;
+}
+
+.advanced-op-desc {
+  font-size: 12px;
+  color: var(--tf-text-tertiary);
+  margin: 0 0 8px;
+  line-height: 1.5;
+}
+
+.advanced-op-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.color-swatch--archived {
+  opacity: 0.5;
 }
 
 /* ========== 类型转换相关样式 ========== */
