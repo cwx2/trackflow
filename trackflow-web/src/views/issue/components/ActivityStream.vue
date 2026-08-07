@@ -36,7 +36,7 @@
     </div>
 
     <div class="stream-list">
-      <div v-for="item in sorted" :key="item.id" :id="item.id" class="stream-item" @mouseenter="hoveredId = item.id" @mouseleave="hoveredId = ''">
+      <div v-for="item in sorted" :key="item.id" :id="item.id" class="stream-item" :class="{ 'stream-item--highlighted': highlightedId === item.id }" @mouseenter="hoveredId = item.id" @mouseleave="hoveredId = ''">
         <UserHoverCard :user-id="item.userId">
           <div v-if="item.userAvatar" class="avatar">
             <img :src="item.userAvatar" :alt="item.user" class="avatar-img" />
@@ -88,7 +88,7 @@
           <!-- Normal display -->
           <template v-else>
             <!-- 评论 -->
-            <div v-if="item.type === 'comment' && !item.isDeleted && !hideCommentText(item)" class="comment-text" :class="{ collapsed: !expandComments }" v-html="item.html"></div>
+            <div v-if="item.type === 'comment' && !item.isDeleted && !hideCommentText(item)" class="comment-text" :class="{ collapsed: !expandComments }" v-html="item.html" @click="handleCommentTextClick($event, item)"></div>
             <!-- 评论关联的字段变更块（YouTrack 风格：评论后 1 分钟内的变更合并展示） -->
             <div v-if="item.type === 'comment' && !item.isDeleted && item.relatedChanges && item.relatedChanges.length > 0" class="related-changes-block">
               <div v-for="(change, idx) in item.relatedChanges" :key="idx" class="related-change-row">
@@ -237,6 +237,7 @@ import StarterKit from '@tiptap/starter-kit'
 import Link from '@tiptap/extension-link'
 import Placeholder from '@tiptap/extension-placeholder'
 import { localizeAction, localizeLinkType } from '@/utils/fieldLabels'
+import { ReplyBlockquote } from '../extensions/ReplyBlockquote'
 import UserHoverCard from './UserHoverCard.vue'
 
 /** 评论关联的字段变更（1分钟内的变更合并到评论条目展示） */
@@ -317,7 +318,10 @@ const editComposing = ref(false)
 const editEditor = useEditor({
   content: '',
   extensions: [
-    StarterKit,
+    StarterKit.configure({
+      blockquote: false, // 使用自定义 ReplyBlockquote 替代
+    }),
+    ReplyBlockquote,
     Link.configure({ openOnClick: false }),
     Placeholder.configure({ placeholder: '编辑评论...' }),
   ],
@@ -510,6 +514,83 @@ function handleCopyLink(item: ActivityItem) {
   })
 }
 
+/** 当前正在高亮的评论 DOM ID */
+const highlightedId = ref('')
+
+/**
+ * 处理评论文本区域的点击事件（事件委托）。
+ * 检测点击目标是否在引用块内，如果是且有 data-reply-to-comment-id 属性，则滚动到原始评论。
+ */
+function handleCommentTextClick(event: MouseEvent, _item: ActivityItem) {
+  const target = event.target as HTMLElement
+  // 向上查找最近的 blockquote 祖先（在 comment-text 范围内）
+  const blockquote = target.closest('blockquote')
+  if (!blockquote) return
+
+  const commentId = blockquote.getAttribute('data-reply-to-comment-id')
+  if (!commentId) {
+    // 如果没有 data 属性（旧评论），尝试按 @username + 内容匹配
+    handleQuoteFallbackClick(blockquote)
+    return
+  }
+
+  scrollToComment(commentId)
+}
+
+/**
+ * 旧评论回复引用（没有 data-reply-to-comment-id 属性）的回退匹配逻辑：
+ * 解析引用块中的 @用户名 和内容，在已加载的评论列表中搜索匹配。
+ */
+function handleQuoteFallbackClick(blockquote: Element) {
+  const text = blockquote.textContent || ''
+  // 格式：@displayName：content...
+  const match = text.match(/^@(.+?)：(.+)/)
+  if (!match) return
+
+  const quotedUser = match[1].trim()
+  const quotedContent = match[2].trim().replace(/\.{3}$/, '') // 移除截断的省略号
+
+  // 在已加载的活动项中搜索匹配的评论
+  const found = props.items.find(item => {
+    if (item.type !== 'comment' || !item.html) return false
+    if (item.user !== quotedUser) return false
+    // 从 HTML 中提取纯文本进行前缀匹配
+    const tempDiv = document.createElement('div')
+    tempDiv.innerHTML = item.html
+    const plainText = (tempDiv.textContent || '').trim()
+    return plainText.startsWith(quotedContent.slice(0, 30)) // 前 30 字匹配
+  })
+
+  if (found) {
+    scrollToComment(found.commentId || found.id.replace('c_', ''))
+  } else {
+    Message.info({ content: '原始评论可能需要加载更多才能查看', duration: 3000 })
+  }
+}
+
+/**
+ * 平滑滚动到指定评论并短暂高亮。
+ * @param commentId 评论 ID（不含 c_ 前缀）
+ */
+function scrollToComment(commentId: string) {
+  const domId = 'c_' + commentId
+  const el = document.getElementById(domId)
+  if (!el) {
+    // 评论不在当前已加载的 DOM 中（可能在"加载更多"之前）
+    Message.info({ content: '原始评论需要加载更多后才能查看', duration: 3000 })
+    return
+  }
+
+  // 平滑滚动到评论位置
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+
+  // 短暂高亮
+  highlightedId.value = domId
+  setTimeout(() => {
+    highlightedId.value = ''
+  }, 2000)
+}
+
 onBeforeUnmount(() => { editEditor.value?.destroy() })
 </script>
 
@@ -572,6 +653,15 @@ onBeforeUnmount(() => { editEditor.value?.destroy() })
 .stream-item { display: flex; gap: 8px; padding: 12px 8px; margin: 0 -8px; border-radius: 6px; transition: background 0.2s; }
 .stream-item:hover { background: var(--tf-bg-hover); }
 .stream-item + .stream-item { border-top: 1px solid var(--tf-border-light); }
+/* 点击引用跳转后的高亮闪烁效果 */
+.stream-item--highlighted {
+  animation: highlight-flash 2s ease-out;
+}
+@keyframes highlight-flash {
+  0% { background: var(--tf-accent-subtle, rgba(88, 166, 255, 0.2)); }
+  50% { background: var(--tf-accent-subtle, rgba(88, 166, 255, 0.15)); }
+  100% { background: transparent; }
+}
 .avatar {
   width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
@@ -654,6 +744,22 @@ onBeforeUnmount(() => { editEditor.value?.destroy() })
 }
 .comment-text :deep(p) { margin: 4px 0; }
 .comment-text :deep(code) { background: var(--tf-bg-code); padding: 0 3px; border-radius: 2px; font-size: 11px; }
+/* Reply quote blockquote in rendered comments - clickable */
+.comment-text :deep(blockquote) {
+  border-left: 3px solid var(--tf-accent);
+  margin: 4px 0 8px;
+  padding: 6px 12px;
+  color: var(--tf-text-tertiary);
+  font-size: 12px;
+  background: var(--tf-bg-surface);
+  border-radius: 0 4px 4px 0;
+  cursor: pointer;
+  transition: background 150ms, border-color 150ms;
+}
+.comment-text :deep(blockquote:hover) {
+  background: var(--tf-bg-hover);
+  border-color: var(--tf-accent-hover, var(--tf-accent));
+}
 
 /* Related changes block (YouTrack style: field changes within 1 minute of a comment) */
 .related-changes-block {

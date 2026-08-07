@@ -359,7 +359,7 @@ function onReplyComment(item: ActivityItem) {
   const tempDiv = document.createElement('div')
   tempDiv.innerHTML = item.html || item.rawContent || ''
   const plainText = tempDiv.textContent || tempDiv.innerText || ''
-  commentInputRef.value.insertReplyQuote(item.user, plainText.trim())
+  commentInputRef.value.insertReplyQuote(item.user, plainText.trim(), item.commentId)
 }
 
 // ============ Lifecycle ============

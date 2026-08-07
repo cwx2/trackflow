@@ -59,6 +59,7 @@ import StarterKit from '@tiptap/starter-kit'
 import Link from '@tiptap/extension-link'
 import Placeholder from '@tiptap/extension-placeholder'
 import Mention from '@tiptap/extension-mention'
+import { ReplyBlockquote } from '../extensions/ReplyBlockquote'
 import { groupApi } from '@/api'
 import type { GroupSimpleVO } from '@/api/types'
 import { useMentionSuggestion } from '../composables/useMentionSuggestion'
@@ -161,7 +162,10 @@ const SubmitOnEnter = Extension.create({
 const editor = useEditor({
   content: '',
   extensions: [
-    StarterKit,
+    StarterKit.configure({
+      blockquote: false, // 使用自定义 ReplyBlockquote 替代
+    }),
+    ReplyBlockquote,
     Link.configure({ openOnClick: false }),
     Placeholder.configure({ placeholder: '添加评论... 支持 Markdown 语法，输入 @ 提及成员' }),
     Mention.configure({
@@ -238,12 +242,14 @@ function submit() {
  * 如果编辑器已有内容，将引用块插入到现有内容前面（以换行分隔）。
  * @param displayName 被回复者的显示名
  * @param content 被引用的原评论纯文本（已截取前 100 字）
+ * @param commentId 被引用的原评论 ID（用于点击引用跳转）
  */
-function insertReplyQuote(displayName: string, content: string) {
+function insertReplyQuote(displayName: string, content: string, commentId?: string) {
   if (!editor.value) return
   const truncated = content.length > 100 ? content.slice(0, 100) + '...' : content
   // 构建 blockquote HTML：引用块 + 空行方便输入
-  const quoteHtml = `<blockquote><p>@${displayName}：${truncated}</p></blockquote><p></p>`
+  const replyAttr = commentId ? ` data-reply-to-comment-id="${commentId}"` : ''
+  const quoteHtml = `<blockquote${replyAttr}><p>@${displayName}：${truncated}</p></blockquote><p></p>`
 
   const currentContent = editor.value.getHTML()
   const isCurrentEmpty = editor.value.isEmpty
