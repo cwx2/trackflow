@@ -201,7 +201,7 @@
 
         <!-- 只读字段（无 editType 或被权限限制） -->
         <a-tooltip v-else :content="field.tooltip || getReadonlyTooltip(field)" position="left" mini>
-          <div class="sb-value readonly-value" :class="{ 'user-link': field.userId }" @click="field.userId ? navigateToUser(field.userId) : onReadonlyFieldClick(field)">
+          <div class="sb-value readonly-value" :class="{ 'user-link': field.userId, 'readonly-metric': field.readonlyReason === 'computed' || field.readonlyReason === 'derived' }" @click="field.userId ? navigateToUser(field.userId) : onReadonlyFieldClick(field)">
             <TimeProgressIndicator
               v-if="field.progress && field.progress.estimated > 0"
               :spent="field.progress.spent"
@@ -470,6 +470,9 @@ function getReadonlyTooltip(field: SidebarField): string {
   const fieldLabel = field.label || '此字段'
   if (field.readonlyReason) {
     if (field.readonlyReason === 'computed') {
+      if (field.key === 'spentHours') {
+        return '由团队成员手动记录的工时累计求和，不包含时间间隔'
+      }
       return `${fieldLabel}由系统自动累计，不可直接编辑`
     }
     if (field.readonlyReason === 'derived') {
@@ -829,6 +832,13 @@ defineExpose({ highlightField })
   cursor: default;
   color: var(--tf-text-tertiary);
   opacity: 0.75;
+}
+
+/* 计算/聚合型只读字段（已花时间、总花费时间等）— 视觉权重高于系统信息字段 */
+.sb-value.readonly-value.readonly-metric {
+  color: var(--tf-text-secondary);
+  opacity: 1;
+  font-weight: 500;
 }
 
 /* 只读字段 hover 效果 - 提示用户此字段不可编辑 */
