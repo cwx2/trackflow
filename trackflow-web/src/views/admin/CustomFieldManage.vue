@@ -709,12 +709,25 @@
           <div class="form-section-title">关联设置</div>
           <a-form :model="form" layout="vertical" size="small">
             <a-form-item :label="form.isForAll ? '附加到项目（可选）' : '关联项目'">
-              <CheckboxGroupEnhanced
+              <a-select
                 v-model="form.projectIds"
-                :options="projectCheckboxOptions"
-                :search-threshold="8"
-                :scroll-threshold="10"
-              />
+                multiple
+                allow-clear
+                allow-search
+                :placeholder="form.isForAll ? '全局字段已对所有项目生效，此处可选择附加配置项目' : '不选则不关联任何项目（可在项目字段管理中手动添加）'"
+                :max-tag-count="3"
+                :scrollbar="true"
+              >
+                <a-option
+                  v-for="p in projectList"
+                  :key="p.id"
+                  :value="p.id"
+                  :label="p.name"
+                >
+                  <span class="select-option-key">{{ p.key }}</span>
+                  {{ p.name }}
+                </a-option>
+              </a-select>
               <div v-if="form.isForAll" class="form-help">
                 全局字段已对所有项目生效。此处选择的项目将额外创建项目级配置记录，便于后续设置条件显示、角色权限等。
               </div>
@@ -724,12 +737,21 @@
             </a-form-item>
 
             <a-form-item label="适用 Issue 类型">
-              <CheckboxGroupEnhanced
+              <a-select
                 v-model="form.issueTypes"
-                :options="issueTypeCheckboxOptions"
-                :search-threshold="8"
-                :scroll-threshold="10"
-              />
+                multiple
+                allow-clear
+                placeholder="不选则适用所有类型"
+                :max-tag-count="5"
+              >
+                <a-option
+                  v-for="t in issueTypeOptions"
+                  :key="t.value"
+                  :value="t.value"
+                >
+                  {{ t.label }}
+                </a-option>
+              </a-select>
               <div class="form-help">不选则适用所有类型</div>
             </a-form-item>
           </a-form>
@@ -823,8 +845,7 @@ import type { CustomFieldDefinitionVO, CustomFieldUsageVO, OptionUsageItemVO, Us
 import { localizeIssueType } from '@/utils/fieldLabels'
 import FieldsInProjects from './FieldsInProjects.vue'
 import DefaultValueInput from './components/DefaultValueInput.vue'
-import CheckboxGroupEnhanced from './components/CheckboxGroupEnhanced.vue'
-import type { CheckboxOption } from './components/CheckboxGroupEnhanced.vue'
+
 
 const activeTab = ref('list')
 const fieldList = ref<CustomFieldDefinitionVO[]>([])
@@ -854,23 +875,7 @@ const rowSelection = reactive({
   showCheckedAll: true
 })
 
-/** 项目列表转换为 CheckboxGroupEnhanced 的选项格式 */
-const projectCheckboxOptions = computed<CheckboxOption[]>(() =>
-  projectList.value.map(p => ({
-    value: p.id as string,
-    label: p.name as string,
-    extra: p.key as string,
-    searchKeywords: [p.key as string]
-  }))
-)
 
-/** Issue 类型列表转换为 CheckboxGroupEnhanced 的选项格式 */
-const issueTypeCheckboxOptions = computed<CheckboxOption[]>(() =>
-  issueTypeOptions.value.map(t => ({
-    value: t.value,
-    label: t.label
-  }))
-)
 
 // Detail sidebar state
 const selectedField = ref<CustomFieldDefinitionVO | null>(null)
@@ -2049,6 +2054,17 @@ onMounted(() => {
   margin-top: 4px;
 }
 
+.select-option-key {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--tf-text-tertiary);
+  background: var(--tf-bg-surface);
+  border-radius: 3px;
+  padding: 0 4px;
+  margin-right: 6px;
+}
+
 .options-sort-toolbar {
   display: flex;
   gap: 4px;
@@ -2309,14 +2325,15 @@ onMounted(() => {
 }
 
 .form-section {
-  padding: 16px 0;
-  border-bottom: 1px solid var(--tf-border);
+  padding: 12px 0;
+  border-bottom: 1px solid var(--tf-border-light, color-mix(in srgb, var(--tf-border) 50%, transparent));
 }
 .form-section:first-child {
   padding-top: 0;
 }
 .form-section:last-child {
   border-bottom: none;
+  padding-bottom: 0;
 }
 
 .form-section-title {
