@@ -2108,8 +2108,8 @@ const quickCreating = ref(false)
 const quickForm = reactive({
   projectId: undefined as string | undefined,
   title: '',
-  issueType: 'Task',
-  priority: 'Normal'
+  issueType: '任务',
+  priority: '普通'
 })
 
 // Drafts
@@ -2501,14 +2501,14 @@ watch(activeProjectId, async (projectId) => {
 
 /** 根据优先级值从动态选项中获取颜色 */
 function getPriorityColorForRecord(priority: string | null | undefined): string {
-  const p = priority || 'Normal'
+  const p = priority || '普通'
   const opt = priorityOptions.value.find(o => o.value === p || o.value.toLowerCase() === p.toLowerCase())
   return opt?.color || '#6366f1'
 }
 
 /** 根据工单类型值从动态选项中获取颜色 */
 function getIssueTypeColorForRecord(issueType: string | null | undefined): string {
-  const t = issueType || 'Task'
+  const t = issueType || '任务'
   const opt = issueTypeOptions.value.find(o => o.value === t || o.value.toLowerCase() === t.toLowerCase())
   return opt?.color || '#6366f1'
 }
