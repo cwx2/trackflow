@@ -1,16 +1,44 @@
 <template>
   <div v-if="teamMembers.length > 0" class="widget-project-team">
-    <div v-for="member in teamMembers" :key="member.userId" class="team-member-row">
-      <div class="member-avatar" :style="{ background: getAvatarColor(member.displayName || member.username) }">
-        {{ getInitial(member.displayName || member.username) }}
-      </div>
-      <div class="member-info">
-        <div class="member-name clickable" @click="goToMemberIssues(member)">{{ member.displayName || member.username }}</div>
-        <div class="member-role">{{ member.roleName || '—' }}</div>
-      </div>
-      <div class="member-issue-count clickable" :class="{ 'has-issues': member.openIssueCount > 0 }" @click="goToMemberIssues(member)">
-        <span class="count-number">{{ member.openIssueCount }}</span>
-        <span class="count-label">工单</span>
+    <!-- 汇总行 -->
+    <div class="team-summary-row">
+      <span class="summary-label">Total</span>
+      <span class="summary-count">{{ totalIssueCount }}</span>
+      <span class="summary-unit">工单</span>
+    </div>
+
+    <!-- 成员列表 -->
+    <div class="team-member-list">
+      <div
+        v-for="member in teamMembers"
+        :key="member.userId"
+        class="team-member-row"
+        @click="goToMemberIssues(member)"
+      >
+        <div class="member-left">
+          <div class="member-avatar" :style="{ background: getAvatarColor(member.displayName || member.username) }">
+            {{ getInitial(member.displayName || member.username) }}
+          </div>
+          <div class="member-info">
+            <div class="member-name">{{ member.displayName || member.username }}</div>
+            <div class="member-role">{{ member.roleName || '—' }}</div>
+          </div>
+        </div>
+
+        <div class="member-right">
+          <div class="member-stats">
+            <span class="count-number" :class="{ 'has-issues': member.openIssueCount > 0 }">
+              {{ member.openIssueCount }}
+            </span>
+            <span class="count-pct">{{ getMemberPct(member.openIssueCount) }}%</span>
+          </div>
+          <div class="member-bar-track">
+            <div
+              class="member-bar-fill"
+              :style="{ width: getBarWidth(member.openIssueCount) + '%' }"
+            ></div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -21,7 +49,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { IconUserGroup } from '@arco-design/web-vue/es/icon'
 import { dashboardApi } from '@/api/dashboard'
@@ -39,6 +67,31 @@ const emit = defineEmits<{
 const router = useRouter()
 const teamMembers = ref<ProjectTeamMemberVO[]>([])
 
+// 汇总：全部成员工单总数
+const totalIssueCount = computed(() =>
+  teamMembers.value.reduce((sum, m) => sum + (m.openIssueCount || 0), 0)
+)
+
+// 最大值：用于柱状条宽度计算（最多的人 = 100%）
+const maxIssueCount = computed(() =>
+  Math.max(...teamMembers.value.map(m => m.openIssueCount || 0), 1)
+)
+
+/**
+ * 进度条宽度：按「当前成员 / 最多工单成员」比例计算
+ */
+function getBarWidth(count: number): number {
+  return Math.round((count / maxIssueCount.value) * 100)
+}
+
+/**
+ * 百分比：按「当前成员 / 全部成员总数」计算
+ */
+function getMemberPct(count: number): number {
+  if (totalIssueCount.value === 0) return 0
+  return Math.round((count / totalIssueCount.value) * 100)
+}
+
 /**
  * 跳转到工单列表，按成员筛选未关闭工单
  */
@@ -53,6 +106,7 @@ function goToMemberIssues(member: ProjectTeamMemberVO) {
   }
   router.push({ path: '/issues', query })
 }
+
 // 根据名字生成确定性的头像颜色
 const avatarColors = [
   '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6',
@@ -109,9 +163,42 @@ defineExpose({ loadData })
 .widget-project-team {
   display: flex;
   flex-direction: column;
-  gap: 2px;
   overflow-y: auto;
   max-height: 100%;
+}
+
+/* 汇总行 */
+.team-summary-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 8px 8px;
+  border-bottom: 1px solid var(--tf-border-light, var(--color-border-2));
+  margin-bottom: 4px;
+}
+
+.summary-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--tf-text-secondary);
+}
+
+.summary-count {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--tf-text-primary);
+}
+
+.summary-unit {
+  font-size: 12px;
+  color: var(--tf-text-tertiary);
+}
+
+/* 成员列表 */
+.team-member-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .team-member-row {
@@ -120,11 +207,21 @@ defineExpose({ loadData })
   gap: 10px;
   padding: 6px 8px;
   border-radius: 4px;
+  cursor: pointer;
   transition: background 0.15s;
 }
 
 .team-member-row:hover {
   background: var(--tf-bg-hover);
+}
+
+/* 左侧：头像 + 信息 */
+.member-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 130px;
+  min-width: 0;
 }
 
 .member-avatar {
@@ -154,15 +251,6 @@ defineExpose({ loadData })
   white-space: nowrap;
 }
 
-.member-name.clickable {
-  cursor: pointer;
-  transition: color 0.15s;
-}
-
-.member-name.clickable:hover {
-  color: var(--tf-accent);
-}
-
 .member-role {
   font-size: 11px;
   color: var(--tf-text-tertiary);
@@ -171,41 +259,56 @@ defineExpose({ loadData })
   white-space: nowrap;
 }
 
-.member-issue-count {
+/* 右侧：数量 + 百分比 + 进度条 */
+.member-right {
+  flex: 1;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  flex-shrink: 0;
-  min-width: 36px;
+  gap: 3px;
+  min-width: 0;
 }
 
-.member-issue-count.clickable {
-  cursor: pointer;
-  border-radius: 4px;
-  padding: 2px 4px;
-  transition: background 0.15s;
-}
-
-.member-issue-count.clickable:hover {
-  background: var(--tf-bg-hover);
+.member-stats {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
 }
 
 .count-number {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--tf-text-tertiary);
-  line-height: 1.2;
+  min-width: 20px;
+  text-align: right;
 }
 
-.member-issue-count.has-issues .count-number {
+.count-number.has-issues {
   color: var(--tf-accent);
 }
 
-.count-label {
-  font-size: 10px;
-  color: var(--tf-text-quaternary, var(--tf-text-tertiary));
+.count-pct {
+  font-size: 11px;
+  color: var(--tf-text-tertiary);
+  min-width: 28px;
 }
 
+/* 进度条 */
+.member-bar-track {
+  height: 4px;
+  background: var(--tf-bg-elevated, var(--color-fill-2));
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.member-bar-fill {
+  height: 100%;
+  background: var(--tf-accent, var(--color-primary-6));
+  opacity: 0.7;
+  border-radius: 2px;
+  transition: width 0.4s ease;
+}
+
+/* 配置提示 */
 .widget-configure-hint {
   display: flex;
   flex-direction: column;
