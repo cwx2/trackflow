@@ -384,15 +384,23 @@
                 <div v-if="badgeForm.showAsBadge" class="badge-color-rules-section">
                   <label class="condition-label">颜色规则</label>
                   <div v-for="(rule, idx) in badgeForm.colorRules" :key="idx" class="badge-rule-row">
-                    <span v-if="rule.max != null" class="badge-rule-label">≤ {{ rule.max }}</span>
-                    <span v-else class="badge-rule-label">默认</span>
+                    <span class="badge-rule-prefix">≤</span>
+                    <a-input-number
+                      v-model="rule.max"
+                      :min="0"
+                      :precision="0"
+                      placeholder="空=默认"
+                      size="mini"
+                      class="badge-max-input"
+                      @change="saveBadgeConfig"
+                    />
                     <input
                       type="color"
                       :value="rule.color"
                       class="badge-color-input"
                       @change="(e: Event) => { rule.color = (e.target as HTMLInputElement).value; saveBadgeConfig() }"
                     />
-                    <span class="badge-color-preview" :style="{ background: rule.color }">{{ idx + 1 }}</span>
+                    <span class="badge-color-preview" :style="{ background: rule.color }">{{ rule.max ?? '∞' }}</span>
                     <a-button
                       type="text"
                       size="mini"
@@ -711,7 +719,10 @@ function initBadgeForm(field: CustomFieldDefinitionVO | null) {
 }
 
 function addBadgeRule() {
-  badgeForm.colorRules.push({ max: null, color: '#3b82f6' })
+  // Default max = highest existing max + 2, or 3 for first rule
+  const existingMaxes = badgeForm.colorRules.filter(r => r.max != null).map(r => r.max as number)
+  const defaultMax = existingMaxes.length > 0 ? Math.max(...existingMaxes) + 2 : 3
+  badgeForm.colorRules.push({ max: defaultMax, color: '#3b82f6' })
 }
 
 function removeBadgeRule(idx: number) {
@@ -721,7 +732,12 @@ function removeBadgeRule(idx: number) {
 
 async function saveBadgeConfig() {
   if (!selectedField.value || !props.project?.id) return
-  const rulesJson = badgeForm.colorRules.length > 0 ? JSON.stringify(badgeForm.colorRules) : null
+  // Clean rules: convert undefined max to null for proper JSON serialization
+  const cleanedRules = badgeForm.colorRules.map(rule => ({
+    ...(rule.max != null ? { max: rule.max } : {}),
+    color: rule.color
+  }))
+  const rulesJson = cleanedRules.length > 0 ? JSON.stringify(cleanedRules) : null
   try {
     await customFieldApi.setFieldBadgeConfig(props.project.id, selectedField.value.id, {
       showAsBadge: badgeForm.showAsBadge,
@@ -1825,6 +1841,16 @@ onMounted(() => {
   align-items: center;
   gap: 8px;
   margin-bottom: 4px;
+}
+
+.badge-rule-prefix {
+  font-size: 11px;
+  color: var(--tf-text-tertiary);
+  flex-shrink: 0;
+}
+
+.badge-max-input {
+  width: 72px;
 }
 
 .badge-rule-label {

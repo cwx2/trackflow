@@ -1224,10 +1224,9 @@ public class CustomFieldService {
             mapping.setHasIndependentOptions(false);
             projectMapper.insert(mapping);
         } else {
-            projectMapper.update(null, new LambdaUpdateWrapper<CustomFieldProject>()
-                    .eq(CustomFieldProject::getId, mapping.getId())
-                    .set(CustomFieldProject::getShowAsBadge, showAsBadge != null ? showAsBadge : false)
-                    .set(CustomFieldProject::getBadgeColorRules, badgeColorRules));
+            mapping.setShowAsBadge(showAsBadge != null ? showAsBadge : false);
+            mapping.setBadgeColorRules(badgeColorRules);
+            projectMapper.updateById(mapping);
         }
 
         // 验证同一项目最多 2 个徽章字段
