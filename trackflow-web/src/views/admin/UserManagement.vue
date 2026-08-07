@@ -8,8 +8,8 @@
             size="small"
             allow-clear
             style="width: 260px"
-            @search="() => { page = 1; loadUsers() }"
-            @clear="() => { page = 1; loadUsers() }"
+            @search="() => { pagination.page = 1; loadUsers() }"
+            @clear="() => { pagination.page = 1; loadUsers() }"
             @input="debounceLoad"
           />
           <a-select
@@ -18,7 +18,7 @@
             size="small"
             allow-clear
             style="width: 130px"
-            @change="() => { page = 1; loadUsers() }"
+            @change="() => { pagination.page = 1; loadUsers() }"
           >
             <a-option v-for="role in globalRoles" :key="role.id" :value="role.id">{{ role.name }}</a-option>
           </a-select>
@@ -28,7 +28,7 @@
             size="small"
             allow-clear
             style="width: 110px"
-            @change="() => { page = 1; loadUsers() }"
+            @change="() => { pagination.page = 1; loadUsers() }"
           >
             <a-option value="active">启用</a-option>
             <a-option value="disabled">禁用</a-option>
@@ -39,7 +39,7 @@
             size="small"
             allow-clear
             style="width: 140px"
-            @change="() => { page = 1; loadUsers() }"
+            @change="() => { pagination.page = 1; loadUsers() }"
           >
             <a-option value="banned">封禁</a-option>
             <a-option value="suspended">暂停</a-option>
@@ -99,7 +99,12 @@
         </a-table-column>
         <a-table-column title="状态" :width="80">
           <template #cell="{ record }">
-            <span class="status-tag" :class="record.status">{{ record.status === 'active' ? '启用' : getBanStatusLabel(record.banStatus) }}</span>
+            <IssueStatusTag
+              :name="record.status === 'active' ? '启用' : getBanStatusLabel(record.banStatus)"
+              :color="record.status === 'active' ? '#4caf50' : '#f44336'"
+              size="medium"
+              :show-dot="false"
+            />
           </template>
         </a-table-column>
         <a-table-column title="最近登录" :width="150">
@@ -133,11 +138,11 @@
 
     <!-- 分页 -->
     <AdminPagination
-      v-model:current="page"
-      v-model:page-size="pageSize"
+      v-model:current="pagination.page"
+      v-model:page-size="pagination.pageSize"
       :total="total"
-      @change="loadUsers"
-      @page-size-change="loadUsers"
+      @change="onPageChange"
+      @page-size-change="onPageSizeChange"
     />
 
     <!-- 新建用户弹窗 -->
@@ -360,24 +365,38 @@ import type { UserProfileProjectRoleInfo } from '@/api/user'
 import type { GlobalMemberVO } from '@/api/globalMember'
 import { useAuthStore } from '@/stores/auth'
 import { AdminPageLayout, AdminPagination } from '@/components/admin'
-import { UserAvatar } from '@/components/base'
+import { UserAvatar, IssueStatusTag } from '@/components/base'
+import { usePagedList } from '@/composables/usePagedList'
 
 const authStore = useAuthStore()
 const router = useRouter()
 const currentUserId = computed(() => authStore.user?.userId)
 
-const users = ref<any[]>([])
-const total = ref(0)
-const page = ref(1)
-const pageSize = ref(20)
-const totalPages = computed(() => Math.ceil(total.value / pageSize.value))
-const loading = ref(false)
-
-const filters = reactive({ keyword: '', roleId: '', status: '', banStatus: '' })
-
 // 排序状态
 const sortField = ref('createdAt')
 const sortDesc = ref(true)
+
+interface UserFilters {
+  keyword: string
+  roleId: string
+  status: string
+  banStatus: string
+}
+
+const { list: users, total, loading, pagination, filters, refresh: loadUsers, onPageChange, onPageSizeChange } = usePagedList<any, UserFilters>(
+  (params) => {
+    const requestParams: Record<string, any> = { page: params.page, pageSize: params.pageSize }
+    if (params.keyword) requestParams.keyword = params.keyword
+    if (params.roleId) requestParams.roleId = params.roleId
+    if (params.status) requestParams.status = params.status
+    if (params.banStatus) requestParams.banStatus = params.banStatus
+    if (sortField.value) {
+      requestParams.sort = (sortDesc.value ? '-' : '') + sortField.value
+    }
+    return userApi.list(requestParams)
+  },
+  { pageSize: 20, initialFilters: { keyword: '', roleId: '', status: '', banStatus: '' } }
+)
 
 function toggleSort(field: string) {
   if (sortField.value === field) {
@@ -386,7 +405,7 @@ function toggleSort(field: string) {
     sortField.value = field
     sortDesc.value = true
   }
-  page.value = 1
+  pagination.page = 1
   loadUsers()
 }
 
@@ -456,26 +475,7 @@ const availableProjects = computed(() => {
 let debounceTimer: any = null
 function debounceLoad() {
   clearTimeout(debounceTimer)
-  debounceTimer = setTimeout(() => { page.value = 1; loadUsers() }, 300)
-}
-
-async function loadUsers() {
-  loading.value = true
-  try {
-    const params: any = { page: page.value, pageSize: pageSize.value }
-    if (filters.keyword) params.keyword = filters.keyword
-    if (filters.roleId) params.roleId = filters.roleId
-    if (filters.status) params.status = filters.status
-    if (filters.banStatus) params.banStatus = filters.banStatus
-    // 排序参数：-fieldName 降序，fieldName 升序
-    if (sortField.value) {
-      params.sort = (sortDesc.value ? '-' : '') + sortField.value
-    }
-    const res = await userApi.list(params)
-    users.value = res.data?.list || []
-    total.value = res.data?.pagination?.total || 0
-  } catch (e) { users.value = []; total.value = 0 }
-  finally { loading.value = false }
+  debounceTimer = setTimeout(() => { pagination.page = 1; loadUsers() }, 300)
 }
 
 async function disableUser(user: any) {
@@ -863,7 +863,6 @@ function getBanStatusLabel(banStatus?: string): string {
 }
 
 onMounted(() => {
-  loadUsers()
   loadGlobalRoles()
   loadProjectRoles()
   loadAllProjects()
@@ -893,9 +892,6 @@ onMounted(() => {
 .user-info { display: flex; flex-direction: column; min-width: 0; }
 .user-info .username-link { font-size: var(--font-size-sm); line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .user-login { font-size: 11px; color: var(--text-muted); line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.status-tag { font-size: var(--font-size-xs); padding: 2px 8px; border-radius: var(--radius-sm); }
-.status-tag.active { background: rgba(76,175,80,0.15); color: var(--accent-green); }
-.status-tag.disabled { background: rgba(244,67,54,0.15); color: var(--accent-red); }
 .time-text { font-size: var(--font-size-xs); color: var(--text-secondary); }
 
 .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px 24px; color: var(--text-muted); }

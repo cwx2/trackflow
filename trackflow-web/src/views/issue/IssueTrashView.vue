@@ -138,18 +138,23 @@ import { issueApi, projectApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import { localizeIssueType, localizePriority } from '@/utils/fieldLabels'
 import type { IssueTrashVO } from '@/api/types'
+import { usePagedList } from '@/composables/usePagedList'
 
 const authStore = useAuthStore()
 
 const projectList = ref<any[]>([])
 const selectedProjectId = ref<string | null>(null)
-const trashList = ref<IssueTrashVO[]>([])
-const loading = ref(false)
-const currentPage = ref(1)
-const pageSize = ref(20)
-const total = ref(0)
 const selectedIds = ref<string[]>([])
 const retentionDays = ref(30)
+
+interface TrashFilters {
+  projectId: string
+}
+
+const { list: trashList, total, loading, pagination, refresh: loadTrash, onPageChange, onPageSizeChange } = usePagedList<IssueTrashVO, TrashFilters>(
+  (params) => issueApi.listTrash({ projectId: selectedProjectId.value!, page: params.page, pageSize: params.pageSize }),
+  { pageSize: 20, immediate: false }
+)
 
 const retentionOptions = [
   { value: 7, label: '7 天' },
@@ -183,8 +188,8 @@ const columns = [
 ]
 
 const paginationConfig = computed(() => ({
-  current: currentPage.value,
-  pageSize: pageSize.value,
+  current: pagination.page,
+  pageSize: pagination.pageSize,
   total: total.value,
   showTotal: true,
   showPageSize: true,
@@ -213,27 +218,9 @@ async function loadProjects() {
 
 async function onProjectChange() {
   if (!selectedProjectId.value) return
-  await Promise.all([loadTrash(), loadRetentionSettings()])
-}
-
-async function loadTrash() {
-  if (!selectedProjectId.value) return
-  loading.value = true
   selectedIds.value = []
-  try {
-    const res = await issueApi.listTrash({
-      projectId: selectedProjectId.value,
-      page: currentPage.value,
-      pageSize: pageSize.value
-    })
-    trashList.value = res.data?.list || []
-    total.value = res.data?.pagination?.total || 0
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '加载回收站失败')
-    trashList.value = []
-  } finally {
-    loading.value = false
-  }
+  pagination.page = 1
+  await Promise.all([loadTrash(), loadRetentionSettings()])
 }
 
 async function loadRetentionSettings() {
@@ -255,17 +242,6 @@ async function setRetention(days: number) {
   } catch (e: any) {
     Message.error(e.response?.data?.message || '设置失败')
   }
-}
-
-function onPageChange(page: number) {
-  currentPage.value = page
-  loadTrash()
-}
-
-function onPageSizeChange(size: number) {
-  pageSize.value = size
-  currentPage.value = 1
-  loadTrash()
 }
 
 function onSelectionChange(keys: string[]) {

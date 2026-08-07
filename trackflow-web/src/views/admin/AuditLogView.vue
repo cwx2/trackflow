@@ -124,36 +124,37 @@
 
     <!-- 分页 -->
     <AdminPagination
-      v-model:current="page"
-      v-model:page-size="pageSize"
+      v-model:current="pagination.page"
+      v-model:page-size="pagination.pageSize"
       :total="total"
-      @change="loadLogs"
-      @page-size-change="loadLogs"
+      @change="onPageChange"
+      @page-size-change="onPageSizeChange"
     />
   </AdminPageLayout>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, computed } from 'vue'
 import { auditLogApi } from '@/api'
 import type { AuditLogVO } from '@/api/auditLog'
 import { Message } from '@arco-design/web-vue'
 import { AdminPageLayout, AdminPagination, AdminTableToolbar } from '@/components/admin'
+import { usePagedList } from '@/composables/usePagedList'
 
-const logs = ref<AuditLogVO[]>([])
-const total = ref(0)
-const page = ref(1)
-const pageSize = ref(20)
-const loading = ref(false)
+interface AuditLogFilters {
+  action: string
+  targetType: string
+  startDate: string
+  endDate: string
+  search: string
+}
+
+const { list: logs, total, loading, pagination, filters, refresh: loadLogs, onPageChange, onPageSizeChange } = usePagedList<AuditLogVO, AuditLogFilters>(
+  (params) => auditLogApi.list(params),
+  { pageSize: 20, initialFilters: { action: '', targetType: '', startDate: '', endDate: '', search: '' } }
+)
+
 const exporting = ref(false)
-
-const filters = reactive({
-  action: '',
-  targetType: '',
-  startDate: '',
-  endDate: '',
-  search: ''
-})
 
 /** Date range for a-range-picker (array of two strings or undefined) */
 const dateRange = computed(() => {
@@ -175,30 +176,8 @@ function onDateRangeChange(val: (string | undefined)[] | undefined) {
 }
 
 function resetAndLoad() {
-  page.value = 1
+  pagination.page = 1
   loadLogs()
-}
-
-async function loadLogs() {
-  loading.value = true
-  try {
-    const params: any = { page: page.value, pageSize: pageSize.value }
-    if (filters.action) params.action = filters.action
-    if (filters.targetType) params.targetType = filters.targetType
-    if (filters.startDate) params.startDate = filters.startDate
-    if (filters.endDate) params.endDate = filters.endDate
-    if (filters.search) params.search = filters.search
-
-    const res = await auditLogApi.list(params)
-    logs.value = res.data?.list || []
-    total.value = res.data?.pagination?.total || 0
-  } catch (e) {
-    logs.value = []
-    total.value = 0
-    Message.error('加载审计日志失败')
-  } finally {
-    loading.value = false
-  }
 }
 
 async function exportJson() {
@@ -448,10 +427,6 @@ function formatGenericDetails(d: Record<string, any>): string {
     })
     .join('；')
 }
-
-onMounted(() => {
-  loadLogs()
-})
 </script>
 
 <style scoped>

@@ -85,13 +85,13 @@
 
     <!-- 分页 -->
     <AdminPagination
-      v-model:current="currentPage"
-      v-model:page-size="pageSize"
+      v-model:current="pagination.page"
+      v-model:page-size="pagination.pageSize"
       :total="total"
       :page-size-options="[10, 20, 50]"
       inline
-      @change="loadActivities"
-      @page-size-change="loadActivities"
+      @change="onPageChange"
+      @page-size-change="onPageSizeChange"
     />
   </a-drawer>
 </template>
@@ -104,6 +104,7 @@ import { workflowApi } from '@/api'
 import { localizeIssueType } from '@/utils/fieldLabels'
 import { AdminPagination } from '@/components/admin'
 import type { WorkflowActivityVO } from '@/api/types'
+import { usePagedList } from '@/composables/usePagedList'
 
 const props = defineProps<{
   visible: boolean
@@ -114,11 +115,22 @@ const emit = defineEmits<{
   'update:visible': [value: boolean]
 }>()
 
-const loading = ref(false)
-const activities = ref<WorkflowActivityVO[]>([])
-const total = ref(0)
-const currentPage = ref(1)
-const pageSize = ref(10)
+interface ActivityFilters {
+  userId: string
+  startDate: string
+  endDate: string
+}
+
+const { list: activities, total, loading, pagination, filters: activityFilters, refresh: loadActivities, onPageChange, onPageSizeChange } = usePagedList<WorkflowActivityVO, ActivityFilters>(
+  (params) => {
+    const requestParams: Record<string, any> = { page: params.page, pageSize: params.pageSize }
+    if (params.userId) requestParams.userId = params.userId
+    if (params.startDate) requestParams.startDate = params.startDate
+    if (params.endDate) requestParams.endDate = params.endDate
+    return workflowApi.listActivities(props.projectId, requestParams)
+  },
+  { pageSize: 10, immediate: false, initialFilters: { userId: '', startDate: '', endDate: '' } }
+)
 
 // 筛选
 const dateRange = ref<string[]>([])
@@ -132,56 +144,42 @@ function formatTime(isoStr: string): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
-async function loadActivities() {
-  loading.value = true
-  try {
-    const params: Record<string, any> = {
-      page: currentPage.value,
-      pageSize: pageSize.value
-    }
-    if (filterUserId.value) {
-      params.userId = filterUserId.value
-    }
-    if (dateRange.value && dateRange.value.length === 2) {
-      params.startDate = dateRange.value[0]
-      params.endDate = dateRange.value[1]
-    }
+function onFilterChange() {
+  activityFilters.userId = filterUserId.value || ''
+  if (dateRange.value && dateRange.value.length === 2) {
+    activityFilters.startDate = dateRange.value[0] || ''
+    activityFilters.endDate = dateRange.value[1] || ''
+  } else {
+    activityFilters.startDate = ''
+    activityFilters.endDate = ''
+  }
+  pagination.page = 1
+  loadActivities()
+}
 
-    const res = await workflowApi.listActivities(props.projectId, params)
-    const data = res.data
-    activities.value = data?.list || []
-    total.value = data?.pagination?.total || 0
-
-    // 收集出现过的用户（用于筛选下拉）
+// Collect users from activities for filter dropdown
+watch(activities, (newActivities) => {
+  if (users.value.length === 0 && newActivities.length > 0) {
     const userMap = new Map<string, string>()
-    for (const a of activities.value) {
+    for (const a of newActivities) {
       if (a.userId && a.userDisplayName) {
         userMap.set(a.userId, a.userDisplayName)
       }
     }
-    // 只在首次加载时填充用户列表
-    if (users.value.length === 0 && userMap.size > 0) {
+    if (userMap.size > 0) {
       users.value = Array.from(userMap.entries()).map(([id, displayName]) => ({ id, displayName }))
     }
-  } catch {
-    Message.error('加载变更历史失败')
-    activities.value = []
-    total.value = 0
-  } finally {
-    loading.value = false
   }
-}
-
-function onFilterChange() {
-  currentPage.value = 1
-  loadActivities()
-}
+})
 
 watch(() => props.visible, (val) => {
   if (val) {
-    currentPage.value = 1
+    pagination.page = 1
     dateRange.value = []
     filterUserId.value = undefined
+    activityFilters.userId = ''
+    activityFilters.startDate = ''
+    activityFilters.endDate = ''
     loadActivities()
   }
 })

@@ -33,7 +33,7 @@
           v-else
           :data="executions"
           :columns="columns"
-          :pagination="{ total: total, current: page, pageSize: pageSize, showTotal: true, showPageSize: true, pageSizeOptions: [20, 50, 100] }"
+          :pagination="{ total: total, current: pagination.page, pageSize: pagination.pageSize, showTotal: true, showPageSize: true, pageSizeOptions: [20, 50, 100] }"
           :bordered="false"
           row-key="id"
           class="execution-table"
@@ -74,20 +74,20 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Message } from '@arco-design/web-vue'
 import { automationApi, type ExecutionVO } from '@/api'
 import ExecutionDetailDrawer from './components/ExecutionDetailDrawer.vue'
+import { usePagedList } from '@/composables/usePagedList'
 
 const route = useRoute()
 const router = useRouter()
 
 const workflowId = computed(() => route.params.id as string)
 const workflowName = ref('')
-const loading = ref(false)
-const executions = ref<ExecutionVO[]>([])
-const total = ref(0)
-const page = ref(1)
-const pageSize = ref(20)
+
+const { list: executions, total, loading, pagination, refresh: loadExecutions, onPageChange: handlePageChange, onPageSizeChange: handlePageSizeChange } = usePagedList<ExecutionVO>(
+  (params) => automationApi.listExecutions(workflowId.value, { page: params.page, pageSize: params.pageSize }),
+  { pageSize: 20 }
+)
 
 // 详情抽屉
 const drawerVisible = ref(false)
@@ -129,21 +129,6 @@ function formatDuration(ms?: number): string {
   return `${Math.floor(ms/60000)}m ${Math.floor((ms%60000)/1000)}s`
 }
 
-async function loadExecutions() {
-  loading.value = true
-  try {
-    const res = await automationApi.listExecutions(workflowId.value, { page: page.value, pageSize: pageSize.value })
-    if (res.code === 0 && res.data) {
-      executions.value = res.data.list || []
-      total.value = res.data.pagination?.total || 0
-    }
-  } catch (e: any) {
-    Message.error('加载执行历史失败')
-  } finally {
-    loading.value = false
-  }
-}
-
 async function loadWorkflowName() {
   try {
     const res = await automationApi.getById(workflowId.value)
@@ -158,20 +143,8 @@ function openDetail(execution: ExecutionVO) {
   drawerVisible.value = true
 }
 
-function handlePageChange(p: number) {
-  page.value = p
-  loadExecutions()
-}
-
-function handlePageSizeChange(size: number) {
-  pageSize.value = size
-  page.value = 1
-  loadExecutions()
-}
-
 onMounted(() => {
   loadWorkflowName()
-  loadExecutions()
 })
 </script>
 
