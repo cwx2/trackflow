@@ -79,6 +79,7 @@
             :items="activityItems"
             :current-user-id="currentUserId"
             :can-manage-comments="canManageComments"
+            :can-comment="canCommentEffective"
             :show-add-time="projectTimeTrackingEnabled && canLogTime"
             :has-more="activityHasMore"
             :loading-more="activityLoadingMore"
@@ -87,11 +88,13 @@
             @delete-comment="onDeleteComment"
             @restore-comment="onRestoreComment"
             @permanently-delete-comment="onPermanentlyDeleteComment"
+            @reply-comment="onReplyComment"
             @add-time="openTimeDialog"
             @load-more="loadMoreActivities"
           />
           <CommentInput
             v-if="canCommentEffective"
+            ref="commentInputRef"
             :project-id="issue?.projectId"
             :show-add-time="projectTimeTrackingEnabled && canLogTime"
             :can-set-visibility="canEditIssue"
@@ -298,6 +301,9 @@ const {
 const SIDEBAR_COLLAPSED_KEY = 'tf_issue_detail_sidebar_collapsed'
 const sidebarCollapsed = ref<boolean>(localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true')
 
+// Comment input ref (for reply functionality)
+const commentInputRef = ref<InstanceType<typeof CommentInput> | null>(null)
+
 // User groups for 'group' type custom fields
 const allUserGroups = ref<Array<{ id: string; name: string }>>([])
 async function loadUserGroups() {
@@ -342,6 +348,19 @@ const {
   openTimeDialog, handleStartTimer, handleStopTimerFromDetail, submitTimeEntry,
   onPasteUpload,
 } = actions
+
+// ============ Reply & Copy Comment Link ============
+/**
+ * 点击「回复」按钮时，将引用块插入评论输入框
+ */
+function onReplyComment(item: ActivityItem) {
+  if (!commentInputRef.value) return
+  // 从 HTML 中提取纯文本（去标签）
+  const tempDiv = document.createElement('div')
+  tempDiv.innerHTML = item.html || item.rawContent || ''
+  const plainText = tempDiv.textContent || tempDiv.innerText || ''
+  commentInputRef.value.insertReplyQuote(item.user, plainText.trim())
+}
 
 // ============ Lifecycle ============
 onMounted(() => {

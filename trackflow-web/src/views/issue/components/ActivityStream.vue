@@ -61,10 +61,12 @@
               class="automation-badge"
               :title="item.detail.ruleName ? '自动规则：' + item.detail.ruleName : '由自动化规则触发'"
             >⚡ {{ item.detail.ruleName || '自动规则' }}</span>
-            <!-- Comment actions -->
-            <div v-if="item.type === 'comment' && !item.isDeleted && !hideCommentText(item) && canModifyComment(item) && editingCommentId !== item.commentId" class="comment-actions" :class="{ 'comment-actions--visible': hoveredId === item.id }">
-              <button class="action-btn" title="编辑评论" @click="startEdit(item)">✎</button>
-              <button class="action-btn action-btn-danger" title="删除评论" @click="confirmDelete(item)">✕</button>
+            <!-- Comment actions: reply + copy link (visible to all relevant users) -->
+            <div v-if="item.type === 'comment' && !item.isDeleted && !hideCommentText(item) && editingCommentId !== item.commentId" class="comment-actions" :class="{ 'comment-actions--visible': hoveredId === item.id }">
+              <button v-if="props.canComment" class="action-btn" title="回复" @click="emit('replyComment', item)">↩</button>
+              <button class="action-btn" title="复制评论链接" @click="handleCopyLink(item)">🔗</button>
+              <button v-if="canModifyComment(item)" class="action-btn" title="编辑评论" @click="startEdit(item)">✎</button>
+              <button v-if="canModifyComment(item)" class="action-btn action-btn-danger" title="删除评论" @click="confirmDelete(item)">✕</button>
             </div>
           </div>
           <!-- Deleted comment placeholder -->
@@ -229,6 +231,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onBeforeUnmount, nextTick } from 'vue'
+import { Message } from '@arco-design/web-vue'
 import { useEditor, EditorContent } from '@tiptap/vue-3'
 import StarterKit from '@tiptap/starter-kit'
 import Link from '@tiptap/extension-link'
@@ -277,6 +280,7 @@ const props = defineProps<{
   items: ActivityItem[]
   currentUserId?: string
   canManageComments?: boolean
+  canComment?: boolean
   showAddTime?: boolean
   hasMore?: boolean
   loadingMore?: boolean
@@ -288,6 +292,7 @@ const emit = defineEmits<{
   deleteComment: [commentId: string]
   restoreComment: [commentId: string]
   permanentlyDeleteComment: [commentId: string]
+  replyComment: [item: ActivityItem]
   addTime: []
   loadMore: []
 }>()
@@ -490,6 +495,19 @@ function formatAutoAssignSkipped(detail?: Record<string, any>): string {
     default:
       return `自动分配已跳过 — 原因：${detail.reason}`
   }
+}
+
+/**
+ * 复制评论的永久链接到剪贴板。
+ * 链接格式：{当前页面URL}#{commentDomId}
+ */
+function handleCopyLink(item: ActivityItem) {
+  const url = `${window.location.origin}${window.location.pathname}#${item.id}`
+  navigator.clipboard.writeText(url).then(() => {
+    Message.success({ content: '链接已复制', duration: 2000 })
+  }).catch(() => {
+    Message.error('复制链接失败')
+  })
 }
 
 onBeforeUnmount(() => { editEditor.value?.destroy() })

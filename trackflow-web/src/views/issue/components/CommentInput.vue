@@ -52,7 +52,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onBeforeUnmount, onMounted } from 'vue'
+import { ref, computed, onBeforeUnmount, onMounted, nextTick } from 'vue'
 import { useEditor, EditorContent } from '@tiptap/vue-3'
 import StarterKit from '@tiptap/starter-kit'
 import Link from '@tiptap/extension-link'
@@ -203,6 +203,41 @@ function submit() {
   selectedGroupIds.value = []
 }
 
+/**
+ * 在编辑器中插入回复引用块。
+ * 如果编辑器已有内容，将引用块插入到现有内容前面（以换行分隔）。
+ * @param displayName 被回复者的显示名
+ * @param content 被引用的原评论纯文本（已截取前 100 字）
+ */
+function insertReplyQuote(displayName: string, content: string) {
+  if (!editor.value) return
+  const truncated = content.length > 100 ? content.slice(0, 100) + '...' : content
+  // 构建 blockquote HTML：引用块 + 空行方便输入
+  const quoteHtml = `<blockquote><p>@${displayName}：${truncated}</p></blockquote><p></p>`
+
+  const currentContent = editor.value.getHTML()
+  const isCurrentEmpty = editor.value.isEmpty
+
+  if (isCurrentEmpty) {
+    editor.value.commands.setContent(quoteHtml)
+  } else {
+    // 在已有内容前面插入引用块
+    editor.value.commands.setContent(quoteHtml + currentContent)
+  }
+  // 将光标移动到引用块之后
+  editor.value.commands.focus('end')
+
+  // 滚动到评论输入区域
+  nextTick(() => {
+    const el = document.querySelector('.comment-input')
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+  })
+}
+
+defineExpose({ insertReplyQuote })
+
 onBeforeUnmount(() => { editor.value?.destroy() })
 </script>
 
@@ -283,6 +318,15 @@ onBeforeUnmount(() => { editor.value?.destroy() })
 }
 .editor-area :deep(.tiptap-comment p) { margin: 4px 0; }
 .editor-area :deep(.tiptap-comment code) { background: var(--tf-bg-code); padding: 0 3px; border-radius: 2px; font-size: 12px; }
+.editor-area :deep(.tiptap-comment blockquote) {
+  border-left: 3px solid var(--tf-border);
+  margin: 4px 0;
+  padding: 4px 12px;
+  color: var(--tf-text-tertiary);
+  font-size: 12px;
+  background: var(--tf-bg-surface);
+  border-radius: 0 4px 4px 0;
+}
 .editor-area :deep(.tiptap-comment .is-empty::before) {
   content: attr(data-placeholder); color: var(--tf-text-muted);
   pointer-events: none; float: left; height: 0;
