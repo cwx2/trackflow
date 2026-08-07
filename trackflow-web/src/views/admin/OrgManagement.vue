@@ -27,6 +27,9 @@
       <template #name="{ record }">
         <span class="org-name-link">{{ record.name }}</span>
       </template>
+      <template #projectCount="{ record }">
+        <span class="project-count">{{ record.projectCount ?? 0 }}</span>
+      </template>
       <template #description="{ record }">
         <span class="description-text">{{ record.description || '—' }}</span>
       </template>
@@ -51,7 +54,7 @@
     <a-modal
       v-model:visible="showDialog"
       :title="editing ? '编辑组织' : '创建组织'"
-      :width="420"
+      :width="480"
       @before-ok="submitOrg"
       @cancel="showDialog = false"
       :ok-text="editing ? '更新' : '创建'"
@@ -67,21 +70,35 @@
         <a-form-item label="描述">
           <a-input v-model="form.description" placeholder="可选描述" />
         </a-form-item>
+        <a-form-item v-if="!editing" label="初始项目">
+          <a-select
+            v-model="form.projectIds"
+            :options="unassignedProjectOptions"
+            placeholder="选择要加入此组织的项目（可选）"
+            multiple
+            allow-clear
+            :max-tag-count="3"
+          />
+        </a-form-item>
       </a-form>
     </a-modal>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { Modal, Message } from '@arco-design/web-vue'
 import type { TableColumnData } from '@arco-design/web-vue'
 import { organizationApi } from '@/api'
-import type { OrgVO } from '@/api/organization'
+import type { OrgVO, OrgProjectVO } from '@/api/organization'
+
+const router = useRouter()
 
 const columns: TableColumnData[] = [
   { title: '编码', slotName: 'code', width: 120 },
   { title: '名称', slotName: 'name', width: 200 },
+  { title: '项目数', slotName: 'projectCount', width: 80, align: 'center' },
   { title: '描述', slotName: 'description', ellipsis: true, tooltip: true },
   { title: '创建时间', slotName: 'createdAt', width: 150 },
   { title: '操作', slotName: 'actions', width: 140 },
@@ -90,7 +107,12 @@ const columns: TableColumnData[] = [
 const organizations = ref<OrgVO[]>([])
 const showDialog = ref(false)
 const editing = ref<OrgVO | null>(null)
-const form = reactive({ name: '', code: '', description: '' })
+const form = reactive({ name: '', code: '', description: '', projectIds: [] as string[] })
+const unassignedProjects = ref<OrgProjectVO[]>([])
+
+const unassignedProjectOptions = computed(() =>
+  unassignedProjects.value.map(p => ({ value: p.id, label: `${p.key} - ${p.name}` }))
+)
 
 async function loadOrgs() {
   try {
@@ -99,20 +121,27 @@ async function loadOrgs() {
   } catch (e) { organizations.value = [] }
 }
 
+async function loadUnassignedProjects() {
+  try {
+    const res = await organizationApi.getUnassignedProjects()
+    unassignedProjects.value = res.data || []
+  } catch (e) { unassignedProjects.value = [] }
+}
+
 function openCreateDialog() {
   editing.value = null
-  form.name = ''; form.code = ''; form.description = ''
+  form.name = ''; form.code = ''; form.description = ''; form.projectIds = []
+  loadUnassignedProjects()
   showDialog.value = true
 }
 
-/** 点击行跳转组织详情（排除按钮点击） */
 function navigateToOrg(record: any) {
-  editOrg(record)
+  router.push({ name: 'OrgDetail', params: { id: record.id } })
 }
 
 function editOrg(org: OrgVO) {
   editing.value = org
-  form.name = org.name; form.code = org.code; form.description = org.description || ''
+  form.name = org.name; form.code = org.code; form.description = org.description || ''; form.projectIds = []
   showDialog.value = true
 }
 
@@ -121,7 +150,8 @@ async function submitOrg(done?: (closed: boolean) => void) {
     if (editing.value) {
       await organizationApi.update(editing.value.id, { name: form.name, description: form.description })
     } else {
-      await organizationApi.create({ name: form.name, code: form.code, description: form.description })
+      const projectIds = form.projectIds.length > 0 ? form.projectIds.map(Number) : undefined
+      await organizationApi.create({ name: form.name, code: form.code, description: form.description, projectIds })
     }
     Message.success(editing.value ? '组织已更新' : '组织已创建')
     if (done) done(true)
@@ -164,20 +194,19 @@ onMounted(loadOrgs)
 .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-shrink: 0; }
 .page-title { font-size: 18px; font-weight: 600; color: var(--text-bright); }
 
-/* Table fills remaining space */
 .org-table { flex: 1; min-height: 0; }
 .org-table :deep(.arco-table) { height: 100%; }
 .org-table :deep(.arco-table-container) { height: 100%; display: flex; flex-direction: column; }
 .org-table :deep(.arco-table-content-scroll) { flex: 1; min-height: 0; overflow: hidden; }
 .org-table :deep(.arco-table-body) { flex: 1; max-height: none !important; overflow-y: auto !important; }
 
-/* Clickable row styles */
 .org-table :deep(.arco-table-tr.clickable-row) { cursor: pointer; }
 .org-table :deep(.arco-table-tr.clickable-row:hover .arco-table-td) { background: var(--bg-hover); }
 
 .org-name-link { color: var(--accent-blue); font-weight: 500; cursor: pointer; transition: color 150ms; }
 .org-name-link:hover { text-decoration: underline; }
 .code-tag { font-size: var(--font-size-xs); background: var(--bg-tertiary); padding: 2px 6px; border-radius: var(--radius-sm); color: var(--accent-blue); }
+.project-count { font-size: 13px; font-weight: 500; color: var(--text-primary); }
 .description-text { color: var(--text-secondary); }
 .time-text { font-size: var(--font-size-xs); color: var(--text-secondary); }
 .empty-state-hint { color: var(--text-tertiary); margin-bottom: 12px; font-size: 13px; }

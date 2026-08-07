@@ -4,6 +4,8 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
+import java.util.List;
+
 @Data
 public class CreateOrgDTO {
 
@@ -17,4 +19,7 @@ public class CreateOrgDTO {
 
     @Size(max = 500, message = "描述不能超过500字符")
     private String description;
+
+    /** 初始项目ID列表（可选，创建时将这些项目归入此组织） */
+    private List<Long> projectIds;
 }

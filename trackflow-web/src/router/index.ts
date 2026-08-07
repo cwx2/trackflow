@@ -223,6 +223,12 @@ const routes = [
         meta: { requiresAdmin: true, requiredPermission: 'system:manage_orgs', title: '组织管理' }
       },
       {
+        path: 'admin/organizations/:id',
+        name: 'OrgDetail',
+        component: () => import('@/views/admin/OrgDetailView.vue'),
+        meta: { requiresAdmin: true, requiredPermission: 'system:manage_orgs', title: '组织详情' }
+      },
+      {
         path: 'admin/groups',
         name: 'GroupManagement',
         component: () => import('@/views/admin/GroupManagement.vue'),
