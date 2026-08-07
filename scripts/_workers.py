@@ -234,6 +234,105 @@ def _git_has_unrelated_changes() -> bool:
     return False
 
 
+def _git_commit_and_push_stray_changes(worker_id: str) -> bool:
+    """
+    兜底：将共享工作区中所有非队列、非脚本的改动强制 commit + push。
+
+    触发场景：多个 consumer 同时修改了同一个共享文件（如 IssueCreatePanel.vue），
+    其中一个提交成功，另一个的 commit 失败（"可能无变更"），但文件仍处于 modified 状态，
+    导致 _git_has_unrelated_changes() 持续返回 True，整个消费者队列死锁。
+
+    本函数在等待超时后自动接管，把这些"无主改动"提交并推送出去，恢复队列。
+    """
+    label = worker_id
+    try:
+        # 只 stage 非队列、非脚本的改动文件
+        status_result = subprocess.run(
+            ["git", "status", "--porcelain=v1", "--untracked-files=all"],
+            capture_output=True, text=True, cwd=str(WORKSPACE),
+            encoding="utf-8", errors="replace", timeout=15,
+        )
+        if status_result.returncode != 0:
+            return False
+
+        ignored_prefixes = (
+            "requirements/", "test/", "scripts/log/", "scripts/.auto_iterate_parallel.lock",
+            ".claude/", ".kiro/",
+        )
+        automation_files = {
+            "scripts/_config.py", "scripts/_kiro.py", "scripts/_claude.py",
+            "scripts/_parsers.py", "scripts/_playwright.py", "scripts/_utils.py",
+            "scripts/_workers.py", "scripts/auto_iterate_parallel.py",
+        }
+        stray_files: list[str] = []
+        for line in status_result.stdout.splitlines():
+            if len(line) < 4:
+                continue
+            path_text = line[3:].strip().replace('\\', '/')
+            paths = [part.strip() for part in path_text.split(" -> ")]
+            for path in paths:
+                if path not in automation_files and not path.startswith(ignored_prefixes):
+                    stray_files.append(path)
+
+        if not stray_files:
+            log.info(f"[{label}] 兜底检查：工作区已干净，无需提交")
+            return True
+
+        log.warning(f"[{label}] 🔧 兜底 commit：检测到 {len(stray_files)} 个无主改动文件：{', '.join(stray_files[:10])}")
+
+        # git add
+        add_result = subprocess.run(
+            ["git", "add", "--"] + stray_files,
+            capture_output=True, text=True, cwd=str(WORKSPACE),
+            encoding="utf-8", errors="replace", timeout=30,
+        )
+        if add_result.returncode != 0:
+            log.warning(f"[{label}] 兜底 git add 失败: {add_result.stderr.strip()}")
+            return False
+
+        # 检查是否真的有 staged 内容
+        diff_result = subprocess.run(
+            ["git", "diff", "--cached", "--quiet"],
+            cwd=str(WORKSPACE), timeout=15,
+        )
+        if diff_result.returncode == 0:
+            log.info(f"[{label}] 兜底：文件已被其他 worker 提交，工作区已对齐，无需再次提交")
+            return True
+
+        # git commit
+        commit_result = subprocess.run(
+            ["git", "commit", "-m", f"chore: commit shared files to unblock consumer queue [{worker_id}]"],
+            capture_output=True, text=True, cwd=str(WORKSPACE),
+            encoding="utf-8", errors="replace", timeout=60,
+        )
+        if commit_result.returncode != 0:
+            log.warning(f"[{label}] 兜底 git commit 失败: {commit_result.stderr.strip()}")
+            return False
+
+        log.info(f"[{label}] 🔧 兜底 commit 成功，准备 push")
+
+        # git pull --rebase 再 push
+        subprocess.run(
+            ["git", "pull", "--rebase", "--autostash"],
+            capture_output=True, cwd=str(WORKSPACE), timeout=60,
+        )
+        push_result = subprocess.run(
+            ["git", "push"],
+            capture_output=True, text=True, cwd=str(WORKSPACE),
+            encoding="utf-8", errors="replace", timeout=60,
+        )
+        if push_result.returncode == 0:
+            log.info(f"[{label}] 🔧 兜底 push 成功，队列恢复正常")
+            return True
+        else:
+            log.warning(f"[{label}] 兜底 push 失败: {push_result.stderr.strip()}")
+            return False
+
+    except Exception as e:
+        log.warning(f"[{label}] 兜底 commit/push 异常: {e}")
+        return False
+
+
 def _build_diff_range(commit_before: str, commit_after: str) -> tuple[str, list[str]]:
     """返回安全的变更范围，不再用 HEAD~1 猜测其它需求的提交。"""
     if commit_before and commit_after and commit_before != commit_after:
@@ -972,9 +1071,27 @@ def consumer_loop(worker_id: str) -> None:
                 continue
 
             idle_rounds = 0
+
+            # 检查共享工作区是否有非队列的脏文件
+            # 最多等待 3 轮（约 90 秒），超时后触发兜底 commit/push，避免队列死锁
+            _stray_attr = f"_stray_count_{worker_id}"
             if _git_has_unrelated_changes():
-                time.sleep(30)
-                continue
+                stray_count = getattr(consumer_loop, _stray_attr, 0) + 1
+                setattr(consumer_loop, _stray_attr, stray_count)
+                if stray_count <= 3:
+                    log.warning(f"[{worker_id}] 共享工作区有脏文件，等待 30s（第 {stray_count}/3 轮）")
+                    time.sleep(30)
+                    continue
+                else:
+                    # 超时兜底：强制 commit + push 无主改动，恢复队列
+                    log.warning(f"[{worker_id}] 脏文件超过 3 轮未清理，触发兜底 commit/push")
+                    setattr(consumer_loop, _stray_attr, 0)
+                    with _pipeline_lock("push"):
+                        _git_commit_and_push_stray_changes(worker_id)
+                    time.sleep(10)
+                    continue
+            else:
+                setattr(consumer_loop, _stray_attr, 0)
             first = available[0]
 
             # 超过重试上限 → 移到 rejected/
