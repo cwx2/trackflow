@@ -58,6 +58,9 @@ public class IssueVO {
     /** 已关闭的直接子工单数 */
     private Integer childClosedCount;
 
+    /** 父工单 ID（用于前端树形视图构建） */
+    private String parentId;
+
     /** 投票数冗余字段（来自 issue.vote_count） */
     private Integer voteCount;
 

@@ -20,6 +20,7 @@ public interface IssueConverter extends BaseConverter {
     @Mapping(target = "assigneeId", expression = "java(longToString(entity.getAssigneeId()))")
     @Mapping(target = "reporterId", expression = "java(longToString(entity.getReporterId()))")
     @Mapping(target = "sprintId", expression = "java(longToString(entity.getSprintId()))")
+    @Mapping(target = "parentId", expression = "java(longToString(entity.getParentId()))")
     @Mapping(target = "assigneeName", ignore = true)
     @Mapping(target = "assigneeAvatarUrl", ignore = true)
     @Mapping(target = "reporterName", ignore = true)
