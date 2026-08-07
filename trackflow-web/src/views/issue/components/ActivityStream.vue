@@ -551,7 +551,8 @@ onBeforeUnmount(() => { editEditor.value?.destroy() })
 .check-mark { width: 16px; font-size: 12px; color: var(--tf-accent); }
 .dropdown-divider { height: 1px; background: var(--tf-border-light); margin: 4px 0; }
 
-.stream-item { display: flex; gap: 8px; padding: 12px 0; transition: background 0.2s; }
+.stream-item { display: flex; gap: 8px; padding: 12px 8px; margin: 0 -8px; border-radius: 6px; transition: background 0.2s; }
+.stream-item:hover { background: var(--tf-bg-hover); }
 .stream-item + .stream-item { border-top: 1px solid var(--tf-border-light); }
 .avatar {
   width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
