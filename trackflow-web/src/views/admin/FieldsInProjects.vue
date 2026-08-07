@@ -27,13 +27,16 @@
       </div>
     </div>
 
-    <!-- 加载状态 -->
-    <div v-if="loading" class="loading-state">
-      <a-spin :size="24" />
-    </div>
+    <!-- 内容区域 -->
+    <DataContainer
+      :loading="loading"
+      :is-empty="projectFieldsData.length === 0"
+      empty-title="暂无字段配置"
+      empty-description="创建自定义字段并将其分配到项目中"
+    >
 
     <!-- 按项目分组视图 -->
-    <template v-else-if="groupBy === 'project'">
+    <template v-if="groupBy === 'project'">
       <div v-if="filteredByProject.length === 0" class="empty-state">
         <icon-folder />
         <span>没有匹配的项目</span>
@@ -399,6 +402,7 @@
         </div>
       </div>
     </template>
+    </DataContainer>
 
     <!-- 附加字段弹窗（双视图：选择已有 / 新建字段） -->
     <a-modal
@@ -490,6 +494,7 @@ import { IconSearch, IconRight, IconPlus, IconFolder, IconFile, IconLeft, IconDe
 import { Message, Modal } from '@arco-design/web-vue'
 import { customFieldApi } from '@/api'
 import type { ProjectFieldsVO, FieldSummaryVO, CustomFieldDefinitionVO } from '@/api/types'
+import DataContainer from '@/components/base/DataContainer.vue'
 
 // Tooltip 提示文本（避免 HTML attribute 中的引号问题）
 const tooltipRequiredText = '设置为「不允许为空」+ 无默认值时，用户创建工单必须主动选择（参考 YouTrack "Set value"）'

@@ -77,6 +77,12 @@
     </AdminTableToolbar>
 
     <!-- 审计日志列表 -->
+    <DataContainer
+      :loading="loading"
+      :is-empty="logs.length === 0"
+      empty-title="暂无审计日志"
+      empty-description="权限变更操作将自动记录在此"
+    >
     <div class="data-table">
       <div class="table-header">
         <div class="col" style="width: 160px">时间</div>
@@ -87,10 +93,6 @@
         <div class="col" style="flex: 1">变更详情</div>
       </div>
       <div class="table-body">
-        <div v-if="loading" class="loading-row">
-          <span class="loading-text">加载中...</span>
-        </div>
-        <template v-else-if="logs.length > 0">
           <div v-for="log in logs" :key="log.id" class="table-row">
             <div class="col" style="width: 160px">
               <span class="time-text">{{ formatDateTime(log.createdAt) }}</span>
@@ -113,14 +115,9 @@
               <span class="detail-text">{{ formatDetails(log) }}</span>
             </div>
           </div>
-        </template>
-        <div v-else class="empty-state">
-          <div class="empty-icon">📋</div>
-          <h3 class="empty-title">暂无审计日志</h3>
-          <p class="empty-desc">权限变更操作将自动记录在此</p>
-        </div>
       </div>
     </div>
+    </DataContainer>
 
     <!-- 分页 -->
     <AdminPagination
@@ -139,6 +136,7 @@ import { auditLogApi } from '@/api'
 import type { AuditLogVO } from '@/api/auditLog'
 import { Message } from '@arco-design/web-vue'
 import { AdminPageLayout, AdminPagination, AdminTableToolbar } from '@/components/admin'
+import DataContainer from '@/components/base/DataContainer.vue'
 import { usePagedList } from '@/composables/usePagedList'
 
 interface AuditLogFilters {

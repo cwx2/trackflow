@@ -8,25 +8,14 @@
       </router-link>
     </div>
 
-    <!-- 加载中 -->
-    <div v-if="loading" class="loading-state">
-      <a-spin :size="20" />
-      <span>加载组织信息...</span>
-    </div>
-
-    <!-- 错误状态 -->
-    <div v-else-if="error" class="error-state">
-      <div class="error-icon">⚠️</div>
-      <h3>加载失败</h3>
-      <p>{{ error }}</p>
-      <div class="error-actions">
-        <a-button @click="router.push('/admin/organizations')">返回组织列表</a-button>
-        <a-button type="primary" @click="loadOrg">重试</a-button>
-      </div>
-    </div>
-
+    <DataContainer
+      :loading="loading"
+      :error="error"
+      :is-empty="false"
+      :retry="loadOrg"
+    >
     <!-- 组织详情 -->
-    <template v-else-if="org">
+    <template v-if="org">
       <div class="org-header">
         <div class="org-info">
           <h1 class="org-title">{{ org.name }}</h1>
@@ -173,6 +162,7 @@
         </a-tab-pane>
       </a-tabs>
     </template>
+    </DataContainer>
 
     <!-- 添加项目弹窗 -->
     <a-modal
@@ -234,6 +224,7 @@ import { useConfirmDelete } from '@/composables/useConfirmDelete'
 import type { TableColumnData } from '@arco-design/web-vue'
 import { organizationApi, userApi, roleApi } from '@/api'
 import type { OrgDetailVO, OrgProjectVO, OrgAccessVO } from '@/api/organization'
+import DataContainer from '@/components/base/DataContainer.vue'
 
 const route = useRoute()
 const router = useRouter()

@@ -7,12 +7,7 @@
       <p class="settings-desc">配置系统级时间追踪参数，影响所有项目的工时单位换算和时间表显示。</p>
     </div>
 
-    <div v-if="loading" class="settings-loading">
-      <a-spin :size="20" />
-      <span>加载中...</span>
-    </div>
-
-    <template v-else>
+    <DataContainer :loading="loading" :is-empty="false">
       <!-- Hours per day -->
       <div class="settings-section">
         <div class="section-header">
@@ -88,7 +83,7 @@
           重置
         </a-button>
       </div>
-    </template>
+    </DataContainer>
 
     <!-- Recalculation Strategy Dialog -->
     <a-modal
@@ -203,6 +198,7 @@ import { ref, reactive, computed, onMounted, nextTick } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { systemSettingApi } from '@/api/systemSetting'
 import type { TimeTrackingSettingsVO, UpdateTimeTrackingSettingsDTO } from '@/api/systemSetting'
+import DataContainer from '@/components/base/DataContainer.vue'
 
 const loading = ref(true)
 const saving = ref(false)

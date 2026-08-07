@@ -13,7 +13,7 @@
       </div>
     </template>
 
-    <a-spin :loading="loading" style="width: 100%">
+    <DataContainer :loading="loading" :is-empty="false">
       <!-- 说明文字 -->
       <a-alert class="guard-info" type="info" :show-icon="true">
         <template #title>什么是守卫条件？</template>
@@ -124,7 +124,7 @@
           <li><strong>子工单已关闭</strong> — 所有直接子工单必须处于已关闭状态</li>
         </ul>
       </div>
-    </a-spin>
+    </DataContainer>
 
     <!-- 底部操作 -->
     <div class="panel-footer">
@@ -151,6 +151,7 @@ import { Message } from '@arco-design/web-vue'
 import { IconPlus, IconDelete, IconCheckCircle } from '@arco-design/web-vue/es/icon'
 import { workflowApi } from '@/api'
 import type { TransitionConditionItem } from '@/api/workflow'
+import DataContainer from '@/components/base/DataContainer.vue'
 
 /** 内部扩展类型，包含 conditionMode 用于 UI 分支 */
 interface ConditionRow {

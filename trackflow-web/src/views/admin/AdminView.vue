@@ -1,20 +1,14 @@
 <template>
   <div class="admin-page">
-    <!-- 权限加载中 -->
-    <div v-if="loading" class="admin-loading">
-      <span class="loading-text">加载中...</span>
-    </div>
-
-    <!-- 无权限 -->
-    <div v-else-if="!hasAnyAdminPermission" class="admin-forbidden">
-      <div class="forbidden-icon">🔒</div>
-      <h2 class="forbidden-title">无访问权限</h2>
-      <p class="forbidden-desc">你没有系统管理权限，无法访问此页面</p>
-      <router-link to="/" class="forbidden-btn">返回首页</router-link>
-    </div>
+    <!-- 权限加载中 / 无权限 -->
+    <DataContainer
+      :loading="loading"
+      :is-empty="!hasAnyAdminPermission"
+      empty-title="无访问权限"
+      empty-description="你没有系统管理权限，无法访问此页面"
+    >
 
     <!-- 正常内容 -->
-    <template v-else>
       <div class="admin-header">
         <h1 class="admin-title">系统管理</h1>
         <p class="admin-desc">管理用户、角色、组织和系统配置</p>
@@ -35,13 +29,14 @@
           <span class="card-arrow">→</span>
         </router-link>
       </div>
-    </template>
+    </DataContainer>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, ref, onMounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
+import DataContainer from '@/components/base/DataContainer.vue'
 
 const authStore = useAuthStore()
 const loading = ref(true)

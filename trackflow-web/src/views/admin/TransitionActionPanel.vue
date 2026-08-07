@@ -13,31 +13,36 @@
       </div>
     </template>
 
-    <a-spin :loading="loading" style="width: 100%">
-      <!-- 转换显示名称配置 -->
-      <div class="transition-name-section">
-        <div class="section-label">转换名称</div>
-        <div class="name-input-row">
-          <a-input
-            v-model="editTransitionName"
-            :max-length="100"
-            placeholder="留空则显示目标状态名"
-            allow-clear
-            @press-enter="saveTransitionName"
-          />
-          <a-button
-            type="primary"
-            size="small"
-            :loading="nameSaving"
-            :disabled="nameSaving"
-            @click="saveTransitionName"
-          >保存</a-button>
-        </div>
-        <div class="name-hint">配置后，工单状态下拉将显示此名称而非目标状态名（如"开始处理"）</div>
+    <!-- 转换显示名称配置 -->
+    <div class="transition-name-section">
+      <div class="section-label">转换名称</div>
+      <div class="name-input-row">
+        <a-input
+          v-model="editTransitionName"
+          :max-length="100"
+          placeholder="留空则显示目标状态名"
+          allow-clear
+          @press-enter="saveTransitionName"
+        />
+        <a-button
+          type="primary"
+          size="small"
+          :loading="nameSaving"
+          :disabled="nameSaving"
+          @click="saveTransitionName"
+        >保存</a-button>
       </div>
+      <div class="name-hint">配置后，工单状态下拉将显示此名称而非目标状态名（如"开始处理"）</div>
+    </div>
 
+    <DataContainer
+      :loading="loading"
+      :is-empty="actions.length === 0"
+      empty-title="暂无配置的动作"
+      empty-description="为此转换路径添加自动化动作，如自动分配负责人。"
+    >
       <!-- 动作列表 -->
-      <div v-if="actions.length > 0" class="action-list">
+      <div class="action-list">
         <div
           v-for="action in actions"
           :key="action.id"
@@ -85,13 +90,7 @@
         </div>
       </div>
 
-      <!-- 空状态 -->
-      <div v-else-if="!loading" class="empty-state">
-        <icon-thunderbolt :size="36" style="color: var(--color-text-4)" />
-        <p class="empty-title">暂无配置的动作</p>
-        <p class="empty-desc">为此转换路径添加自动化动作，如自动分配负责人。</p>
-      </div>
-    </a-spin>
+    </DataContainer>
 
     <!-- 底部操作 -->
     <div class="panel-footer">
@@ -121,6 +120,7 @@ import { IconPlus, IconThunderbolt, IconExclamationCircleFill } from '@arco-desi
 import { transitionActionApi, workflowApi } from '@/api'
 import type { TransitionActionVO } from '@/api/transitionAction'
 import TransitionActionForm from './TransitionActionForm.vue'
+import DataContainer from '@/components/base/DataContainer.vue'
 
 const props = defineProps<{
   visible: boolean
@@ -397,27 +397,6 @@ function strategyDescription(config: TransitionActionVO['actionConfig'], actionT
   align-items: center;
   gap: 4px;
   flex-shrink: 0;
-}
-
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 48px 24px;
-  text-align: center;
-}
-
-.empty-title {
-  margin-top: 12px;
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--text-secondary, var(--color-text-2));
-}
-
-.empty-desc {
-  margin-top: 4px;
-  font-size: 12px;
-  color: var(--text-muted, var(--color-text-4));
 }
 
 .panel-footer {

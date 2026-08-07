@@ -29,8 +29,13 @@
     </div>
 
     <!-- 活动列表 -->
-    <a-spin :loading="loading">
-      <div v-if="activities.length > 0" class="activity-list">
+    <DataContainer
+      :loading="loading"
+      :is-empty="activities.length === 0"
+      empty-title="暂无变更记录"
+      empty-description="保存工作流配置后，变更历史将显示在这里。"
+    >
+      <div class="activity-list">
         <div
           v-for="activity in activities"
           :key="activity.id"
@@ -74,14 +79,7 @@
           </div>
         </div>
       </div>
-
-      <!-- 空状态 -->
-      <div v-else-if="!loading" class="empty-state">
-        <icon-history :size="40" />
-        <h4>暂无变更记录</h4>
-        <p>保存工作流配置后，变更历史将显示在这里。</p>
-      </div>
-    </a-spin>
+    </DataContainer>
 
     <!-- 分页 -->
     <AdminPagination
@@ -103,6 +101,7 @@ import { IconPlusCircle, IconMinusCircle, IconHistory } from '@arco-design/web-v
 import { workflowApi } from '@/api'
 import { localizeIssueType } from '@/utils/fieldLabels'
 import { AdminPagination } from '@/components/admin'
+import DataContainer from '@/components/base/DataContainer.vue'
 import type { WorkflowActivityVO } from '@/api/types'
 import { usePagedList } from '@/composables/usePagedList'
 

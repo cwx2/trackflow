@@ -19,8 +19,15 @@
     </div>
 
     <!-- 规则列表 -->
-    <a-spin :loading="loading">
-      <div v-if="filteredRules.length > 0" class="rules-list">
+    <DataContainer
+      :loading="loading"
+      :is-empty="filteredRules.length === 0"
+      empty-title="暂无定时规则"
+      empty-description="创建 on-schedule 规则，按计划定期检查工单并自动执行动作。"
+      create-action="创建第一条定时规则"
+      @create="showCreateModal"
+    >
+      <div class="rules-list">
         <div
           v-for="rule in filteredRules"
           :key="rule.id"
@@ -80,18 +87,7 @@
           </div>
         </div>
       </div>
-
-      <!-- 空状态 -->
-      <div v-else class="empty-state">
-        <icon-clock-circle style="font-size: 48px; color: var(--color-text-4)" />
-        <h3>暂无定时规则</h3>
-        <p>创建 on-schedule 规则，按计划定期检查工单并自动执行动作。</p>
-        <a-button type="primary" @click="showCreateModal">
-          <template #icon><icon-plus /></template>
-          创建第一条定时规则
-        </a-button>
-      </div>
-    </a-spin>
+    </DataContainer>
 
     <!-- 创建/编辑弹窗 -->
     <a-modal
@@ -330,6 +326,7 @@ import { CronExpressionParser } from 'cron-parser'
 import { workflowRuleApi, projectApi } from '@/api'
 import type { WorkflowRuleVO, WorkflowRuleDTO, WorkflowRuleExecutionLogVO } from '@/api/workflowRule'
 import VariableInput from './components/VariableInput.vue'
+import DataContainer from '@/components/base/DataContainer.vue'
 
 const props = defineProps<{
   projectId: string

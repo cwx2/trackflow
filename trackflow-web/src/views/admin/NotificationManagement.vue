@@ -7,12 +7,7 @@
       <p class="settings-desc">配置全局通知策略、默认偏好和保留策略。管理系统级通知行为。</p>
     </div>
 
-    <div v-if="loading" class="settings-loading">
-      <a-spin :size="20" />
-      <span>加载中...</span>
-    </div>
-
-    <template v-else>
+    <DataContainer :loading="loading" :is-empty="false">
       <!-- 通知统计概览 -->
       <div class="settings-section">
         <div class="section-header">
@@ -402,7 +397,7 @@
           重置
         </a-button>
       </div>
-    </template>
+    </DataContainer>
   </div>
 </template>
 
@@ -411,6 +406,7 @@ import { ref, reactive, onMounted, watch, computed } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { notificationAdminApi } from '@/api/notificationAdmin'
 import type { NotificationSettingsVO, NotificationStatsVO, EmailConfigVO, NotificationOutboxVO, OutboxStats } from '@/api/notificationAdmin'
+import DataContainer from '@/components/base/DataContainer.vue'
 
 const loading = ref(true)
 const saving = ref(false)

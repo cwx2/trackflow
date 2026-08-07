@@ -19,18 +19,15 @@
 
     <!-- 执行列表 -->
     <div class="page-content">
-      <a-spin :loading="loading" class="full-spin">
-        <div v-if="!loading && executions.length === 0" class="empty-state">
-          <div class="empty-icon">📋</div>
-          <h3 class="empty-title">暂无执行记录</h3>
-          <p class="empty-desc">在工作流编辑器中点击「试运行」开始第一次执行</p>
-          <a-button type="primary" @click="router.push(`/automation/${workflowId}`)">
-            打开编辑器
-          </a-button>
-        </div>
-
+      <DataContainer
+        :loading="loading"
+        :is-empty="executions.length === 0"
+        empty-title="暂无执行记录"
+        empty-description="在工作流编辑器中点击「试运行」开始第一次执行"
+        create-action="打开编辑器"
+        @create="router.push(`/automation/${workflowId}`)"
+      >
         <a-table
-          v-else
           :data="executions"
           :columns="columns"
           :pagination="{ total: total, current: pagination.page, pageSize: pagination.pageSize, showTotal: true, showPageSize: true, pageSizeOptions: [20, 50, 100] }"
@@ -60,7 +57,7 @@
             </a-button>
           </template>
         </a-table>
-      </a-spin>
+      </DataContainer>
     </div>
 
     <!-- 执行详情抽屉 -->
@@ -77,6 +74,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { automationApi, type ExecutionVO } from '@/api'
 import ExecutionDetailDrawer from './components/ExecutionDetailDrawer.vue'
 import { usePagedList } from '@/composables/usePagedList'
+import DataContainer from '@/components/base/DataContainer.vue'
 
 const route = useRoute()
 const router = useRouter()

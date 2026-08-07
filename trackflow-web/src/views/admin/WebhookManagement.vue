@@ -26,22 +26,15 @@
 
     <!-- Webhook 列表 -->
     <template v-else>
-      <div v-if="loading" class="loading-state">
-        <a-spin :size="20" />
-        <span>加载中...</span>
-      </div>
-
-      <div v-else-if="webhooks.length === 0" class="empty-state">
-        <div class="empty-icon">🪝</div>
-        <p class="empty-title">暂无 Webhook</p>
-        <p class="empty-desc">创建 Webhook 来接收项目事件通知</p>
-        <a-button type="outline" size="small" style="margin-top: 12px" @click="openCreateDialog">
-          <template #icon><icon-plus /></template>
-          创建 Webhook
-        </a-button>
-      </div>
-
-      <div v-else class="webhook-list">
+      <DataContainer
+        :loading="loading"
+        :is-empty="webhooks.length === 0"
+        empty-title="暂无 Webhook"
+        empty-description="创建 Webhook 来接收项目事件通知"
+        create-action="创建 Webhook"
+        @create="openCreateDialog"
+      >
+        <div class="webhook-list">
         <div v-for="wh in webhooks" :key="wh.id" class="webhook-card">
           <div class="webhook-main">
             <div class="webhook-header">
@@ -84,6 +77,7 @@
           </div>
         </div>
       </div>
+      </DataContainer>
     </template>
 
     <!-- 创建/编辑弹窗 -->
@@ -129,14 +123,13 @@
       :width="700"
       :footer="false"
     >
-      <div v-if="logsLoading" class="loading-state">
-        <a-spin :size="20" />
-        <span>加载中...</span>
-      </div>
-      <div v-else-if="logs.length === 0" class="empty-section">
-        暂无投递记录
-      </div>
-      <div v-else class="log-list">
+      <DataContainer
+        :loading="logsLoading"
+        :is-empty="logs.length === 0"
+        empty-title="暂无投递记录"
+        empty-description="Webhook 触发后，投递日志将在此显示"
+      >
+      <div class="log-list">
         <div v-for="log in logs" :key="log.id" class="log-item" @click="toggleLogDetail(log.id)">
           <div class="log-summary">
             <span class="log-status" :class="log.success ? 'success' : 'failed'">
@@ -168,6 +161,7 @@
           />
         </div>
       </div>
+      </DataContainer>
     </a-modal>
 
     <!-- 删除确认弹窗 -->
@@ -193,6 +187,7 @@ import { Message } from '@arco-design/web-vue'
 import { projectApi, webhookApi } from '@/api'
 import type { WebhookVO, WebhookLogVO } from '@/api/webhook'
 import AdminPageLayout from '@/components/admin/AdminPageLayout.vue'
+import DataContainer from '@/components/base/DataContainer.vue'
 
 // === State ===
 const projects = ref<{ id: string; name: string; key: string }[]>([])
@@ -459,48 +454,6 @@ onMounted(async () => {
   font-size: 12px;
   color: var(--tf-text-tertiary);
   font-weight: 500;
-}
-
-/* Empty & Loading */
-.empty-state, .loading-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 60px 20px;
-  text-align: center;
-}
-
-.loading-state {
-  flex-direction: row;
-  gap: 8px;
-  color: var(--tf-text-tertiary);
-  font-size: 13px;
-}
-
-.empty-icon {
-  font-size: 40px;
-  margin-bottom: 12px;
-}
-
-.empty-title {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--tf-text-primary);
-  margin: 0 0 6px 0;
-}
-
-.empty-desc {
-  font-size: 12px;
-  color: var(--tf-text-tertiary);
-  margin: 0;
-}
-
-.empty-section {
-  padding: 24px;
-  text-align: center;
-  color: var(--tf-text-tertiary);
-  font-size: 13px;
 }
 
 /* Webhook list */

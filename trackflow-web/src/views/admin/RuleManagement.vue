@@ -11,10 +11,17 @@
     <a-tabs v-model:active-key="activeTab" class="rule-tabs">
       <!-- Tab 1: 规则列表 -->
       <a-tab-pane key="rules" title="规则列表">
+        <DataContainer
+          :loading="loadingRules"
+          :is-empty="rules.length === 0"
+          empty-title="暂无计分规则"
+          empty-description="创建规则来实现工单计分与统计"
+          create-action="创建规则"
+          @create="showCreateForm"
+        >
         <div class="rule-list">
           <a-table
             :data="rules"
-            :loading="loadingRules"
             :pagination="false"
             row-key="id"
             :bordered="false"
@@ -82,6 +89,7 @@
             </template>
           </a-table>
         </div>
+        </DataContainer>
       </a-tab-pane>
 
       <!-- Tab 2: 执行记录 -->
@@ -309,6 +317,7 @@ import { Message } from '@arco-design/web-vue'
 import { useRouter } from 'vue-router'
 import { scoreRuleApi } from '@/api'
 import AdminPageLayout from '@/components/admin/AdminPageLayout.vue'
+import DataContainer from '@/components/base/DataContainer.vue'
 import type { RuleDefinitionVO, RuleExecutionLogVO, RuleStatisticsVO } from '@/api/scoreRule'
 
 const router = useRouter()

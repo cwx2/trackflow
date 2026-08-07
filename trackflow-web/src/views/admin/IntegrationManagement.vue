@@ -4,13 +4,13 @@
       <!-- 适配器列表 Tab -->
       <a-tab-pane key="adapters" title="适配器">
         <div class="adapters-section">
-          <a-spin :loading="adaptersLoading" class="full-spin">
-            <div v-if="adapters.length === 0 && !adaptersLoading" class="empty-state">
-              <div class="empty-icon">🔌</div>
-              <h3 class="empty-title">暂无适配器</h3>
-              <p class="empty-desc">系统尚未注册任何第三方集成适配器</p>
-            </div>
-            <div v-else class="adapter-grid">
+          <DataContainer
+            :loading="adaptersLoading"
+            :is-empty="adapters.length === 0"
+            empty-title="暂无适配器"
+            empty-description="系统尚未注册任何第三方集成适配器"
+          >
+            <div class="adapter-grid">
               <div
                 v-for="adapter in adapters"
                 :key="adapter.adapterType"
@@ -65,7 +65,7 @@
                 </div>
               </div>
             </div>
-          </a-spin>
+          </DataContainer>
         </div>
       </a-tab-pane>
 
@@ -239,6 +239,7 @@ import { Message } from '@arco-design/web-vue'
 import { integrationAdminApi } from '@/api'
 import type { IntegrationAdapterVO, IntegrationConfigVO, IntegrationLogVO } from '@/api/integrationAdmin'
 import AdminPageLayout from '@/components/admin/AdminPageLayout.vue'
+import DataContainer from '@/components/base/DataContainer.vue'
 
 const activeTab = ref('adapters')
 
@@ -690,30 +691,5 @@ onMounted(() => {
   gap: 8px;
 }
 
-/* 空状态 */
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 64px 0;
-}
-
-.empty-icon {
-  font-size: 40px;
-  margin-bottom: 16px;
-}
-
-.empty-title {
-  font-size: 16px;
-  font-weight: 500;
-  color: var(--tf-text-primary);
-  margin: 0 0 8px 0;
-}
-
-.empty-desc {
-  font-size: 13px;
-  color: var(--tf-text-tertiary);
-  margin: 0;
-}
+/* 适配器卡片 */
 </style>
