@@ -385,7 +385,7 @@ function commitDesc(content: string) {
 .detail-main {
   flex: 1;
   overflow-y: auto;
-  padding: 0 24px 48px;
+  padding: 0 24px 24px;
   min-width: 0;
 }
 

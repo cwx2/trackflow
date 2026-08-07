@@ -38,78 +38,82 @@
     />
 
     <div class="page-body">
-      <DetailMainContent
-        :issue-key="issue.issueKey"
-        :issue-type="issue.issueType"
-        :title="issue.title"
-        :description="issue.description || ''"
-        :tags="issueTags"
-        :available-tags="projectTags"
-        :links="issueLinks"
-        :attachments="issueAttachments"
-        :readonly="!canEditIssueEffective"
-        :can-delete="canDeleteIssue"
-        :can-move="canMoveIssue"
-        :show-add-time="projectTimeTrackingEnabled && canLogTime"
-        :children="issue.children || []"
-        :child-progress="issue.childProgress || null"
-        @update-title="onUpdateTitle"
-        @update-desc="onUpdateDesc"
-        @remove-tag="onRemoveTag"
-        @add-tag="onAddTag"
-        @add-tags="onAddTags"
-        @create-tag="onCreateTag"
-        @add-link="openAddLinkModal"
-        @delete-link="onDeleteLink"
-        @upload="triggerUpload(false)"
-        @upload-private="triggerUpload(true)"
-        @upload-files="onDropFiles"
-        @delete-attachment="onDeleteAttachment"
-        @delete-all-attachments="onDeleteAllAttachments"
-        @copy-id="onCopyId"
-        @clone="onCloneIssue"
-        @create-subtask="onCreateSubtask"
-        @move="onMoveIssue"
-        @delete="onDeleteIssue"
-        @add-time="openTimeDialog"
-      >
-        <template #activity>
-          <div ref="activityStreamRef" class="activity-stream-anchor">
-          <ActivityStream
-            :items="activityItems"
-            :current-user-id="currentUserId"
-            :can-manage-comments="canManageComments"
-            :can-comment="canCommentEffective"
-            :show-add-time="projectTimeTrackingEnabled && canLogTime"
-            :has-more="activityHasMore"
-            :loading-more="activityLoadingMore"
-            :total-activities="activityTotal"
-            :loaded-activities="activities.length"
-            @edit-comment="onEditComment"
-            @delete-comment="onDeleteComment"
-            @restore-comment="onRestoreComment"
-            @permanently-delete-comment="onPermanentlyDeleteComment"
-            @reply-comment="onReplyComment"
-            @add-time="openTimeDialog"
-            @load-more="loadMoreActivities"
-          />
-          <CommentInput
-            v-if="canCommentEffective"
-            ref="commentInputRef"
-            :project-id="issue?.projectId"
-            :show-add-time="projectTimeTrackingEnabled && canLogTime"
-            :can-set-visibility="canEditIssue"
-            :timer-running="timerStore.isRunning"
-            :timer-issue-match="timerStore.issueId === issue?.id"
-            :timer-elapsed="timerStore.elapsedDisplay"
-            @submit="onAddComment"
-            @add-time="openTimeDialog"
-            @start-timer="handleStartTimer"
-            @stop-timer="handleStopTimerFromDetail"
-          />
-          </div>
-        </template>
-      </DetailMainContent>
+      <div class="detail-main-column">
+        <DetailMainContent
+          :issue-key="issue.issueKey"
+          :issue-type="issue.issueType"
+          :title="issue.title"
+          :description="issue.description || ''"
+          :tags="issueTags"
+          :available-tags="projectTags"
+          :links="issueLinks"
+          :attachments="issueAttachments"
+          :readonly="!canEditIssueEffective"
+          :can-delete="canDeleteIssue"
+          :can-move="canMoveIssue"
+          :show-add-time="projectTimeTrackingEnabled && canLogTime"
+          :children="issue.children || []"
+          :child-progress="issue.childProgress || null"
+          @update-title="onUpdateTitle"
+          @update-desc="onUpdateDesc"
+          @remove-tag="onRemoveTag"
+          @add-tag="onAddTag"
+          @add-tags="onAddTags"
+          @create-tag="onCreateTag"
+          @add-link="openAddLinkModal"
+          @delete-link="onDeleteLink"
+          @upload="triggerUpload(false)"
+          @upload-private="triggerUpload(true)"
+          @upload-files="onDropFiles"
+          @delete-attachment="onDeleteAttachment"
+          @delete-all-attachments="onDeleteAllAttachments"
+          @copy-id="onCopyId"
+          @clone="onCloneIssue"
+          @create-subtask="onCreateSubtask"
+          @move="onMoveIssue"
+          @delete="onDeleteIssue"
+          @add-time="openTimeDialog"
+        >
+          <template #activity>
+            <div ref="activityStreamRef" class="activity-stream-anchor">
+            <ActivityStream
+              :items="activityItems"
+              :current-user-id="currentUserId"
+              :can-manage-comments="canManageComments"
+              :can-comment="canCommentEffective"
+              :show-add-time="projectTimeTrackingEnabled && canLogTime"
+              :has-more="activityHasMore"
+              :loading-more="activityLoadingMore"
+              :total-activities="activityTotal"
+              :loaded-activities="activities.length"
+              @edit-comment="onEditComment"
+              @delete-comment="onDeleteComment"
+              @restore-comment="onRestoreComment"
+              @permanently-delete-comment="onPermanentlyDeleteComment"
+              @reply-comment="onReplyComment"
+              @add-time="openTimeDialog"
+              @load-more="loadMoreActivities"
+            />
+            </div>
+          </template>
+        </DetailMainContent>
+
+        <CommentInput
+          v-if="canCommentEffective"
+          ref="commentInputRef"
+          class="comment-input-fixed"
+          :project-id="issue?.projectId"
+          :show-add-time="projectTimeTrackingEnabled && canLogTime"
+          :can-set-visibility="canEditIssue"
+          :timer-running="timerStore.isRunning"
+          :timer-issue-match="timerStore.issueId === issue?.id"
+          :timer-elapsed="timerStore.elapsedDisplay"
+          @submit="onAddComment"
+          @add-time="openTimeDialog"
+          @start-timer="handleStartTimer"
+          @stop-timer="handleStopTimerFromDetail"
+        />
+      </div>
 
       <DetailSidebar
         ref="sidebarRef"
@@ -859,6 +863,24 @@ onBeforeRouteLeave((_to, _from, next) => {
   flex: 1;
   display: flex;
   overflow: hidden;
+}
+
+.detail-main-column {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.comment-input-fixed {
+  flex-shrink: 0;
+  border-top: 1px solid var(--tf-border-light);
+  padding: 12px 24px 16px;
+}
+
+.comment-input-fixed :deep(.comment-input) {
+  margin-top: 0;
 }
 
 .loading-page {
