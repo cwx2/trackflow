@@ -8,78 +8,73 @@
     </template>
 
     <!-- 搜索与过滤 -->
-    <div class="filter-bar">
-      <a-input-search
-        v-model="filters.search"
-        placeholder="搜索审计日志... (支持 author:xxx / target:xxx)"
+    <AdminTableToolbar
+      v-model="filters.search"
+      search-placeholder="搜索审计日志... (支持 author:xxx / target:xxx)"
+      :search-width="480"
+      @search="resetAndLoad"
+      @clear="resetAndLoad"
+    >
+      <a-select v-model="filters.action" placeholder="全部操作" size="small" allow-clear style="width: 160px" @change="resetAndLoad">
+        <a-option-group label="认证">
+          <a-option value="login">用户登录</a-option>
+          <a-option value="first_login">首次登录</a-option>
+          <a-option value="login_failed">登录失败</a-option>
+          <a-option value="api_key_used">使用 API Key</a-option>
+          <a-option value="api_key_failed">API Key 失败</a-option>
+        </a-option-group>
+        <a-option-group label="用户管理">
+          <a-option value="create_user">创建用户</a-option>
+          <a-option value="disable_user">禁用用户</a-option>
+          <a-option value="enable_user">启用用户</a-option>
+          <a-option value="assign_global_role">分配系统角色</a-option>
+          <a-option value="remove_global_role">移除系统角色</a-option>
+        </a-option-group>
+        <a-option-group label="用户组">
+          <a-option value="create_group">创建用户组</a-option>
+          <a-option value="update_group">编辑用户组</a-option>
+          <a-option value="delete_group">删除用户组</a-option>
+          <a-option value="add_group_members">添加组成员</a-option>
+          <a-option value="remove_group_members">移除组成员</a-option>
+          <a-option value="assign_group_role">分配组角色</a-option>
+        </a-option-group>
+        <a-option-group label="角色与权限">
+          <a-option value="clone_role">克隆角色</a-option>
+          <a-option value="update_role_permissions">修改角色权限</a-option>
+        </a-option-group>
+        <a-option-group label="API Key">
+          <a-option value="create_api_key">创建 API Key</a-option>
+          <a-option value="revoke_api_key">吊销 API Key</a-option>
+          <a-option value="revoke_all_api_keys">吊销所有 API Key</a-option>
+        </a-option-group>
+        <a-option-group label="系统设置">
+          <a-option value="time_tracking_settings_update">修改工时设置</a-option>
+        </a-option-group>
+        <a-option-group label="项目管理">
+          <a-option value="create_project">创建项目</a-option>
+          <a-option value="update_project">修改项目</a-option>
+          <a-option value="archive_project">归档项目</a-option>
+          <a-option value="delete_project">删除项目</a-option>
+          <a-option value="update_project_member_role">修改成员角色</a-option>
+          <a-option value="remove_project_member">移除项目成员</a-option>
+        </a-option-group>
+      </a-select>
+      <a-select v-model="filters.targetType" placeholder="全部目标" size="small" allow-clear style="width: 120px" @change="resetAndLoad">
+        <a-option value="auth">认证</a-option>
+        <a-option value="user">用户</a-option>
+        <a-option value="user_group">用户组</a-option>
+        <a-option value="role">角色</a-option>
+        <a-option value="project">项目</a-option>
+        <a-option value="api_key">API Key</a-option>
+        <a-option value="system_setting">系统设置</a-option>
+      </a-select>
+      <a-range-picker
         size="small"
-        allow-clear
-        style="max-width: 480px"
-        @search="resetAndLoad"
-        @clear="resetAndLoad"
+        style="width: 240px"
+        :model-value="dateRange"
+        @change="onDateRangeChange"
       />
-      <div class="filter-controls">
-        <a-select v-model="filters.action" placeholder="全部操作" size="small" allow-clear style="width: 160px" @change="resetAndLoad">
-          <a-option-group label="认证">
-            <a-option value="login">用户登录</a-option>
-            <a-option value="first_login">首次登录</a-option>
-            <a-option value="login_failed">登录失败</a-option>
-            <a-option value="api_key_used">使用 API Key</a-option>
-            <a-option value="api_key_failed">API Key 失败</a-option>
-          </a-option-group>
-          <a-option-group label="用户管理">
-            <a-option value="create_user">创建用户</a-option>
-            <a-option value="disable_user">禁用用户</a-option>
-            <a-option value="enable_user">启用用户</a-option>
-            <a-option value="assign_global_role">分配系统角色</a-option>
-            <a-option value="remove_global_role">移除系统角色</a-option>
-          </a-option-group>
-          <a-option-group label="用户组">
-            <a-option value="create_group">创建用户组</a-option>
-            <a-option value="update_group">编辑用户组</a-option>
-            <a-option value="delete_group">删除用户组</a-option>
-            <a-option value="add_group_members">添加组成员</a-option>
-            <a-option value="remove_group_members">移除组成员</a-option>
-            <a-option value="assign_group_role">分配组角色</a-option>
-          </a-option-group>
-          <a-option-group label="角色与权限">
-            <a-option value="clone_role">克隆角色</a-option>
-            <a-option value="update_role_permissions">修改角色权限</a-option>
-          </a-option-group>
-          <a-option-group label="API Key">
-            <a-option value="create_api_key">创建 API Key</a-option>
-            <a-option value="revoke_api_key">吊销 API Key</a-option>
-            <a-option value="revoke_all_api_keys">吊销所有 API Key</a-option>
-          </a-option-group>
-          <a-option-group label="系统设置">
-            <a-option value="time_tracking_settings_update">修改工时设置</a-option>
-          </a-option-group>
-          <a-option-group label="项目管理">
-            <a-option value="create_project">创建项目</a-option>
-            <a-option value="update_project">修改项目</a-option>
-            <a-option value="archive_project">归档项目</a-option>
-            <a-option value="delete_project">删除项目</a-option>
-            <a-option value="update_project_member_role">修改成员角色</a-option>
-            <a-option value="remove_project_member">移除项目成员</a-option>
-          </a-option-group>
-        </a-select>
-        <a-select v-model="filters.targetType" placeholder="全部目标" size="small" allow-clear style="width: 120px" @change="resetAndLoad">
-          <a-option value="auth">认证</a-option>
-          <a-option value="user">用户</a-option>
-          <a-option value="user_group">用户组</a-option>
-          <a-option value="role">角色</a-option>
-          <a-option value="project">项目</a-option>
-          <a-option value="api_key">API Key</a-option>
-          <a-option value="system_setting">系统设置</a-option>
-        </a-select>
-        <a-range-picker
-          size="small"
-          style="width: 240px"
-          :model-value="dateRange"
-          @change="onDateRangeChange"
-        />
-      </div>
-    </div>
+    </AdminTableToolbar>
 
     <!-- 审计日志列表 -->
     <div class="data-table">
@@ -144,7 +139,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { auditLogApi } from '@/api'
 import type { AuditLogVO } from '@/api/auditLog'
 import { Message } from '@arco-design/web-vue'
-import { AdminPageLayout, AdminPagination } from '@/components/admin'
+import { AdminPageLayout, AdminPagination, AdminTableToolbar } from '@/components/admin'
 
 const logs = ref<AuditLogVO[]>([])
 const total = ref(0)
@@ -467,21 +462,6 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.filter-bar {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-bottom: 16px;
-  flex-shrink: 0;
-}
-
-.filter-controls {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
 .data-table {
   width: 100%;
   border: 1px solid var(--border-color);
