@@ -63,10 +63,10 @@
             >⚡ {{ item.detail.ruleName || '自动规则' }}</span>
             <!-- Comment actions: reply + copy link (visible to all relevant users) -->
             <div v-if="item.type === 'comment' && !item.isDeleted && !hideCommentText(item) && editingCommentId !== item.commentId" class="comment-actions" :class="{ 'comment-actions--visible': hoveredId === item.id }">
-              <button v-if="props.canComment" class="action-btn" title="回复" @click="emit('replyComment', item)">↩</button>
-              <button class="action-btn" title="复制评论链接" @click="handleCopyLink(item)">🔗</button>
-              <button v-if="canModifyComment(item)" class="action-btn" title="编辑评论" @click="startEdit(item)">✎</button>
-              <button v-if="canModifyComment(item)" class="action-btn action-btn-danger" title="删除评论" @click="confirmDelete(item)">✕</button>
+              <button v-if="props.canComment" class="action-btn" title="回复" @click="emit('replyComment', item)"><icon-reply /></button>
+              <button class="action-btn" title="复制评论链接" @click="handleCopyLink(item)"><icon-link /></button>
+              <button v-if="canModifyComment(item)" class="action-btn" title="编辑评论" @click="startEdit(item)"><icon-edit /></button>
+              <button v-if="canModifyComment(item)" class="action-btn action-btn-danger" title="删除评论" @click="confirmDelete(item)"><icon-delete /></button>
             </div>
           </div>
           <!-- Deleted comment placeholder -->
@@ -754,9 +754,10 @@ onBeforeUnmount(() => { editEditor.value?.destroy() })
   opacity: 1; pointer-events: auto;
 }
 .action-btn {
-  font-size: 12px; padding: 2px 6px; border-radius: 3px;
+  font-size: 14px; padding: 2px 6px; border-radius: 3px;
   background: none; border: none; color: var(--tf-text-tertiary);
   cursor: pointer; transition: color 150ms, background 150ms;
+  display: inline-flex; align-items: center; justify-content: center;
 }
 .action-btn:hover { color: var(--tf-text-primary); background: var(--tf-bg-hover); }
 .action-btn-danger:hover { color: var(--tf-error); background: rgba(248, 81, 73, 0.1); }
