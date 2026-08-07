@@ -15,6 +15,14 @@
                 <icon-expand :size="14" />
               </button>
               <button
+                v-if="currentTabUnreadCount > 0"
+                class="panel-action-btn"
+                title="跳转到第一条未读"
+                @click="scrollToFirstUnread"
+              >
+                <icon-to-bottom :size="14" />
+              </button>
+              <button
                 class="panel-action-btn"
                 :class="{ active: unreadOnly }"
                 title="仅显示未读"
@@ -65,7 +73,7 @@
           </div>
 
           <!-- 面板内容 -->
-          <div class="panel-body">
+          <div ref="panelBodyRef" class="panel-body">
             <!-- 加载状态 -->
             <div v-if="loading && notifications.length === 0" class="panel-loading">
               <div class="loading-skeleton" v-for="i in 4" :key="i">
@@ -112,7 +120,9 @@
                   v-for="item in getVisibleItems(group)"
                   :key="item.id"
                   class="notification-item"
-                  :class="{ unread: !item.isRead }"
+                  :class="{ unread: !item.isRead, 'highlight-flash': highlightedId === item.id }"
+                  :data-notification-id="item.id"
+                  :data-unread="!item.isRead ? 'true' : undefined"
                   @click="handleItemClick(item)"
                 >
                   <div class="item-indicator">
@@ -227,6 +237,12 @@ const {
   unmuteThread
 } = useNotification()
 
+/** 面板列表容器 ref */
+const panelBodyRef = ref<HTMLElement | null>(null)
+
+/** 当前高亮的通知 ID（短暂闪烁后自动清除） */
+const highlightedId = ref<string | null>(null)
+
 /** 标签页配置 */
 interface TabConfig {
   key: NotificationCategory
@@ -249,6 +265,35 @@ const visibleTabs = computed(() => {
 /** 获取指定分类的未读计数 */
 function getCategoryCount(category: NotificationCategory): number {
   return categoryUnreadCounts.value[category] || 0
+}
+
+/** 当前 Tab 的未读通知数（用于控制「跳转到未读」按钮可见性） */
+const currentTabUnreadCount = computed(() => {
+  return getCategoryCount(activeCategory.value)
+})
+
+/**
+ * 滚动到面板列表中第一条未读通知，并短暂高亮该条目
+ */
+function scrollToFirstUnread() {
+  const container = panelBodyRef.value
+  if (!container) return
+
+  const firstUnread = container.querySelector<HTMLElement>('[data-unread="true"]')
+  if (!firstUnread) return
+
+  // 平滑滚动到第一条未读
+  firstUnread.scrollIntoView({ behavior: 'smooth', block: 'center' })
+
+  // 获取该通知的 ID 并设置高亮
+  const notificationId = firstUnread.dataset.notificationId
+  if (notificationId) {
+    highlightedId.value = notificationId
+    // 1 秒后移除高亮
+    setTimeout(() => {
+      highlightedId.value = null
+    }, 1200)
+  }
 }
 
 // ===== 分组逻辑 =====
@@ -789,6 +834,17 @@ function handleDeleteAllRead() {
 }
 .notification-item.unread:hover {
   background: var(--tf-bg-hover);
+}
+.notification-item.highlight-flash {
+  animation: highlight-pulse 1.2s ease-out;
+}
+
+@keyframes highlight-pulse {
+  0% { background: var(--tf-accent-bg); }
+  20% { background: color-mix(in srgb, var(--tf-accent) 20%, transparent); }
+  50% { background: var(--tf-accent-bg); }
+  70% { background: color-mix(in srgb, var(--tf-accent) 15%, transparent); }
+  100% { background: var(--tf-accent-bg); }
 }
 
 .item-indicator {
