@@ -310,10 +310,23 @@ const editingCommentId = ref<string | null>(null)
 const editingContent = ref('')
 const editTiptapRef = ref<InstanceType<typeof TiptapEditor> | null>(null)
 
+/**
+ * Because the TiptapEditor is inside a v-for, Vue may treat the ref as an array.
+ * This helper reliably gets the single editor instance regardless of ref shape.
+ */
+function getEditTiptap(): InstanceType<typeof TiptapEditor> | null {
+  const refVal = editTiptapRef.value as any
+  if (!refVal) return null
+  // If Vue assigned an array (v-for behavior), take the first element
+  if (Array.isArray(refVal)) return refVal[0] ?? null
+  return refVal
+}
+
 const editTiptapEmpty = computed(() => {
   // When the TiptapEditor ref is available and its editor is initialized, use its isEmpty
-  if (editTiptapRef.value) {
-    const refEmpty = editTiptapRef.value.isEmpty
+  const tiptap = getEditTiptap()
+  if (tiptap) {
+    const refEmpty = tiptap.isEmpty
     // If ref says empty but we have editingContent (editor may not be initialized yet), trust content
     if (refEmpty && editingContent.value) {
       const textContent = editingContent.value.replace(/<[^>]*>/g, '').trim()
@@ -325,7 +338,7 @@ const editTiptapEmpty = computed(() => {
   const content = editingContent.value.replace(/<[^>]*>/g, '').trim()
   return !content
 })
-const editTiptapComposing = computed(() => editTiptapRef.value?.isComposing ?? false)
+const editTiptapComposing = computed(() => getEditTiptap()?.isComposing ?? false)
 
 // Delete state
 const deleteModalVisible = ref(false)
@@ -412,7 +425,7 @@ function startEdit(item: ActivityItem) {
   // Editor needs 2 ticks: 1 for v-if to render, 1 for useEditor to initialize
   nextTick(() => {
     nextTick(() => {
-      editTiptapRef.value?.focus('end')
+      getEditTiptap()?.focus('end')
     })
   })
 }
@@ -423,9 +436,10 @@ function cancelEdit() {
 }
 
 function saveEdit() {
-  if (!editingCommentId.value || !editTiptapRef.value || editTiptapRef.value.isEmpty) return
-  if (editTiptapRef.value.isComposing) return
-  const html = editTiptapRef.value.getHTML()
+  const tiptap = getEditTiptap()
+  if (!editingCommentId.value || !tiptap || tiptap.isEmpty) return
+  if (tiptap.isComposing) return
+  const html = tiptap.getHTML()
   emit('editComment', editingCommentId.value, html)
   editingCommentId.value = null
   editingContent.value = ''
