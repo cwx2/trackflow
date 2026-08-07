@@ -74,7 +74,7 @@
           <div v-else-if="item.type === 'comment' && !item.isDeleted && editingCommentId === item.commentId" class="comment-edit">
             <TiptapEditor
               ref="editTiptapRef"
-              model-value=""
+              :model-value="editingContent"
               placeholder="编辑评论..."
               :toolbar="false"
               :reply-blockquote="true"
@@ -83,6 +83,7 @@
               :min-height="60"
               :max-height="200"
               content-format="html"
+              @update:model-value="editingContent = $event"
             />
             <div class="edit-actions">
               <button class="btn-cancel" @click="cancelEdit">取消</button>
@@ -306,9 +307,24 @@ const hoveredId = ref('')
 
 // Edit state
 const editingCommentId = ref<string | null>(null)
+const editingContent = ref('')
 const editTiptapRef = ref<InstanceType<typeof TiptapEditor> | null>(null)
 
-const editTiptapEmpty = computed(() => editTiptapRef.value?.isEmpty ?? true)
+const editTiptapEmpty = computed(() => {
+  // When the TiptapEditor ref is available and its editor is initialized, use its isEmpty
+  if (editTiptapRef.value) {
+    const refEmpty = editTiptapRef.value.isEmpty
+    // If ref says empty but we have editingContent (editor may not be initialized yet), trust content
+    if (refEmpty && editingContent.value) {
+      const textContent = editingContent.value.replace(/<[^>]*>/g, '').trim()
+      if (textContent) return false
+    }
+    return refEmpty
+  }
+  // Fallback: check editingContent when ref is not yet available
+  const content = editingContent.value.replace(/<[^>]*>/g, '').trim()
+  return !content
+})
 const editTiptapComposing = computed(() => editTiptapRef.value?.isComposing ?? false)
 
 // Delete state
@@ -385,24 +401,25 @@ function canModifyComment(item: ActivityItem): boolean {
 }
 
 function startEdit(item: ActivityItem) {
+  // Set content first so the TiptapEditor mounts with initial content via model-value
+  if (item.rawContent) {
+    const isHtml = item.rawContent.trim().startsWith('<')
+    editingContent.value = isHtml ? item.rawContent : `<p>${item.rawContent}</p>`
+  } else {
+    editingContent.value = ''
+  }
   editingCommentId.value = item.commentId || null
+  // Editor needs 2 ticks: 1 for v-if to render, 1 for useEditor to initialize
   nextTick(() => {
-    if (editTiptapRef.value && item.rawContent) {
-      // If rawContent starts with '<', it's HTML; otherwise set as paragraph
-      const isHtml = item.rawContent.trim().startsWith('<')
-      if (isHtml) {
-        editTiptapRef.value.setContent(item.rawContent)
-      } else {
-        editTiptapRef.value.setContent(`<p>${item.rawContent}</p>`)
-      }
-      editTiptapRef.value.focus('end')
-    }
+    nextTick(() => {
+      editTiptapRef.value?.focus('end')
+    })
   })
 }
 
 function cancelEdit() {
   editingCommentId.value = null
-  editTiptapRef.value?.clearContent()
+  editingContent.value = ''
 }
 
 function saveEdit() {
@@ -411,7 +428,7 @@ function saveEdit() {
   const html = editTiptapRef.value.getHTML()
   emit('editComment', editingCommentId.value, html)
   editingCommentId.value = null
-  editTiptapRef.value.clearContent()
+  editingContent.value = ''
 }
 
 function confirmDelete(item: ActivityItem) {
