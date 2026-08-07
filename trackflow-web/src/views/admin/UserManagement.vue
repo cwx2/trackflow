@@ -1,9 +1,7 @@
 <template>
-  <div class="admin-page">
-    <div class="page-header">
-      <h2 class="page-title">用户管理</h2>
-      <div class="header-actions">
-        <div class="header-filters">
+  <AdminPageLayout title="用户管理">
+    <template #actions>
+      <div class="header-filters">
           <a-input-search
             v-model="filters.keyword"
             placeholder="搜索用户名/姓名/邮箱..."
@@ -54,8 +52,7 @@
           <template #icon><icon-plus /></template>
           新建用户
         </a-button>
-      </div>
-    </div>
+    </template>
 
     <!-- 用户列表 -->
     <div class="table-wrapper">
@@ -137,19 +134,14 @@
     </div>
 
     <!-- 分页 -->
-    <div class="pagination-wrapper" v-if="total > 0">
-      <a-pagination
-        :total="total"
-        :current="page"
-        :page-size="pageSize"
-        size="small"
-        show-total
-        show-page-size
-        :page-size-options="[20, 50, 100, 200]"
-        @change="(p: number) => { page = p; loadUsers() }"
-        @page-size-change="(size: number) => { pageSize = size; page = 1; loadUsers() }"
-      />
-    </div>
+    <AdminPagination
+      :total="total"
+      :page="page"
+      :page-size="pageSize"
+      :page-size-options="[20, 50, 100, 200]"
+      @page-change="(p: number) => { page = p; loadUsers() }"
+      @page-size-change="(size: number) => { pageSize = size; page = 1; loadUsers() }"
+    />
 
     <!-- 新建用户弹窗 -->
     <a-modal
@@ -359,7 +351,7 @@
         </div>
       </template>
     </a-modal>
-  </div>
+  </AdminPageLayout>
 </template>
 
 <script setup lang="ts">
@@ -370,6 +362,7 @@ import { userApi, projectApi, globalMemberApi, roleApi } from '@/api'
 import type { UserProfileProjectRoleInfo } from '@/api/user'
 import type { GlobalMemberVO } from '@/api/globalMember'
 import { useAuthStore } from '@/stores/auth'
+import { AdminPageLayout, AdminPagination } from '@/components/admin'
 
 const authStore = useAuthStore()
 const router = useRouter()
@@ -901,12 +894,6 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.pagination-wrapper { display: flex; justify-content: flex-end; padding-top: 12px; flex-shrink: 0; }
-
-.admin-page { padding: 24px; height: 100%; display: flex; flex-direction: column; overflow: hidden; }
-.page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-shrink: 0; }
-.page-title { font-size: 18px; font-weight: 600; color: var(--text-bright); }
-.header-actions { display: flex; align-items: center; gap: 12px; }
 .header-filters { display: flex; gap: 8px; }
 
 /* Table wrapper: flex-grow to fill remaining space, internal scroll */

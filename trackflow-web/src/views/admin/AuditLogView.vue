@@ -1,14 +1,11 @@
 <template>
-  <div class="admin-page">
-    <div class="page-header">
-      <h2 class="page-title">审计日志</h2>
-      <div class="header-actions">
-        <a-button size="small" @click="exportJson" :loading="exporting">
-          <template #icon><icon-download /></template>
-          导出 JSON
-        </a-button>
-      </div>
-    </div>
+  <AdminPageLayout title="审计日志">
+    <template #actions>
+      <a-button size="small" @click="exportJson" :loading="exporting">
+        <template #icon><icon-download /></template>
+        导出 JSON
+      </a-button>
+    </template>
 
     <!-- 搜索与过滤 -->
     <div class="filter-bar">
@@ -131,20 +128,15 @@
     </div>
 
     <!-- 分页 -->
-    <div class="pagination-wrapper" v-if="total > 0">
-      <a-pagination
-        :total="total"
-        :current="page"
-        :page-size="pageSize"
-        size="small"
-        show-total
-        show-page-size
-        :page-size-options="[20, 50, 100, 200]"
-        @change="(p: number) => { page = p; loadLogs() }"
-        @page-size-change="onPageSizeChange"
-      />
-    </div>
-  </div>
+    <AdminPagination
+      :total="total"
+      :page="page"
+      :page-size="pageSize"
+      :page-size-options="[20, 50, 100, 200]"
+      @page-change="(p: number) => { page = p; loadLogs() }"
+      @page-size-change="onPageSizeChange"
+    />
+  </AdminPageLayout>
 </template>
 
 <script setup lang="ts">
@@ -152,6 +144,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { auditLogApi } from '@/api'
 import type { AuditLogVO } from '@/api/auditLog'
 import { Message } from '@arco-design/web-vue'
+import { AdminPageLayout, AdminPagination } from '@/components/admin'
 
 const logs = ref<AuditLogVO[]>([])
 const total = ref(0)
@@ -474,40 +467,6 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.admin-page {
-  padding: 24px;
-  height: 100%;
-  width: 100%;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.pagination-wrapper { display: flex; justify-content: flex-end; padding-top: 12px; flex-shrink: 0; }
-
-.page-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 16px;
-  flex-wrap: wrap;
-  gap: 12px;
-  flex-shrink: 0;
-}
-
-.page-title {
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--text-bright);
-}
-
-.header-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
 .filter-bar {
   display: flex;
   flex-direction: column;

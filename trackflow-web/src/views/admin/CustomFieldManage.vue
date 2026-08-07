@@ -1,12 +1,11 @@
 <template>
-  <div class="cf-manage">
-    <div class="cf-header">
-      <h2 class="page-title">自定义字段管理</h2>
+  <AdminPageLayout title="自定义字段管理">
+    <template #actions>
       <a-button v-if="activeTab === 'list'" type="primary" size="small" @click="openCreate">
         <template #icon><icon-plus /></template>
         创建自定义字段
       </a-button>
-    </div>
+    </template>
 
     <!-- 双标签页 -->
     <a-tabs v-model:active-key="activeTab" size="small" class="cf-tabs">
@@ -72,17 +71,15 @@
               <a-table
                 :data="filteredFieldList"
                 :loading="loading"
-                :pagination="pagination"
+                :pagination="false"
                 row-key="id"
                 size="small"
                 :row-selection="rowSelection"
                 v-model:selected-keys="selectedKeys"
-                @page-change="onPageChange"
-                @page-size-change="onPageSizeChange"
                 @row-click="onRowClick"
               >
               <template #columns>
-                <a-table-column title="字段名称" data-index="name">
+                <a-table-column title="字段名称" data-index="name" :width="180">
                   <template #cell="{ record }">
                     <span class="clickable-name">{{ record.name }}</span>
                     <a-tag v-if="record.isBuiltIn" size="small" color="arcoblue" style="margin-left: 6px">内置</a-tag>
@@ -99,7 +96,7 @@
                     <span v-else class="text-muted">—</span>
                   </template>
                 </a-table-column>
-                <a-table-column title="选项值" :width="220">
+                <a-table-column title="选项值" :width="260">
                   <template #cell="{ record }">
                     <template v-if="(record.fieldFormat === 'list' || record.fieldFormat === 'state' || record.fieldFormat === 'ownedField' || record.fieldFormat === 'version' || record.fieldFormat === 'build') && record.options && record.options.length > 0">
                       <div class="options-inline">
@@ -118,19 +115,14 @@
                     <span v-else class="text-muted">—</span>
                   </template>
                 </a-table-column>
-                <a-table-column title="必填" data-index="isRequired" :width="60" align="center">
+                <a-table-column title="属性" :width="140">
                   <template #cell="{ record }">
-                    <icon-check v-if="record.isRequired" style="color: var(--tf-success)" />
-                  </template>
-                </a-table-column>
-                <a-table-column title="全局" data-index="isForAll" :width="60" align="center">
-                  <template #cell="{ record }">
-                    <icon-check v-if="record.isForAll" style="color: var(--tf-accent)" />
-                  </template>
-                </a-table-column>
-                <a-table-column title="私有" data-index="isPrivate" :width="60" align="center">
-                  <template #cell="{ record }">
-                    <icon-lock v-if="record.isPrivate" style="color: var(--tf-warning)" />
+                    <div class="field-badges">
+                      <span v-if="record.isRequired" class="field-badge field-badge--required">必填</span>
+                      <span v-if="record.isForAll" class="field-badge field-badge--global">全局</span>
+                      <span v-if="record.isPrivate" class="field-badge field-badge--private">私有</span>
+                      <span v-if="record.isHiddenInList" class="field-badge field-badge--hidden">隐藏</span>
+                    </div>
                   </template>
                 </a-table-column>
                 <a-table-column title="使用项目" :width="140">
@@ -159,12 +151,6 @@
                     <span v-else>{{ record.issueTypes.map(t => localizeIssueType(t)).join(', ') }}</span>
                   </template>
                 </a-table-column>
-                <a-table-column title="列表可见" :width="80" align="center">
-                  <template #cell="{ record }">
-                    <icon-eye v-if="!record.isHiddenInList" style="color: var(--tf-success)" />
-                    <icon-eye-invisible v-else style="color: var(--tf-text-quaternary)" />
-                  </template>
-                </a-table-column>
                 <a-table-column title="操作" :width="120" align="center">
                   <template #cell="{ record }">
                     <a-button type="text" size="mini" @click.stop="openEdit(record)">编辑</a-button>
@@ -177,6 +163,14 @@
               </template>
             </a-table>
             </div>
+            <AdminPagination
+              :total="pagination.total"
+              :page="pagination.current"
+              :page-size="pagination.pageSize"
+              :page-size-options="[20, 50, 100]"
+              @page-change="onPageChange"
+              @page-size-change="onPageSizeChange"
+            />
           </div>
 
           <!-- 字段详情侧边栏 -->
@@ -834,7 +828,7 @@
         </template>
       </div>
     </a-modal>
-  </div>
+  </AdminPageLayout>
 </template>
 
 <script setup lang="ts">
@@ -846,6 +840,7 @@ import type { CustomFieldDefinitionVO, CustomFieldUsageVO, OptionUsageItemVO, Us
 import { localizeIssueType } from '@/utils/fieldLabels'
 import FieldsInProjects from './FieldsInProjects.vue'
 import DefaultValueInput from './components/DefaultValueInput.vue'
+import { AdminPageLayout, AdminPagination } from '@/components/admin'
 
 
 const activeTab = ref('list')
@@ -1730,29 +1725,6 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.cf-manage {
-  padding: 24px;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.cf-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 16px;
-  flex-shrink: 0;
-}
-
-.page-title {
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--tf-text-primary);
-  margin: 0;
-}
-
 .cf-tabs {
   flex: 1;
   min-height: 0;
@@ -1869,6 +1841,44 @@ onMounted(() => {
 }
 .clickable-name:hover {
   text-decoration: underline;
+}
+
+/* 属性标签组合 */
+.field-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+
+.field-badge {
+  display: inline-block;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+  line-height: 1.4;
+}
+
+.field-badge--required {
+  background: color-mix(in srgb, var(--tf-error, #f85149) 12%, transparent);
+  color: var(--tf-error, #f85149);
+}
+
+.field-badge--global {
+  background: color-mix(in srgb, var(--tf-accent) 12%, transparent);
+  color: var(--tf-accent);
+}
+
+.field-badge--private {
+  background: color-mix(in srgb, var(--tf-warning, #d29922) 12%, transparent);
+  color: var(--tf-warning, #d29922);
+}
+
+.field-badge--hidden {
+  background: color-mix(in srgb, var(--tf-text-tertiary) 12%, transparent);
+  color: var(--tf-text-tertiary);
 }
 
 /* 默认值单元格 */
