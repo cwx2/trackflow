@@ -1,4 +1,4 @@
-import { ref, onUnmounted, watch } from 'vue'
+import { ref, onUnmounted, watch, effectScope } from 'vue'
 import { Client } from '@stomp/stompjs'
 import type { StompSubscription } from '@stomp/stompjs'
 import { useAuthStore } from '@/stores/auth'
@@ -30,8 +30,8 @@ let reconnectAttempts = 0
 const MAX_RECONNECT_ATTEMPTS = 5
 const RECONNECT_DELAY_BASE = 5000 // 5s base
 
-// Token 监听器清理函数（仅注册一次）
-let tokenWatchStopper: (() => void) | null = null
+// Token 监听的 detached effect scope（不受任何组件卸载影响）
+let tokenWatchScope: ReturnType<typeof effectScope> | null = null
 
 /**
  * WebSocket 连接管理 composable。
@@ -115,21 +115,24 @@ export function useWebSocket() {
     globalStatus.value = 'connecting'
     globalClient.activate()
 
-    // 注册 token 变化监听（仅一次），token 刷新后同步更新 connectHeaders
-    if (!tokenWatchStopper) {
-      tokenWatchStopper = watch(
-        () => authStore.accessToken,
-        (newToken) => {
-          if (newToken && globalClient) {
-            globalClient.connectHeaders = { token: newToken }
-            // 如果连接已断开且仍有使用者，用新 token 重连
-            if (!globalClient.connected && !globalClient.active && connectionRefCount > 0) {
-              reconnectAttempts = 0 // 重置重连计数（新 token 应能成功）
-              globalClient.activate()
+    // 注册 token 变化监听（仅一次），使用 detached effectScope 确保不受组件卸载影响
+    if (!tokenWatchScope) {
+      tokenWatchScope = effectScope(true) // detached = true
+      tokenWatchScope.run(() => {
+        watch(
+          () => authStore.accessToken,
+          (newToken) => {
+            if (newToken && globalClient) {
+              globalClient.connectHeaders = { token: newToken }
+              // 如果连接已断开且仍有使用者，用新 token 重连
+              if (!globalClient.connected && !globalClient.active && connectionRefCount > 0) {
+                reconnectAttempts = 0 // 重置重连计数（新 token 应能成功）
+                globalClient.activate()
+              }
             }
           }
-        }
-      )
+        )
+      })
     }
 
     return globalClient
@@ -145,10 +148,10 @@ export function useWebSocket() {
       globalClient = null
       globalStatus.value = 'disconnected'
       reconnectAttempts = 0
-      // 清理 token 监听器
-      if (tokenWatchStopper) {
-        tokenWatchStopper()
-        tokenWatchStopper = null
+      // 清理 token 监听 scope
+      if (tokenWatchScope) {
+        tokenWatchScope.stop()
+        tokenWatchScope = null
       }
     }
   }
@@ -162,6 +165,7 @@ export function useWebSocket() {
 
   /**
    * Token 刷新后更新 WebSocket 连接 headers
+   * @deprecated 已被 authStore.accessToken 的自动 watch 机制取代，保留仅为向后兼容
    */
   function updateToken(newToken: string) {
     if (globalClient) {
