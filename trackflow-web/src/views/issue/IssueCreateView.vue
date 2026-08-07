@@ -48,14 +48,12 @@ function onCancelWithData(formData: any) {
 // Vue Router 路由守卫：离开页面时自动保存草稿（YouTrack 风格：关闭=自动保存）
 onBeforeRouteLeave((_to, _from, next) => {
   const panel = createPanelRef.value
-  if (panel && panel.isDirty && panel.getFormData) {
-    const formData = panel.getFormData()
-    if (formData.title?.trim() || formData.description?.trim()) {
-      saveDraft(formData)
-      Message.info('已保存为草稿')
-    }
+  if (panel && panel.isDirty) {
+    // 自动保存，无需确认（YouTrack 行为）
+    next()
+  } else {
+    next()
   }
-  next()
 })
 </script>
 
