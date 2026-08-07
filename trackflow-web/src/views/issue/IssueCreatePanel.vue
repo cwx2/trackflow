@@ -1019,8 +1019,8 @@ const form = reactive({
   projectId: undefined as string | undefined,
   title: '',
   description: '',
-  issueType: 'Task',
-  priority: 'Normal',
+  issueType: '任务',
+  priority: '普通',
   statusId: undefined as string | undefined,
   assigneeId: undefined as string | undefined,
   sprintId: undefined as string | undefined,
@@ -1554,8 +1554,8 @@ function onSelectDraft(draft: IssueDraft) {
 function applyDraftToForm(draft: IssueDraft) {
   form.title = draft.title || ''
   form.description = draft.description || ''
-  form.issueType = draft.issueType || 'Task'
-  form.priority = draft.priority || 'Normal'
+  form.issueType = draft.issueType || '任务'
+  form.priority = draft.priority || '普通'
   form.statusId = draft.statusId || undefined
   form.tagIds = draft.tagIds || []
   form.dueDate = draft.dueDate || ''
@@ -1599,8 +1599,8 @@ function applyTemplate(template: IssueTemplateVO) {
 function clearTemplate() {
   selectedTemplateId.value = null
   form.description = ''
-  form.issueType = 'Task'
-  form.priority = 'Normal'
+  form.issueType = '任务'
+  form.priority = '普通'
 }
 
 /**
@@ -1725,8 +1725,8 @@ function loadDraftData(draftId: string) {
 
   form.title = draft.title || ''
   form.description = draft.description || ''
-  form.issueType = draft.issueType || 'Task'
-  form.priority = draft.priority || 'Normal'
+  form.issueType = draft.issueType || '任务'
+  form.priority = draft.priority || '普通'
   form.statusId = draft.statusId || undefined
   form.tagIds = draft.tagIds || []
   form.dueDate = draft.dueDate || ''
