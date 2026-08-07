@@ -91,9 +91,7 @@
               <span class="att-file-icon">{{ getFileIcon(att.fileName) }}</span>
               <!-- Previewable indicator -->
               <span v-if="isPreviewable(att)" class="att-preview-badge" title="点击预览">
-                <svg viewBox="0 0 16 16" width="12" height="12">
-                  <path fill="currentColor" d="M8 3C4.5 3 1.7 5.1 1 8c.7 2.9 3.5 5 7 5s6.3-2.1 7-5c-.7-2.9-3.5-5-7-5zm0 8.5A3.5 3.5 0 1 1 8 4.5 3.5 3.5 0 0 1 8 11.5zm0-5.5a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/>
-                </svg>
+                <icon-eye :size="12" />
               </span>
             </template>
             <div class="att-overlay" @click.stop>

@@ -14,11 +14,7 @@
     <div v-else-if="error" class="data-container__error">
       <slot name="error" :error="error" :retry="retry">
         <div class="data-container__error-default">
-          <svg class="error-icon" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-            <circle cx="12" cy="12" r="10" />
-            <line x1="12" y1="8" x2="12" y2="12" />
-            <line x1="12" y1="16" x2="12.01" y2="16" />
-          </svg>
+          <icon-exclamation-circle-fill class="error-icon" :size="48" />
           <h3 class="error-title">加载失败</h3>
           <p class="error-desc">{{ error }}</p>
           <button v-if="retry" class="btn-retry" @click="retry">重新加载</button>
@@ -31,12 +27,8 @@
       <slot name="empty">
         <div class="data-container__empty-default">
           <slot name="empty-icon">
-            <svg class="empty-icon" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-              <rect x="3" y="3" width="18" height="18" rx="2" />
-              <line x1="9" y1="9" x2="15" y2="15" />
-              <line x1="15" y1="9" x2="9" y2="15" />
-            </svg>
-          </slot>
+              <icon-empty class="empty-icon" :size="48" />
+            </slot>
           <h3 class="empty-title">{{ emptyTitle }}</h3>
           <p v-if="emptyDescription" class="empty-desc">{{ emptyDescription }}</p>
           <button v-if="createAction" class="btn-create" @click="$emit('create')">
