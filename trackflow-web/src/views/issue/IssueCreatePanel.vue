@@ -1,5 +1,7 @@
 <template>
+  <!-- Modal mode: when NOT full page -->
   <a-modal
+    v-if="!isFullPage"
     :visible="visible"
     :footer="false"
     :closable="true"
@@ -41,7 +43,7 @@
           </div>
         </template>
       </a-trigger>
-      <a-tooltip v-if="!isFullPage" content="在全屏页面中查看" position="bottom" mini>
+      <a-tooltip content="在全屏页面中查看" position="bottom" mini>
         <span class="fullscreen-btn" @click.stop="goFullscreen">
           <icon-fullscreen />
         </span>
@@ -1584,70 +1586,31 @@ function clearTemplate() {
 }
 
 /**
- * 关闭面板
- * 当表单有未保存内容时，显示自定义确认弹窗而非触发浏览器原生 beforeunload
+ * 关闭面板（取消按钮 / 右上角 ✕）
+ * 
+ * YouTrack 标准行为：关闭 = 自动保存草稿，无需确认。
+ * 只有用户主动点击「丢弃」才不保存。
  */
 function close() {
   if (isDirty.value) {
-    // 临时移除 beforeunload 监听器，避免用户主动关闭时触发浏览器原生对话框
-    // 这是用户主动操作，应该由应用内的 Modal.confirm 处理，而不是浏览器
-    window.removeEventListener('beforeunload', handleBeforeUnload)
-
-    // 用于追踪用户选择的操作（保存草稿/放弃更改/取消）
-    // 只有用户点击确定或取消按钮时才关闭外层 modal，点击遮罩或 Escape 则恢复编辑
-    let userAction: 'save' | 'discard' | 'cancel' = 'cancel'
-    let formDataToSave: any = null
-
-    Modal.confirm({
-      title: '保存为草稿？',
-      content: '当前表单中有未保存的内容。是否保存为草稿？',
-      okText: '保存草稿',
-      cancelText: '放弃更改',
-      simple: false,
-      onOk: () => {
-        // 记录用户选择保存草稿，并准备表单数据
-        userAction = 'save'
-        formDataToSave = {
-          title: form.title,
-          description: form.description,
-          projectId: form.projectId || '',
-          issueType: form.issueType,
-          priority: form.priority,
-          statusId: form.statusId || '',
-          sprintId: form.sprintId || '',
-          assigneeId: form.assigneeId || '',
-          tagIds: [...form.tagIds],
-          dueDate: form.dueDate || '',
-          estimatedHours: form.estimatedHours ?? null,
-          customFieldValues: { ...customFieldValues.value }
-        }
-        // Arco Modal 会自动触发关闭动画，无需手动调用 close()
-      },
-      onCancel: () => {
-        // 用户选择放弃更改
-        userAction = 'discard'
-        // Arco Modal 会自动触发关闭动画
-      },
-      onClose: () => {
-        // Modal 完全关闭后（动画结束、DOM 已清理）才执行后续逻辑
-        // 这样可以避免嵌套 Modal 的关闭时序冲突
-        if (userAction === 'save' && formDataToSave) {
-          emit('cancel-with-data', formDataToSave)
-          doClose()
-        } else if (userAction === 'discard') {
-          doClose()
-        } else {
-          // userAction === 'cancel'：用户点击遮罩或按 Escape 取消
-          // 恢复 beforeunload 监听器，让用户继续编辑
-          if (props.visible) {
-            window.addEventListener('beforeunload', handleBeforeUnload)
-          }
-        }
-      }
-    })
-  } else {
-    doClose()
+    // 有内容时自动保存为草稿（YouTrack 风格：无需确认）
+    const formData = {
+      title: form.title,
+      description: form.description,
+      projectId: form.projectId || '',
+      issueType: form.issueType,
+      priority: form.priority,
+      statusId: form.statusId || '',
+      sprintId: form.sprintId || '',
+      assigneeId: form.assigneeId || '',
+      tagIds: [...form.tagIds],
+      dueDate: form.dueDate || '',
+      estimatedHours: form.estimatedHours ?? null,
+      customFieldValues: { ...customFieldValues.value }
+    }
+    emit('cancel-with-data', formData)
   }
+  doClose()
 }
 
 /** 真正关闭面板并重置表单 */

@@ -15,7 +15,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useRouter, useRoute, onBeforeRouteLeave } from 'vue-router'
-import { Modal, Message } from '@arco-design/web-vue'
+import { Message } from '@arco-design/web-vue'
 import IssueCreatePanel from './IssueCreatePanel.vue'
 import { useDrafts } from './composables/useDrafts'
 
@@ -45,24 +45,12 @@ function onCancelWithData(formData: any) {
   }
 }
 
-// Vue Router 路由守卫：离开页面时检查脏数据
+// Vue Router 路由守卫：离开页面时自动保存草稿（YouTrack 风格：关闭=自动保存）
 onBeforeRouteLeave((_to, _from, next) => {
   const panel = createPanelRef.value
   if (panel && panel.isDirty) {
-    Modal.confirm({
-      title: '保存为草稿？',
-      content: '当前表单中有未保存的内容。是否保存为草稿？',
-      okText: '保存草稿',
-      cancelText: '放弃更改',
-      simple: false,
-      onOk: () => {
-        // The panel's close handler will emit cancel-with-data
-        next()
-      },
-      onCancel: () => {
-        next()
-      }
-    })
+    // 自动保存，无需确认（YouTrack 行为）
+    next()
   } else {
     next()
   }
@@ -72,5 +60,8 @@ onBeforeRouteLeave((_to, _from, next) => {
 <style scoped>
 .issue-create-page {
   height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 </style>
