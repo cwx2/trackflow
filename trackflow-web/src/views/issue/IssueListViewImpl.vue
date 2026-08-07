@@ -301,7 +301,7 @@
       <a-modal
         v-model:visible="showCreateQueryModal"
         title="保存查询"
-        :width="400"
+        :width="440"
         :ok-loading="createQueryLoading"
         ok-text="保存查询"
         cancel-text="取消"
@@ -327,18 +327,21 @@
               <a-link @click="createQueryForm.icon = ''" style="margin-left: 8px; font-size: 12px;">清除</a-link>
             </div>
           </a-form-item>
-          <a-form-item label="筛选条件">
-            <div class="query-preview-filters">
-              <template v-if="createQueryFiltersPreview.length > 0">
-                <div v-for="(f, i) in createQueryFiltersPreview" :key="i" class="preview-chip">
-                  {{ f }}
-                </div>
-              </template>
-              <span v-else class="preview-empty">无筛选条件（将返回所有工单）</span>
-            </div>
+          <a-form-item label="查询条件">
+            <QueryInput
+              v-model="createQueryForm.queryText"
+              placeholder="输入查询条件... (如 状态: 未关闭  负责人: 我)"
+              :status-list="statusCache"
+              :project-list="projectList"
+              :project-id="activeProjectId"
+            />
           </a-form-item>
           <a-form-item label="固定到面板顶部">
             <a-switch v-model="createQueryForm.pinned" />
+          </a-form-item>
+          <a-form-item label="共享">
+            <a-switch v-model="createQueryForm.shared" />
+            <span class="form-help-text">共享后其他项目成员也能看到此查询</span>
           </a-form-item>
         </a-form>
       </a-modal>
@@ -1310,42 +1313,33 @@ const queryIconOptions = ['🧪', '🐛', '🚀', '⚡', '📋', '🎯', '🔥',
 const createQueryForm = reactive({
   name: '',
   pinned: true,
-  icon: ''
+  shared: false,
+  icon: '',
+  queryText: ''
 })
 
-// Computed: preview of current filters for the create modal
-const createQueryFiltersPreview = computed(() => {
-  const previews: string[] = []
-  if (activeQueryId.value) {
-    const q = savedQueries.value.find(sq => sq.id === activeQueryId.value)
-    if (q) previews.push(`基于查询: ${q.name}`)
-  }
-  if (activeProjectId.value) {
-    const p = projectList.value.find(pr => pr.id === activeProjectId.value)
-    if (p) previews.push(`项目: ${p.name}`)
-  }
-  if (searchKeyword.value) {
-    previews.push(`关键字: ${searchKeyword.value}`)
-  }
-  if (globalFilterParams.value.statusId) {
-    previews.push(`状态: ${globalFilterParams.value.statusId}`)
-  }
-  if (globalFilterParams.value.assigneeId) {
-    previews.push(`负责人: ${globalFilterParams.value.assigneeId}`)
-  }
-  if (globalFilterParams.value.priority) {
-    previews.push(`优先级: ${globalFilterParams.value.priority}`)
-  }
-  if (globalFilterParams.value.sprintId) {
-    previews.push(`Sprint: ${globalFilterParams.value.sprintId}`)
-  }
-  return previews
-})
+// Pre-fill query text from current filters is handled in openCreateQueryModal
 
 function openCreateQueryModal() {
   createQueryForm.name = ''
   createQueryForm.pinned = true
+  createQueryForm.shared = false
   createQueryForm.icon = ''
+  // Pre-fill query text from current context:
+  // 1. If viewing a saved query, use its filters as the starting point
+  // 2. Otherwise use the page-level filter params
+  let preFilters: any[] = []
+  if (activeQueryObj.value && activeQueryObj.value.filters) {
+    try {
+      const raw = activeQueryObj.value.filters
+      preFilters = typeof raw === 'string' ? JSON.parse(raw) : (Array.isArray(raw) ? raw : [])
+    } catch {
+      preFilters = []
+    }
+  } else {
+    preFilters = buildCurrentFilters()
+  }
+  createQueryForm.queryText = filtersToQueryText(preFilters)
   showCreateQueryModal.value = true
 }
 
@@ -1356,13 +1350,14 @@ async function handleCreateQuery() {
   }
   createQueryLoading.value = true
   try {
-    const filters = buildCurrentFilters()
+    // Parse the user-editable query text into structured filters
+    const filters = queryTextToFilters(createQueryForm.queryText)
 
     await queryApi.create({
       name: createQueryForm.name.trim(),
       filters: filters,
       pinned: createQueryForm.pinned,
-      shared: false,
+      shared: createQueryForm.shared,
       icon: createQueryForm.icon || undefined
     })
     Message.success('查询已保存')
@@ -4371,9 +4366,7 @@ onBeforeRouteLeave((_to, _from, next) => {
 .query-ctx-delete:hover { background: rgba(248, 81, 73, 0.08) !important; }
 
 /* Create query modal */
-.query-preview-filters { display: flex; flex-wrap: wrap; gap: 6px; }
-.preview-chip { padding: 2px 8px; background: var(--tf-bg-surface); border: 1px solid var(--tf-border); border-radius: 3px; font-size: 12px; color: var(--tf-text-secondary); }
-.preview-empty { font-size: 12px; color: var(--tf-text-tertiary); }
+
 
 /* Edit query modal */
 .form-help-text { font-size: 12px; color: var(--tf-text-tertiary); margin-left: 8px; }
