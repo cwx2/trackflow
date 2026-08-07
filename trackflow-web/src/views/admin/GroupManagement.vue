@@ -23,263 +23,259 @@
     </div>
 
     <!-- 用户组列表 -->
-    <div class="data-table">
-      <div class="table-header">
-        <div class="col" style="width:200px">名称</div>
-        <div class="col" style="flex:1">描述</div>
-        <div class="col" style="width:90px">成员数</div>
-        <div class="col" style="width:90px">角色数</div>
-        <div class="col" style="width:160px">创建时间</div>
-        <div class="col" style="width:200px">操作</div>
-      </div>
-      <div class="table-body">
+    <a-table
+      :columns="tableColumns"
+      :data="groups"
+      :loading="loading"
+      :pagination="false"
+      :bordered="false"
+      row-key="id"
+      size="medium"
+      :scroll="{ y: 600 }"
+      @row-click="openDetail"
+    >
+      <template #empty>
         <DataContainer
-          :loading="loading"
+          :loading="false"
           :error="loadError"
-          :is-empty="groups.length === 0"
+          :is-empty="true"
           :retry="loadGroups"
           loading-text="加载中..."
           empty-title="暂无用户组"
           empty-description="创建用户组来批量管理团队权限"
           create-action="创建用户组"
           @create="openCreateDialog"
-        >
-        <div v-for="group in groups" :key="group.id" class="table-row" @click="openDetail(group)">
-          <div class="col" style="width:200px">
-            <span class="group-name">{{ group.name }}</span>
-          </div>
-          <div class="col" style="flex:1">{{ group.description || '—' }}</div>
-          <div class="col" style="width:90px">
-            <span class="count-badge">{{ group.memberCount }} 人</span>
-          </div>
-          <div class="col" style="width:90px">
-            <span class="count-badge">{{ group.roleCount }} 个</span>
-          </div>
-          <div class="col" style="width:160px">{{ formatDate(group.createdAt) }}</div>
-          <div class="col" style="width:200px" @click.stop>
-            <a-button type="text" size="mini" @click="openDetail(group)">详情</a-button>
-            <a-button type="text" size="mini" @click="openEditDialog(group)">编辑</a-button>
-            <a-button type="text" size="mini" status="danger" @click="confirmDelete(group)">删除</a-button>
-          </div>
-        </div>
-        </DataContainer>
-      </div>
-    </div>
+        />
+      </template>
+      <template #name="{ record }">
+        <span class="group-name">{{ record.name }}</span>
+      </template>
+      <template #description="{ record }">
+        {{ record.description || '—' }}
+      </template>
+      <template #memberCount="{ record }">
+        <span class="count-badge">{{ record.memberCount }} 人</span>
+      </template>
+      <template #roleCount="{ record }">
+        <span class="count-badge">{{ record.roleCount }} 个</span>
+      </template>
+      <template #createdAt="{ record }">
+        {{ formatDate(record.createdAt) }}
+      </template>
+      <template #actions="{ record }">
+        <a-space :size="4">
+          <a-button type="text" size="mini" @click.stop="openDetail(record)">详情</a-button>
+          <a-button type="text" size="mini" @click.stop="openEditDialog(record)">编辑</a-button>
+          <a-button type="text" size="mini" status="danger" @click.stop="confirmDelete(record)">删除</a-button>
+        </a-space>
+      </template>
+    </a-table>
 
     <!-- 创建/编辑弹窗 -->
-    <div class="modal-overlay" v-if="showFormDialog" @click.self="showFormDialog = false">
-      <div class="modal-sm">
-        <div class="modal-header">
-          <h3>{{ editingGroup ? '编辑用户组' : '创建用户组' }}</h3>
-          <button class="btn-close" @click="showFormDialog = false">✕</button>
+    <a-modal
+      v-model:visible="showFormDialog"
+      :title="editingGroup ? '编辑用户组' : '创建用户组'"
+      :width="440"
+      :ok-text="editingGroup ? '保存修改' : '创建用户组'"
+      cancel-text="取消"
+      :ok-button-props="{ disabled: !formData.name?.trim() }"
+      @ok="submitForm"
+      @cancel="showFormDialog = false"
+    >
+      <a-form :model="formData" layout="vertical">
+        <a-form-item label="名称" required>
+          <a-input v-model="formData.name" placeholder="例如：前端团队" />
+        </a-form-item>
+        <a-form-item label="描述">
+          <a-textarea v-model="formData.description" placeholder="组的用途说明..." :max-length="500" :auto-size="{ minRows: 3, maxRows: 6 }" />
+        </a-form-item>
+      </a-form>
+    </a-modal>
+
+    <!-- 详情面板（抽屉） -->
+    <a-drawer
+      v-model:visible="showDetailPanel"
+      :title="detailData?.name"
+      :width="640"
+      :footer="false"
+    >
+      <div class="detail-body" v-if="detailData">
+        <!-- 基本信息 -->
+        <div class="detail-section" v-if="detailData.description">
+          <p class="detail-desc">{{ detailData.description }}</p>
         </div>
-        <div class="modal-body">
-          <div class="form-row">
-            <label class="form-label">名称 *</label>
-            <input v-model="formData.name" class="form-input" placeholder="例如：前端团队" />
+
+        <!-- 成员管理 -->
+        <div class="detail-section">
+          <div class="section-header">
+            <h4>成员 ({{ detailData.members.length }})</h4>
+            <a-button type="outline" size="small" @click="showAddMemberDialog = true">
+              <template #icon><icon-plus /></template>
+              添加成员
+            </a-button>
           </div>
-          <div class="form-row">
-            <label class="form-label">描述</label>
-            <textarea v-model="formData.description" class="form-input form-textarea" placeholder="组的用途说明..." rows="3"></textarea>
+          <div class="member-list" v-if="detailData.members.length > 0">
+            <div v-for="member in detailData.members" :key="member.userId" class="member-item">
+              <div class="member-info">
+                <span class="member-avatar">{{ (member.displayName || member.username).charAt(0) }}</span>
+                <div>
+                  <span class="member-name">{{ member.displayName || member.username }}</span>
+                  <span class="member-email">{{ member.email }}</span>
+                </div>
+              </div>
+              <a-button type="text" size="mini" status="danger" @click="removeMember(member)">移除</a-button>
+            </div>
           </div>
+          <a-empty v-else description="暂无成员" />
         </div>
-        <div class="modal-footer">
-          <button class="btn-cancel" @click="showFormDialog = false">取消</button>
-          <button class="btn-submit" @click="submitForm" :disabled="!formData.name?.trim()">
-            {{ editingGroup ? '保存修改' : '创建用户组' }}
-          </button>
+
+        <!-- 角色分配 -->
+        <div class="detail-section">
+          <div class="section-header">
+            <h4>角色分配 ({{ detailData.roles.length }})</h4>
+            <a-button type="outline" size="small" @click="showAddRoleDialog = true">
+              <template #icon><icon-plus /></template>
+              分配角色
+            </a-button>
+          </div>
+          <div class="role-list" v-if="detailData.roles.length > 0">
+            <div v-for="role in detailData.roles" :key="role.id" class="role-item">
+              <div class="role-info">
+                <a-tag size="small">{{ role.roleName }}</a-tag>
+                <a-tag v-if="role.scope === 'global'" size="small" color="arcoblue">全局</a-tag>
+                <a-tag v-else-if="role.scope === 'all_projects'" size="small" color="green">所有项目</a-tag>
+                <span class="role-scope" v-else-if="role.projectId">
+                  {{ role.projectName }} ({{ role.projectKey }})
+                </span>
+              </div>
+              <a-button type="text" size="mini" status="danger" @click="removeRole(role)">移除</a-button>
+            </div>
+          </div>
+          <a-empty v-else description="暂无角色分配" />
         </div>
       </div>
-    </div>
-
-    <!-- 详情面板 -->
-    <div class="modal-overlay" v-if="showDetailPanel" @click.self="showDetailPanel = false">
-      <div class="modal-lg">
-        <div class="modal-header">
-          <h3>{{ detailData?.name }}</h3>
-          <button class="btn-close" @click="showDetailPanel = false">✕</button>
-        </div>
-        <div class="modal-body detail-body" v-if="detailData">
-          <!-- 基本信息 -->
-          <div class="detail-section">
-            <p class="detail-desc" v-if="detailData.description">{{ detailData.description }}</p>
-          </div>
-
-          <!-- 成员管理 -->
-          <div class="detail-section">
-            <div class="section-header">
-              <h4>成员 ({{ detailData.members.length }})</h4>
-              <button class="btn-sm accent" @click="showAddMemberDialog = true">+ 添加成员</button>
-            </div>
-            <div class="member-list" v-if="detailData.members.length > 0">
-              <div v-for="member in detailData.members" :key="member.userId" class="member-item">
-                <div class="member-info">
-                  <span class="member-avatar">{{ (member.displayName || member.username).charAt(0) }}</span>
-                  <div>
-                    <span class="member-name">{{ member.displayName || member.username }}</span>
-                    <span class="member-email">{{ member.email }}</span>
-                  </div>
-                </div>
-                <button class="btn-sm danger" @click="removeMember(member)">移除</button>
-              </div>
-            </div>
-            <div v-else class="empty-section">暂无成员</div>
-          </div>
-
-          <!-- 角色分配 -->
-          <div class="detail-section">
-            <div class="section-header">
-              <h4>角色分配 ({{ detailData.roles.length }})</h4>
-              <button class="btn-sm accent" @click="showAddRoleDialog = true">+ 分配角色</button>
-            </div>
-            <div class="role-list" v-if="detailData.roles.length > 0">
-              <div v-for="role in detailData.roles" :key="role.id" class="role-item">
-                <div class="role-info">
-                  <span class="role-name-tag">{{ role.roleName }}</span>
-                  <span class="role-scope global" v-if="role.scope === 'global'">全局</span>
-                  <span class="role-scope all-projects" v-else-if="role.scope === 'all_projects'">所有项目</span>
-                  <span class="role-scope" v-else-if="role.projectId">
-                    {{ role.projectName }} ({{ role.projectKey }})
-                  </span>
-                </div>
-                <button class="btn-sm danger" @click="removeRole(role)">移除</button>
-              </div>
-            </div>
-            <div v-else class="empty-section">暂无角色分配</div>
-          </div>
-        </div>
-      </div>
-    </div>
+    </a-drawer>
 
     <!-- 添加成员弹窗 -->
-    <div class="modal-overlay" v-if="showAddMemberDialog" @click.self="showAddMemberDialog = false">
-      <div class="modal-sm">
-        <div class="modal-header">
-          <h3>添加成员</h3>
-          <button class="btn-close" @click="showAddMemberDialog = false">✕</button>
-        </div>
-        <div class="modal-body">
-          <div class="form-row">
-            <label class="form-label">搜索用户</label>
-            <input v-model="memberSearchKeyword" class="form-input" placeholder="输入用户名或姓名..." @input="searchUsers" />
-          </div>
-          <div class="user-search-results" v-if="searchedUsers.length > 0">
-            <div
-              v-for="user in searchedUsers"
-              :key="user.id"
-              class="user-option"
-              :class="{ selected: selectedUserIds.includes(user.id) }"
-              @click="toggleUserSelection(user)"
-            >
-              <span class="user-avatar-sm">{{ (user.displayName || user.username).charAt(0) }}</span>
-              <span class="user-label">{{ user.displayName || user.username }} ({{ user.username }})</span>
-              <span class="check-mark" v-if="selectedUserIds.includes(user.id)">✓</span>
-            </div>
-          </div>
-          <div class="selected-count" v-if="selectedUserIds.length > 0">
-            已选择 {{ selectedUserIds.length }} 名用户
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button class="btn-cancel" @click="showAddMemberDialog = false">取消</button>
-          <button class="btn-submit" @click="submitAddMembers" :disabled="selectedUserIds.length === 0">
-            添加 {{ selectedUserIds.length }} 名成员
-          </button>
+    <a-modal
+      v-model:visible="showAddMemberDialog"
+      title="添加成员"
+      :width="440"
+      ok-text="添加成员"
+      cancel-text="取消"
+      :ok-button-props="{ disabled: selectedUserIds.length === 0 }"
+      @ok="submitAddMembers"
+      @cancel="showAddMemberDialog = false"
+    >
+      <a-form layout="vertical">
+        <a-form-item label="搜索用户">
+          <a-input v-model="memberSearchKeyword" placeholder="输入用户名或姓名..." @input="searchUsers" allow-clear />
+        </a-form-item>
+      </a-form>
+      <div class="user-search-results" v-if="searchedUsers.length > 0">
+        <div
+          v-for="user in searchedUsers"
+          :key="user.id"
+          class="user-option"
+          :class="{ selected: selectedUserIds.includes(user.id) }"
+          @click="toggleUserSelection(user)"
+        >
+          <span class="user-avatar-sm">{{ (user.displayName || user.username).charAt(0) }}</span>
+          <span class="user-label">{{ user.displayName || user.username }} ({{ user.username }})</span>
+          <icon-check v-if="selectedUserIds.includes(user.id)" class="check-mark" />
         </div>
       </div>
-    </div>
+      <div class="selected-count" v-if="selectedUserIds.length > 0">
+        已选择 {{ selectedUserIds.length }} 名用户
+      </div>
+    </a-modal>
 
     <!-- 分配角色弹窗 -->
-    <div class="modal-overlay" v-if="showAddRoleDialog" @click.self="showAddRoleDialog = false">
-      <div class="modal-sm">
-        <div class="modal-header">
-          <h3>分配角色</h3>
-          <button class="btn-close" @click="showAddRoleDialog = false">✕</button>
-        </div>
-        <div class="modal-body">
-          <div class="form-row">
-            <label class="form-label">角色 *</label>
-            <a-select v-model="roleFormData.roleId" placeholder="请选择角色" size="small" @change="onRoleChange">
-              <a-option v-for="role in availableRoles" :key="role.id" :value="role.id">
-                {{ role.name }} ({{ role.roleType }})
-              </a-option>
-            </a-select>
-          </div>
-          <div class="form-row" v-if="selectedRoleType === 'project'">
-            <label class="form-label">作用域 *</label>
-            <div class="scope-options">
-              <label class="scope-option" :class="{ active: roleFormData.scopeMode === 'global' }">
-                <input type="radio" v-model="roleFormData.scopeMode" value="global" />
+    <a-modal
+      v-model:visible="showAddRoleDialog"
+      title="分配角色"
+      :width="480"
+      ok-text="分配角色"
+      cancel-text="取消"
+      :ok-button-props="{ disabled: !canSubmitRole }"
+      @ok="submitAssignRole"
+      @cancel="showAddRoleDialog = false"
+    >
+      <a-form :model="roleFormData" layout="vertical">
+        <a-form-item label="角色" required>
+          <a-select v-model="roleFormData.roleId" placeholder="请选择角色" @change="onRoleChange">
+            <a-option v-for="role in availableRoles" :key="role.id" :value="role.id">
+              {{ role.name }} ({{ role.roleType }})
+            </a-option>
+          </a-select>
+        </a-form-item>
+        <a-form-item v-if="selectedRoleType === 'project'" label="作用域" required>
+          <a-radio-group v-model="roleFormData.scopeMode" direction="vertical">
+            <a-radio value="global">
+              <div class="scope-radio-content">
                 <span class="scope-label">全局（所有项目）</span>
                 <span class="scope-desc">角色对所有现有及未来新建的项目生效</span>
-              </label>
-              <label class="scope-option" :class="{ active: roleFormData.scopeMode === 'projects' }">
-                <input type="radio" v-model="roleFormData.scopeMode" value="projects" />
+              </div>
+            </a-radio>
+            <a-radio value="projects">
+              <div class="scope-radio-content">
                 <span class="scope-label">指定项目</span>
                 <span class="scope-desc">选择一个或多个项目</span>
-              </label>
-            </div>
+              </div>
+            </a-radio>
+          </a-radio-group>
+        </a-form-item>
+        <a-form-item v-if="selectedRoleType === 'project' && roleFormData.scopeMode === 'projects'" label="选择项目" required>
+          <a-checkbox-group v-model="roleFormData.selectedProjectIds" direction="vertical">
+            <a-checkbox v-for="project in availableProjects" :key="project.id" :value="project.id">
+              {{ project.name }} ({{ project.key }})
+            </a-checkbox>
+          </a-checkbox-group>
+          <div class="selected-count" v-if="roleFormData.selectedProjectIds.length > 0">
+            已选择 {{ roleFormData.selectedProjectIds.length }} 个项目
           </div>
-          <div class="form-row" v-if="selectedRoleType === 'project' && roleFormData.scopeMode === 'projects'">
-            <label class="form-label">选择项目 *</label>
-            <div class="project-checklist">
-              <label
-                v-for="project in availableProjects"
-                :key="project.id"
-                class="project-check-item"
-                :class="{ selected: roleFormData.selectedProjectIds.includes(project.id) }"
-              >
-                <input
-                  type="checkbox"
-                  :value="project.id"
-                  v-model="roleFormData.selectedProjectIds"
-                  class="project-checkbox"
-                />
-                <span class="project-check-label">{{ project.name }} ({{ project.key }})</span>
-              </label>
-            </div>
-            <div class="selected-count" v-if="roleFormData.selectedProjectIds.length > 0">
-              已选择 {{ roleFormData.selectedProjectIds.length }} 个项目
-            </div>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button class="btn-cancel" @click="showAddRoleDialog = false">取消</button>
-          <button class="btn-submit" @click="submitAssignRole" :disabled="!canSubmitRole">
-            分配角色
-          </button>
-        </div>
-      </div>
-    </div>
+        </a-form-item>
+      </a-form>
+    </a-modal>
 
     <!-- 删除确认弹窗 -->
-    <div class="modal-overlay" v-if="showDeleteDialog" @click.self="showDeleteDialog = false">
-      <div class="modal-sm">
-        <div class="modal-header">
-          <h3>确认删除</h3>
-          <button class="btn-close" @click="showDeleteDialog = false">✕</button>
-        </div>
-        <div class="modal-body">
-          <p>确定要删除用户组 <strong>{{ deletingGroup?.name }}</strong> 吗？</p>
-          <p class="warning-text">此操作不可撤销。组内成员将失去通过该组继承的所有权限。</p>
-        </div>
-        <div class="modal-footer">
-          <button class="btn-cancel" @click="showDeleteDialog = false">取消</button>
-          <button class="btn-submit danger" @click="executeDelete">删除用户组</button>
-        </div>
-      </div>
-    </div>
+    <a-modal
+      v-model:visible="showDeleteDialog"
+      title="确认删除"
+      :width="400"
+      ok-text="删除用户组"
+      cancel-text="取消"
+      :ok-button-props="{ status: 'danger' }"
+      @ok="executeDelete"
+      @cancel="showDeleteDialog = false"
+    >
+      <p>确定要删除用户组 <strong>{{ deletingGroup?.name }}</strong> 吗？</p>
+      <a-alert type="warning" :show-icon="false" style="margin-top: 8px">
+        此操作不可撤销。组内成员将失去通过该组继承的所有权限。
+      </a-alert>
+    </a-modal>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, reactive } from 'vue'
 import { groupApi, userApi, projectApi } from '@/api'
 import type { UserGroupVO, UserGroupDetailVO } from '@/api/group'
 import type { UserVO, ProjectVO } from '@/api/types'
 import { Message } from '@arco-design/web-vue'
 import { useRequest } from '@/composables/useRequest'
 import DataContainer from '@/components/base/DataContainer.vue'
+import type { TableColumnData } from '@arco-design/web-vue'
+
+// ===== 表格列定义 =====
+const tableColumns: TableColumnData[] = [
+  { title: '名称', dataIndex: 'name', slotName: 'name', width: 200 },
+  { title: '描述', dataIndex: 'description', slotName: 'description', ellipsis: true },
+  { title: '成员数', dataIndex: 'memberCount', slotName: 'memberCount', width: 90 },
+  { title: '角色数', dataIndex: 'roleCount', slotName: 'roleCount', width: 90 },
+  { title: '创建时间', dataIndex: 'createdAt', slotName: 'createdAt', width: 160 },
+  { title: '操作', slotName: 'actions', width: 200 },
+]
 
 // ===== 列表数据 =====
 const groups = ref<UserGroupVO[]>([])
@@ -298,7 +294,7 @@ const { loading, error: loadError, execute: loadGroups } = useRequest(
 // ===== 创建/编辑 =====
 const showFormDialog = ref(false)
 const editingGroup = ref<UserGroupVO | null>(null)
-const formData = ref({ name: '', description: '' })
+const formData = reactive({ name: '', description: '' })
 
 // ===== 详情面板 =====
 const showDetailPanel = ref(false)
@@ -315,7 +311,7 @@ const selectedUserIds = ref<string[]>([])
 const showAddRoleDialog = ref(false)
 const availableRoles = ref<any[]>([])
 const availableProjects = ref<ProjectVO[]>([])
-const roleFormData = ref({ roleId: '', scopeMode: 'global' as 'global' | 'projects', selectedProjectIds: [] as string[] })
+const roleFormData = reactive({ roleId: '', scopeMode: 'global' as 'global' | 'projects', selectedProjectIds: [] as string[] })
 const selectedRoleType = ref('')
 
 // ===== 删除确认 =====
@@ -323,9 +319,9 @@ const showDeleteDialog = ref(false)
 const deletingGroup = ref<UserGroupVO | null>(null)
 
 const canSubmitRole = computed(() => {
-  if (!roleFormData.value.roleId) return false
+  if (!roleFormData.roleId) return false
   if (selectedRoleType.value === 'project') {
-    if (roleFormData.value.scopeMode === 'projects' && roleFormData.value.selectedProjectIds.length === 0) {
+    if (roleFormData.scopeMode === 'projects' && roleFormData.selectedProjectIds.length === 0) {
       return false
     }
   }
@@ -340,18 +336,20 @@ function debouncedSearch() {
 
 function openCreateDialog() {
   editingGroup.value = null
-  formData.value = { name: '', description: '' }
+  formData.name = ''
+  formData.description = ''
   showFormDialog.value = true
 }
 
 function openEditDialog(group: UserGroupVO) {
   editingGroup.value = group
-  formData.value = { name: group.name, description: group.description || '' }
+  formData.name = group.name
+  formData.description = group.description || ''
   showFormDialog.value = true
 }
 
 async function submitForm() {
-  const data = { name: formData.value.name.trim(), description: formData.value.description?.trim() || undefined }
+  const data = { name: formData.name.trim(), description: formData.description?.trim() || undefined }
   try {
     if (editingGroup.value) {
       await groupApi.update(editingGroup.value.id, data)
@@ -367,10 +365,10 @@ async function submitForm() {
   }
 }
 
-async function openDetail(group: UserGroupVO) {
-  currentGroupId.value = group.id
+async function openDetail(record: UserGroupVO) {
+  currentGroupId.value = record.id
   try {
-    const res = await groupApi.getDetail(group.id)
+    const res = await groupApi.getDetail(record.id)
     if (res.code === 0) {
       detailData.value = res.data
       showDetailPanel.value = true
@@ -397,7 +395,6 @@ async function searchUsers() {
   try {
     const res = await userApi.list({ keyword: memberSearchKeyword.value, page: 1, pageSize: 20 })
     if (res.code === 0) {
-      // 过滤掉已是组成员的用户
       const existingIds = detailData.value?.members.map(m => m.userId) || []
       searchedUsers.value = res.data.list.filter(u => !existingIds.includes(u.id))
     }
@@ -460,23 +457,22 @@ async function loadRolesAndProjects() {
 }
 
 function onRoleChange() {
-  const role = availableRoles.value.find((r: any) => String(r.id) === roleFormData.value.roleId)
+  const role = availableRoles.value.find((r: any) => String(r.id) === roleFormData.roleId)
   selectedRoleType.value = role?.roleType || ''
-  // Reset scope selection when role changes
-  roleFormData.value.scopeMode = 'global'
-  roleFormData.value.selectedProjectIds = []
+  roleFormData.scopeMode = 'global'
+  roleFormData.selectedProjectIds = []
 }
 
 async function submitAssignRole() {
   try {
     const isProjectRole = selectedRoleType.value === 'project'
-    const isGlobalScope = isProjectRole && roleFormData.value.scopeMode === 'global'
-    const projectIds = isProjectRole && roleFormData.value.scopeMode === 'projects'
-      ? roleFormData.value.selectedProjectIds
+    const isGlobalScope = isProjectRole && roleFormData.scopeMode === 'global'
+    const projectIds = isProjectRole && roleFormData.scopeMode === 'projects'
+      ? roleFormData.selectedProjectIds
       : undefined
 
     await groupApi.assignRole(currentGroupId.value, {
-      roleId: roleFormData.value.roleId,
+      roleId: roleFormData.roleId,
       globalScope: isGlobalScope || undefined,
       projectIds: projectIds
     })
@@ -485,7 +481,9 @@ async function submitAssignRole() {
       projectIds ? `（${projectIds.length} 个项目）` : ''
     Message.success(`角色已分配${scopeLabel}`)
     showAddRoleDialog.value = false
-    roleFormData.value = { roleId: '', scopeMode: 'global', selectedProjectIds: [] }
+    roleFormData.roleId = ''
+    roleFormData.scopeMode = 'global'
+    roleFormData.selectedProjectIds = []
     selectedRoleType.value = ''
     await reloadDetail()
     await loadGroups()
@@ -540,67 +538,19 @@ onMounted(async () => {
 .admin-page { padding: 32px; height: 100%; overflow-y: auto; }
 .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
 .page-title { font-size: 20px; font-weight: 600; color: var(--tf-text-primary); margin: 0; }
-.btn-create { height: 36px; padding: 0 16px; background: var(--tf-accent); color: #fff; border: none; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; transition: opacity .15s; }
-.btn-create:hover { opacity: 0.9; }
 .search-bar { margin-bottom: 16px; }
-.search-input { max-width: 320px; }
 
 /* Table */
-.data-table { background: var(--tf-bg-surface); border: 1px solid var(--tf-border-light); border-radius: 8px; overflow: hidden; }
-.table-header { display: flex; padding: 10px 16px; background: var(--tf-bg-elevated); border-bottom: 1px solid var(--tf-border-light); }
-.table-header .col { font-size: 11px; font-weight: 600; color: var(--tf-text-tertiary); text-transform: uppercase; letter-spacing: 0.5px; }
-.table-body { max-height: 600px; overflow-y: auto; }
-.table-row { display: flex; align-items: center; padding: 10px 16px; border-bottom: 1px solid var(--tf-border-light); transition: background .1s; cursor: pointer; }
-.table-row:hover { background: var(--tf-bg-hover); }
-.table-row:last-child { border-bottom: none; }
-.col { display: flex; align-items: center; font-size: 13px; color: var(--tf-text-secondary); padding-right: 8px; }
-.table-empty { padding: 48px 16px; text-align: center; color: var(--tf-text-tertiary); }
-.empty-icon { font-size: 32px; margin-bottom: 12px; }
-.empty-title { font-size: 14px; font-weight: 500; color: var(--tf-text-secondary); margin: 0 0 4px; }
-.empty-desc { font-size: 12px; color: var(--tf-text-tertiary); margin: 0 0 16px; }
-.btn-create-sm { height: 32px; padding: 0 12px; background: var(--tf-accent); color: #fff; border: none; border-radius: 6px; font-size: 12px; cursor: pointer; }
 .group-name { font-weight: 500; color: var(--tf-text-primary); }
 .count-badge { font-size: 12px; color: var(--tf-text-tertiary); }
 
-/* Buttons */
-.btn-sm { height: 28px; padding: 0 10px; background: var(--tf-bg-elevated); border: 1px solid var(--tf-border-light); border-radius: 4px; font-size: 12px; color: var(--tf-text-secondary); cursor: pointer; margin-right: 4px; transition: all .1s; }
-.btn-sm:hover { background: var(--tf-bg-hover); color: var(--tf-text-primary); }
-.btn-sm.danger { color: var(--tf-text-tertiary); }
-.btn-sm.danger:hover { color: var(--color-error); border-color: var(--color-error); }
-.btn-sm.accent { background: var(--tf-accent); color: #fff; border-color: transparent; }
-.btn-sm.accent:hover { opacity: 0.9; }
-
-/* Modal */
-.modal-overlay { position: fixed; inset: 0; z-index: 100; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; }
-.modal-sm { width: 440px; max-height: 80vh; background: var(--tf-bg-surface); border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; }
-.modal-lg { width: 680px; max-height: 85vh; background: var(--tf-bg-surface); border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; }
-.modal-header { display: flex; align-items: center; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--tf-border-light); }
-.modal-header h3 { font-size: 16px; font-weight: 600; color: var(--tf-text-primary); margin: 0; flex: 1; }
-.modal-body { padding: 20px; overflow-y: auto; flex: 1; }
-.modal-footer { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 20px; border-top: 1px solid var(--tf-border-light); }
-.btn-close { width: 28px; height: 28px; background: none; border: none; font-size: 16px; color: var(--tf-text-tertiary); cursor: pointer; border-radius: 4px; }
-.btn-close:hover { background: var(--tf-bg-hover); color: var(--tf-text-primary); }
-.btn-cancel { height: 36px; padding: 0 16px; background: var(--tf-bg-elevated); border: 1px solid var(--tf-border-light); border-radius: 6px; font-size: 13px; color: var(--tf-text-secondary); cursor: pointer; }
-.btn-submit { height: 36px; padding: 0 16px; background: var(--tf-accent); color: #fff; border: none; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; }
-.btn-submit:disabled { opacity: 0.4; cursor: not-allowed; }
-.btn-submit.danger { background: var(--color-error, #e53e3e); }
-
-/* Form */
-.form-row { margin-bottom: 16px; }
-.form-label { display: block; font-size: 12px; font-weight: 500; color: var(--tf-text-secondary); margin-bottom: 6px; }
-.form-input { width: 100%; height: 32px; padding: 0 12px; background: var(--tf-bg-body); border: 1px solid var(--tf-border-light); border-radius: 6px; font-size: 13px; color: var(--tf-text-primary); outline: none; }
-.form-input:focus { border-color: var(--tf-accent); }
-.form-textarea { height: auto; padding: 8px 12px; resize: vertical; }
-select.form-input { cursor: pointer; }
-
 /* Detail panel */
 .detail-body { padding: 0; }
-.detail-section { padding: 16px 20px; border-bottom: 1px solid var(--tf-border-light); }
+.detail-section { padding: 16px 0; border-bottom: 1px solid var(--tf-border-light); }
 .detail-section:last-child { border-bottom: none; }
 .detail-desc { font-size: 13px; color: var(--tf-text-secondary); margin: 0; }
 .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
 .section-header h4 { font-size: 14px; font-weight: 600; color: var(--tf-text-primary); margin: 0; }
-.empty-section { font-size: 13px; color: var(--tf-text-tertiary); padding: 12px 0; }
 
 /* Member list */
 .member-list { display: flex; flex-direction: column; gap: 8px; }
@@ -613,29 +563,13 @@ select.form-input { cursor: pointer; }
 /* Role list */
 .role-list { display: flex; flex-direction: column; gap: 8px; }
 .role-item { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: var(--tf-bg-body); border-radius: 6px; }
-.role-info { display: flex; align-items: center; gap: 8px; }
-.role-name-tag { font-size: 12px; font-weight: 500; padding: 2px 8px; background: var(--tf-bg-elevated); border-radius: 3px; color: var(--tf-text-primary); }
+.role-info { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .role-scope { font-size: 11px; color: var(--tf-text-tertiary); }
-.role-scope.global { color: var(--tf-accent); }
-.role-scope.all-projects { color: var(--color-success, #3fb950); font-weight: 500; }
 
-/* Scope options (radio group) */
-.scope-options { display: flex; flex-direction: column; gap: 8px; }
-.scope-option { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px; padding: 10px 12px; border: 1px solid var(--tf-border-light); border-radius: 6px; cursor: pointer; transition: all .15s; }
-.scope-option:hover { background: var(--tf-bg-hover); }
-.scope-option.active { border-color: var(--tf-accent); background: color-mix(in srgb, var(--tf-accent) 8%, transparent); }
-.scope-option input[type="radio"] { margin-top: 2px; accent-color: var(--tf-accent); }
-.scope-label { font-size: 13px; font-weight: 500; color: var(--tf-text-primary); flex: 1; }
-.scope-desc { width: 100%; font-size: 11px; color: var(--tf-text-tertiary); margin-left: 22px; }
-
-/* Project checklist */
-.project-checklist { max-height: 200px; overflow-y: auto; border: 1px solid var(--tf-border-light); border-radius: 6px; }
-.project-check-item { display: flex; align-items: center; gap: 8px; padding: 8px 12px; cursor: pointer; transition: background .1s; border-bottom: 1px solid var(--tf-border-light); }
-.project-check-item:last-child { border-bottom: none; }
-.project-check-item:hover { background: var(--tf-bg-hover); }
-.project-check-item.selected { background: color-mix(in srgb, var(--tf-accent) 8%, transparent); }
-.project-checkbox { accent-color: var(--tf-accent); }
-.project-check-label { font-size: 13px; color: var(--tf-text-primary); }
+/* Scope radio content */
+.scope-radio-content { display: flex; flex-direction: column; gap: 2px; }
+.scope-label { font-size: 13px; font-weight: 500; color: var(--tf-text-primary); }
+.scope-desc { font-size: 11px; color: var(--tf-text-tertiary); }
 
 /* Add member dialog */
 .user-search-results { max-height: 240px; overflow-y: auto; margin-top: 8px; border: 1px solid var(--tf-border-light); border-radius: 6px; }
@@ -644,7 +578,6 @@ select.form-input { cursor: pointer; }
 .user-option.selected { background: var(--tf-bg-elevated); }
 .user-avatar-sm { width: 24px; height: 24px; border-radius: 50%; background: var(--tf-accent); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 11px; flex-shrink: 0; }
 .user-label { font-size: 13px; color: var(--tf-text-primary); flex: 1; }
-.check-mark { color: var(--tf-accent); font-weight: 600; }
+.check-mark { color: var(--tf-accent); font-size: 14px; }
 .selected-count { margin-top: 8px; font-size: 12px; color: var(--tf-accent); }
-.warning-text { font-size: 12px; color: var(--color-error, #e53e3e); margin-top: 8px; }
 </style>
