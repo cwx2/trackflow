@@ -21,12 +21,7 @@
         </div>
         <template v-else-if="userInfo">
           <div class="card-header">
-            <div v-if="userInfo.avatarUrl" class="card-avatar">
-              <img :src="userInfo.avatarUrl" :alt="userInfo.displayName" />
-            </div>
-            <div v-else class="card-avatar card-avatar--placeholder" :style="{ background: avatarBg(userInfo.displayName) }">
-              {{ initial(userInfo.displayName) }}
-            </div>
+            <UserAvatar :name="userInfo.displayName || ''" :avatar="userInfo.avatarUrl" :size="40" />
             <div class="card-info">
               <div class="card-name">{{ userInfo.displayName }}</div>
               <div class="card-username">@{{ userInfo.username }}</div>
@@ -56,6 +51,7 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { userApi, type UserSummaryVO } from '@/api/user'
+import { UserAvatar } from '@/components/base'
 
 const props = defineProps<{
   /** 用户 ID（数据库 ID），为空时不包裹 trigger */
@@ -109,15 +105,6 @@ function viewUserProfile() {
   if (!props.userId) return
   router.push({ path: `/users/${props.userId}` })
 }
-
-function initial(name?: string) {
-  return name ? name[0].toUpperCase() : 'U'
-}
-
-function avatarBg(name?: string) {
-  const colors = ['#5c6bc0', '#26a69a', '#ef5350', '#ab47bc', '#42a5f5', '#ff7043', '#66bb6a']
-  return colors[(name || '').charCodeAt(0) % colors.length]
-}
 </script>
 
 <style scoped>
@@ -150,27 +137,6 @@ function avatarBg(name?: string) {
   display: flex;
   align-items: center;
   gap: 10px;
-}
-
-.card-avatar {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  overflow: hidden;
-  flex-shrink: 0;
-}
-.card-avatar img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-.card-avatar--placeholder {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #fff;
-  font-size: 16px;
-  font-weight: 600;
 }
 
 .card-info {

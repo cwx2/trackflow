@@ -1424,9 +1424,6 @@ onBeforeRouteLeave(() => {
     }
   }
 }
-  align-items: center;
-  flex-shrink: 0;
-}
 
 .content-filters {
   display: flex;

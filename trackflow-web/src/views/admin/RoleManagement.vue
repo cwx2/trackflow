@@ -178,7 +178,7 @@
           </div>
           <div v-else class="users-list">
             <div v-for="user in usersData.globalUsers" :key="user.id" class="user-item">
-              <div class="user-avatar">{{ user.displayName?.charAt(0) || '?' }}</div>
+              <UserAvatar :name="user.displayName || user.username || ''" :size="28" />
               <div class="user-info">
                 <div class="user-name">{{ user.displayName }}</div>
                 <div class="user-meta">{{ user.username }} · {{ user.email || '—' }}</div>
@@ -203,7 +203,7 @@
               </div>
               <div class="users-list">
                 <div v-for="user in group.users" :key="user.id" class="user-item">
-                  <div class="user-avatar">{{ user.displayName?.charAt(0) || '?' }}</div>
+                  <UserAvatar :name="user.displayName || user.username || ''" :size="28" />
                   <div class="user-info">
                     <div class="user-name">{{ user.displayName }}</div>
                     <div class="user-meta">{{ user.username }} · {{ user.email || '—' }}</div>
@@ -230,6 +230,7 @@ import { roleApi } from '@/api'
 import type { RoleVO, RoleUsersVO } from '@/api/types'
 import type { PermissionItem, PermissionGroup } from '@/api/role'
 import AdminPageLayout from '@/components/admin/AdminPageLayout.vue'
+import { UserAvatar } from '@/components/base'
 
 const CATEGORY_LABELS: Record<string, string> = {
   system: '系统权限',
@@ -503,7 +504,6 @@ onMounted(() => {
 .users-list { display: flex; flex-direction: column; gap: 2px; }
 .user-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: var(--radius-md); transition: background 100ms; }
 .user-item:hover { background: var(--bg-hover); }
-.user-avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--accent-blue); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 500; flex-shrink: 0; }
 .user-info { min-width: 0; }
 .user-name { font-size: var(--font-size-sm); color: var(--text-bright); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .user-meta { font-size: var(--font-size-xs); color: var(--text-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

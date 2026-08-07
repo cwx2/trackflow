@@ -33,7 +33,7 @@
           @click="handleClickAssignee(null)"
         >
           <div class="assignee-info">
-            <span class="assignee-avatar unassigned-avatar">?</span>
+            <span class="assignee-avatar-placeholder">?</span>
             <span class="assignee-name">未分配</span>
           </div>
           <div class="assignee-stats">
@@ -56,7 +56,7 @@
           @click="handleClickAssignee(assignee.userId)"
         >
           <div class="assignee-info">
-            <span class="assignee-avatar">{{ getInitial(assignee.displayName) }}</span>
+            <UserAvatar :name="assignee.displayName" :size="22" />
             <span class="assignee-name">{{ assignee.displayName }}</span>
           </div>
           <div class="assignee-stats">
@@ -95,6 +95,7 @@
 import { ref, watch } from 'vue'
 import { sprintApi } from '@/api'
 import type { SprintAssigneeDistributionVO } from '@/api/types'
+import { UserAvatar } from '@/components/base'
 
 const props = defineProps<{
   sprintId: string
@@ -145,10 +146,6 @@ function getSegmentWidth(assignee: { issueCount: number; doneCount: number; inPr
   if (assignee.issueCount === 0) return 0
   const map = { done: assignee.doneCount, inProgress: assignee.inProgressCount, todo: assignee.todoCount }
   return (map[type] / assignee.issueCount) * 100
-}
-
-function getInitial(name: string): string {
-  return name ? name.charAt(0) : '?'
 }
 
 function formatHours(hours: number): string {
@@ -256,22 +253,18 @@ function handleClickAssignee(userId: string | null) {
   flex-shrink: 0;
 }
 
-.assignee-avatar {
+.assignee-avatar-placeholder {
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  background: var(--color-fill-3);
-  color: var(--color-text-2);
+  background: rgba(var(--warning-6), 0.15);
+  color: rgb(var(--warning-6));
   font-size: 11px;
   font-weight: 600;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-}
-.assignee-avatar.unassigned-avatar {
-  background: rgba(var(--warning-6), 0.15);
-  color: rgb(var(--warning-6));
 }
 
 .assignee-name {

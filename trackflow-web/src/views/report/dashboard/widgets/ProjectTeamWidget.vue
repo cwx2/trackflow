@@ -16,9 +16,7 @@
         @click="goToMemberIssues(member)"
       >
         <div class="member-left">
-          <div class="member-avatar" :style="{ background: getAvatarColor(member.displayName || member.username) }">
-            {{ getInitial(member.displayName || member.username) }}
-          </div>
+          <UserAvatar :name="member.displayName || member.username" :size="28" />
           <div class="member-info">
             <div class="member-name">{{ member.displayName || member.username }}</div>
             <div class="member-role">{{ member.roleName || '—' }}</div>
@@ -54,6 +52,7 @@ import { useRouter } from 'vue-router'
 import { IconUserGroup } from '@arco-design/web-vue/es/icon'
 import { dashboardApi } from '@/api/dashboard'
 import type { ProjectTeamMemberVO } from '@/api/dashboard'
+import { UserAvatar } from '@/components/base'
 
 const props = defineProps<{
   config: Record<string, any>
@@ -105,31 +104,6 @@ function goToMemberIssues(member: ProjectTeamMemberVO) {
     query.projectId = props.config.projectId
   }
   router.push({ path: '/issues', query })
-}
-
-// 根据名字生成确定性的头像颜色
-const avatarColors = [
-  '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6',
-  '#06b6d4', '#ec4899', '#14b8a6', '#f97316', '#6366f1'
-]
-
-function getAvatarColor(name: string): string {
-  if (!name) return avatarColors[0]
-  let hash = 0
-  for (let i = 0; i < name.length; i++) {
-    hash = name.charCodeAt(i) + ((hash << 5) - hash)
-  }
-  return avatarColors[Math.abs(hash) % avatarColors.length]
-}
-
-function getInitial(name: string): string {
-  if (!name) return '?'
-  // CJK names: return first character
-  if (/[\u4e00-\u9fff]/.test(name)) {
-    return name.charAt(0)
-  }
-  // Latin names: return first letter uppercase
-  return name.charAt(0).toUpperCase()
 }
 
 async function loadData(_force = false) {
@@ -222,19 +196,6 @@ defineExpose({ loadData })
   gap: 8px;
   flex: 0 0 130px;
   min-width: 0;
-}
-
-.member-avatar {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
-  font-weight: 600;
-  color: #fff;
-  flex-shrink: 0;
 }
 
 .member-info {

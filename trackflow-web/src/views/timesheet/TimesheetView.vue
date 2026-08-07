@@ -32,7 +32,7 @@
               >
                 <a-option v-for="u in selectableUsers" :key="u.id" :value="u.id" :label="u.displayName || u.username">
                   <div class="user-option">
-                    <span class="user-option-avatar">{{ (u.displayName || u.username).charAt(0) }}</span>
+                    <UserAvatar :name="u.displayName || u.username" :size="20" />
                     <span class="user-option-name">{{ u.displayName || u.username }}</span>
                     <span v-if="u.id === authStore.user?.id" class="user-option-self">(我)</span>
                   </div>
@@ -41,7 +41,7 @@
             </template>
             <template v-else>
               <div class="user-selector-static">
-                <span class="user-avatar-dot"></span>
+                <UserAvatar :name="currentUserName" :size="12" />
                 <span class="user-name">{{ currentUserName }}</span>
               </div>
             </template>
@@ -262,7 +262,7 @@
               class="member-row"
             >
               <div class="member-info">
-                <span class="member-avatar">{{ (member.displayName || member.username || '?').charAt(0) }}</span>
+                <UserAvatar :name="member.displayName || member.username || '?'" :size="24" />
                 <span class="member-name">{{ member.displayName || member.username }}</span>
               </div>
               <div class="member-bar-area">
@@ -331,7 +331,7 @@
             >
               <a-option v-for="u in dialogSelectableUsers" :key="u.id" :value="u.id" :label="u.displayName || u.username">
                 <div class="user-option">
-                  <span class="user-option-avatar">{{ (u.displayName || u.username).charAt(0) }}</span>
+                  <UserAvatar :name="u.displayName || u.username" :size="20" />
                   <span class="user-option-name">{{ u.displayName || u.username }}</span>
                   <span v-if="u.id === authStore.user?.id" class="user-option-self">(我)</span>
                 </div>
@@ -340,7 +340,7 @@
           </template>
           <template v-else>
             <div class="author-display">
-              <span class="author-avatar">{{ currentUserName.charAt(0) }}</span>
+              <UserAvatar :name="currentUserName" :size="24" shape="square" />
               <span class="author-name">{{ currentUserName }}</span>
             </div>
           </template>
@@ -432,6 +432,7 @@ import { workItemAttributeApi } from '@/api/timeEntry'
 import { useTimeTrackingSettings } from '@/composables/useTimeTrackingSettings'
 import WeekGrid from './WeekGrid.vue'
 import MonthGrid from './MonthGrid.vue'
+import { UserAvatar } from '@/components/base'
 
 const authStore = useAuthStore()
 const route = useRoute()
@@ -1264,9 +1265,7 @@ onMounted(async () => {
 .controls-left { display: flex; flex-direction: column; gap: 6px; }
 .user-selector-area { display: flex; align-items: center; }
 .user-selector-static { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 500; color: var(--tf-text-primary); }
-.user-avatar-dot { width: 12px; height: 12px; border-radius: 50%; background: var(--tf-accent); }
 .user-option { display: flex; align-items: center; gap: 8px; }
-.user-option-avatar { width: 20px; height: 20px; border-radius: 50%; background: linear-gradient(135deg, var(--tf-accent), #8b5cf6); display: flex; align-items: center; justify-content: center; font-size: 10px; color: #fff; font-weight: 600; flex-shrink: 0; }
 .user-option-name { font-size: 13px; color: var(--tf-text-primary); }
 .user-option-self { font-size: 11px; color: var(--tf-text-tertiary); }
 .project-selector { display: flex; align-items: center; gap: 8px; }
@@ -1331,7 +1330,6 @@ onMounted(async () => {
 .member-row { display: flex; align-items: center; gap: 12px; padding: 8px 16px; border-bottom: 1px solid var(--tf-border-light); }
 .member-row:last-child { border-bottom: none; }
 .member-info { display: flex; align-items: center; gap: 8px; min-width: 140px; max-width: 140px; }
-.member-avatar { width: 24px; height: 24px; border-radius: 50%; background: linear-gradient(135deg, var(--tf-accent), #8b5cf6); display: flex; align-items: center; justify-content: center; font-size: 11px; color: #fff; font-weight: 600; flex-shrink: 0; }
 .member-name { font-size: 13px; color: var(--tf-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .member-bar-area { flex: 1; display: flex; flex-wrap: wrap; gap: 4px; min-height: 24px; align-items: center; }
 .member-entries { display: flex; flex-wrap: wrap; gap: 4px; }
@@ -1362,7 +1360,6 @@ onMounted(async () => {
 .flex-1 { flex: 1; }
 
 .author-display { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--tf-bg-surface); border: 1px solid var(--tf-border-light); border-radius: var(--tf-radius-md); }
-.author-avatar { width: 24px; height: 24px; border-radius: 4px; background: linear-gradient(135deg, #f59e0b, #ef4444); display: flex; align-items: center; justify-content: center; font-size: 11px; color: #fff; font-weight: 600; }
 .author-name { font-size: 13px; color: var(--tf-text-primary); }
 
 .date-mode-toggle { display: inline-flex; border: 1px solid var(--tf-border); border-radius: var(--tf-radius-md); overflow: hidden; }

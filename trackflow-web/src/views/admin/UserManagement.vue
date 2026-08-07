@@ -78,9 +78,7 @@
           </template>
           <template #cell="{ record }">
             <div class="user-col">
-              <span class="user-avatar" :style="{ background: getAvatarColor(record.displayName || record.username) }">
-                {{ getInitial(record.displayName || record.username) }}
-              </span>
+              <UserAvatar :name="record.displayName || record.username" :size="28" />
               <div class="user-info">
                 <router-link :to="`/admin/users/${record.id}`" class="username-link" @click.stop>{{ record.displayName || record.username }}</router-link>
                 <span class="user-login">{{ record.username }}</span>
@@ -362,6 +360,7 @@ import type { UserProfileProjectRoleInfo } from '@/api/user'
 import type { GlobalMemberVO } from '@/api/globalMember'
 import { useAuthStore } from '@/stores/auth'
 import { AdminPageLayout, AdminPagination } from '@/components/admin'
+import { UserAvatar } from '@/components/base'
 
 const authStore = useAuthStore()
 const router = useRouter()
@@ -863,27 +862,6 @@ function getBanStatusLabel(banStatus?: string): string {
   return BAN_STATUS_LABELS[banStatus] || '禁用'
 }
 
-/** 获取用户名首字母（支持中文取第一个字） */
-function getInitial(name: string): string {
-  if (!name) return '?'
-  const first = name.trim().charAt(0)
-  return first.toUpperCase()
-}
-
-/** 根据名称生成稳定的头像背景色 */
-function getAvatarColor(name: string): string {
-  const colors = [
-    '#4a9af5', '#7c5cbf', '#e06c75', '#e5a64e',
-    '#56b6c2', '#98c379', '#c678dd', '#61afef',
-    '#d19a66', '#be5046'
-  ]
-  let hash = 0
-  for (let i = 0; i < name.length; i++) {
-    hash = name.charCodeAt(i) + ((hash << 5) - hash)
-  }
-  return colors[Math.abs(hash) % colors.length]
-}
-
 onMounted(() => {
   loadUsers()
   loadGlobalRoles()
@@ -912,7 +890,6 @@ onMounted(() => {
 
 /* User column with avatar */
 .user-col { display: flex; align-items: center; gap: 10px; }
-.user-avatar { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 12px; font-weight: 600; flex-shrink: 0; }
 .user-info { display: flex; flex-direction: column; min-width: 0; }
 .user-info .username-link { font-size: var(--font-size-sm); line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .user-login { font-size: 11px; color: var(--text-muted); line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

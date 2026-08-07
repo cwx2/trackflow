@@ -117,7 +117,7 @@
           <div class="member-list" v-if="detailData.members.length > 0">
             <div v-for="member in detailData.members" :key="member.userId" class="member-item">
               <div class="member-info">
-                <span class="member-avatar">{{ (member.displayName || member.username).charAt(0) }}</span>
+                <UserAvatar :name="member.displayName || member.username" :size="32" />
                 <div>
                   <span class="member-name">{{ member.displayName || member.username }}</span>
                   <span class="member-email">{{ member.email }}</span>
@@ -180,7 +180,7 @@
           :class="{ selected: selectedUserIds.includes(user.id) }"
           @click="toggleUserSelection(user)"
         >
-          <span class="user-avatar-sm">{{ (user.displayName || user.username).charAt(0) }}</span>
+          <UserAvatar :name="user.displayName || user.username" :size="24" />
           <span class="user-label">{{ user.displayName || user.username }} ({{ user.username }})</span>
           <icon-check v-if="selectedUserIds.includes(user.id)" class="check-mark" />
         </div>
@@ -265,6 +265,7 @@ import type { UserVO, ProjectVO } from '@/api/types'
 import { Message } from '@arco-design/web-vue'
 import { useRequest } from '@/composables/useRequest'
 import DataContainer from '@/components/base/DataContainer.vue'
+import { UserAvatar } from '@/components/base'
 import AdminPageLayout from '@/components/admin/AdminPageLayout.vue'
 import type { TableColumnData } from '@arco-design/web-vue'
 
@@ -561,7 +562,6 @@ onMounted(async () => {
 .member-list { display: flex; flex-direction: column; gap: 8px; }
 .member-item { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: var(--tf-bg-body); border-radius: 6px; }
 .member-info { display: flex; align-items: center; gap: 10px; }
-.member-avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--tf-accent); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 500; flex-shrink: 0; }
 .member-name { font-size: 13px; font-weight: 500; color: var(--tf-text-primary); display: block; }
 .member-email { font-size: 11px; color: var(--tf-text-tertiary); }
 
@@ -581,7 +581,6 @@ onMounted(async () => {
 .user-option { display: flex; align-items: center; gap: 8px; padding: 8px 12px; cursor: pointer; transition: background .1s; }
 .user-option:hover { background: var(--tf-bg-hover); }
 .user-option.selected { background: var(--tf-bg-elevated); }
-.user-avatar-sm { width: 24px; height: 24px; border-radius: 50%; background: var(--tf-accent); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 11px; flex-shrink: 0; }
 .user-label { font-size: 13px; color: var(--tf-text-primary); flex: 1; }
 .check-mark { color: var(--tf-accent); font-size: 14px; }
 .selected-count { margin-top: 8px; font-size: 12px; color: var(--tf-accent); }

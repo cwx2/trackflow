@@ -30,9 +30,7 @@
       <!-- 用户基本信息卡片 -->
       <div class="profile-header">
         <div class="avatar-section">
-          <div class="user-avatar">
-            {{ profile.displayName?.charAt(0) || profile.username?.charAt(0) || '?' }}
-          </div>
+          <UserAvatar :name="profile.displayName || profile.username || ''" :size="56" />
         </div>
         <div class="info-section">
           <h1 class="user-display-name">{{ profile.displayName || profile.username }}</h1>
@@ -271,6 +269,7 @@ import { Modal, Message } from '@arco-design/web-vue'
 import { userApi, projectApi, roleApi } from '@/api'
 import type { UserProfileVO, UserProfileProjectRoleInfo } from '@/api/user'
 import { localizeActionShort, fieldLabelMap, localizeLinkType } from '@/utils/fieldLabels'
+import { UserAvatar } from '@/components/base'
 
 const route = useRoute()
 const router = useRouter()
@@ -694,19 +693,6 @@ onMounted(() => {
   border: 1px solid var(--border-color);
   border-radius: 8px;
   margin-bottom: 24px;
-}
-.user-avatar {
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  background: var(--accent-blue);
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 20px;
-  font-weight: 600;
-  flex-shrink: 0;
 }
 .info-section {
   flex: 1;

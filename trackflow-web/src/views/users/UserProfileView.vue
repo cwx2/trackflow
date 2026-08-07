@@ -38,10 +38,7 @@
     <template v-else-if="profile">
       <!-- 头部区域 -->
       <div class="profile-header">
-        <div class="profile-avatar" :style="{ background: avatarBg }">
-          <img v-if="profile.avatarUrl" :src="profile.avatarUrl" :alt="profile.displayName" />
-          <span v-else class="avatar-initial">{{ userInitial }}</span>
-        </div>
+        <UserAvatar :name="profile.displayName || ''" :avatar="profile.avatarUrl" :size="56" />
         <div class="profile-header-info">
           <h1 class="profile-name">{{ profile.displayName }}</h1>
           <span class="profile-username">@{{ profile.username }}</span>
@@ -143,6 +140,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { userApi, type UserPublicProfileVO } from '@/api/user'
+import { UserAvatar } from '@/components/base'
 
 const route = useRoute()
 const router = useRouter()
@@ -152,16 +150,6 @@ const loading = ref(true)
 const forbidden = ref(false)
 const notFound = ref(false)
 const profile = ref<UserPublicProfileVO | null>(null)
-
-const userInitial = computed(() => {
-  return profile.value?.displayName?.[0]?.toUpperCase() || 'U'
-})
-
-const avatarBg = computed(() => {
-  const colors = ['#5c6bc0', '#26a69a', '#ef5350', '#ab47bc', '#42a5f5', '#ff7043', '#66bb6a']
-  const name = profile.value?.displayName || ''
-  return colors[name.charCodeAt(0) % colors.length]
-})
 
 const statusColor = computed(() => {
   if (profile.value?.banStatus === 'banned') return 'red'
@@ -302,26 +290,6 @@ onMounted(loadProfile)
   align-items: center;
   gap: 16px;
   margin-bottom: 32px;
-}
-.profile-avatar {
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  flex-shrink: 0;
-}
-.profile-avatar img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-.avatar-initial {
-  font-size: 22px;
-  font-weight: 600;
-  color: #fff;
 }
 .profile-header-info {
   flex: 1;

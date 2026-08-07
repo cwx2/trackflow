@@ -1,5 +1,5 @@
 <template>
-  <AdminPageLayout title="自定义动作" subtitle="配置工单快捷动作按钮，如"一键延期"、"标记为重复"、"升级优先级"">
+  <AdminPageLayout title="自定义动作" subtitle="配置工单快捷动作按钮，如「一键延期」、「标记为重复」、「升级优先级」">
     <template #actions>
       <a-button type="primary" @click="showCreateForm">
         <template #icon><icon-plus /></template>

@@ -230,17 +230,17 @@
 
         <a-tooltip v-if="sidebarCollapsed" :content="userName" position="right" :mini="true">
           <div class="sidebar-user" @click="showUserMenu = !showUserMenu">
-            <div class="user-avatar-sm">{{ userInitial }}</div>
+            <UserAvatar :name="userName" :size="24" />
             <span class="user-name">{{ userName }}</span>
           </div>
         </a-tooltip>
         <div v-else class="sidebar-user" @click="showUserMenu = !showUserMenu">
-          <div class="user-avatar-sm">{{ userInitial }}</div>
+          <UserAvatar :name="userName" :size="24" />
           <span class="user-name">{{ userName }}</span>
         </div>
         <div v-if="showUserMenu" class="user-menu">
           <div class="user-menu-header">
-            <div class="user-avatar-lg">{{ userInitial }}</div>
+            <UserAvatar :name="userName" :size="32" />
             <div class="user-menu-info">
               <span class="user-menu-name">{{ userName }}</span>
               <span class="user-menu-email">{{ userEmail }}</span>
@@ -290,6 +290,7 @@ import TabBar from './TabBar.vue'
 import NotificationPanel from './NotificationPanel.vue'
 import ServiceStatusBanner from './ServiceStatusBanner.vue'
 import trackflowLogoUrl from '@/assets/trackflow-watermark.svg'
+import { UserAvatar } from '@/components/base'
 import trackflowIconUrl from '@/assets/trackflow-icon.svg'
 
 const router = useRouter()
@@ -399,11 +400,6 @@ const themeIconComponent = computed(() => {
 })
 const themeLabel = computed(() => {
   return theme.value === 'dark' ? '暗色' : theme.value === 'light' ? '亮色' : '护眼'
-})
-
-const userInitial = computed(() => {
-  const name = authStore.user?.displayName || authStore.user?.username || 'U'
-  return name.charAt(0).toUpperCase()
 })
 
 const userName = computed(() => {
@@ -695,20 +691,6 @@ onUnmounted(() => document.removeEventListener('click', handleClickOutside))
 }
 .sidebar-user:hover { background: var(--tf-sidebar-hover); }
 
-.user-avatar-sm {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: var(--tf-accent);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 11px;
-  color: #fff;
-  font-weight: 600;
-  flex-shrink: 0;
-}
-
 .user-name {
   font-size: 12px;
   color: var(--tf-text-secondary);
@@ -737,20 +719,6 @@ onUnmounted(() => document.removeEventListener('click', handleClickOutside))
   align-items: center;
   gap: 10px;
   padding: 8px;
-}
-
-.user-avatar-lg {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background: var(--tf-accent);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 13px;
-  color: #fff;
-  font-weight: 600;
-  flex-shrink: 0;
 }
 
 .user-menu-info {

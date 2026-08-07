@@ -38,12 +38,7 @@
     <div class="stream-list">
       <div v-for="item in sorted" :key="item.id" :id="item.id" class="stream-item" :class="{ 'stream-item--highlighted': highlightedId === item.id }" @mouseenter="hoveredId = item.id" @mouseleave="hoveredId = ''">
         <UserHoverCard :user-id="item.userId">
-          <div v-if="item.userAvatar" class="avatar">
-            <img :src="item.userAvatar" :alt="item.user" class="avatar-img" />
-          </div>
-          <div v-else class="avatar" :style="{ background: avatarBg(item.user) }">
-            {{ initial(item.user) }}
-          </div>
+          <UserAvatar :name="item.user" :avatar="item.userAvatar" :size="28" />
         </UserHoverCard>
         <div class="item-body">
           <div class="item-head">
@@ -232,6 +227,7 @@ import Placeholder from '@tiptap/extension-placeholder'
 import { localizeAction, localizeLinkType } from '@/utils/fieldLabels'
 import { ReplyBlockquote } from '../extensions/ReplyBlockquote'
 import UserHoverCard from './UserHoverCard.vue'
+import { UserAvatar } from '@/components/base'
 
 /** 评论关联的字段变更（1分钟内的变更合并到评论条目展示） */
 export interface RelatedChange {
@@ -470,11 +466,6 @@ function doPermanentDelete() {
   permanentDeletingCommentId.value = null
 }
 
-function initial(name: string) { return name ? name[0].toUpperCase() : 'U' }
-function avatarBg(name: string) {
-  const c = ['#5c6bc0','#26a69a','#ef5350','#ab47bc','#42a5f5','#ff7043','#66bb6a']
-  return c[(name || '').charCodeAt(0) % c.length]
-}
 
 /** 将分钟数格式化为 "Xh Ym" 或 "Xm" */
 function formatDurationMin(minutes?: number): string {
@@ -680,15 +671,6 @@ defineExpose({
   0% { background: var(--tf-accent-subtle, rgba(88, 166, 255, 0.2)); }
   50% { background: var(--tf-accent-subtle, rgba(88, 166, 255, 0.15)); }
   100% { background: transparent; }
-}
-.avatar {
-  width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 11px; color: #fff; font-weight: 600;
-  overflow: hidden;
-}
-.avatar-img {
-  width: 100%; height: 100%; object-fit: cover;
 }
 .item-body { flex: 1; min-width: 0; }
 .item-head { display: flex; align-items: baseline; gap: 8px; }
