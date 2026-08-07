@@ -3940,7 +3940,7 @@ onMounted(async () => {
   }
 
   // Handle dashboard filter params (statusId, statusCode, statusCategory, status, label, sprint, keyword, etc.)
-  if (route.query.statusId || route.query.statusCode || route.query.statusCategory || route.query.statusName || route.query.status || route.query.overdue || route.query.dueSoon || route.query.sprint || route.query.reportedByMe || route.query.assignedToMe || route.query.priority || route.query.issueType || route.query.assigneeName || route.query.assignee || route.query.projectId || route.query.keyword) {
+  if (route.query.statusId || route.query.statusCode || route.query.statusCategory || route.query.statusName || route.query.status || route.query.overdue || route.query.dueSoon || route.query.sprint || route.query.reportedByMe || route.query.assignedToMe || route.query.priority || route.query.issueType || route.query.assigneeName || route.query.assignee || route.query.reporter || route.query.projectId || route.query.keyword) {
     applyDashboardFilter()
   } else if (!route.query.project && !activeProjectId.value) {
     // Restore user's last query preference, or show all issues on first visit (YouTrack standard)
