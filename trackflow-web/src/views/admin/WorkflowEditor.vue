@@ -257,9 +257,8 @@
                     @mouseleave="onCellLeave"
                   >
                     <div v-if="fromStatus.id !== toStatus.id" class="cell-content">
-                      <input
-                        type="checkbox"
-                        :checked="isAllowed(fromStatus.id, toStatus.id)"
+                      <a-checkbox
+                        :model-value="isAllowed(fromStatus.id, toStatus.id)"
                         @change="toggleTransition(fromStatus.id, toStatus.id)"
                         @click.stop
                         class="matrix-checkbox"
@@ -1453,7 +1452,7 @@ onBeforeRouteLeave(() => {
 .page-title {
   font-size: 18px;
   font-weight: 600;
-  color: var(--text-bright);
+  color: var(--tf-text-primary);
   white-space: nowrap;
   flex-shrink: 0;
 }
@@ -1471,7 +1470,7 @@ onBeforeRouteLeave(() => {
   align-items: center;
   margin-bottom: 12px;
   padding: 8px 12px;
-  background: var(--bg-secondary);
+  background: var(--tf-bg-surface);
   border-radius: 6px;
 }
 
@@ -1482,24 +1481,25 @@ onBeforeRouteLeave(() => {
   gap: 12px;
   margin-bottom: 16px;
   padding: 8px 12px;
-  background: var(--bg-secondary);
+  background: var(--tf-bg-surface);
   border-radius: 6px;
 }
 
 .toolbar-stats {
   font-size: 12px;
-  color: var(--text-muted);
+  color: var(--tf-text-muted);
   margin-left: auto;
 }
 
 .toolbar-divider {
   margin: 0 8px;
-  color: var(--border-color);
+  color: var(--tf-border);
 }
 
 .matrix-container {
-  overflow-x: auto;
+  overflow: auto;
   flex: 1;
+  max-height: 100%;
 }
 
 .matrix-table {
@@ -1507,20 +1507,32 @@ onBeforeRouteLeave(() => {
   width: 100%;
   min-width: max-content;
   table-layout: auto;
+  background: var(--tf-bg-surface);
 }
 
 .matrix-table th,
 .matrix-table td {
   padding: 6px 8px;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--tf-border);
   text-align: center;
   font-size: 11px;
 }
 
+/* Sticky thead */
+.matrix-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+}
+
+.matrix-table thead th {
+  background: var(--tf-bg-elevated);
+}
+
 /* 分组头（列方向） */
 .group-header {
-  background: var(--bg-tertiary);
-  color: var(--text-secondary);
+  background: var(--tf-bg-elevated);
+  color: var(--tf-text-tertiary);
   font-weight: 600;
   font-size: 11px;
   letter-spacing: 0.5px;
@@ -1529,10 +1541,10 @@ onBeforeRouteLeave(() => {
   border-bottom: none;
 }
 
-.group-header.group-open { border-top: 2px solid #58a6ff; }
-.group-header.group-in_progress { border-top: 2px solid #d29922; }
-.group-header.group-done { border-top: 2px solid #3fb950; }
-.group-header.group-cancelled { border-top: 2px solid #f85149; }
+.group-header.group-open { border-top: 2px solid var(--tf-accent); }
+.group-header.group-in_progress { border-top: 2px solid var(--tf-warning); }
+.group-header.group-done { border-top: 2px solid var(--tf-success); }
+.group-header.group-cancelled { border-top: 2px solid var(--tf-danger); }
 
 .group-count {
   font-weight: 400;
@@ -1540,14 +1552,14 @@ onBeforeRouteLeave(() => {
 }
 
 .corner-cell {
-  background: var(--bg-tertiary);
-  color: var(--text-secondary);
+  background: var(--tf-bg-elevated);
+  color: var(--tf-text-secondary);
   font-weight: 500;
   text-align: left;
   min-width: 140px;
   position: sticky;
   left: 0;
-  z-index: 3;
+  z-index: 5;
 }
 
 .corner-cell-sub {
@@ -1555,8 +1567,8 @@ onBeforeRouteLeave(() => {
 }
 
 .col-header {
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
+  background: var(--tf-bg-elevated);
+  color: var(--tf-text-primary);
   font-weight: 500;
   white-space: nowrap;
   font-size: 11px;
@@ -1566,7 +1578,7 @@ onBeforeRouteLeave(() => {
 }
 
 .col-header.highlighted {
-  background: var(--bg-hover, rgba(88, 166, 255, 0.08));
+  background: var(--tf-bg-hover);
 }
 
 .col-header-name {
@@ -1579,8 +1591,8 @@ onBeforeRouteLeave(() => {
 
 /* 行分组标题 */
 .group-row-header {
-  background: var(--bg-tertiary);
-  color: var(--text-secondary);
+  background: var(--tf-bg-elevated);
+  color: var(--tf-text-tertiary);
   font-weight: 600;
   font-size: 11px;
   letter-spacing: 0.5px;
@@ -1595,13 +1607,13 @@ onBeforeRouteLeave(() => {
 }
 
 .group-row-header:hover {
-  background: var(--bg-hover, rgba(255, 255, 255, 0.04));
+  background: var(--tf-bg-hover);
 }
 
-.group-row-header.group-open { border-left: 3px solid #58a6ff; }
-.group-row-header.group-in_progress { border-left: 3px solid #d29922; }
-.group-row-header.group-done { border-left: 3px solid #3fb950; }
-.group-row-header.group-cancelled { border-left: 3px solid #f85149; }
+.group-row-header.group-open { border-left: 3px solid var(--tf-accent); }
+.group-row-header.group-in_progress { border-left: 3px solid var(--tf-warning); }
+.group-row-header.group-done { border-left: 3px solid var(--tf-success); }
+.group-row-header.group-cancelled { border-left: 3px solid var(--tf-danger); }
 
 .group-toggle {
   display: inline-block;
@@ -1610,8 +1622,8 @@ onBeforeRouteLeave(() => {
 }
 
 .row-header {
-  background: var(--bg-secondary);
-  color: var(--text-primary);
+  background: var(--tf-bg-surface);
+  color: var(--tf-text-primary);
   text-align: left;
   font-weight: 500;
   white-space: nowrap;
@@ -1629,7 +1641,7 @@ onBeforeRouteLeave(() => {
   display: inline-block;
   margin-left: 6px;
   font-size: 12px;
-  color: var(--color-text-4, #8b949e);
+  color: var(--tf-text-muted);
   cursor: pointer;
   opacity: 0;
   transition: opacity 150ms ease, color 150ms ease;
@@ -1641,16 +1653,16 @@ onBeforeRouteLeave(() => {
 
 .initial-status-star.active {
   opacity: 1;
-  color: #d29922;
+  color: var(--tf-warning);
 }
 
 .initial-status-star:hover {
-  color: #d29922;
+  color: var(--tf-warning);
   opacity: 1;
 }
 
 .row-header.highlighted {
-  background: var(--bg-hover, rgba(88, 166, 255, 0.08));
+  background: var(--tf-bg-hover);
 }
 
 .status-dot {
@@ -1662,20 +1674,20 @@ onBeforeRouteLeave(() => {
 }
 
 .matrix-cell {
-  background: var(--bg-primary);
+  background: var(--tf-bg-body);
   transition: background-color 100ms ease;
 }
 .matrix-cell.disabled {
-  background: var(--bg-tertiary);
+  background: var(--tf-bg-elevated);
 }
 .matrix-cell.clickable {
   cursor: pointer;
 }
 .matrix-cell.clickable:hover {
-  background: var(--bg-tertiary, rgba(255, 255, 255, 0.04));
+  background: var(--tf-bg-hover);
 }
 .matrix-cell.highlighted {
-  background: var(--bg-hover, rgba(88, 166, 255, 0.04));
+  background: var(--tf-bg-hover);
 }
 
 .cell-content {
@@ -1692,8 +1704,8 @@ onBeforeRouteLeave(() => {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--accent-blue, rgb(var(--arcoblue-6)));
-  box-shadow: 0 0 0 2px var(--bg-primary, var(--color-bg-2));
+  background: var(--tf-accent);
+  box-shadow: 0 0 0 2px var(--tf-bg-body);
 }
 
 .guard-dot {
@@ -1703,26 +1715,28 @@ onBeforeRouteLeave(() => {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #d29922;
-  box-shadow: 0 0 0 2px var(--bg-primary, var(--color-bg-2));
+  background: var(--tf-warning);
+  box-shadow: 0 0 0 2px var(--tf-bg-body);
 }
 
 .matrix-checkbox {
+  line-height: 1;
+}
+
+.matrix-checkbox :deep(.arco-checkbox-icon) {
   width: 14px;
   height: 14px;
-  cursor: pointer;
-  accent-color: var(--accent-blue);
 }
 
 .cell-dash {
-  color: var(--text-muted);
+  color: var(--tf-text-muted);
   font-size: 10px;
 }
 
 .help-text {
   margin-top: 16px;
   font-size: var(--font-size-sm);
-  color: var(--text-muted);
+  color: var(--tf-text-muted);
   display: flex;
   align-items: center;
   gap: 6px;
@@ -1734,14 +1748,14 @@ onBeforeRouteLeave(() => {
   align-items: center;
   justify-content: center;
   padding: 64px 24px;
-  color: var(--text-muted);
+  color: var(--tf-text-muted);
 }
 
 .empty-state h3 {
   margin-top: 16px;
   font-size: 16px;
   font-weight: 500;
-  color: var(--text-secondary);
+  color: var(--tf-text-secondary);
 }
 
 .empty-state p {
@@ -1752,19 +1766,19 @@ onBeforeRouteLeave(() => {
 }
 
 .empty-state-error {
-  color: var(--color-danger-6, #f85149);
+  color: var(--tf-danger);
 }
 
 .empty-state-error h3 {
-  color: var(--color-danger-6, #f85149);
+  color: var(--tf-danger);
 }
 
 .empty-state-info {
-  color: rgb(var(--arcoblue-6));
+  color: var(--tf-accent);
 }
 
 .empty-state-info h3 {
-  color: rgb(var(--arcoblue-6));
+  color: var(--tf-accent);
 }
 
 /* 模式 Tab */
@@ -1775,7 +1789,7 @@ onBeforeRouteLeave(() => {
 .mode-info-icon {
   margin-left: 4px;
   font-size: 12px;
-  color: var(--text-muted);
+  color: var(--tf-text-muted);
   vertical-align: middle;
   cursor: help;
 }
@@ -1841,7 +1855,7 @@ onBeforeRouteLeave(() => {
   align-items: center;
   margin-bottom: 12px;
   padding: 8px 12px;
-  background: var(--bg-secondary);
+  background: var(--tf-bg-surface);
   border-radius: 6px;
 }
 
