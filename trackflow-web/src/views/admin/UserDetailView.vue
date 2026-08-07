@@ -3,7 +3,7 @@
     <!-- 顶部导航 -->
     <div class="page-nav">
       <router-link to="/admin/users" class="back-link">
-        <span class="back-icon">←</span>
+        <icon-left :size="14" />
         <span>用户管理</span>
       </router-link>
     </div>
@@ -649,14 +649,14 @@ onMounted(() => {
   gap: 6px;
   color: var(--text-secondary);
   text-decoration: none;
-  font-size: var(--font-size-sm);
-  transition: color 150ms;
+  font-size: 13px;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  transition: color 150ms, background-color 150ms;
 }
 .back-link:hover {
   color: var(--accent-blue);
-}
-.back-icon {
-  font-size: 14px;
+  background: var(--tf-bg-hover, rgba(255,255,255,0.06));
 }
 
 /* 加载/错误状态 */
@@ -882,10 +882,13 @@ onMounted(() => {
   white-space: nowrap;
 }
 .btn-revoke {
-  display: none !important;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 150ms;
 }
 .project-role-item:hover .btn-revoke {
-  display: inline-flex !important;
+  opacity: 1;
+  pointer-events: auto;
 }
 .btn-revoke:hover {
   color: var(--accent-red) !important;
