@@ -1359,8 +1359,26 @@ function resumeBeforeUnload() {
  */
 const isDiscarding = ref(false)
 
+/** 获取当前表单数据快照（供父组件在路由守卫中保存草稿使用） */
+function getFormData() {
+  return {
+    title: form.title,
+    description: form.description,
+    projectId: form.projectId || '',
+    issueType: form.issueType,
+    priority: form.priority,
+    statusId: form.statusId || '',
+    sprintId: form.sprintId || '',
+    assigneeId: form.assigneeId || '',
+    tagIds: [...form.tagIds],
+    dueDate: form.dueDate || '',
+    estimatedHours: form.estimatedHours ?? null,
+    customFieldValues: { ...customFieldValues.value }
+  }
+}
+
 // 暴露 isDirty、isDiscarding 和 beforeunload 控制方法供父组件使用
-defineExpose({ isDirty, isDiscarding, suspendBeforeUnload, resumeBeforeUnload })
+defineExpose({ isDirty, isDiscarding, suspendBeforeUnload, resumeBeforeUnload, getFormData })
 
 // 检测 macOS 以显示正确的修饰键提示
 const isMac = navigator.platform.toUpperCase().includes('MAC')
@@ -1594,21 +1612,7 @@ function clearTemplate() {
 function close() {
   if (isDirty.value) {
     // 有内容时自动保存为草稿（YouTrack 风格：无需确认）
-    const formData = {
-      title: form.title,
-      description: form.description,
-      projectId: form.projectId || '',
-      issueType: form.issueType,
-      priority: form.priority,
-      statusId: form.statusId || '',
-      sprintId: form.sprintId || '',
-      assigneeId: form.assigneeId || '',
-      tagIds: [...form.tagIds],
-      dueDate: form.dueDate || '',
-      estimatedHours: form.estimatedHours ?? null,
-      customFieldValues: { ...customFieldValues.value }
-    }
-    emit('cancel-with-data', formData)
+    emit('cancel-with-data', getFormData())
   }
   doClose()
 }
