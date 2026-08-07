@@ -249,7 +249,8 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { Message, Modal } from '@arco-design/web-vue'
+import { Message } from '@arco-design/web-vue'
+import { useConfirmDelete } from '@/composables/useConfirmDelete'
 import { workflowDefinitionApi } from '@/api/workflowDefinition'
 import type { WorkflowDefinitionVO, BoundProject } from '@/api/workflowDefinition'
 import { projectApi } from '@/api'
@@ -432,10 +433,11 @@ async function handleAttachConfirm() {
 }
 
 async function handleDetach(def: WorkflowDefinitionVO, proj: BoundProject) {
-  Modal.confirm({
-    title: '确认解绑',
-    content: `确定要将项目「${proj.name}」从工作流「${def.name}」中分离吗？`,
-    async onOk() {
+  const { confirmDelete } = useConfirmDelete()
+  confirmDelete({
+    itemName: `项目「${proj.name}」与工作流「${def.name}」的绑定`,
+    confirmText: '解绑',
+    onConfirm: async () => {
       try {
         await workflowDefinitionApi.detachFromProject(proj.id, def.id)
         Message.success('解绑成功')
@@ -448,10 +450,12 @@ async function handleDetach(def: WorkflowDefinitionVO, proj: BoundProject) {
 }
 
 function handleDelete(def: WorkflowDefinitionVO) {
-  Modal.confirm({
-    title: '确认删除',
-    content: `确定要删除工作流「${def.name}」吗？关联的转换规则也将被删除，此操作不可撤销。`,
-    async onOk() {
+  const { confirmDangerDelete } = useConfirmDelete()
+  confirmDangerDelete({
+    itemName: `工作流「${def.name}」`,
+    impactDescription: '关联的转换规则也将被删除',
+    confirmText: '确认删除',
+    onConfirm: async () => {
       try {
         await workflowDefinitionApi.delete(def.id)
         Message.success('删除成功')

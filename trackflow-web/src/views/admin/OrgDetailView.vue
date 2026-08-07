@@ -454,13 +454,11 @@ async function submitGrantAccess(done?: (closed: boolean) => void) {
 }
 
 function revokeAccess(access: OrgAccessVO) {
-  Modal.confirm({
-    title: '撤销授权',
-    content: `确定要撤销 ${access.userDisplayName} 的 ${access.roleName} 角色吗？`,
-    okText: '撤销',
-    cancelText: '取消',
-    okButtonProps: { status: 'danger' },
-    async onOk() {
+  const { confirmDelete } = useConfirmDelete()
+  confirmDelete({
+    itemName: `${access.userDisplayName} 的「${access.roleName}」角色`,
+    confirmText: '撤销',
+    onConfirm: async () => {
       try {
         await organizationApi.revokeAccess(orgId.value, access.id)
         Message.success('授权已撤销')

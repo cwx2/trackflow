@@ -360,6 +360,7 @@
 import { ref, reactive, computed, onMounted, h } from 'vue'
 import { useRouter } from 'vue-router'
 import { Modal, Message } from '@arco-design/web-vue'
+import { useConfirmDelete } from '@/composables/useConfirmDelete'
 import { userApi, projectApi, globalMemberApi, roleApi } from '@/api'
 import type { UserProfileProjectRoleInfo } from '@/api/user'
 import type { GlobalMemberVO } from '@/api/globalMember'
@@ -720,13 +721,11 @@ async function removeFromProject(pr: UserProfileProjectRoleInfo) {
   const userId = selectedUser.value?.id
   if (!userId) return
 
-  Modal.confirm({
-    title: '确认移除成员',
-    content: `确定将该用户从项目"${pr.projectName}"中移除？`,
-    okText: '移除',
-    cancelText: '取消',
-    okButtonProps: { status: 'danger' },
-    async onOk() {
+  const { confirmDelete } = useConfirmDelete()
+  confirmDelete({
+    itemName: `该用户在项目「${pr.projectName}」中的成员资格`,
+    confirmText: '移除',
+    onConfirm: async () => {
       try {
         await projectApi.removeMember(pr.projectId, userId)
         userProjectRoles.value = userProjectRoles.value.filter(
@@ -789,13 +788,11 @@ async function revokeGlobalMember(gm: GlobalMemberVO) {
   const userId = selectedUser.value?.id
   if (!userId) return
 
-  Modal.confirm({
-    title: '撤销全局项目角色',
-    content: `确定撤销该用户的全局「${gm.roleName}」角色吗？该用户将从所有项目中移除此角色。`,
-    okText: '撤销',
-    cancelText: '取消',
-    okButtonProps: { status: 'danger' },
-    async onOk() {
+  const { confirmDelete } = useConfirmDelete()
+  confirmDelete({
+    itemName: `该用户的全局「${gm.roleName}」角色`,
+    confirmText: '撤销',
+    onConfirm: async () => {
       try {
         await globalMemberApi.revoke(userId, gm.roleId)
         Message.success('全局项目角色已撤销')

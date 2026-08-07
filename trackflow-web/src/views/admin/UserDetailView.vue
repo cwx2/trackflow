@@ -271,6 +271,7 @@
 import { ref, computed, onMounted, h } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Modal, Message } from '@arco-design/web-vue'
+import { useConfirmDelete } from '@/composables/useConfirmDelete'
 import { userApi, projectApi, roleApi } from '@/api'
 import type { UserProfileVO, UserProfileProjectRoleInfo } from '@/api/user'
 import { localizeActionShort, fieldLabelMap, localizeLinkType } from '@/utils/fieldLabels'
@@ -577,17 +578,12 @@ function revokeProjectRole(pr: UserProfileProjectRoleInfo) {
 
   if (directRolesInProject.length <= 1) {
     // 只有一个直接角色：撤销意味着从项目中完全移除
-    Modal.confirm({
-      title: '确认撤销角色',
-      content: () => h('div', [
-        h('p', `确定撤销 "${profile.value!.displayName}" 在项目「${pr.projectName}」中的「${pr.roleName}」角色吗？`),
-        h('p', { style: 'color: var(--tf-text-tertiary); font-size: 12px; margin-top: 8px' },
-          '这是该用户在此项目中的唯一直接角色，撤销后将从项目中完全移除。')
-      ]),
-      okText: '撤销角色',
-      cancelText: '取消',
-      okButtonProps: { status: 'danger' },
-      async onOk() {
+    const { confirmDangerDelete } = useConfirmDelete()
+    confirmDangerDelete({
+      itemName: `${profile.value!.displayName} 在项目「${pr.projectName}」中的「${pr.roleName}」角色`,
+      impactDescription: '这是该用户在此项目中的唯一直接角色，撤销后将从项目中完全移除',
+      confirmText: '撤销角色',
+      onConfirm: async () => {
         try {
           await projectApi.removeMember(pr.projectId, userId.value)
           Message.success('角色已撤销')
@@ -599,13 +595,11 @@ function revokeProjectRole(pr: UserProfileProjectRoleInfo) {
     })
   } else {
     // 多个角色：只移除选中的角色
-    Modal.confirm({
-      title: '确认撤销角色',
-      content: `确定撤销 "${profile.value.displayName}" 在项目「${pr.projectName}」中的「${pr.roleName}」角色吗？`,
-      okText: '撤销角色',
-      cancelText: '取消',
-      okButtonProps: { status: 'danger' },
-      async onOk() {
+    const { confirmDelete } = useConfirmDelete()
+    confirmDelete({
+      itemName: `${profile.value.displayName} 在项目「${pr.projectName}」中的「${pr.roleName}」角色`,
+      confirmText: '撤销角色',
+      onConfirm: async () => {
         try {
           // 保留其余角色
           const remainingRoleIds = directRolesInProject
