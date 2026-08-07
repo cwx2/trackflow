@@ -233,7 +233,7 @@
             <span class="prop-label">优先级</span>
             <a-select v-model="form.priority" size="small">
               <a-option v-for="p in prioritySelectOptions" :key="p.value" :value="p.value">
-                <span class="priority-badge" :style="{ background: p.color }"></span>{{ p.label }}
+                <IssuePriorityBadge :priority="p.value" :color="p.color" mode="dot" :show-label="true" />
               </a-option>
             </a-select>
           </div>
@@ -707,6 +707,7 @@ import { useRouter } from 'vue-router'
 import { Message, Modal } from '@arco-design/web-vue'
 import { IconDown, IconAttachment, IconClose, IconPlus, IconUp, IconLink, IconSearch, IconCheck, IconFullscreen, IconFile } from '@arco-design/web-vue/es/icon'
 import { projectApi, issueApi, sprintApi, customFieldApi, issueTemplateApi, tagApi } from '@/api'
+import { IssuePriorityBadge } from '@/components/base'
 import { useProjectList } from '@/composables/useProjectList'
 import { usePermission } from '@/composables/usePermission'
 import { useCustomFieldForm } from './composables/useCustomFieldForm'
@@ -2233,7 +2234,6 @@ onMounted(() => {
 .prop-row { margin-bottom: 14px; }
 .prop-label { display: block; font-size: 12px; color: var(--color-text-3); margin-bottom: 4px; }
 
-.priority-badge { margin-right: 6px; }
 .priority-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
 .priority-dot.critical { background: #ef4444; }
 .priority-dot.high { background: #f59e0b; }

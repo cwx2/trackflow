@@ -59,7 +59,13 @@
           <a-select v-model="deleteTargetSprintId" placeholder="选择目标迭代" style="width: 100%">
             <a-option v-for="target in preview.targetSprints" :key="target.id" :value="target.id">
               {{ target.name }}
-              <span class="target-status-tag">{{ target.status === 'active' ? '进行中' : '计划中' }}</span>
+              <IssueStatusTag
+                :name="target.status === 'active' ? '进行中' : '计划中'"
+                :color="target.status === 'active' ? '#3b82f6' : '#6b7280'"
+                size="small"
+                :show-dot="false"
+                variant="plain"
+              />
             </a-option>
           </a-select>
         </div>
@@ -78,6 +84,7 @@
 import { ref, computed, watch } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { sprintApi } from '@/api'
+import { IssueStatusTag } from '@/components/base'
 import type { SprintVO, DeletionPreviewVO } from '@/api/types'
 
 const props = defineProps<{
@@ -190,7 +197,6 @@ async function confirmDelete() {
 .radio-desc { display: block; font-size: 12px; color: var(--color-text-3); margin-top: 2px; }
 .radio-desc.disabled { color: var(--color-text-4); font-style: italic; }
 .target-sprint-select { margin-top: 8px; margin-left: 24px; }
-.target-status-tag { font-size: 11px; color: var(--color-text-3); margin-left: 8px; }
 
 .complete-loading { display: flex; flex-direction: column; align-items: center; padding: 32px 0; }
 </style>

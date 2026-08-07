@@ -26,13 +26,10 @@
         <div v-for="issue in preview.openIssues" :key="issue.id" class="open-issue-item">
           <span class="issue-key">{{ issue.issueKey }}</span>
           <span class="issue-title">{{ issue.title }}</span>
-          <span
-            class="issue-status-tag"
-            :style="{
-              background: (issue.statusColor || '#6b7280') + '20',
-              color: issue.statusColor || '#6b7280'
-            }"
-          >{{ localizeStatusName(issue.statusName) }}</span>
+          <IssueStatusTag
+            :name="localizeStatusName(issue.statusName)"
+            :color="issue.statusColor || '#6b7280'"
+          />
           <span class="issue-assignee" v-if="issue.assigneeName">{{ issue.assigneeName }}</span>
         </div>
       </div>
@@ -60,7 +57,13 @@
           <a-select v-model="targetSprintId" placeholder="选择目标迭代" style="width: 100%">
             <a-option v-for="target in preview.targetSprints" :key="target.id" :value="target.id">
               {{ target.name }}
-              <span class="target-status-tag">{{ target.status === 'active' ? '进行中' : '计划中' }}</span>
+              <IssueStatusTag
+                :name="target.status === 'active' ? '进行中' : '计划中'"
+                :color="target.status === 'active' ? '#3b82f6' : '#6b7280'"
+                size="small"
+                :show-dot="false"
+                variant="plain"
+              />
             </a-option>
           </a-select>
         </div>
@@ -80,6 +83,7 @@ import { ref, computed, watch } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { sprintApi } from '@/api'
 import { localizeStatusName } from '@/utils/fieldLabels'
+import { IssueStatusTag } from '@/components/base'
 import type { SprintVO, CompletionPreviewVO } from '@/api/types'
 
 const props = defineProps<{
@@ -204,14 +208,6 @@ async function confirmComplete() {
   border-bottom: 1px solid var(--color-border);
 }
 .open-issue-item:last-child { border-bottom: none; }
-.issue-status-tag {
-  padding: 2px 6px;
-  border-radius: 3px;
-  font-size: 10px;
-  font-weight: 500;
-  flex-shrink: 0;
-  white-space: nowrap;
-}
 .issue-key { color: var(--color-text-3); font-family: monospace; font-size: 11px; flex-shrink: 0; }
 .issue-title { color: var(--color-text-1); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .issue-assignee { color: var(--color-text-3); font-size: 11px; flex-shrink: 0; }
@@ -222,7 +218,6 @@ async function confirmComplete() {
 .radio-desc { display: block; font-size: 12px; color: var(--color-text-3); margin-top: 2px; }
 .radio-desc.disabled { color: var(--color-text-4); font-style: italic; }
 .target-sprint-select { margin-top: 8px; margin-left: 24px; }
-.target-status-tag { font-size: 11px; color: var(--color-text-3); margin-left: 8px; }
 
 .complete-loading { display: flex; flex-direction: column; align-items: center; padding: 32px 0; }
 </style>

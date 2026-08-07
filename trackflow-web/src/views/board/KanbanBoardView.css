@@ -1532,18 +1532,6 @@
   transform: translateY(0);
 }
 
-.hidden-status-tag-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.hidden-status-tag-name {
-  font-weight: 500;
-  color: var(--color-text-1);
-}
-
 .hidden-status-tag-count {
   font-size: 11px;
   font-weight: 600;

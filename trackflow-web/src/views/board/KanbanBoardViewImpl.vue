@@ -308,8 +308,12 @@
             :title="`查看「${localizeStatusName(col.statusName)}」状态下的 ${col.issueCount || 0} 个工单`"
             @click="onHiddenStatusTagClick(col)"
           >
-            <span class="hidden-status-tag-dot" :style="{ background: col.statusColor || 'var(--color-fill-4)' }"></span>
-            <span class="hidden-status-tag-name">{{ localizeStatusName(col.statusName) }}</span>
+            <IssueStatusTag
+              :name="localizeStatusName(col.statusName)"
+              :color="col.statusColor"
+              size="small"
+              variant="plain"
+            />
             <span class="hidden-status-tag-count">{{ col.issueCount || 0 }}</span>
           </button>
         </div>
@@ -1143,6 +1147,7 @@
 <script setup lang="ts">
 import { useKanbanBoard } from './composables'
 import { localizeStatusName, localizePriority } from '@/utils/fieldLabels'
+import { IssueStatusTag } from '@/components/base'
 import BoardSettingsDrawer from './BoardSettingsDrawer.vue'
 import BoardSelector from './BoardSelector.vue'
 import BacklogPanel from './BacklogPanel.vue'

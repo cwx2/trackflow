@@ -45,7 +45,12 @@
             </span>
             <span class="meta-item">
               <span class="meta-label">状态</span>
-              <span class="status-tag" :class="profile.status">{{ statusLabel(profile.status, profile.banStatus) }}</span>
+              <IssueStatusTag
+                :name="statusLabel(profile.status, profile.banStatus)"
+                :color="profile.status === 'active' ? '#4caf50' : '#f44336'"
+                size="medium"
+                :show-dot="false"
+              />
             </span>
           </div>
           <!-- 禁用信息展示 -->
@@ -269,7 +274,7 @@ import { Modal, Message } from '@arco-design/web-vue'
 import { userApi, projectApi, roleApi } from '@/api'
 import type { UserProfileVO, UserProfileProjectRoleInfo } from '@/api/user'
 import { localizeActionShort, fieldLabelMap, localizeLinkType } from '@/utils/fieldLabels'
-import { UserAvatar } from '@/components/base'
+import { UserAvatar, IssueStatusTag } from '@/components/base'
 
 const route = useRoute()
 const router = useRouter()
@@ -722,19 +727,6 @@ onMounted(() => {
 }
 .meta-value {
   color: var(--text-primary);
-}
-.status-tag {
-  font-size: var(--font-size-xs);
-  padding: 2px 8px;
-  border-radius: var(--radius-sm);
-}
-.status-tag.active {
-  background: rgba(76,175,80,0.15);
-  color: var(--accent-green);
-}
-.status-tag.disabled {
-  background: rgba(244,67,54,0.15);
-  color: var(--accent-red);
 }
 .user-timestamps {
   font-size: var(--font-size-xs);

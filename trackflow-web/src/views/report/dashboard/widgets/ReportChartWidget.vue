@@ -17,6 +17,7 @@ import { TooltipComponent, LegendComponent, GridComponent } from 'echarts/compon
 import VChart from 'vue-echarts'
 import { IconBarChart } from '@arco-design/web-vue/es/icon'
 import { reportApi } from '@/api/report'
+import { getPriorityColor } from '@/views/issue/composables/usePriorityOptions'
 import type { ReportDataVO } from '@/api/report'
 
 use([CanvasRenderer, PieChart, BarChart, LineChart, TooltipComponent, LegendComponent, GridComponent])
@@ -52,14 +53,9 @@ const statusColors: Record<string, string> = {
   'Solved': '#3fb950', 'Online': '#3fb950'
 }
 
-const priorityColors: Record<string, string> = {
-  '阻塞': '#ff1744', '紧急': '#f85149', '高': '#f0883e', '普通': '#58a6ff', '低': '#3fb950',
-  'Critical': '#f85149', 'High': '#f0883e', 'Normal': '#58a6ff', 'Low': '#3fb950'
-}
-
 function getItemColor(label: string, groupBy: string, idx: number): string {
   if (groupBy === 'status') return statusColors[label] || palette[idx % palette.length]
-  if (groupBy === 'priority') return priorityColors[label] || palette[idx % palette.length]
+  if (groupBy === 'priority') return getPriorityColor(label) || palette[idx % palette.length]
   return palette[idx % palette.length]
 }
 

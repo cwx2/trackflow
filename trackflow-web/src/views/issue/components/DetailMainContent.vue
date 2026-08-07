@@ -172,12 +172,12 @@
           <div v-if="group.expanded" class="link-group-items">
             <div v-for="link in group.items" :key="link.id" class="link-item" :class="{ 'link-blocked': link.isUnresolvedBlocker }">
               <span v-if="link.isUnresolvedBlocker" class="link-block-icon" title="未解决的阻塞">⛔</span>
-              <span
-                v-if="link.priorityColor && link.priorityOrder"
-                class="link-priority-badge"
-                :style="{ backgroundColor: link.priorityColor }"
-                :title="link.priority"
-              >{{ link.priorityOrder }}</span>
+              <IssuePriorityBadge
+                v-if="link.priority"
+                :priority="link.priority"
+                :color="link.priorityColor"
+                mode="block"
+              />
               <router-link :to="`/issues/${link.issueKey}`" class="link-key-ref">{{ link.issueKey }}</router-link>
               <span class="link-title-text">{{ link.issueTitle }}</span>
               <span class="link-status" :style="{ color: link.statusColor }">{{ link.statusName }}</span>
@@ -212,6 +212,7 @@ import { Message } from '@arco-design/web-vue'
 import { IconCopy, IconDelete, IconBranch, IconSwap, IconPrinter, IconClockCircle, IconUpload, IconLock, IconSearch, IconPlus, IconEdit, IconLink, IconMore, IconAttachment, IconClose } from '@arco-design/web-vue/es/icon'
 import { renderMarkdown } from '@/utils/markdown'
 import { localizeIssueType } from '@/utils/fieldLabels'
+import { IssuePriorityBadge } from '@/components/base'
 import RichEditor from './RichEditor.vue'
 import ChildIssuesList from './ChildIssuesList.vue'
 import AttachmentSection from './AttachmentSection.vue'
@@ -590,12 +591,6 @@ function commitDesc(content: string) {
   padding-left: 6px;
 }
 .link-block-icon { font-size: 11px; flex-shrink: 0; }
-.link-priority-badge {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 16px; height: 16px; border-radius: 3px;
-  font-size: 11px; font-weight: 600; color: #fff;
-  flex-shrink: 0;
-}
 .link-key-ref { color: var(--tf-accent); font-weight: 500; text-decoration: none; flex-shrink: 0; }
 .link-key-ref:hover { text-decoration: underline; }
 .link-title-text { color: var(--tf-text-secondary); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -41,9 +41,7 @@
     <span v-else-if="indent > 0" class="item-expand-spacer"></span>
 
     <!-- Priority badge -->
-    <span class="item-priority" :class="'priority-' + (issue.priority || 'Normal').toLowerCase()">
-      {{ localizePriority(issue.priority) }}
-    </span>
+    <IssuePriorityBadge :priority="issue.priority" mode="text" />
 
     <!-- Issue key -->
     <router-link :to="`/issues/${issue.issueKey}`" class="item-key" @click.stop>{{ issue.issueKey }}</router-link>
@@ -200,7 +198,8 @@ import { computed, ref } from 'vue'
 import { IconRight, IconDown, IconLayers, IconDragDotVertical, IconThumbUp, IconLoading } from '@arco-design/web-vue/es/icon'
 import type { IssueVO, CustomFieldValueVO, SprintVO } from '@/api/types'
 import type { DensityLevel } from '../composables'
-import { localizeStatusName, localizePriority } from '@/utils/fieldLabels'
+import { localizeStatusName } from '@/utils/fieldLabels'
+import { IssuePriorityBadge } from '@/components/base'
 import TimeProgressIndicator from './TimeProgressIndicator.vue'
 
 interface IssueListItemIssue extends IssueVO {
@@ -504,29 +503,6 @@ function truncateDescription(desc?: string): string {
   width: 18px;
   flex-shrink: 0;
 }
-
-/* Priority badge */
-.item-priority {
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 11px;
-  font-weight: 500;
-  color: #fff;
-  padding: 1px 6px;
-  border-radius: 3px;
-  white-space: nowrap;
-  max-width: 48px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  background: var(--tf-text-tertiary);
-}
-
-.item-priority.priority-critical { background: var(--tf-danger, #e53e3e); }
-.item-priority.priority-high { background: var(--tf-warning, #ed8936); }
-.item-priority.priority-normal { background: var(--tf-accent, #4299e1); }
-.item-priority.priority-low { background: var(--tf-text-tertiary, #a0aec0); }
 
 /* Issue key */
 .item-key {

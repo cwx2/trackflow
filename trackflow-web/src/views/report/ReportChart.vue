@@ -90,6 +90,7 @@ import { PieChart, BarChart, LineChart } from 'echarts/charts'
 import { TooltipComponent, LegendComponent, GridComponent } from 'echarts/components'
 import VChart from 'vue-echarts'
 import { localizeStatusName, priorityLabelMap } from '@/utils/fieldLabels'
+import { getPriorityColor } from '@/views/issue/composables/usePriorityOptions'
 import type { ReportDataVO } from '@/api/report'
 
 // 注册 ECharts 组件（按需引入）
@@ -171,20 +172,6 @@ const statusColors: Record<string, string> = {
   'Online': '#3fb950'
 }
 
-/** 优先级色 */
-const priorityColors: Record<string, string> = {
-  '阻塞': '#ff1744',
-  '紧急': '#f85149',
-  '高': '#f0883e',
-  '普通': '#58a6ff',
-  '低': '#3fb950',
-  // 兼容历史英文值
-  'Critical': '#f85149',
-  'High': '#f0883e',
-  'Normal': '#58a6ff',
-  'Low': '#3fb950',
-}
-
 /** 通用色板（轮循） */
 const palette = ['#58a6ff', '#3fb950', '#f0883e', '#a371f7', '#d29922', '#f85149', '#79c0ff', '#56d364', '#ffa657', '#d2a8ff']
 
@@ -192,7 +179,7 @@ const palette = ['#58a6ff', '#3fb950', '#f0883e', '#a371f7', '#d29922', '#f85149
 
 function getItemColor(label: string, groupBy: string, idx: number): string {
   if (groupBy === 'status') return statusColors[label] || palette[idx % palette.length]
-  if (groupBy === 'priority') return priorityColors[label] || palette[idx % palette.length]
+  if (groupBy === 'priority') return getPriorityColor(label) || palette[idx % palette.length]
   return palette[idx % palette.length]
 }
 

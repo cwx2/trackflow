@@ -179,8 +179,7 @@
               class="dropdown-item"
               @click="handleBatchPriority(p.value)"
             >
-              <span class="priority-badge" :style="{ background: p.color }"></span>
-              <span>{{ p.label }}</span>
+              <IssuePriorityBadge :priority="p.value" :color="p.color" mode="dot" :show-label="true" />
             </div>
           </div>
         </template>
@@ -352,6 +351,7 @@ import { ref, computed, watch, onMounted } from 'vue'
 import { IconSwap, IconUser, IconSearch, IconCalendar, IconFire, IconDelete, IconDownload, IconCode, IconTag, IconLink, IconClose, IconRightCircle } from '@arco-design/web-vue/es/icon'
 import { Modal, Message } from '@arco-design/web-vue'
 import { issueApi, projectApi, sprintApi, tagApi } from '@/api'
+import { IssuePriorityBadge } from '@/components/base'
 import type { IssueVO, IssueTagVO, ProjectMemberVO, SprintVO, BatchAvailableStatusVO } from '@/api/types'
 import { localizeStatusName, linkTypeLabelMap } from '@/utils/fieldLabels'
 import { loadPriorityOptions } from '../composables/usePriorityOptions'

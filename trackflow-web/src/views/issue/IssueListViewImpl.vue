@@ -611,7 +611,7 @@
           </a-select>
           <a-select v-model="quickForm.priority" size="small" style="width: 80px">
             <a-option v-for="p in priorityOptions" :key="p.value" :value="p.value">
-              <span class="priority-badge" :style="{ background: p.color }"></span>{{ p.label }}
+              <IssuePriorityBadge :priority="p.value" :color="p.color" mode="dot" :show-label="true" />
             </a-option>
           </a-select>
           <a-button type="primary" size="small" :loading="quickCreating" :disabled="!quickForm.projectId || !quickForm.title" @click="quickCreate">
@@ -758,21 +758,19 @@
           <div @click.stop>
             <a-trigger v-if="canEditIssue(record)" v-model:popup-visible="priorityDropdowns[record.id]" trigger="click" position="bl" :popup-offset="4">
               <span class="editable-cell" @click="priorityDropdowns[record.id] = true">
-                <span class="priority-badge" :style="{ background: getPriorityColorForRecord(record.priority) }"></span>
-                {{ localizePriority(record.priority) }}
+                <IssuePriorityBadge :priority="record.priority" mode="dot" :show-label="true" />
                 <icon-loading v-if="isCellEditing(record.id, 'priority')" class="cell-spinner" />
               </span>
               <template #content>
                 <div class="inline-dropdown">
                   <div v-for="p in priorityOptions" :key="p.value" class="dropdown-item" @click="selectPriority(record, p.value)">
-                    <span class="priority-badge" :style="{ background: p.color }"></span><span>{{ p.label }}</span>
+                    <IssuePriorityBadge :priority="p.value" :color="p.color" mode="dot" :show-label="true" />
                   </div>
                 </div>
               </template>
             </a-trigger>
             <span v-else class="readonly-cell">
-              <span class="priority-badge" :style="{ background: getPriorityColorForRecord(record.priority) }"></span>
-              {{ localizePriority(record.priority) }}
+              <IssuePriorityBadge :priority="record.priority" mode="dot" :show-label="true" />
             </span>
           </div>
         </template>
@@ -1012,6 +1010,7 @@ import { useAuthStore } from '@/stores/auth'
 import { localizeStatusName, localizePriority, priorityLabelMap, priorityReverseLabelMap, queryFieldKeyToLabel, queryFieldLabelToKey } from '@/utils/fieldLabels'
 import { extractVersion, showActionFeedback } from '@/utils/transition'
 import { ERROR_CODES } from '@/api/error-codes'
+import { IssuePriorityBadge } from '@/components/base'
 import { useIssueList, useSelection, useInlineEdit, useBatchOps, usePermission, useColumnConfig, useViewSettings, useManualOrder, useDrafts } from './composables'
 import { loadPriorityOptions } from './composables/usePriorityOptions'
 import { loadIssueTypeOptions } from './composables/useIssueTypeOptions'
@@ -2498,13 +2497,6 @@ watch(activeProjectId, async (projectId) => {
     issueTypeOptions.value = loadedTypes.map(o => ({ value: o.value, label: o.label, color: o.color || '#6366f1' }))
   }
 }, { immediate: true })
-
-/** 根据优先级值从动态选项中获取颜色 */
-function getPriorityColorForRecord(priority: string | null | undefined): string {
-  const p = priority || '普通'
-  const opt = priorityOptions.value.find(o => o.value === p || o.value.toLowerCase() === p.toLowerCase())
-  return opt?.color || '#6366f1'
-}
 
 /** 根据工单类型值从动态选项中获取颜色 */
 function getIssueTypeColorForRecord(issueType: string | null | undefined): string {

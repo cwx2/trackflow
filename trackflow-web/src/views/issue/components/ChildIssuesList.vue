@@ -22,12 +22,11 @@
         :class="{ 'child-resolved': child.statusCategory === 'done' }"
       >
         <span class="child-status-dot" :style="{ background: child.statusColor || '#666' }"></span>
-        <span
-          v-if="child.priority && getPriorityColor(child.priority) && getPriorityOrder(child.priority)"
-          class="child-priority-badge"
-          :style="{ backgroundColor: getPriorityColor(child.priority) }"
-          :title="child.priority"
-        >{{ getPriorityOrder(child.priority) }}</span>
+        <IssuePriorityBadge
+          v-if="child.priority"
+          :priority="child.priority"
+          mode="block"
+        />
         <router-link :to="`/issues/${child.issueKey}`" class="child-key">{{ child.issueKey }}</router-link>
         <span class="child-title">{{ child.title }}</span>
         <span class="child-assignee" v-if="child.assigneeName">{{ child.assigneeName }}</span>
@@ -50,33 +49,13 @@
 <script setup lang="ts">
 import type { ChildIssueVO, ChildProgressVO } from '@/api/types'
 import { localizeStatusName } from '@/utils/fieldLabels'
-import { getPriorityColor } from '../composables/usePriorityOptions'
+import { IssuePriorityBadge } from '@/components/base'
 
 defineProps<{
   children: ChildIssueVO[]
   progress?: ChildProgressVO | null
   showProgress?: boolean
 }>()
-
-/** 优先级 position 映射（value → 从 1 开始的序号） */
-const PRIORITY_ORDER: Record<string, number> = {
-  '阻塞': 1,
-  '紧急': 2,
-  '高': 3,
-  '普通': 4,
-  '低': 5,
-  // 兼容历史英文值
-  'Show-stopper': 1,
-  'Critical': 2,
-  'High': 3,
-  'Normal': 4,
-  'Low': 5,
-}
-
-function getPriorityOrder(priority: string | null | undefined): number | null {
-  if (!priority) return null
-  return PRIORITY_ORDER[priority] ?? null
-}
 </script>
 
 <style scoped>
@@ -164,19 +143,6 @@ function getPriorityOrder(priority: string | null | undefined): number | null {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.child-priority-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-  border-radius: 3px;
-  font-size: 11px;
-  font-weight: 600;
-  color: #fff;
   flex-shrink: 0;
 }
 
