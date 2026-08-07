@@ -2,7 +2,10 @@
   <div class="admin-page">
     <div class="page-header">
       <h2 class="page-title">组织管理</h2>
-      <button class="btn-create" @click="openCreateDialog">+ 新建组织</button>
+      <a-button type="primary" size="small" @click="openCreateDialog">
+        <template #icon><icon-plus /></template>
+        新建组织
+      </a-button>
     </div>
 
     <!-- 组织列表 -->
@@ -29,8 +32,8 @@
             <span class="time-text">{{ formatDate(org.createdAt) }}</span>
           </div>
           <div class="col" style="width:140px">
-            <button class="btn-sm" @click="editOrg(org)">编辑</button>
-            <button class="btn-sm danger" @click="deleteOrg(org)">删除</button>
+            <a-button type="text" size="mini" @click="editOrg(org)">编辑</a-button>
+            <a-button type="text" size="mini" status="danger" @click="deleteOrg(org)">删除</a-button>
           </div>
         </div>
         <div v-if="organizations.length === 0" class="empty-row">暂无组织数据</div>
@@ -38,34 +41,27 @@
     </div>
 
     <!-- 创建/编辑弹窗 -->
-    <div class="modal-overlay" v-if="showDialog" @click.self="showDialog = false">
-      <div class="modal-sm">
-        <div class="modal-header">
-          <h3>{{ editing ? '编辑组织' : '创建组织' }}</h3>
-          <button class="btn-close" @click="showDialog = false">✕</button>
-        </div>
-        <div class="modal-body">
-          <div class="form-row">
-            <label class="form-label">名称 *</label>
-            <input v-model="form.name" class="form-input" placeholder="组织名称" />
-          </div>
-          <div class="form-row" v-if="!editing">
-            <label class="form-label">编码 *</label>
-            <input v-model="form.code" class="form-input" placeholder="唯一编码（例如 TECH）" />
-          </div>
-          <div class="form-row">
-            <label class="form-label">描述</label>
-            <input v-model="form.description" class="form-input" placeholder="可选描述" />
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button class="btn-cancel" @click="showDialog = false">取消</button>
-          <button class="btn-submit" @click="submitOrg" :disabled="!form.name">
-            {{ editing ? '更新' : '创建' }}
-          </button>
-        </div>
-      </div>
-    </div>
+    <a-modal
+      v-model:visible="showDialog"
+      :title="editing ? '编辑组织' : '创建组织'"
+      :width="420"
+      @before-ok="submitOrg"
+      @cancel="showDialog = false"
+      :ok-text="editing ? '更新' : '创建'"
+      :ok-button-props="{ disabled: !form.name }"
+    >
+      <a-form :model="form" layout="vertical" size="small">
+        <a-form-item label="名称" required>
+          <a-input v-model="form.name" placeholder="组织名称" />
+        </a-form-item>
+        <a-form-item v-if="!editing" label="编码" required>
+          <a-input v-model="form.code" placeholder="唯一编码（例如 TECH）" />
+        </a-form-item>
+        <a-form-item label="描述">
+          <a-input v-model="form.description" placeholder="可选描述" />
+        </a-form-item>
+      </a-form>
+    </a-modal>
   </div>
 </template>
 
@@ -99,14 +95,20 @@ function editOrg(org: OrgVO) {
   showDialog.value = true
 }
 
-async function submitOrg() {
-  if (editing.value) {
-    await organizationApi.update(editing.value.id, { name: form.name, description: form.description })
-  } else {
-    await organizationApi.create({ name: form.name, code: form.code, description: form.description })
+async function submitOrg(done?: (closed: boolean) => void) {
+  try {
+    if (editing.value) {
+      await organizationApi.update(editing.value.id, { name: form.name, description: form.description })
+    } else {
+      await organizationApi.create({ name: form.name, code: form.code, description: form.description })
+    }
+    Message.success(editing.value ? '组织已更新' : '组织已创建')
+    if (done) done(true)
+    loadOrgs()
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '操作失败')
+    if (done) done(false)
   }
-  showDialog.value = false
-  loadOrgs()
 }
 
 async function deleteOrg(org: OrgVO) {

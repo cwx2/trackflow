@@ -12,12 +12,14 @@
     <div class="filter-bar">
       <div class="filter-item">
         <label class="filter-label">项目</label>
-        <select v-model="selectedProjectId" class="form-input filter-select" @change="loadWebhooks">
-          <option value="">请选择项目</option>
-          <option v-for="p in projects" :key="p.id" :value="p.id">{{ p.name }} ({{ p.key }})</option>
-        </select>
+        <a-select v-model="selectedProjectId" placeholder="请选择项目" size="small" style="min-width: 240px" allow-clear @change="loadWebhooks">
+          <a-option v-for="p in projects" :key="p.id" :value="p.id">{{ p.name }} ({{ p.key }})</a-option>
+        </a-select>
       </div>
-      <button v-if="selectedProjectId" class="btn-create" @click="openCreateDialog">+ 新建 Webhook</button>
+      <a-button v-if="selectedProjectId" type="primary" size="small" @click="openCreateDialog">
+        <template #icon><icon-plus /></template>
+        新建 Webhook
+      </a-button>
     </div>
 
     <!-- 无项目选择提示 -->
@@ -65,12 +67,12 @@
             </div>
           </div>
           <div class="webhook-actions">
-            <button class="btn-sm" @click="viewLogs(wh)" title="查看投递日志">📋 日志</button>
-            <button class="btn-sm" @click="testWebhook(wh)" :disabled="testingId === wh.id" title="发送测试请求">
+            <a-button type="text" size="mini" @click="viewLogs(wh)" title="查看投递日志">📋 日志</a-button>
+            <a-button type="text" size="mini" @click="testWebhook(wh)" :disabled="testingId === wh.id" title="发送测试请求">
               {{ testingId === wh.id ? '⏳' : '🧪' }} 测试
-            </button>
-            <button class="btn-sm" @click="openEditDialog(wh)">✏️ 编辑</button>
-            <button class="btn-sm danger" @click="confirmDelete(wh)">🗑️ 删除</button>
+            </a-button>
+            <a-button type="text" size="mini" @click="openEditDialog(wh)">✏️ 编辑</a-button>
+            <a-button type="text" size="mini" status="danger" @click="confirmDelete(wh)">🗑️ 删除</a-button>
           </div>
         </div>
       </div>

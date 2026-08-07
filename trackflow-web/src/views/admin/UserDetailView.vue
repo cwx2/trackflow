@@ -221,44 +221,42 @@
     </div>
 
     <!-- 赋予项目角色弹窗 -->
-    <div class="modal-overlay" v-if="showAssignProjectRoleDialog" @click.self="closeAssignDialog">
-      <div class="modal-sm">
-        <div class="modal-header">
-          <h3>赋予项目角色 — {{ profile?.displayName }}</h3>
-          <button class="btn-close" @click="closeAssignDialog">×</button>
-        </div>
-        <div class="modal-body assign-role-form">
-          <div class="form-field">
-            <label class="form-label">选择项目</label>
-            <select v-model="assignProjectId" class="form-select">
-              <option value="">请选择项目</option>
-              <option v-for="p in allProjects" :key="p.id" :value="p.id">
-                {{ p.key }} — {{ p.name }}
-              </option>
-            </select>
-          </div>
-          <div class="form-field">
-            <label class="form-label">选择角色</label>
-            <select v-model="assignRoleId" class="form-select">
-              <option value="">请选择角色</option>
-              <option v-for="r in projectRoles" :key="r.id" :value="r.id">
-                {{ r.name }}
-              </option>
-            </select>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button class="btn-secondary" @click="closeAssignDialog">取消</button>
-          <button
-            class="btn-primary"
-            :disabled="!assignProjectId || !assignRoleId || assignLoading"
-            @click="confirmAssignProjectRole"
-          >
-            {{ assignLoading ? '赋予中...' : '赋予角色' }}
-          </button>
-        </div>
+    <a-modal
+      v-model:visible="showAssignProjectRoleDialog"
+      title=""
+      :width="420"
+      :footer="false"
+      @cancel="closeAssignDialog"
+    >
+      <template #title>赋予项目角色 — {{ profile?.displayName }}</template>
+      <a-form layout="vertical" size="small">
+        <a-form-item label="选择项目">
+          <a-select v-model="assignProjectId" placeholder="请选择项目" allow-clear>
+            <a-option v-for="p in allProjects" :key="p.id" :value="p.id">
+              {{ p.key }} — {{ p.name }}
+            </a-option>
+          </a-select>
+        </a-form-item>
+        <a-form-item label="选择角色">
+          <a-select v-model="assignRoleId" placeholder="请选择角色" allow-clear>
+            <a-option v-for="r in projectRoles" :key="r.id" :value="r.id">
+              {{ r.name }}
+            </a-option>
+          </a-select>
+        </a-form-item>
+      </a-form>
+      <div class="modal-footer">
+        <a-button @click="closeAssignDialog">取消</a-button>
+        <a-button
+          type="primary"
+          :disabled="!assignProjectId || !assignRoleId"
+          :loading="assignLoading"
+          @click="confirmAssignProjectRole"
+        >
+          赋予角色
+        </a-button>
       </div>
-    </div>
+    </a-modal>
   </div>
 </template>
 

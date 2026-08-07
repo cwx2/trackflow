@@ -4,29 +4,56 @@
       <h2 class="page-title">用户管理</h2>
       <div class="header-actions">
         <div class="header-filters">
-          <input v-model="filters.keyword" class="filter-input" placeholder="搜索用户名/姓名/邮箱..." @input="debounceLoad" />
-          <select v-model="filters.roleId" class="filter-select" @change="loadUsers">
-            <option value="">全部角色</option>
-            <option v-for="role in globalRoles" :key="role.id" :value="role.id">{{ role.name }}</option>
-          </select>
-          <select v-model="filters.status" class="filter-select" @change="loadUsers">
-            <option value="">全部状态</option>
-            <option value="active">启用</option>
-            <option value="disabled">禁用</option>
-          </select>
-          <select v-model="filters.banStatus" class="filter-select" @change="loadUsers">
-            <option value="">全部禁用类型</option>
-            <option value="banned">封禁</option>
-            <option value="suspended">暂停</option>
-            <option value="inactive">不活跃</option>
-            <option value="deactivated">注销</option>
-            <option value="locked">锁定</option>
-          </select>
+          <a-input-search
+            v-model="filters.keyword"
+            placeholder="搜索用户名/姓名/邮箱..."
+            size="small"
+            allow-clear
+            style="width: 260px"
+            @search="() => { page = 1; loadUsers() }"
+            @clear="() => { page = 1; loadUsers() }"
+            @input="debounceLoad"
+          />
+          <a-select
+            v-model="filters.roleId"
+            placeholder="全部角色"
+            size="small"
+            allow-clear
+            style="width: 130px"
+            @change="() => { page = 1; loadUsers() }"
+          >
+            <a-option v-for="role in globalRoles" :key="role.id" :value="role.id">{{ role.name }}</a-option>
+          </a-select>
+          <a-select
+            v-model="filters.status"
+            placeholder="全部状态"
+            size="small"
+            allow-clear
+            style="width: 110px"
+            @change="() => { page = 1; loadUsers() }"
+          >
+            <a-option value="active">启用</a-option>
+            <a-option value="disabled">禁用</a-option>
+          </a-select>
+          <a-select
+            v-model="filters.banStatus"
+            placeholder="全部禁用类型"
+            size="small"
+            allow-clear
+            style="width: 140px"
+            @change="() => { page = 1; loadUsers() }"
+          >
+            <a-option value="banned">封禁</a-option>
+            <a-option value="suspended">暂停</a-option>
+            <a-option value="inactive">不活跃</a-option>
+            <a-option value="deactivated">注销</a-option>
+            <a-option value="locked">锁定</a-option>
+          </a-select>
         </div>
-        <button class="btn-primary" @click="showCreateDialog = true">
-          <icon-plus :size="14" style="margin-right: 4px" />
+        <a-button type="primary" size="small" @click="showCreateDialog = true">
+          <template #icon><icon-plus /></template>
           新建用户
-        </button>
+        </a-button>
       </div>
     </div>
 
@@ -75,9 +102,9 @@
             <span class="time-text">{{ formatDate(user.lastLoginAt) }}</span>
           </div>
           <div class="col" style="width:120px">
-            <button v-if="user.status === 'active' && user.id !== currentUserId" class="btn-sm danger" @click="disableUser(user)">禁用</button>
-            <button v-else-if="user.status !== 'active'" class="btn-sm" @click="enableUser(user)">启用</button>
-            <button class="btn-sm" @click="openRoleDialog(user)">角色</button>
+            <a-button v-if="user.status === 'active' && user.id !== currentUserId" type="text" size="mini" status="danger" @click="disableUser(user)">禁用</a-button>
+            <a-button v-else-if="user.status !== 'active'" type="text" size="mini" @click="enableUser(user)">启用</a-button>
+            <a-button type="text" size="mini" @click="openRoleDialog(user)">角色</a-button>
           </div>
         </div>
         <div v-if="users.length === 0 && !loading" class="empty-state">
@@ -91,79 +118,69 @@
     </div>
 
     <!-- 分页 -->
-    <div class="pagination" v-if="total > 0">
-      <span>共 {{ total }} 条</span>
-      <div class="page-btns">
-        <button class="btn-page" :disabled="page <= 1" @click="page--; loadUsers()">‹</button>
-        <span>{{ page }} / {{ totalPages }}</span>
-        <button class="btn-page" :disabled="page >= totalPages" @click="page++; loadUsers()">›</button>
-      </div>
+    <div class="pagination-wrapper" v-if="total > 0">
+      <a-pagination
+        :total="total"
+        :current="page"
+        :page-size="pageSize"
+        size="small"
+        show-total
+        @change="(p: number) => { page = p; loadUsers() }"
+      />
     </div>
 
     <!-- 新建用户弹窗 -->
-    <div class="modal-overlay" v-if="showCreateDialog" @click.self="showCreateDialog = false">
-      <div class="modal-md">
-        <div class="modal-header">
-          <h3>新建用户</h3>
-          <button class="btn-close" @click="closeCreateDialog">×</button>
+    <a-modal
+      v-model:visible="showCreateDialog"
+      title="新建用户"
+      :width="480"
+      :footer="false"
+      @cancel="closeCreateDialog"
+    >
+      <form @submit.prevent="handleCreateUser">
+        <a-form :model="createForm" layout="vertical" size="small">
+          <a-form-item label="显示名称" required>
+            <a-input
+              v-model="createForm.displayName"
+              placeholder="例如：张伟、John Smith"
+              :max-length="50"
+            />
+            <template #extra>用户的全名，将显示在系统各处</template>
+          </a-form-item>
+          <a-form-item label="用户名" required>
+            <a-input
+              v-model="createForm.username"
+              placeholder="字母开头，只含字母/数字/下划线/连字符"
+            />
+            <template #extra>登录凭据，创建后不可修改</template>
+          </a-form-item>
+          <a-form-item label="邮箱" required>
+            <a-input
+              v-model="createForm.email"
+              placeholder="user@company.com"
+            />
+          </a-form-item>
+          <a-form-item label="临时密码" required>
+            <a-input-password
+              v-model="createForm.password"
+              placeholder="至少 6 个字符，首次登录需修改"
+              autocomplete="new-password"
+            />
+            <template #extra>用户首次登录时将被要求修改密码</template>
+          </a-form-item>
+        </a-form>
+        <div v-if="createError" class="form-error">
+          <icon-info-circle :size="14" />
+          {{ createError }}
         </div>
-        <div class="modal-body">
-          <form @submit.prevent="handleCreateUser">
-            <div class="form-group">
-              <label class="form-label">显示名称 <span class="required">*</span></label>
-              <input
-                v-model="createForm.displayName"
-                class="form-input"
-                placeholder="例如：张伟、John Smith"
-                autocomplete="off"
-              />
-              <span class="form-hint">用户的全名，将显示在系统各处</span>
-            </div>
-            <div class="form-group">
-              <label class="form-label">用户名 <span class="required">*</span></label>
-              <input
-                v-model="createForm.username"
-                class="form-input"
-                placeholder="字母开头，只含字母/数字/下划线/连字符"
-                autocomplete="off"
-              />
-              <span class="form-hint">登录凭据，创建后不可修改</span>
-            </div>
-            <div class="form-group">
-              <label class="form-label">邮箱 <span class="required">*</span></label>
-              <input
-                v-model="createForm.email"
-                class="form-input"
-                type="email"
-                placeholder="user@company.com"
-                autocomplete="off"
-              />
-            </div>
-            <div class="form-group">
-              <label class="form-label">临时密码 <span class="required">*</span></label>
-              <input
-                v-model="createForm.password"
-                class="form-input"
-                type="password"
-                placeholder="至少 6 个字符，首次登录需修改"
-                autocomplete="new-password"
-              />
-              <span class="form-hint">用户首次登录时将被要求修改密码</span>
-            </div>
-            <div v-if="createError" class="form-error">
-              <icon-info-circle :size="14" />
-              {{ createError }}
-            </div>
-            <div class="modal-footer">
-              <button type="button" class="btn-secondary" @click="closeCreateDialog">取消</button>
-              <button type="submit" class="btn-primary" :disabled="creating">
-                {{ creating ? '创建中...' : '创建用户' }}
-              </button>
-            </div>
-          </form>
+        <div class="modal-footer">
+          <a-button @click="closeCreateDialog">取消</a-button>
+          <a-button type="primary" html-type="submit" :loading="creating">
+            创建用户
+          </a-button>
         </div>
-      </div>
-    </div>
+      </form>
+    </a-modal>
 
     <!-- 角色管理弹窗 -->
     <div class="modal-overlay" v-if="showRoleDialog" @click.self="showRoleDialog = false">
@@ -234,17 +251,16 @@
 
               <!-- 添加自动分配的项目角色 -->
               <div class="add-global-member-section">
-                <button v-if="!showAddGlobalMember" class="btn-text-sm" @click="showAddGlobalMember = true">
-                  <icon-plus :size="12" style="margin-right: 4px" />
+                <a-button v-if="!showAddGlobalMember" type="text" size="mini" @click="showAddGlobalMember = true">
+                  <template #icon><icon-plus :size="12" /></template>
                   添加自动分配角色
-                </button>
+                </a-button>
                 <div v-else class="add-global-member-form">
-                  <select v-model="addGlobalRoleId" class="add-project-select">
-                    <option value="">选择角色...</option>
-                    <option v-for="r in availableGlobalProjectRoles" :key="r.id" :value="r.id">{{ r.name }}</option>
-                  </select>
-                  <button class="btn-sm-action" :disabled="!addGlobalRoleId" @click="assignGlobalMember">确认</button>
-                  <button class="btn-sm-action secondary" @click="showAddGlobalMember = false; addGlobalRoleId = ''">取消</button>
+                  <a-select v-model="addGlobalRoleId" placeholder="选择角色..." size="mini" style="flex: 1; min-width: 120px">
+                    <a-option v-for="r in availableGlobalProjectRoles" :key="r.id" :value="r.id">{{ r.name }}</a-option>
+                  </a-select>
+                  <a-button size="mini" type="primary" :disabled="!addGlobalRoleId" @click="assignGlobalMember">确认</a-button>
+                  <a-button size="mini" @click="showAddGlobalMember = false; addGlobalRoleId = ''">取消</a-button>
                 </div>
               </div>
             </div>
@@ -272,15 +288,16 @@
                     </span>
                   </div>
                   <div class="project-role-actions">
-                    <select
-                      class="project-role-select"
-                      :value="pr.roleCode"
+                    <a-select
+                      :model-value="pr.roleCode"
+                      size="mini"
+                      style="width: 110px"
                       :disabled="pr.source === 'group'"
                       :title="pr.source === 'group' ? '通过用户组继承的角色不可直接修改' : ''"
-                      @change="changeProjectRole(pr, ($event.target as HTMLSelectElement).value)"
+                      @change="(val: string) => changeProjectRole(pr, val)"
                     >
-                      <option v-for="r in projectRoles" :key="r.id" :value="r.code">{{ r.name }}</option>
-                    </select>
+                      <a-option v-for="r in projectRoles" :key="r.id" :value="r.code">{{ r.name }}</a-option>
+                    </a-select>
                     <button
                       v-if="pr.source !== 'group'"
                       class="btn-icon-sm danger"
@@ -299,23 +316,21 @@
 
               <!-- 添加到项目 -->
               <div class="add-project-section">
-                <button v-if="!showAddProject" class="btn-text-sm" @click="showAddProject = true">
-                  <icon-plus :size="12" style="margin-right: 4px" />
+                <a-button v-if="!showAddProject" type="text" size="mini" @click="showAddProject = true">
+                  <template #icon><icon-plus :size="12" /></template>
                   添加到项目
-                </button>
+                </a-button>
                 <div v-else class="add-project-form">
-                  <select v-model="addProjectId" class="add-project-select">
-                    <option value="">选择项目...</option>
-                    <option v-for="p in availableProjects" :key="p.id" :value="p.id">
+                  <a-select v-model="addProjectId" placeholder="选择项目..." size="mini" style="flex: 1; min-width: 120px">
+                    <a-option v-for="p in availableProjects" :key="p.id" :value="p.id">
                       {{ p.key }} — {{ p.name }}
-                    </option>
-                  </select>
-                  <select v-model="addProjectRoleId" class="add-project-select">
-                    <option value="">选择角色...</option>
-                    <option v-for="r in projectRoles" :key="r.id" :value="r.id">{{ r.name }}</option>
-                  </select>
-                  <button class="btn-sm-action" :disabled="!addProjectId || !addProjectRoleId" @click="addToProject">确认</button>
-                  <button class="btn-sm-action secondary" @click="cancelAddProject">取消</button>
+                    </a-option>
+                  </a-select>
+                  <a-select v-model="addProjectRoleId" placeholder="选择角色..." size="mini" style="flex: 1; min-width: 120px">
+                    <a-option v-for="r in projectRoles" :key="r.id" :value="r.id">{{ r.name }}</a-option>
+                  </a-select>
+                  <a-button size="mini" type="primary" :disabled="!addProjectId || !addProjectRoleId" @click="addToProject">确认</a-button>
+                  <a-button size="mini" @click="cancelAddProject">取消</a-button>
                 </div>
               </div>
             </div>
@@ -870,6 +885,8 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.pagination-wrapper { display: flex; justify-content: flex-end; margin-top: 12px; }
+
 .admin-page { padding: 24px; height: 100%; overflow-y: auto; }
 .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
 .page-title { font-size: 18px; font-weight: 600; color: var(--text-bright); }

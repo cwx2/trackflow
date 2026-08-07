@@ -3,99 +3,83 @@
     <div class="page-header">
       <h2 class="page-title">审计日志</h2>
       <div class="header-actions">
-        <button class="btn-export" @click="exportJson" :disabled="exporting">
-          <span class="export-icon">⬇</span>
-          {{ exporting ? '导出中...' : '导出 JSON' }}
-        </button>
+        <a-button size="small" @click="exportJson" :loading="exporting">
+          <template #icon><icon-download /></template>
+          导出 JSON
+        </a-button>
       </div>
     </div>
 
     <!-- 搜索与过滤 -->
     <div class="filter-bar">
-      <div class="search-box">
-        <input
-          v-model="filters.search"
-          type="text"
-          class="search-input"
-          placeholder="搜索审计日志... (支持 author:xxx / target:xxx)"
-          @keydown.enter="resetAndLoad"
-        />
-        <button class="search-btn" @click="resetAndLoad" title="搜索">🔍</button>
-        <button
-          v-if="filters.search"
-          class="search-clear-btn"
-          @click="clearSearch"
-          title="清除搜索"
-        >✕</button>
-      </div>
+      <a-input-search
+        v-model="filters.search"
+        placeholder="搜索审计日志... (支持 author:xxx / target:xxx)"
+        size="small"
+        allow-clear
+        style="max-width: 480px"
+        @search="resetAndLoad"
+        @clear="resetAndLoad"
+      />
       <div class="filter-controls">
-        <select v-model="filters.action" class="filter-select" @change="resetAndLoad">
-          <option value="">全部操作</option>
-          <optgroup label="认证">
-            <option value="login">用户登录</option>
-            <option value="first_login">首次登录</option>
-            <option value="login_failed">登录失败</option>
-            <option value="api_key_used">使用 API Key</option>
-            <option value="api_key_failed">API Key 失败</option>
-          </optgroup>
-          <optgroup label="用户管理">
-            <option value="create_user">创建用户</option>
-            <option value="disable_user">禁用用户</option>
-            <option value="enable_user">启用用户</option>
-            <option value="assign_global_role">分配系统角色</option>
-            <option value="remove_global_role">移除系统角色</option>
-          </optgroup>
-          <optgroup label="用户组">
-            <option value="create_group">创建用户组</option>
-            <option value="update_group">编辑用户组</option>
-            <option value="delete_group">删除用户组</option>
-            <option value="add_group_members">添加组成员</option>
-            <option value="remove_group_members">移除组成员</option>
-            <option value="assign_group_role">分配组角色</option>
-          </optgroup>
-          <optgroup label="角色与权限">
-            <option value="clone_role">克隆角色</option>
-            <option value="update_role_permissions">修改角色权限</option>
-          </optgroup>
-          <optgroup label="API Key">
-            <option value="create_api_key">创建 API Key</option>
-            <option value="revoke_api_key">吊销 API Key</option>
-            <option value="revoke_all_api_keys">吊销所有 API Key</option>
-          </optgroup>
-          <optgroup label="系统设置">
-            <option value="time_tracking_settings_update">修改工时设置</option>
-          </optgroup>
-          <optgroup label="项目管理">
-            <option value="create_project">创建项目</option>
-            <option value="update_project">修改项目</option>
-            <option value="archive_project">归档项目</option>
-            <option value="delete_project">删除项目</option>
-            <option value="update_project_member_role">修改成员角色</option>
-            <option value="remove_project_member">移除项目成员</option>
-          </optgroup>
-        </select>
-        <select v-model="filters.targetType" class="filter-select" @change="resetAndLoad">
-          <option value="">全部目标</option>
-          <option value="auth">认证</option>
-          <option value="user">用户</option>
-          <option value="user_group">用户组</option>
-          <option value="role">角色</option>
-          <option value="project">项目</option>
-          <option value="api_key">API Key</option>
-          <option value="system_setting">系统设置</option>
-        </select>
-        <input
-          v-model="filters.startDate"
-          type="date"
-          class="filter-input date-input"
-          @change="resetAndLoad"
-        />
-        <span class="date-sep">至</span>
-        <input
-          v-model="filters.endDate"
-          type="date"
-          class="filter-input date-input"
-          @change="resetAndLoad"
+        <a-select v-model="filters.action" placeholder="全部操作" size="small" allow-clear style="width: 160px" @change="resetAndLoad">
+          <a-option-group label="认证">
+            <a-option value="login">用户登录</a-option>
+            <a-option value="first_login">首次登录</a-option>
+            <a-option value="login_failed">登录失败</a-option>
+            <a-option value="api_key_used">使用 API Key</a-option>
+            <a-option value="api_key_failed">API Key 失败</a-option>
+          </a-option-group>
+          <a-option-group label="用户管理">
+            <a-option value="create_user">创建用户</a-option>
+            <a-option value="disable_user">禁用用户</a-option>
+            <a-option value="enable_user">启用用户</a-option>
+            <a-option value="assign_global_role">分配系统角色</a-option>
+            <a-option value="remove_global_role">移除系统角色</a-option>
+          </a-option-group>
+          <a-option-group label="用户组">
+            <a-option value="create_group">创建用户组</a-option>
+            <a-option value="update_group">编辑用户组</a-option>
+            <a-option value="delete_group">删除用户组</a-option>
+            <a-option value="add_group_members">添加组成员</a-option>
+            <a-option value="remove_group_members">移除组成员</a-option>
+            <a-option value="assign_group_role">分配组角色</a-option>
+          </a-option-group>
+          <a-option-group label="角色与权限">
+            <a-option value="clone_role">克隆角色</a-option>
+            <a-option value="update_role_permissions">修改角色权限</a-option>
+          </a-option-group>
+          <a-option-group label="API Key">
+            <a-option value="create_api_key">创建 API Key</a-option>
+            <a-option value="revoke_api_key">吊销 API Key</a-option>
+            <a-option value="revoke_all_api_keys">吊销所有 API Key</a-option>
+          </a-option-group>
+          <a-option-group label="系统设置">
+            <a-option value="time_tracking_settings_update">修改工时设置</a-option>
+          </a-option-group>
+          <a-option-group label="项目管理">
+            <a-option value="create_project">创建项目</a-option>
+            <a-option value="update_project">修改项目</a-option>
+            <a-option value="archive_project">归档项目</a-option>
+            <a-option value="delete_project">删除项目</a-option>
+            <a-option value="update_project_member_role">修改成员角色</a-option>
+            <a-option value="remove_project_member">移除项目成员</a-option>
+          </a-option-group>
+        </a-select>
+        <a-select v-model="filters.targetType" placeholder="全部目标" size="small" allow-clear style="width: 120px" @change="resetAndLoad">
+          <a-option value="auth">认证</a-option>
+          <a-option value="user">用户</a-option>
+          <a-option value="user_group">用户组</a-option>
+          <a-option value="role">角色</a-option>
+          <a-option value="project">项目</a-option>
+          <a-option value="api_key">API Key</a-option>
+          <a-option value="system_setting">系统设置</a-option>
+        </a-select>
+        <a-range-picker
+          size="small"
+          style="width: 240px"
+          :model-value="dateRange"
+          @change="onDateRangeChange"
         />
       </div>
     </div>
@@ -147,13 +131,15 @@
     </div>
 
     <!-- 分页 -->
-    <div class="pagination" v-if="total > 0">
-      <span class="total-text">共 {{ total }} 条记录</span>
-      <div class="page-btns">
-        <button class="btn-page" :disabled="page <= 1" @click="page--; loadLogs()">‹</button>
-        <span class="page-info">{{ page }} / {{ totalPages }}</span>
-        <button class="btn-page" :disabled="page >= totalPages" @click="page++; loadLogs()">›</button>
-      </div>
+    <div class="pagination-wrapper" v-if="total > 0">
+      <a-pagination
+        :total="total"
+        :current="page"
+        :page-size="pageSize"
+        size="small"
+        show-total
+        @change="(p: number) => { page = p; loadLogs() }"
+      />
     </div>
   </div>
 </template>
@@ -180,14 +166,28 @@ const filters = reactive({
   search: ''
 })
 
+/** Date range for a-range-picker (array of two strings or undefined) */
+const dateRange = computed(() => {
+  if (filters.startDate && filters.endDate) return [filters.startDate, filters.endDate]
+  if (filters.startDate) return [filters.startDate, '']
+  if (filters.endDate) return ['', filters.endDate]
+  return undefined
+})
+
+function onDateRangeChange(val: (string | undefined)[] | undefined) {
+  if (val && val.length === 2) {
+    filters.startDate = val[0] || ''
+    filters.endDate = val[1] || ''
+  } else {
+    filters.startDate = ''
+    filters.endDate = ''
+  }
+  resetAndLoad()
+}
+
 function resetAndLoad() {
   page.value = 1
   loadLogs()
-}
-
-function clearSearch() {
-  filters.search = ''
-  resetAndLoad()
 }
 
 async function loadLogs() {
@@ -473,6 +473,8 @@ onMounted(() => {
   min-width: 0;
   overflow-y: auto;
 }
+
+.pagination-wrapper { display: flex; justify-content: flex-end; margin-top: 12px; }
 
 .page-header {
   display: flex;

@@ -2,7 +2,10 @@
   <div class="admin-page">
     <div class="page-header">
       <h2 class="page-title">角色管理</h2>
-      <button class="btn-create" @click="openCreateDialog">+ 新建角色</button>
+      <a-button type="primary" size="small" @click="openCreateDialog">
+        <template #icon><icon-plus /></template>
+        新建角色
+      </a-button>
     </div>
 
     <!-- 角色列表 -->
@@ -43,11 +46,11 @@
             <span v-if="role.builtin" class="builtin-tag">是</span>
           </div>
           <div class="col" style="width:260px">
-            <button class="btn-sm" @click="openUsersDialog(role)">用户</button>
-            <button class="btn-sm" @click="openPermDialog(role)">权限</button>
-            <button class="btn-sm" @click="openCloneDialog(role)">克隆</button>
-            <button class="btn-sm" @click="editRole(role)" :disabled="role.builtin">编辑</button>
-            <button class="btn-sm danger" @click="deleteRole(role)" :disabled="role.builtin">删除</button>
+            <a-button type="text" size="mini" @click="openUsersDialog(role)">用户</a-button>
+            <a-button type="text" size="mini" @click="openPermDialog(role)">权限</a-button>
+            <a-button type="text" size="mini" @click="openCloneDialog(role)">克隆</a-button>
+            <a-button type="text" size="mini" @click="editRole(role)" :disabled="role.builtin">编辑</a-button>
+            <a-button type="text" size="mini" status="danger" @click="deleteRole(role)" :disabled="role.builtin">删除</a-button>
           </div>
         </div>
       </div>
@@ -71,10 +74,10 @@
           </div>
           <div class="form-row" v-if="!editingRole">
             <label class="form-label">类型 *</label>
-            <select v-model="roleForm.roleType" class="form-input">
-              <option value="project">项目级</option>
-              <option value="global">全局</option>
-            </select>
+            <a-select v-model="roleForm.roleType" size="small">
+              <a-option value="project">项目级</a-option>
+              <a-option value="global">全局</a-option>
+            </a-select>
           </div>
           <div class="form-row">
             <label class="form-label">描述</label>

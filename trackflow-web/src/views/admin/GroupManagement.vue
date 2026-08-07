@@ -2,12 +2,24 @@
   <div class="admin-page">
     <div class="page-header">
       <h2 class="page-title">用户组管理</h2>
-      <button class="btn-create" @click="openCreateDialog">+ 新建用户组</button>
+      <a-button type="primary" size="small" @click="openCreateDialog">
+        <template #icon><icon-plus /></template>
+        新建用户组
+      </a-button>
     </div>
 
     <!-- 搜索 -->
     <div class="search-bar">
-      <input v-model="keyword" class="form-input search-input" placeholder="搜索用户组..." @input="debouncedSearch" />
+      <a-input-search
+        v-model="keyword"
+        placeholder="搜索用户组..."
+        size="small"
+        allow-clear
+        style="max-width: 320px"
+        @search="loadGroups"
+        @clear="loadGroups"
+        @input="debouncedSearch"
+      />
     </div>
 
     <!-- 用户组列表 -->
@@ -45,9 +57,9 @@
           </div>
           <div class="col" style="width:160px">{{ formatDate(group.createdAt) }}</div>
           <div class="col" style="width:200px" @click.stop>
-            <button class="btn-sm" @click="openDetail(group)">详情</button>
-            <button class="btn-sm" @click="openEditDialog(group)">编辑</button>
-            <button class="btn-sm danger" @click="confirmDelete(group)">删除</button>
+            <a-button type="text" size="mini" @click="openDetail(group)">详情</a-button>
+            <a-button type="text" size="mini" @click="openEditDialog(group)">编辑</a-button>
+            <a-button type="text" size="mini" status="danger" @click="confirmDelete(group)">删除</a-button>
           </div>
         </div>
         </DataContainer>
@@ -187,12 +199,11 @@
         <div class="modal-body">
           <div class="form-row">
             <label class="form-label">角色 *</label>
-            <select v-model="roleFormData.roleId" class="form-input" @change="onRoleChange">
-              <option value="">请选择角色</option>
-              <option v-for="role in availableRoles" :key="role.id" :value="role.id">
+            <a-select v-model="roleFormData.roleId" placeholder="请选择角色" size="small" @change="onRoleChange">
+              <a-option v-for="role in availableRoles" :key="role.id" :value="role.id">
                 {{ role.name }} ({{ role.roleType }})
-              </option>
-            </select>
+              </a-option>
+            </a-select>
           </div>
           <div class="form-row" v-if="selectedRoleType === 'project'">
             <label class="form-label">作用域 *</label>
