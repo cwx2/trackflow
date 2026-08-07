@@ -470,10 +470,12 @@ onMounted(() => {
   height: 100%;
   width: 100%;
   min-width: 0;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
-.pagination-wrapper { display: flex; justify-content: flex-end; margin-top: 12px; }
+.pagination-wrapper { display: flex; justify-content: flex-end; padding-top: 12px; flex-shrink: 0; }
 
 .page-header {
   display: flex;
@@ -482,6 +484,7 @@ onMounted(() => {
   margin-bottom: 16px;
   flex-wrap: wrap;
   gap: 12px;
+  flex-shrink: 0;
 }
 
 .page-title {
@@ -501,6 +504,7 @@ onMounted(() => {
   flex-direction: column;
   gap: 10px;
   margin-bottom: 16px;
+  flex-shrink: 0;
 }
 
 .filter-controls {
@@ -515,6 +519,10 @@ onMounted(() => {
   border: 1px solid var(--border-color);
   border-radius: 6px;
   overflow: hidden;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .table-header {
@@ -525,6 +533,13 @@ onMounted(() => {
   font-size: var(--font-size-xs);
   color: var(--text-secondary);
   text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.table-body {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
 }
 
 .table-row {

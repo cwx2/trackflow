@@ -16,6 +16,8 @@
       :bordered="false"
       row-key="id"
       size="medium"
+      class="org-table"
+      :scroll="{ y: '100%' }"
     >
       <template #code="{ record }">
         <code class="code-tag">{{ record.code }}</code>
@@ -147,9 +149,16 @@ onMounted(loadOrgs)
 </script>
 
 <style scoped>
-.admin-page { padding: 24px; height: 100%; overflow-y: auto; }
-.page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+.admin-page { padding: 24px; height: 100%; display: flex; flex-direction: column; overflow: hidden; }
+.page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-shrink: 0; }
 .page-title { font-size: 18px; font-weight: 600; color: var(--text-bright); }
+
+/* Table fills remaining space */
+.org-table { flex: 1; min-height: 0; }
+.org-table :deep(.arco-table) { height: 100%; }
+.org-table :deep(.arco-table-container) { height: 100%; display: flex; flex-direction: column; }
+.org-table :deep(.arco-table-content-scroll) { flex: 1; min-height: 0; overflow: hidden; }
+.org-table :deep(.arco-table-body) { flex: 1; max-height: none !important; overflow-y: auto !important; }
 
 .org-name { color: var(--text-bright); font-weight: 500; }
 .code-tag { font-size: var(--font-size-xs); background: var(--bg-tertiary); padding: 2px 6px; border-radius: var(--radius-sm); color: var(--accent-blue); }

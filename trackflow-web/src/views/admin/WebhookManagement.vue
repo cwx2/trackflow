@@ -439,11 +439,14 @@ onMounted(async () => {
 .admin-page {
   padding: 32px;
   height: 100%;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .page-header {
   margin-bottom: 24px;
+  flex-shrink: 0;
 }
 
 .back-link {
@@ -475,6 +478,7 @@ onMounted(async () => {
   align-items: flex-end;
   gap: 16px;
   margin-bottom: 24px;
+  flex-shrink: 0;
 }
 
 .filter-item {

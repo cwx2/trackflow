@@ -17,6 +17,7 @@
       row-key="id"
       size="medium"
       class="role-table"
+      :scroll="{ y: '100%' }"
     >
       <template #name="{ record }">
         <span class="role-name">{{ record.name }}</span>
@@ -451,9 +452,16 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.admin-page { padding: 24px; height: 100%; overflow-y: auto; }
-.page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+.admin-page { padding: 24px; height: 100%; display: flex; flex-direction: column; overflow: hidden; }
+.page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-shrink: 0; }
 .page-title { font-size: 18px; font-weight: 600; color: var(--text-bright); }
+
+/* Table fills remaining space with fixed header */
+.role-table { flex: 1; min-height: 0; }
+.role-table :deep(.arco-table) { height: 100%; }
+.role-table :deep(.arco-table-container) { height: 100%; display: flex; flex-direction: column; }
+.role-table :deep(.arco-table-content-scroll) { flex: 1; min-height: 0; overflow: hidden; }
+.role-table :deep(.arco-table-body) { flex: 1; max-height: none !important; overflow-y: auto !important; }
 
 /* Table custom cell styles */
 .role-table :deep(.arco-table-th) { font-size: var(--font-size-xs); color: var(--text-secondary); text-transform: uppercase; background: var(--bg-tertiary); }

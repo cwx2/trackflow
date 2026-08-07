@@ -58,6 +58,7 @@
     </div>
 
     <!-- 用户列表 -->
+    <div class="table-wrapper">
     <a-table
       :data="users"
       :pagination="false"
@@ -67,6 +68,7 @@
       row-key="id"
       class="user-table"
       :row-class="() => 'clickable-row'"
+      :scroll="{ y: '100%' }"
       @row-click="navigateToUser"
     >
       <template #columns>
@@ -132,6 +134,7 @@
         </a-empty>
       </template>
     </a-table>
+    </div>
 
     <!-- 分页 -->
     <div class="pagination-wrapper" v-if="total > 0">
@@ -895,13 +898,21 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.pagination-wrapper { display: flex; justify-content: flex-end; margin-top: 12px; }
+.pagination-wrapper { display: flex; justify-content: flex-end; padding-top: 12px; flex-shrink: 0; }
 
-.admin-page { padding: 24px; height: 100%; overflow-y: auto; }
-.page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+.admin-page { padding: 24px; height: 100%; display: flex; flex-direction: column; overflow: hidden; }
+.page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-shrink: 0; }
 .page-title { font-size: 18px; font-weight: 600; color: var(--text-bright); }
 .header-actions { display: flex; align-items: center; gap: 12px; }
 .header-filters { display: flex; gap: 8px; }
+
+/* Table wrapper: flex-grow to fill remaining space, internal scroll */
+.table-wrapper { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+.table-wrapper .user-table { flex: 1; min-height: 0; }
+.table-wrapper :deep(.arco-table) { height: 100%; }
+.table-wrapper :deep(.arco-table-container) { height: 100%; display: flex; flex-direction: column; }
+.table-wrapper :deep(.arco-table-content-scroll) { flex: 1; min-height: 0; overflow: hidden; }
+.table-wrapper :deep(.arco-table-body) { flex: 1; max-height: none !important; overflow-y: auto !important; }
 
 /* User Table */
 .user-table :deep(.arco-table-tr.clickable-row) { cursor: pointer; }

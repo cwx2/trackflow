@@ -31,7 +31,8 @@
       :bordered="false"
       row-key="id"
       size="medium"
-      :scroll="{ y: 600 }"
+      class="group-table"
+      :scroll="{ y: '100%' }"
       @row-click="openDetail"
     >
       <template #empty>
@@ -535,10 +536,17 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.admin-page { padding: 32px; height: 100%; overflow-y: auto; }
-.page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+.admin-page { padding: 32px; height: 100%; display: flex; flex-direction: column; overflow: hidden; }
+.page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; flex-shrink: 0; }
 .page-title { font-size: 20px; font-weight: 600; color: var(--tf-text-primary); margin: 0; }
-.search-bar { margin-bottom: 16px; }
+.search-bar { margin-bottom: 16px; flex-shrink: 0; }
+
+/* Table fills remaining space */
+.group-table { flex: 1; min-height: 0; }
+.group-table :deep(.arco-table) { height: 100%; }
+.group-table :deep(.arco-table-container) { height: 100%; display: flex; flex-direction: column; }
+.group-table :deep(.arco-table-content-scroll) { flex: 1; min-height: 0; overflow: hidden; }
+.group-table :deep(.arco-table-body) { flex: 1; max-height: none !important; overflow-y: auto !important; }
 
 /* Table */
 .group-name { font-weight: 500; color: var(--tf-text-primary); }
