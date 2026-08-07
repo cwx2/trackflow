@@ -384,6 +384,11 @@ async function handleAddComment(content: string, visibleToGroupIds?: string[]) {
   activityStreamCompRef.value?.highlightLatest()
 }
 
+// 注册远端评论（WebSocket 推送）到达后的高亮回调
+onRemoteCommentAdded.value = () => {
+  nextTick(() => { activityStreamCompRef.value?.highlightLatest() })
+}
+
 // ============ Reply & Copy Comment Link ============
 /**
  * 点击「回复」按钮时，将引用块插入评论输入框
