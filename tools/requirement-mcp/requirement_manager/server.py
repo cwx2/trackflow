@@ -42,18 +42,11 @@ mcp = FastMCP("requirement-manager", instructions="""需求文件管理工具。
 
 
 def _find_max_number() -> int:
-    """扫描所有目录，找到最大需求编号"""
+    """扫描整个 requirements 目录树，找到最大需求编号（包含 working/consumer-x/ 等子目录）"""
     max_num = 0
 
-    # 扫描子目录
-    for dir_path in DIRS.values():
-        for f in dir_path.glob("requirement-*.md"):
-            num = _extract_number(f.name)
-            if num > max_num:
-                max_num = num
-
-    # 扫描根目录（兼容旧文件）
-    for f in REQUIREMENTS_BASE.glob("requirement-*.md"):
+    # 递归扫描 requirements 根目录下所有 requirement-*.md 文件
+    for f in REQUIREMENTS_BASE.rglob("requirement-*.md"):
         num = _extract_number(f.name)
         if num > max_num:
             max_num = num
