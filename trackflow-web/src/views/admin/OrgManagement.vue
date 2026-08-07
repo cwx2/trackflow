@@ -1,12 +1,11 @@
 <template>
-  <div class="admin-page">
-    <div class="page-header">
-      <h2 class="page-title">组织管理</h2>
+  <AdminPageLayout title="组织管理">
+    <template #actions>
       <a-button type="primary" size="small" @click="openCreateDialog">
         <template #icon><icon-plus /></template>
         新建组织
       </a-button>
-    </div>
+    </template>
 
     <!-- 组织列表 -->
     <a-table
@@ -50,7 +49,7 @@
       </template>
     </a-table>
 
-    <!-- 创建/编辑弹窗 -->
+  <!-- 创建/编辑弹窗 -->
     <a-modal
       v-model:visible="showDialog"
       :title="editing ? '编辑组织' : '创建组织'"
@@ -82,7 +81,7 @@
         </a-form-item>
       </a-form>
     </a-modal>
-  </div>
+  </AdminPageLayout>
 </template>
 
 <script setup lang="ts">
@@ -92,6 +91,7 @@ import { Modal, Message } from '@arco-design/web-vue'
 import type { TableColumnData } from '@arco-design/web-vue'
 import { organizationApi } from '@/api'
 import type { OrgVO, OrgProjectVO } from '@/api/organization'
+import AdminPageLayout from '@/components/admin/AdminPageLayout.vue'
 
 const router = useRouter()
 
@@ -190,10 +190,6 @@ onMounted(loadOrgs)
 </script>
 
 <style scoped>
-.admin-page { padding: 24px; height: 100%; display: flex; flex-direction: column; overflow: hidden; }
-.page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-shrink: 0; }
-.page-title { font-size: 18px; font-weight: 600; color: var(--text-bright); }
-
 .org-table { flex: 1; min-height: 0; }
 .org-table :deep(.arco-table) { height: 100%; }
 .org-table :deep(.arco-table-container) { height: 100%; display: flex; flex-direction: column; }

@@ -1,61 +1,58 @@
 <template>
-  <div class="workflow-page">
-    <!-- 面包屑导航（从项目设置页跳转过来时显示） -->
-    <div v-if="sourceProjectId" class="breadcrumb-nav">
-      <a-breadcrumb>
-        <a-breadcrumb-item>
-          <router-link :to="`/projects/${sourceProjectKey}/settings?tab=workflow`">
-            <icon-left class="breadcrumb-back-icon" />
-            {{ sourceProjectName }} 的工作流设置
-          </router-link>
-        </a-breadcrumb-item>
-        <a-breadcrumb-item>转换矩阵编辑</a-breadcrumb-item>
-      </a-breadcrumb>
-      <div class="breadcrumb-hint">
-        <icon-info-circle />
-        正在编辑 <strong>{{ sourceProjectName }}</strong> 的工作流规则
-      </div>
-    </div>
-    <!-- 面包屑导航（从工作流列表页跳转过来时显示） -->
-    <div v-else class="breadcrumb-nav">
-      <a-breadcrumb>
-        <a-breadcrumb-item>
-          <router-link to="/workflow">
-            <icon-left class="breadcrumb-back-icon" />
-            工作流列表
-          </router-link>
-        </a-breadcrumb-item>
-        <a-breadcrumb-item>编辑器</a-breadcrumb-item>
-      </a-breadcrumb>
-    </div>
-    
-    <div class="page-header">
-      <h2 class="page-title">工作流编辑器</h2>
-      <div class="header-center">
-        <a-tabs v-model:active-key="activeMainTab" class="workflow-main-tabs" type="rounded">
-          <a-tab-pane key="matrix" title="状态转换矩阵" />
-          <a-tab-pane key="canvas" title="状态机画布" />
-          <a-tab-pane key="rules" title="自动化规则" />
-        </a-tabs>
-      </div>
-      <div class="header-actions">
-        <a-button
-          :type="isDirty ? 'primary' : 'secondary'"
-          :loading="saving"
-          :disabled="!isDirty"
-          @click="saveMatrix"
-        >
-          <template v-if="isDirty">
-            保存工作流 ({{ pendingChangesCount }})
-          </template>
-          <template v-else>保存工作流</template>
-        </a-button>
-        <a-button @click="showHistory = true">
-          <template #icon><icon-history /></template>
-          变更历史
-        </a-button>
-      </div>
-    </div>
+  <AdminPageLayout title="工作流编辑器">
+    <template #breadcrumb>
+      <!-- 面包屑导航（从项目设置页跳转过来时显示） -->
+      <template v-if="sourceProjectId">
+        <a-breadcrumb>
+          <a-breadcrumb-item>
+            <router-link :to="`/projects/${sourceProjectKey}/settings?tab=workflow`">
+              <icon-left class="breadcrumb-back-icon" />
+              {{ sourceProjectName }} 的工作流设置
+            </router-link>
+          </a-breadcrumb-item>
+          <a-breadcrumb-item>转换矩阵编辑</a-breadcrumb-item>
+        </a-breadcrumb>
+        <div class="breadcrumb-hint">
+          <icon-info-circle />
+          正在编辑 <strong>{{ sourceProjectName }}</strong> 的工作流规则
+        </div>
+      </template>
+      <!-- 面包屑导航（从工作流列表页跳转过来时显示） -->
+      <template v-else>
+        <a-breadcrumb>
+          <a-breadcrumb-item>
+            <router-link to="/workflow">
+              <icon-left class="breadcrumb-back-icon" />
+              工作流列表
+            </router-link>
+          </a-breadcrumb-item>
+          <a-breadcrumb-item>编辑器</a-breadcrumb-item>
+        </a-breadcrumb>
+      </template>
+    </template>
+
+    <template #actions>
+      <a-tabs v-model:active-key="activeMainTab" class="workflow-main-tabs" type="rounded">
+        <a-tab-pane key="matrix" title="状态转换矩阵" />
+        <a-tab-pane key="canvas" title="状态机画布" />
+        <a-tab-pane key="rules" title="自动化规则" />
+      </a-tabs>
+      <a-button
+        :type="isDirty ? 'primary' : 'secondary'"
+        :loading="saving"
+        :disabled="!isDirty"
+        @click="saveMatrix"
+      >
+        <template v-if="isDirty">
+          保存工作流 ({{ pendingChangesCount }})
+        </template>
+        <template v-else>保存工作流</template>
+      </a-button>
+      <a-button @click="showHistory = true">
+        <template #icon><icon-history /></template>
+        变更历史
+      </a-button>
+    </template>
 
     <!-- 状态转换矩阵的筛选器（下沉到内容区顶部） -->
     <div class="content-filters" v-show="activeMainTab === 'matrix'">
@@ -480,7 +477,7 @@
       v-model:visible="showHistory"
       :project-id="selectedProject"
     />
-  </div>
+  </AdminPageLayout>
 </template>
 
 <script setup lang="ts">
@@ -496,6 +493,7 @@ import WorkflowRulePanel from './WorkflowRulePanel.vue'
 import ScheduledRulePanel from './ScheduledRulePanel.vue'
 import TransitionGuardPanel from './TransitionGuardPanel.vue'
 import WorkflowCanvasView from './WorkflowCanvasView.vue'
+import AdminPageLayout from '@/components/admin/AdminPageLayout.vue'
 import { localizeStatusName, localizeCategoryName } from '@/utils/fieldLabels'
 
 const route = useRoute()
@@ -1381,14 +1379,6 @@ onBeforeRouteLeave(() => {
 </script>
 
 <style scoped>
-.workflow-page {
-  padding: 24px;
-  height: 100%;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-}
-
 /* 面包屑导航 */
 .breadcrumb-nav {
   margin-bottom: 16px;
@@ -1427,20 +1417,6 @@ onBeforeRouteLeave(() => {
   font-weight: 500;
 }
 
-.page-header {
-  display: flex;
-  align-items: center;
-  margin-bottom: 16px;
-  gap: 12px;
-  min-height: 40px;
-}
-
-.header-center {
-  flex: 1;
-  display: flex;
-  justify-content: center;
-}
-
 .workflow-main-tabs {
   :deep(.arco-tabs-nav) {
     &::before {
@@ -1448,18 +1424,6 @@ onBeforeRouteLeave(() => {
     }
   }
 }
-
-.page-title {
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--tf-text-primary);
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
-.header-actions {
-  display: flex;
-  gap: 8px;
   align-items: center;
   flex-shrink: 0;
 }

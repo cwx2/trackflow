@@ -1,18 +1,10 @@
 <template>
-  <div class="wia-page">
-    <!-- Header -->
-    <div class="wia-header">
-      <router-link to="/admin" class="back-link">← 返回管理</router-link>
-      <div class="header-row">
-        <div>
-          <h1 class="page-title">工作项属性</h1>
-          <p class="page-desc">管理工时记录的分类属性。每个属性定义一组可选值，可分配到指定项目使用。</p>
-        </div>
-        <a-button type="primary" @click="showCreateDialog = true">
-          新建属性
-        </a-button>
-      </div>
-    </div>
+  <AdminPageLayout title="工作项属性" subtitle="管理工时记录的分类属性。每个属性定义一组可选值，可分配到指定项目使用。">
+    <template #actions>
+      <a-button type="primary" @click="showCreateDialog = true">
+        新建属性
+      </a-button>
+    </template>
 
     <!-- Loading -->
     <div v-if="loading" class="wia-loading">
@@ -240,7 +232,7 @@
         </a-select>
       </div>
     </a-modal>
-  </div>
+  </AdminPageLayout>
 </template>
 
 <script setup lang="ts">
@@ -248,6 +240,7 @@ import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { Message, Modal } from '@arco-design/web-vue'
 import { workItemAttributeApi } from '@/api/timeEntry'
 import type { WorkItemAttributeVO, AttributeValueVO, AttributeProjectVO } from '@/api/timeEntry'
+import AdminPageLayout from '@/components/admin/AdminPageLayout.vue'
 import { projectApi } from '@/api'
 
 const loading = ref(true)
@@ -552,50 +545,6 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.wia-page {
-  padding: 32px;
-  max-width: 900px;
-  height: 100%;
-  overflow-y: auto;
-}
-
-.wia-header {
-  margin-bottom: 24px;
-}
-
-.back-link {
-  font-size: 12px;
-  color: var(--tf-text-tertiary);
-  text-decoration: none;
-  display: inline-block;
-  margin-bottom: 12px;
-  transition: color 0.15s;
-}
-
-.back-link:hover {
-  color: var(--tf-accent);
-}
-
-.header-row {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.page-title {
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--tf-text-primary);
-  margin: 0 0 4px 0;
-}
-
-.page-desc {
-  font-size: 13px;
-  color: var(--tf-text-tertiary);
-  margin: 0;
-}
-
 .wia-loading {
   display: flex;
   align-items: center;

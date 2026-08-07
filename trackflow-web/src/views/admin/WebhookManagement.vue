@@ -1,12 +1,11 @@
 <template>
-  <div class="admin-page">
-    <div class="page-header">
-      <div class="header-left">
-        <router-link to="/admin" class="back-link">← 返回管理</router-link>
-        <h2 class="page-title">Webhook 管理</h2>
-        <p class="page-desc">管理项目的 Webhook 通知，当事件发生时自动推送到外部系统。</p>
-      </div>
-    </div>
+  <AdminPageLayout title="Webhook 管理" subtitle="管理项目的 Webhook 通知，当事件发生时自动推送到外部系统。">
+    <template #actions>
+      <a-button v-if="selectedProjectId" type="primary" size="small" @click="openCreateDialog">
+        <template #icon><icon-plus /></template>
+        新建 Webhook
+      </a-button>
+    </template>
 
     <!-- 项目选择 -->
     <div class="filter-bar">
@@ -16,10 +15,6 @@
           <a-option v-for="p in projects" :key="p.id" :value="p.id">{{ p.name }} ({{ p.key }})</a-option>
         </a-select>
       </div>
-      <a-button v-if="selectedProjectId" type="primary" size="small" @click="openCreateDialog">
-        <template #icon><icon-plus /></template>
-        新建 Webhook
-      </a-button>
     </div>
 
     <!-- 无项目选择提示 -->
@@ -189,7 +184,7 @@
       <p>确定要删除 Webhook <strong>{{ deletingWebhook?.name }}</strong> 吗？</p>
       <p class="warning-text">此操作不可撤销，投递日志也将被清除。</p>
     </a-modal>
-  </div>
+  </AdminPageLayout>
 </template>
 
 <script setup lang="ts">
@@ -197,6 +192,7 @@ import { ref, computed, onMounted } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { projectApi, webhookApi } from '@/api'
 import type { WebhookVO, WebhookLogVO } from '@/api/webhook'
+import AdminPageLayout from '@/components/admin/AdminPageLayout.vue'
 
 // === State ===
 const projects = ref<{ id: string; name: string; key: string }[]>([])
@@ -444,42 +440,6 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.admin-page {
-  padding: 32px;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.page-header {
-  margin-bottom: 24px;
-  flex-shrink: 0;
-}
-
-.back-link {
-  font-size: 12px;
-  color: var(--tf-text-tertiary);
-  text-decoration: none;
-  transition: color 0.15s;
-}
-.back-link:hover {
-  color: var(--tf-accent);
-}
-
-.page-title {
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--tf-text-primary);
-  margin: 8px 0 4px 0;
-}
-
-.page-desc {
-  font-size: 13px;
-  color: var(--tf-text-tertiary);
-  margin: 0;
-}
-
 /* Filter bar */
 .filter-bar {
   display: flex;

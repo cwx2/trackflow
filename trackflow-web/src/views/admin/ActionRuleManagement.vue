@@ -1,15 +1,11 @@
 <template>
-  <div class="action-rule-page">
-    <div class="page-header">
-      <div class="header-left">
-        <h2 class="page-title">自定义动作</h2>
-        <span class="page-subtitle">配置工单快捷动作按钮，如"一键延期"、"标记为重复"、"升级优先级"</span>
-      </div>
+  <AdminPageLayout title="自定义动作" subtitle="配置工单快捷动作按钮，如"一键延期"、"标记为重复"、"升级优先级"">
+    <template #actions>
       <a-button type="primary" @click="showCreateForm">
         <template #icon><icon-plus /></template>
         创建动作
       </a-button>
-    </div>
+    </template>
 
     <!-- 动作列表 -->
     <a-table
@@ -244,7 +240,7 @@
         </template>
       </a-form>
     </a-modal>
-  </div>
+  </AdminPageLayout>
 </template>
 
 <script setup lang="ts">
@@ -253,6 +249,7 @@ import { Message } from '@arco-design/web-vue'
 import { IconPlus, IconDelete } from '@arco-design/web-vue/es/icon'
 import { quickActionApi } from '@/api'
 import type { QuickActionDefinitionVO } from '@/api/quickAction'
+import AdminPageLayout from '@/components/admin/AdminPageLayout.vue'
 
 // ==================== State ====================
 const loading = ref(false)
@@ -468,36 +465,6 @@ onMounted(loadDefinitions)
 </script>
 
 <style scoped>
-.action-rule-page {
-  padding: 24px;
-  max-width: 1200px;
-}
-
-.page-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 24px;
-}
-
-.header-left {
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-}
-
-.page-title {
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--color-text-1);
-  margin: 0;
-}
-
-.page-subtitle {
-  font-size: 13px;
-  color: var(--color-text-3);
-}
-
 .action-name-cell {
   display: flex;
   flex-direction: column;

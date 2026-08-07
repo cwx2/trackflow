@@ -1,17 +1,11 @@
 <template>
-  <div class="workflow-list-page">
-    <!-- 页面顶栏 -->
-    <div class="page-header">
-      <div class="header-left">
-        <h1 class="page-title">工作流</h1>
-      </div>
-      <div class="header-actions">
-        <a-button type="primary" @click="showCreateModal = true">
-          <template #icon><icon-plus /></template>
-          创建工作流
-        </a-button>
-      </div>
-    </div>
+  <AdminPageLayout title="工作流">
+    <template #actions>
+      <a-button type="primary" @click="showCreateModal = true">
+        <template #icon><icon-plus /></template>
+        创建工作流
+      </a-button>
+    </template>
 
     <!-- 筛选工具栏 -->
     <div class="filter-bar">
@@ -249,7 +243,7 @@
         style="width: 100%"
       />
     </a-modal>
-  </div>
+  </AdminPageLayout>
 </template>
 
 <script setup lang="ts">
@@ -259,6 +253,7 @@ import { Message, Modal } from '@arco-design/web-vue'
 import { workflowDefinitionApi } from '@/api/workflowDefinition'
 import type { WorkflowDefinitionVO, BoundProject } from '@/api/workflowDefinition'
 import { projectApi } from '@/api'
+import AdminPageLayout from '@/components/admin/AdminPageLayout.vue'
 
 const router = useRouter()
 const loading = ref(true)
@@ -504,29 +499,6 @@ function formatRelativeDate(dateStr: string | null): string {
 </script>
 
 <style scoped>
-.workflow-list-page {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  padding: 24px 32px 0;
-  overflow: hidden;
-}
-
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
-  flex-shrink: 0;
-}
-
-.page-title {
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--tf-text-primary);
-  margin: 0;
-}
-
 .filter-bar {
   display: flex;
   align-items: center;

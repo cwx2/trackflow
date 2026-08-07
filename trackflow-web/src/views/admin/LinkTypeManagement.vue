@@ -1,18 +1,10 @@
 <template>
-  <div class="lt-page">
-    <!-- Header -->
-    <div class="lt-header">
-      <router-link to="/admin" class="back-link">← 返回管理</router-link>
-      <div class="header-row">
-        <div>
-          <h1 class="page-title">关联类型</h1>
-          <p class="page-desc">管理工单关联类型。删除关联类型时，所有使用该类型的工单关联记录将被自动删除。</p>
-        </div>
-        <a-button type="primary" @click="openCreateDialog">
-          新建关联类型
-        </a-button>
-      </div>
-    </div>
+  <AdminPageLayout title="关联类型" subtitle="管理工单关联类型。删除关联类型时，所有使用该类型的工单关联记录将被自动删除。">
+    <template #actions>
+      <a-button type="primary" @click="openCreateDialog">
+        新建关联类型
+      </a-button>
+    </template>
 
     <!-- List with DataContainer for loading / empty states -->
     <DataContainer
@@ -142,7 +134,7 @@
         <p class="delete-irreversible">此操作不可撤销。</p>
       </div>
     </a-modal>
-  </div>
+  </AdminPageLayout>
 </template>
 
 <script setup lang="ts">
@@ -151,6 +143,7 @@ import { Message } from '@arco-design/web-vue'
 import { linkTypeApi } from '@/api'
 import type { IssueLinkTypeVO } from '@/api/types'
 import { useRequest } from '@/composables/useRequest'
+import AdminPageLayout from '@/components/admin/AdminPageLayout.vue'
 import DataContainer from '@/components/base/DataContainer.vue'
 
 const saving = ref(false)
@@ -318,50 +311,6 @@ onMounted(() => loadLinkTypes())
 </script>
 
 <style scoped>
-.lt-page {
-  padding: 32px;
-  max-width: 960px;
-  height: 100%;
-  overflow-y: auto;
-}
-
-.lt-header {
-  margin-bottom: 24px;
-}
-
-.back-link {
-  font-size: 12px;
-  color: var(--tf-text-tertiary);
-  text-decoration: none;
-  display: inline-block;
-  margin-bottom: 12px;
-  transition: color 0.15s;
-}
-
-.back-link:hover {
-  color: var(--tf-accent);
-}
-
-.header-row {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.page-title {
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--tf-text-primary);
-  margin: 0 0 4px 0;
-}
-
-.page-desc {
-  font-size: 13px;
-  color: var(--tf-text-tertiary);
-  margin: 0;
-}
-
 .lt-table {
   border: 1px solid var(--tf-border-light);
   border-radius: 8px;

@@ -1,13 +1,5 @@
 <template>
-  <div class="integration-page">
-    <div class="page-header">
-      <div class="header-left">
-        <router-link to="/admin" class="back-link">← 系统管理</router-link>
-        <h1 class="page-title">第三方集成</h1>
-        <p class="page-desc">管理外部系统适配器的启用状态、配置和事件日志</p>
-      </div>
-    </div>
-
+  <AdminPageLayout title="第三方集成" subtitle="管理外部系统适配器的启用状态、配置和事件日志">
     <a-tabs v-model:active-key="activeTab" class="integration-tabs">
       <!-- 适配器列表 Tab -->
       <a-tab-pane key="adapters" title="适配器">
@@ -238,7 +230,7 @@
         </a-form-item>
       </a-form>
     </a-modal>
-  </div>
+  </AdminPageLayout>
 </template>
 
 <script setup lang="ts">
@@ -246,6 +238,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { integrationAdminApi } from '@/api'
 import type { IntegrationAdapterVO, IntegrationConfigVO, IntegrationLogVO } from '@/api/integrationAdmin'
+import AdminPageLayout from '@/components/admin/AdminPageLayout.vue'
 
 const activeTab = ref('adapters')
 
@@ -488,40 +481,6 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.integration-page {
-  padding: 24px 32px;
-  height: 100%;
-  overflow-y: auto;
-}
-
-.page-header {
-  margin-bottom: 24px;
-}
-
-.back-link {
-  font-size: 12px;
-  color: var(--tf-text-tertiary);
-  text-decoration: none;
-  transition: color 0.15s;
-}
-
-.back-link:hover {
-  color: var(--tf-accent);
-}
-
-.page-title {
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--tf-text-primary);
-  margin: 8px 0 4px;
-}
-
-.page-desc {
-  font-size: 13px;
-  color: var(--tf-text-tertiary);
-  margin: 0;
-}
-
 .integration-tabs {
   margin-top: 8px;
 }

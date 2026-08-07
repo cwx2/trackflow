@@ -1,12 +1,11 @@
 <template>
-  <div class="admin-page">
-    <div class="page-header">
-      <h2 class="page-title">用户组管理</h2>
+  <AdminPageLayout title="用户组管理">
+    <template #actions>
       <a-button type="primary" size="small" @click="openCreateDialog">
         <template #icon><icon-plus /></template>
         新建用户组
       </a-button>
-    </div>
+    </template>
 
     <!-- 搜索 -->
     <div class="search-bar">
@@ -255,7 +254,7 @@
         此操作不可撤销。组内成员将失去通过该组继承的所有权限。
       </a-alert>
     </a-modal>
-  </div>
+  </AdminPageLayout>
 </template>
 
 <script setup lang="ts">
@@ -266,6 +265,7 @@ import type { UserVO, ProjectVO } from '@/api/types'
 import { Message } from '@arco-design/web-vue'
 import { useRequest } from '@/composables/useRequest'
 import DataContainer from '@/components/base/DataContainer.vue'
+import AdminPageLayout from '@/components/admin/AdminPageLayout.vue'
 import type { TableColumnData } from '@arco-design/web-vue'
 
 // ===== 表格列定义 =====
@@ -536,9 +536,6 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.admin-page { padding: 32px; height: 100%; display: flex; flex-direction: column; overflow: hidden; }
-.page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; flex-shrink: 0; }
-.page-title { font-size: 20px; font-weight: 600; color: var(--tf-text-primary); margin: 0; }
 .search-bar { margin-bottom: 16px; flex-shrink: 0; }
 
 /* Table fills remaining space */

@@ -1,16 +1,11 @@
 <template>
-  <div class="rule-management">
-    <!-- Header -->
-    <div class="page-header">
-      <div class="header-left">
-        <h2 class="page-title">规则引擎</h2>
-        <span class="page-subtitle">配置自动化规则，实现工单计分与统计</span>
-      </div>
+  <AdminPageLayout title="规则引擎" subtitle="配置自动化规则，实现工单计分与统计">
+    <template #actions>
       <a-button type="primary" @click="showCreateForm">
         <template #icon><icon-plus /></template>
         创建规则
       </a-button>
-    </div>
+    </template>
 
     <!-- Tabs: 规则列表 / 执行记录 / 统计仪表板 -->
     <a-tabs v-model:active-key="activeTab" class="rule-tabs">
@@ -305,7 +300,7 @@
         </a-form-item>
       </a-form>
     </a-modal>
-  </div>
+  </AdminPageLayout>
 </template>
 
 <script setup lang="ts">
@@ -313,6 +308,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { useRouter } from 'vue-router'
 import { scoreRuleApi } from '@/api'
+import AdminPageLayout from '@/components/admin/AdminPageLayout.vue'
 import type { RuleDefinitionVO, RuleExecutionLogVO, RuleStatisticsVO } from '@/api/scoreRule'
 
 const router = useRouter()
@@ -584,36 +580,6 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.rule-management {
-  padding: 24px;
-  max-width: 1200px;
-}
-
-.page-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 24px;
-}
-
-.header-left {
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-}
-
-.page-title {
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--color-text-1);
-  margin: 0;
-}
-
-.page-subtitle {
-  font-size: 13px;
-  color: var(--color-text-3);
-}
-
 .rule-tabs {
   :deep(.arco-tabs-content) {
     padding-top: 16px;
