@@ -1,64 +1,66 @@
 <template>
-  <div class="comment-input" :class="{ focused }">
-    <div class="editor-toolbar" v-if="editor">
-      <button
-        v-for="btn in toolbar"
-        :key="btn.name"
-        :class="['tb-btn', { active: btn.isActive?.() }]"
-        :title="btn.title"
-        @click="btn.action"
-      >{{ btn.icon }}</button>
-      <div class="toolbar-spacer"></div>
-      <!-- Visible to selector -->
-      <div class="visibility-selector" v-if="groups.length > 0 && canSetVisibility">
-        <button class="visibility-btn" :class="{ restricted: selectedGroupIds.length > 0 }" @click="showVisibilityDropdown = !showVisibilityDropdown" title="设置评论可见范围">
-          <span class="lock-icon">{{ selectedGroupIds.length > 0 ? '🔒' : '👁' }}</span>
-          <span class="visibility-label">{{ visibilityLabel }}</span>
-          <span class="dropdown-arrow">▾</span>
-        </button>
-        <div v-if="showVisibilityDropdown" class="visibility-dropdown" @mouseleave="showVisibilityDropdown = false">
-          <div class="dropdown-header">可见范围</div>
-          <div class="dropdown-option" :class="{ selected: selectedGroupIds.length === 0 }" @click="clearVisibility">
-            <span class="check">{{ selectedGroupIds.length === 0 ? '✓' : '' }}</span>
-            全部成员可见
-          </div>
-          <div class="dropdown-divider"></div>
-          <div
-            v-for="group in groups"
-            :key="group.id"
-            class="dropdown-option"
-            :class="{ selected: selectedGroupIds.includes(group.id) }"
-            @click="toggleGroup(group.id)"
-          >
-            <span class="check">{{ selectedGroupIds.includes(group.id) ? '✓' : '' }}</span>
-            {{ group.name }}
+  <div class="comment-input">
+    <TiptapEditor
+      ref="tiptapRef"
+      model-value=""
+      placeholder="添加评论... 支持 Markdown 语法，输入 @ 提及成员"
+      :toolbar="true"
+      :mention="true"
+      :mention-suggestion="mentionConfig"
+      :submit-on-enter="true"
+      :reply-blockquote="true"
+      :reply-blockquote-extension="ReplyBlockquote"
+      :min-height="80"
+      :max-height="200"
+      content-format="html"
+      @submit="submit"
+    >
+      <template #toolbar-end>
+        <!-- Visible to selector -->
+        <div class="visibility-selector" v-if="groups.length > 0 && canSetVisibility">
+          <button class="visibility-btn" :class="{ restricted: selectedGroupIds.length > 0 }" @click="showVisibilityDropdown = !showVisibilityDropdown" title="设置评论可见范围">
+            <span class="lock-icon">{{ selectedGroupIds.length > 0 ? '🔒' : '👁' }}</span>
+            <span class="visibility-label">{{ visibilityLabel }}</span>
+            <span class="dropdown-arrow">▾</span>
+          </button>
+          <div v-if="showVisibilityDropdown" class="visibility-dropdown" @mouseleave="showVisibilityDropdown = false">
+            <div class="dropdown-header">可见范围</div>
+            <div class="dropdown-option" :class="{ selected: selectedGroupIds.length === 0 }" @click="clearVisibility">
+              <span class="check">{{ selectedGroupIds.length === 0 ? '✓' : '' }}</span>
+              全部成员可见
+            </div>
+            <div class="dropdown-divider"></div>
+            <div
+              v-for="group in groups"
+              :key="group.id"
+              class="dropdown-option"
+              :class="{ selected: selectedGroupIds.includes(group.id) }"
+              @click="toggleGroup(group.id)"
+            >
+              <span class="check">{{ selectedGroupIds.includes(group.id) ? '✓' : '' }}</span>
+              {{ group.name }}
+            </div>
           </div>
         </div>
-      </div>
-    </div>
-    <div class="editor-area">
-      <EditorContent :editor="editor" />
-    </div>
-    <div class="editor-footer">
-      <div class="footer-actions">
-        <button v-if="showAddTime" class="btn-add-time" @click="emit('addTime')" title="添加花费的时间">⏱ 添加花费的时间</button>
-        <button v-if="showAddTime && !timerRunning" class="btn-start-timer" @click="emit('startTimer')" title="开始计时">▶ 开始计时</button>
-        <button v-if="showAddTime && timerRunning && timerIssueMatch" class="btn-stop-timer" @click="emit('stopTimer')" title="停止计时">⏹ 停止计时 ({{ timerElapsed }})</button>
-        <span v-if="showAddTime && timerRunning && !timerIssueMatch" class="timer-elsewhere-hint" title="计时器正在其他工单运行">⏱ 计时中...</span>
-      </div>
-      <button class="btn-submit" :disabled="isEmpty || isComposing" @click="submit">提交评论</button>
-    </div>
+      </template>
+      <template #footer="{ isEmpty: editorEmpty }">
+        <div class="editor-footer">
+          <div class="footer-actions">
+            <button v-if="showAddTime" class="btn-add-time" @click="emit('addTime')" title="添加花费的时间">⏱ 添加花费的时间</button>
+            <button v-if="showAddTime && !timerRunning" class="btn-start-timer" @click="emit('startTimer')" title="开始计时">▶ 开始计时</button>
+            <button v-if="showAddTime && timerRunning && timerIssueMatch" class="btn-stop-timer" @click="emit('stopTimer')" title="停止计时">⏹ 停止计时 ({{ timerElapsed }})</button>
+            <span v-if="showAddTime && timerRunning && !timerIssueMatch" class="timer-elsewhere-hint" title="计时器正在其他工单运行">⏱ 计时中...</span>
+          </div>
+          <button class="btn-submit" :disabled="editorEmpty || (tiptapRef?.isComposing ?? false)" @click="submit">提交评论</button>
+        </div>
+      </template>
+    </TiptapEditor>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onBeforeUnmount, onMounted, nextTick } from 'vue'
-import { useEditor, EditorContent } from '@tiptap/vue-3'
-import { Extension } from '@tiptap/core'
-import StarterKit from '@tiptap/starter-kit'
-import Link from '@tiptap/extension-link'
-import Placeholder from '@tiptap/extension-placeholder'
-import Mention from '@tiptap/extension-mention'
+import { ref, computed, onMounted, nextTick } from 'vue'
+import { TiptapEditor } from '@/components/base'
 import { ReplyBlockquote } from '../extensions/ReplyBlockquote'
 import { groupApi } from '@/api'
 import type { GroupSimpleVO } from '@/api/types'
@@ -86,13 +88,14 @@ const emit = defineEmits<{
   stopTimer: []
 }>()
 
-const focused = ref(false)
+const tiptapRef = ref<InstanceType<typeof TiptapEditor> | null>(null)
 const groups = ref<GroupSimpleVO[]>([])
 const selectedGroupIds = ref<string[]>([])
 const showVisibilityDropdown = ref(false)
 
-// Mention suggestion 配置（按需搜索，无需缓存管理）
+// Mention suggestion 配置
 const { suggestion } = useMentionSuggestion(() => props.projectId)
+const mentionConfig = { suggestion }
 
 const visibilityLabel = computed(() => {
   if (selectedGroupIds.value.length === 0) return '全部可见'
@@ -128,142 +131,43 @@ onMounted(async () => {
   }
 })
 
-// 追踪 IME 组合输入状态，防止在中文输入法未提交时误触发提交
-const isComposing = ref(false)
-
-// 自定义 Enter 发送扩展：Enter 发送评论，Shift+Enter / Ctrl+Enter 换行
-const SubmitOnEnter = Extension.create({
-  name: 'submitOnEnter',
-  addKeyboardShortcuts() {
-    return {
-      'Enter': () => {
-        // IME 组合输入状态下不拦截（让输入法完成确认）
-        if (isComposing.value || this.editor.view.composing) return false
-        // 编辑器为空时不发送
-        if (this.editor.isEmpty) return true
-        // 触发提交
-        submit()
-        return true
-      },
-      'Shift-Enter': ({ editor }) => {
-        // 插入硬换行
-        editor.commands.setHardBreak()
-        return true
-      },
-      'Ctrl-Enter': ({ editor }) => {
-        // 备用换行快捷键
-        editor.commands.setHardBreak()
-        return true
-      },
-    }
-  },
-})
-
-const editor = useEditor({
-  content: '',
-  extensions: [
-    StarterKit.configure({
-      blockquote: false, // 使用自定义 ReplyBlockquote 替代
-    }),
-    ReplyBlockquote,
-    Link.configure({ openOnClick: false }),
-    Placeholder.configure({ placeholder: '添加评论... 支持 Markdown 语法，输入 @ 提及成员' }),
-    Mention.configure({
-      HTMLAttributes: {
-        class: 'mention',
-      },
-      // 后端从 data-mention-id 属性提取 username 进行匹配
-      // node.attrs.id = username（英文，供后端匹配）
-      // node.attrs.label = displayName（可能是中文，供用户查看）
-      renderHTML({ options, node }) {
-        return [
-          'span',
-          { 
-            class: 'mention', 
-            'data-mention-id': node.attrs.id,  // username，后端从这里提取
-            'data-mention-label': node.attrs.label,  // displayName
-            title: `${node.attrs.label} (@${node.attrs.id})`  // hover 提示
-          },
-          // 显示 @displayName 给用户看
-          `${options.suggestion.char}${node.attrs.label ?? node.attrs.id}`,
-        ]
-      },
-      suggestion,
-    }),
-    SubmitOnEnter,
-  ],
-  editorProps: {
-    attributes: { class: 'tiptap-comment' },
-    handleDOMEvents: {
-      // 追踪 IME 组合输入状态
-      compositionstart: () => { isComposing.value = true; return false },
-      compositionend: () => { isComposing.value = false; return false },
-    }
-  },
-  onFocus: () => { focused.value = true },
-  onBlur: () => {
-    focused.value = false
-    // 失焦时重置组合输入状态（防止 compositionend 未触发导致状态残留）
-    isComposing.value = false
-  },
-})
-
-const isEmpty = computed(() => !editor.value || editor.value.isEmpty)
-
-const toolbar = ref([
-  { name: 'bold', icon: 'B', title: '粗体', action: () => editor.value?.chain().focus().toggleBold().run(), isActive: () => editor.value?.isActive('bold') },
-  { name: 'italic', icon: 'I', title: '斜体', action: () => editor.value?.chain().focus().toggleItalic().run(), isActive: () => editor.value?.isActive('italic') },
-  { name: 'code', icon: '<>', title: '代码', action: () => editor.value?.chain().focus().toggleCode().run(), isActive: () => editor.value?.isActive('code') },
-  { name: 'link', icon: '\u{1F517}', title: '链接', action: insertLink, isActive: () => editor.value?.isActive('link') },
-  { name: 'bullet', icon: '\u2022', title: '列表', action: () => editor.value?.chain().focus().toggleBulletList().run(), isActive: () => editor.value?.isActive('bulletList') },
-  { name: 'ordered', icon: '1.', title: '有序列表', action: () => editor.value?.chain().focus().toggleOrderedList().run(), isActive: () => editor.value?.isActive('orderedList') },
-  { name: 'codeblock', icon: '{}', title: '代码块', action: () => editor.value?.chain().focus().toggleCodeBlock().run(), isActive: () => editor.value?.isActive('codeBlock') },
-])
-
-function insertLink() {
-  const url = window.prompt('输入链接 URL:')
-  if (url) editor.value?.chain().focus().setLink({ href: url }).run()
-}
-
 function submit() {
-  if (!editor.value || editor.value.isEmpty) return
-  // 防止在 IME 中文输入法组合状态下提交，否则未确认的拼音/假名等会丢失
-  // 例如：输入 @周杰 时若拼音尚未确认就点击提交，会导致用户名丢失，评论末尾只剩 @
-  if (isComposing.value || editor.value.view.composing) return
-  const html = editor.value.getHTML()
+  const editorInstance = tiptapRef.value
+  if (!editorInstance || editorInstance.isEmpty) return
+  if (editorInstance.isComposing) return
+  const html = editorInstance.getHTML()
   const visibleTo = selectedGroupIds.value.length > 0 ? [...selectedGroupIds.value] : undefined
   emit('submit', html, visibleTo)
-  editor.value.commands.clearContent()
+  editorInstance.clearContent()
   selectedGroupIds.value = []
 }
 
 /**
  * 在编辑器中插入回复引用块。
- * 如果编辑器已有内容，将引用块插入到现有内容前面（以换行分隔）。
  * @param displayName 被回复者的显示名
  * @param content 被引用的原评论纯文本（已截取前 100 字）
  * @param commentId 被引用的原评论 ID（用于点击引用跳转）
  */
 function insertReplyQuote(displayName: string, content: string, commentId?: string) {
-  if (!editor.value) return
+  const editorInstance = tiptapRef.value
+  if (!editorInstance) return
+  const editor = editorInstance.editor
+  if (!editor) return
+
   const truncated = content.length > 100 ? content.slice(0, 100) + '...' : content
-  // 构建 blockquote HTML：引用块 + 空行方便输入
   const replyAttr = commentId ? ` data-reply-to-comment-id="${commentId}"` : ''
   const quoteHtml = `<blockquote${replyAttr}><p>@${displayName}：${truncated}</p></blockquote><p></p>`
 
-  const currentContent = editor.value.getHTML()
-  const isCurrentEmpty = editor.value.isEmpty
+  const isCurrentEmpty = editor.isEmpty
 
   if (isCurrentEmpty) {
-    editor.value.commands.setContent(quoteHtml)
+    editor.commands.setContent(quoteHtml)
   } else {
-    // 在已有内容前面插入引用块
-    editor.value.commands.setContent(quoteHtml + currentContent)
+    const currentContent = editor.getHTML()
+    editor.commands.setContent(quoteHtml + currentContent)
   }
-  // 将光标移动到引用块之后
-  editor.value.commands.focus('end')
+  editor.commands.focus('end')
 
-  // 滚动到评论输入区域
   nextTick(() => {
     const el = document.querySelector('.comment-input')
     if (el) {
@@ -273,36 +177,15 @@ function insertReplyQuote(displayName: string, content: string, commentId?: stri
 }
 
 defineExpose({ insertReplyQuote })
-
-onBeforeUnmount(() => { editor.value?.destroy() })
 </script>
 
 <style scoped>
 .comment-input {
-  border: 1px solid var(--tf-border);
-  border-radius: 6px;
-  overflow: hidden;
   margin-top: 16px;
-  background: var(--tf-bg-body);
-  transition: border-color 150ms;
 }
-.comment-input.focused { border-color: var(--tf-accent); }
-
-.editor-toolbar {
-  display: flex; align-items: center; gap: 4px;
-  height: 36px; padding: 0 8px;
-  background: var(--tf-bg-elevated);
-  border-bottom: 1px solid var(--tf-border);
+.comment-input :deep(.tiptap-editor) {
+  border-radius: 6px;
 }
-.toolbar-spacer { flex: 1; }
-.tb-btn {
-  font-size: 12px; padding: 4px 8px; border-radius: 3px;
-  background: none; border: none; color: var(--tf-text-tertiary);
-  cursor: pointer; font-weight: 600;
-  transition: color 150ms, background 150ms;
-}
-.tb-btn:hover { color: var(--tf-text-primary); background: var(--tf-bg-code); }
-.tb-btn.active { color: var(--tf-accent); background: var(--tf-bg-code); }
 
 /* Visibility selector */
 .visibility-selector { position: relative; }
@@ -346,38 +229,7 @@ onBeforeUnmount(() => { editor.value?.destroy() })
 .dropdown-option .check { width: 14px; font-size: 12px; color: var(--tf-accent); }
 .dropdown-divider { height: 1px; margin: 4px 8px; background: var(--tf-border); }
 
-.editor-area {
-  min-height: 80px; max-height: 200px; overflow-y: auto; padding: 12px;
-}
-.editor-area :deep(.tiptap-comment) {
-  outline: none; font-size: 13px; line-height: 1.5; color: var(--tf-text-primary);
-}
-.editor-area :deep(.tiptap-comment p) { margin: 4px 0; }
-.editor-area :deep(.tiptap-comment code) { background: var(--tf-bg-code); padding: 0 3px; border-radius: 2px; font-size: 12px; }
-.editor-area :deep(.tiptap-comment blockquote) {
-  border-left: 3px solid var(--tf-border);
-  margin: 4px 0;
-  padding: 4px 12px;
-  color: var(--tf-text-tertiary);
-  font-size: 12px;
-  background: var(--tf-bg-surface);
-  border-radius: 0 4px 4px 0;
-}
-.editor-area :deep(.tiptap-comment .is-empty::before) {
-  content: attr(data-placeholder); color: var(--tf-text-muted);
-  pointer-events: none; float: left; height: 0;
-}
-
-/* Mention 样式 */
-.editor-area :deep(.mention) {
-  background: var(--tf-accent-subtle, rgba(88, 166, 255, 0.15));
-  color: var(--tf-accent);
-  border-radius: 3px;
-  padding: 1px 4px;
-  font-weight: 500;
-  white-space: nowrap;
-}
-
+/* Footer */
 .editor-footer {
   display: flex; justify-content: space-between; align-items: center;
   height: 40px; padding: 0 8px;

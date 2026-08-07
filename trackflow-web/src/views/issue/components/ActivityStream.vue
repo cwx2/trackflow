@@ -72,12 +72,21 @@
           </div>
           <!-- Editing mode -->
           <div v-else-if="item.type === 'comment' && !item.isDeleted && editingCommentId === item.commentId" class="comment-edit">
-            <div class="edit-area">
-              <EditorContent :editor="editEditor" />
-            </div>
+            <TiptapEditor
+              ref="editTiptapRef"
+              model-value=""
+              placeholder="编辑评论..."
+              :toolbar="false"
+              :reply-blockquote="true"
+              :reply-blockquote-extension="ReplyBlockquote"
+              :autofocus="true"
+              :min-height="60"
+              :max-height="200"
+              content-format="html"
+            />
             <div class="edit-actions">
               <button class="btn-cancel" @click="cancelEdit">取消</button>
-              <button class="btn-save" :disabled="editEmpty || editComposing" @click="saveEdit">保存修改</button>
+              <button class="btn-save" :disabled="editTiptapEmpty || editTiptapComposing" @click="saveEdit">保存修改</button>
             </div>
           </div>
           <!-- Normal display -->
@@ -218,16 +227,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onBeforeUnmount, nextTick } from 'vue'
+import { ref, computed, watch, nextTick } from 'vue'
 import { Message } from '@arco-design/web-vue'
-import { useEditor, EditorContent } from '@tiptap/vue-3'
-import StarterKit from '@tiptap/starter-kit'
-import Link from '@tiptap/extension-link'
-import Placeholder from '@tiptap/extension-placeholder'
 import { localizeAction, localizeLinkType } from '@/utils/fieldLabels'
 import { ReplyBlockquote } from '../extensions/ReplyBlockquote'
 import UserHoverCard from './UserHoverCard.vue'
-import { UserAvatar } from '@/components/base'
+import { UserAvatar, TiptapEditor } from '@/components/base'
 
 /** 评论关联的字段变更（1分钟内的变更合并到评论条目展示） */
 export interface RelatedChange {
@@ -301,30 +306,10 @@ const hoveredId = ref('')
 
 // Edit state
 const editingCommentId = ref<string | null>(null)
-// 追踪编辑框 IME 组合输入状态
-const editComposing = ref(false)
+const editTiptapRef = ref<InstanceType<typeof TiptapEditor> | null>(null)
 
-const editEditor = useEditor({
-  content: '',
-  extensions: [
-    StarterKit.configure({
-      blockquote: false, // 使用自定义 ReplyBlockquote 替代
-    }),
-    ReplyBlockquote,
-    Link.configure({ openOnClick: false }),
-    Placeholder.configure({ placeholder: '编辑评论...' }),
-  ],
-  editorProps: {
-    attributes: { class: 'tiptap-comment' },
-    handleDOMEvents: {
-      compositionstart: () => { editComposing.value = true; return false },
-      compositionend: () => { editComposing.value = false; return false },
-    }
-  },
-  onBlur: () => { editComposing.value = false },
-})
-
-const editEmpty = computed(() => !editEditor.value || editEditor.value.isEmpty)
+const editTiptapEmpty = computed(() => editTiptapRef.value?.isEmpty ?? true)
+const editTiptapComposing = computed(() => editTiptapRef.value?.isComposing ?? false)
 
 // Delete state
 const deleteModalVisible = ref(false)
@@ -402,32 +387,31 @@ function canModifyComment(item: ActivityItem): boolean {
 function startEdit(item: ActivityItem) {
   editingCommentId.value = item.commentId || null
   nextTick(() => {
-    if (editEditor.value && item.rawContent) {
+    if (editTiptapRef.value && item.rawContent) {
       // If rawContent starts with '<', it's HTML; otherwise set as paragraph
       const isHtml = item.rawContent.trim().startsWith('<')
       if (isHtml) {
-        editEditor.value.commands.setContent(item.rawContent)
+        editTiptapRef.value.setContent(item.rawContent)
       } else {
-        editEditor.value.commands.setContent(`<p>${item.rawContent}</p>`)
+        editTiptapRef.value.setContent(`<p>${item.rawContent}</p>`)
       }
-      editEditor.value.commands.focus('end')
+      editTiptapRef.value.focus('end')
     }
   })
 }
 
 function cancelEdit() {
   editingCommentId.value = null
-  editEditor.value?.commands.clearContent()
+  editTiptapRef.value?.clearContent()
 }
 
 function saveEdit() {
-  if (!editingCommentId.value || !editEditor.value || editEditor.value.isEmpty) return
-  // 防止在 IME 输入法组合状态下保存，避免末尾内容丢失
-  if (editComposing.value || editEditor.value.view.composing) return
-  const html = editEditor.value.getHTML()
+  if (!editingCommentId.value || !editTiptapRef.value || editTiptapRef.value.isEmpty) return
+  if (editTiptapRef.value.isComposing) return
+  const html = editTiptapRef.value.getHTML()
   emit('editComment', editingCommentId.value, html)
   editingCommentId.value = null
-  editEditor.value.commands.clearContent()
+  editTiptapRef.value.clearContent()
 }
 
 function confirmDelete(item: ActivityItem) {
@@ -593,8 +577,6 @@ function scrollToComment(commentId: string) {
     highlightedId.value = ''
   }, 2000)
 }
-
-onBeforeUnmount(() => { editEditor.value?.destroy() })
 
 // Expose current filter state for parent "load more" fixed bar
 const currentFilterLabel = computed(() => filters.find(f => f.key === current.value)?.label ?? '全部')
@@ -858,17 +840,8 @@ defineExpose({
   overflow: hidden;
   background: var(--tf-bg-body);
 }
-.edit-area {
-  min-height: 60px; max-height: 200px; overflow-y: auto; padding: 12px;
-}
-.edit-area :deep(.tiptap-comment) {
-  outline: none; font-size: 13px; line-height: 1.5; color: var(--tf-text-primary);
-}
-.edit-area :deep(.tiptap-comment p) { margin: 4px 0; }
-.edit-area :deep(.tiptap-comment code) { background: var(--tf-bg-code); padding: 0 3px; border-radius: 2px; font-size: 12px; }
-.edit-area :deep(.tiptap-comment .is-empty::before) {
-  content: attr(data-placeholder); color: var(--tf-text-muted);
-  pointer-events: none; float: left; height: 0;
+.comment-edit :deep(.tiptap-editor) {
+  border: none; border-radius: 0;
 }
 .edit-actions {
   display: flex; justify-content: flex-end; gap: 8px;
