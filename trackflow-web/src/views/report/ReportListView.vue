@@ -330,7 +330,8 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onBeforeUnmount, watch } from 'vue'
-import { Message, Modal } from '@arco-design/web-vue'
+import { Message } from '@arco-design/web-vue'
+import { useConfirmDelete } from '@/composables/useConfirmDelete'
 import { reportApi } from '@/api/report'
 import { projectApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
@@ -836,13 +837,11 @@ function startEdit(report: ReportDefinitionVO) {
 }
 
 function confirmDelete(report: ReportDefinitionVO) {
-  Modal.warning({
-    title: '确认删除',
-    content: `确定要删除报表「${report.name}」吗？此操作不可恢复。`,
-    okText: '删除报表',
-    cancelText: '取消',
-    hideCancel: false,
-    onOk: async () => {
+  const { confirmDelete: showConfirm } = useConfirmDelete()
+  showConfirm({
+    itemName: `报表「${report.name}」`,
+    confirmText: '删除报表',
+    onConfirm: async () => {
       try {
         await reportApi.delete(report.id)
         Message.success('报表已删除')

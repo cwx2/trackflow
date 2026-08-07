@@ -829,6 +829,7 @@
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { IconPlus, IconDelete, IconCheck, IconEye, IconEyeInvisible, IconClose, IconSortAscending, IconSortDescending, IconApps, IconFolder, IconLock, IconUnlock, IconInfoCircle, IconExclamationCircleFill } from '@arco-design/web-vue/es/icon'
 import { Message, Modal } from '@arco-design/web-vue'
+import { useConfirmDelete } from '@/composables/useConfirmDelete'
 import { customFieldApi, projectApi, workflowApi, userApi } from '@/api'
 import type { CustomFieldDefinitionVO, CustomFieldUsageVO, OptionUsageItemVO, UserVO, AvailableConversionsVO, ConversionOptionVO } from '@/api/types'
 import { localizeIssueType } from '@/utils/fieldLabels'
@@ -1580,15 +1581,13 @@ async function confirmDelete(record: CustomFieldDefinitionVO) {
     if (!hasValues && !hasConditionRefs) {
       // 无引用——简单确认
       const projectInfo = usage.isForAll
-        ? `该字段为全局字段，当前适用于所有 ${usage.projectCount} 个项目。`
+        ? '（全局字段）'
         : ''
-      Modal.warning({
-        title: '确认删除',
-        content: `${projectInfo}确定要删除自定义字段「${record.name}」？此操作不可撤销。`,
-        okText: '删除字段',
-        cancelText: '取消',
-        hideCancel: false,
-        onOk: () => handleDelete(record.id)
+      const { confirmDelete } = useConfirmDelete()
+      confirmDelete({
+        itemName: `自定义字段「${record.name}」${projectInfo}`,
+        confirmText: '删除字段',
+        onConfirm: () => handleDelete(record.id)
       })
     } else {
       // 有工单引用或条件依赖——危险确认
@@ -1602,13 +1601,12 @@ async function confirmDelete(record: CustomFieldDefinitionVO) {
       if (hasConditionRefs) {
         parts.push(`被 ${usage.conditionRefCount} 条字段配置作为条件源引用，删除后相关条件规则将失效，被隐藏的字段将变为始终显示`)
       }
-      Modal.error({
-        title: '⚠️ 删除将导致数据丢失',
-        content: `字段「${record.name}」${projectInfo}当前${parts.join('；')}。此操作不可撤销。`,
-        okText: hasValues ? `确认删除（影响 ${usage.issueCount} 个工单）` : '确认删除',
-        cancelText: '取消',
-        hideCancel: false,
-        onOk: () => handleDelete(record.id)
+      const { confirmDangerDelete } = useConfirmDelete()
+      confirmDangerDelete({
+        itemName: `字段「${record.name}」${projectInfo}`,
+        impactDescription: parts.join('；'),
+        confirmText: hasValues ? `确认删除（影响 ${usage.issueCount} 个工单）` : '确认删除',
+        onConfirm: () => handleDelete(record.id)
       })
     }
   } catch (e: any) {
@@ -1678,13 +1676,12 @@ async function batchTogglePrivate(isPrivate: boolean) {
 
 function batchDeleteConfirm() {
   if (selectedKeys.value.length === 0) return
-  Modal.warning({
-    title: '确认批量删除',
-    content: `确定要删除选中的 ${selectedKeys.value.length} 个自定义字段？此操作不可撤销，关联的工单字段值将被永久清除。`,
-    okText: `删除 ${selectedKeys.value.length} 个字段`,
-    cancelText: '取消',
-    hideCancel: false,
-    onOk: handleBatchDelete
+  const { confirmDangerDelete } = useConfirmDelete()
+  confirmDangerDelete({
+    itemName: `选中的 ${selectedKeys.value.length} 个自定义字段`,
+    impactDescription: '关联的工单字段值将被永久清除',
+    confirmText: `删除 ${selectedKeys.value.length} 个字段`,
+    onConfirm: handleBatchDelete
   })
 }
 

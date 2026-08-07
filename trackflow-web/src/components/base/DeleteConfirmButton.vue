@@ -25,7 +25,8 @@
  * />
  */
 import { ref } from 'vue'
-import { Modal, Message } from '@arco-design/web-vue'
+import { Message } from '@arco-design/web-vue'
+import { useConfirmDelete } from '@/composables/useConfirmDelete'
 
 const props = withDefaults(defineProps<{
   /** 执行删除的异步函数 */
@@ -59,14 +60,11 @@ const emit = defineEmits<{
 const deleting = ref(false)
 
 function handleClick() {
-  Modal.warning({
-    title: props.confirmTitle,
-    content: props.confirmContent,
-    okText: '确认删除',
-    cancelText: '取消',
-    okButtonProps: { status: 'danger' },
-    hideCancel: false,
-    onOk: async () => {
+  const { confirmDelete } = useConfirmDelete()
+  confirmDelete({
+    itemName: '',
+    confirmText: '确认删除',
+    onConfirm: async () => {
       deleting.value = true
       try {
         await props.deleteFn()

@@ -190,7 +190,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { Modal } from '@arco-design/web-vue'
+import { useConfirmDelete } from '@/composables/useConfirmDelete'
 import {
   IconUpload, IconMore, IconDownload, IconDelete, IconLock,
   IconApps, IconList, IconFile, IconSortDescending, IconSortAscending
@@ -439,24 +439,20 @@ function downloadAll() {
 }
 
 function confirmDelete(att: AttachmentItem) {
-  Modal.warning({
-    title: '删除附件',
-    content: `确定要删除 "${att.fileName}" 吗？此操作不可撤销。`,
-    okText: '删除',
-    cancelText: '取消',
-    hideCancel: false,
-    onOk: () => emit('delete', att.id)
+  const { confirmDelete: showConfirm } = useConfirmDelete()
+  showConfirm({
+    itemName: `附件「${att.fileName}」`,
+    onConfirm: () => emit('delete', att.id)
   })
 }
 
 function confirmDeleteAll() {
-  Modal.warning({
-    title: '删除全部附件',
-    content: `确定要删除全部 ${props.attachments.length} 个附件吗？此操作不可撤销。`,
-    okText: '全部删除',
-    cancelText: '取消',
-    hideCancel: false,
-    onOk: () => emit('delete-all')
+  const { confirmDangerDelete } = useConfirmDelete()
+  confirmDangerDelete({
+    itemName: `全部 ${props.attachments.length} 个附件`,
+    impactDescription: '删除后无法恢复',
+    confirmText: '全部删除',
+    onConfirm: () => emit('delete-all')
   })
 }
 </script>

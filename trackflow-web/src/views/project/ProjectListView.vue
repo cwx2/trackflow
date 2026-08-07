@@ -577,6 +577,7 @@
 import { ref, reactive, computed, onMounted, watch, h } from 'vue'
 import { useRouter } from 'vue-router'
 import { Message, Modal } from '@arco-design/web-vue'
+import { useConfirmDelete } from '@/composables/useConfirmDelete'
 import {
   IconPlus,
   IconMore,
@@ -1083,30 +1084,29 @@ async function confirmRemoveMember(record: any) {
     const count = res.data?.count || 0
     const memberName = record.displayName || record.username
 
-    const content = count > 0
-      ? () => h('div', [
-          h('p', { style: 'margin: 0 0 12px 0' }, `该成员当前负责 ${count} 个工单，移除后将自动取消这些工单的负责人分配。`),
-          h('p', { style: 'margin: 0' }, `确定移除成员「${memberName}」？`)
-        ])
-      : `确定移除成员「${memberName}」？`
-
-    Modal.warning({
-      title: '移除项目成员',
-      content,
-      okText: '确定移除',
-      cancelText: '取消',
-      hideCancel: false,
-      onOk: () => removeMember(record.userId)
-    })
+    if (count > 0) {
+      const { confirmDangerDelete } = useConfirmDelete()
+      confirmDangerDelete({
+        itemName: `成员「${memberName}」`,
+        impactDescription: `当前负责 ${count} 个工单，移除后将自动取消这些工单的负责人分配`,
+        confirmText: '确定移除',
+        onConfirm: () => removeMember(record.userId)
+      })
+    } else {
+      const { confirmDelete } = useConfirmDelete()
+      confirmDelete({
+        itemName: `成员「${memberName}」`,
+        confirmText: '确定移除',
+        onConfirm: () => removeMember(record.userId)
+      })
+    }
   } catch (e: any) {
     // 预检失败时退回简单确认
-    Modal.warning({
-      title: '移除项目成员',
-      content: `确定移除成员「${record.displayName || record.username}」？`,
-      okText: '确定移除',
-      cancelText: '取消',
-      hideCancel: false,
-      onOk: () => removeMember(record.userId)
+    const { confirmDelete } = useConfirmDelete()
+    confirmDelete({
+      itemName: `成员「${record.displayName || record.username}」`,
+      confirmText: '确定移除',
+      onConfirm: () => removeMember(record.userId)
     })
   }
 }

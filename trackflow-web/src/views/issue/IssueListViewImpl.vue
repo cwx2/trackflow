@@ -1001,6 +1001,7 @@ import { ref, reactive, computed, onMounted, onUnmounted, watch, h, nextTick } f
 import { useRouter, useRoute, onBeforeRouteLeave } from 'vue-router'
 import { IconPlus, IconSearch, IconLoading, IconEdit, IconPenFill, IconShareExternal, IconPushpin, IconDelete, IconLock, IconCheckCircle, IconEye, IconLayout, IconExpand, IconDownload, IconFile, IconCode, IconCopy, IconLink, IconCalendar, IconRight, IconSettings, IconMinusCircle, IconExclamationCircleFill } from '@arco-design/web-vue/es/icon'
 import { Message, Modal } from '@arco-design/web-vue'
+import { useConfirmDelete } from '@/composables/useConfirmDelete'
 import axios from 'axios'
 import { projectApi, issueApi, queryApi, sprintApi, tagApi, customFieldApi } from '@/api'
 import type { IssueVO, IssueStatusVO, ProjectMemberVO, SprintVO, CustomFieldValueVO } from '@/api/types'
@@ -1370,13 +1371,10 @@ async function handleCreateQuery() {
 }
 
 async function confirmDeleteQuery(q: any) {
-  Modal.confirm({
-    title: '确认删除',
-    content: `确定要删除查询「${q.name}」吗？此操作不可撤销。`,
-    okText: '删除',
-    cancelText: '取消',
-    okButtonProps: { status: 'danger' },
-    async onOk() {
+  const { confirmDelete } = useConfirmDelete()
+  confirmDelete({
+    itemName: `查询「${q.name}」`,
+    onConfirm: async () => {
       try {
         await queryApi.delete(q.id)
         Message.success('查询已删除')
@@ -2143,13 +2141,12 @@ function handleDeleteDraft(draftId: string) {
 }
 
 function handleDeleteAllDrafts() {
-  Modal.confirm({
-    title: '删除所有草稿',
-    content: `确定要删除全部 ${draftCount.value} 个草稿吗？此操作不可撤销。`,
-    okText: '全部删除',
-    cancelText: '取消',
-    okButtonProps: { status: 'danger' },
-    onOk: () => {
+  const { confirmDangerDelete } = useConfirmDelete()
+  confirmDangerDelete({
+    itemName: `全部 ${draftCount.value} 个草稿`,
+    impactDescription: '删除后无法恢复',
+    confirmText: '全部删除',
+    onConfirm: () => {
       deleteAllDrafts()
       Message.success('所有草稿已删除')
     }

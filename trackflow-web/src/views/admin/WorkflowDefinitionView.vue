@@ -23,22 +23,15 @@
     <div class="main-content">
       <!-- 左侧列表 -->
       <div class="list-panel">
-        <div v-if="loading" class="loading-state">
-          <a-spin />
-        </div>
-
-        <div v-else-if="filteredDefinitions.length === 0" class="empty-state">
-          <div class="empty-icon">📋</div>
-          <h3 class="empty-title">暂无工作流</h3>
-          <p class="empty-desc">
-            {{ searchKeyword ? '没有匹配的工作流' : '创建第一个工作流来管理状态转换规则' }}
-          </p>
-          <a-button v-if="!searchKeyword" type="primary" @click="showCreateModal = true">
-            创建工作流
-          </a-button>
-        </div>
-
-        <div v-else class="def-list">
+        <DataContainer
+          :loading="loading"
+          :is-empty="filteredDefinitions.length === 0"
+          :empty-title="searchKeyword ? '没有匹配的工作流' : '暂无工作流'"
+          :empty-description="searchKeyword ? '' : '创建第一个工作流来管理状态转换规则'"
+          :create-action="searchKeyword ? undefined : '创建工作流'"
+          @create="showCreateModal = true"
+        >
+        <div class="def-list">
           <div
             v-for="def in filteredDefinitions"
             :key="def.id"
@@ -64,6 +57,7 @@
             </div>
           </div>
         </div>
+        </DataContainer>
       </div>
 
       <!-- 右侧详情侧边栏 -->
@@ -255,6 +249,7 @@ import { workflowDefinitionApi } from '@/api/workflowDefinition'
 import type { WorkflowDefinitionVO, BoundProject } from '@/api/workflowDefinition'
 import { projectApi } from '@/api'
 import AdminPageLayout from '@/components/admin/AdminPageLayout.vue'
+import DataContainer from '@/components/base/DataContainer.vue'
 
 const router = useRouter()
 const loading = ref(true)
@@ -530,33 +525,7 @@ function formatRelativeDate(dateStr: string | null): string {
   border-right: 1px solid var(--tf-border-light);
 }
 
-.loading-state {
-  display: flex;
-  justify-content: center;
-  padding: 48px;
-}
-
-.empty-state {
-  text-align: center;
-  padding: 64px 32px;
-}
-.empty-icon {
-  font-size: 40px;
-  margin-bottom: 12px;
-}
-.empty-title {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--tf-text-primary);
-  margin: 0 0 8px;
-}
-.empty-desc {
-  font-size: 13px;
-  color: var(--tf-text-tertiary);
-  margin: 0 0 16px;
-}
-
-.def-list {
+/* 左侧列表 */.def-list {
   display: flex;
   flex-direction: column;
 }

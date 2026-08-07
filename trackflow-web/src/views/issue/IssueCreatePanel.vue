@@ -705,6 +705,7 @@
 import { ref, reactive, computed, onMounted, onBeforeUnmount, onUnmounted, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { Message, Modal } from '@arco-design/web-vue'
+import { useConfirmDelete } from '@/composables/useConfirmDelete'
 import { IconDown, IconAttachment, IconClose, IconPlus, IconUp, IconLink, IconSearch, IconCheck, IconFullscreen, IconFile } from '@arco-design/web-vue/es/icon'
 import { projectApi, issueApi, sprintApi, customFieldApi, issueTemplateApi, tagApi } from '@/api'
 import { IssuePriorityBadge } from '@/components/base'

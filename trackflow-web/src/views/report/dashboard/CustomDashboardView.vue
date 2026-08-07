@@ -345,7 +345,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { Message, Modal } from '@arco-design/web-vue'
+import { Message } from '@arco-design/web-vue'
+import { useConfirmDelete } from '@/composables/useConfirmDelete'
 import { GridLayout, GridItem } from 'grid-layout-plus'
 import {
   IconPlus, IconMore, IconEdit, IconDelete, IconShareAlt, IconStar
@@ -691,13 +692,12 @@ async function handleSetDefault() {
 
 function confirmDelete() {
   if (!currentDashboard.value) return
-  Modal.warning({
-    title: '删除仪表盘',
-    content: `确定要删除「${currentDashboard.value.name}」吗？此操作不可撤销，所有微件将一并删除。`,
-    okText: '删除',
-    cancelText: '取消',
-    hideCancel: false,
-    onOk: async () => {
+  const { confirmDangerDelete } = useConfirmDelete()
+  confirmDangerDelete({
+    itemName: `仪表盘「${currentDashboard.value.name}」`,
+    impactDescription: '所有微件将一并删除',
+    confirmText: '删除',
+    onConfirm: async () => {
       try {
         await customDashboardApi.delete(currentDashboard.value!.id)
         Message.success('已删除')
@@ -902,13 +902,10 @@ async function handleWidgetConfigSave() {
 
 async function deleteWidget(widget: DashboardWidgetVO) {
   if (!currentDashboard.value) return
-  Modal.warning({
-    title: '删除微件',
-    content: `确定要删除「${widget.title || widget.widgetType}」吗？`,
-    okText: '删除',
-    cancelText: '取消',
-    hideCancel: false,
-    onOk: async () => {
+  const { confirmDelete } = useConfirmDelete()
+  confirmDelete({
+    itemName: `微件「${widget.title || widget.widgetType}」`,
+    onConfirm: async () => {
       try {
         await customDashboardApi.deleteWidget(currentDashboard.value!.id, widget.id)
         Message.success('微件已删除')

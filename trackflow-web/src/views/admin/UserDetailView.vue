@@ -8,25 +8,14 @@
       </router-link>
     </div>
 
-    <!-- 加载中 -->
-    <div v-if="loading" class="loading-state">
-      <a-spin :size="20" />
-      <span>加载用户信息...</span>
-    </div>
-
-    <!-- 错误状态 -->
-    <div v-else-if="error" class="error-state">
-      <div class="error-icon">⚠️</div>
-      <h3>加载失败</h3>
-      <p>{{ error }}</p>
-      <div class="error-actions">
-        <a-button @click="router.push('/admin/users')">返回用户列表</a-button>
-        <a-button type="primary" @click="loadProfile">重试</a-button>
-      </div>
-    </div>
-
+    <DataContainer
+      :loading="loading"
+      :error="error"
+      :is-empty="false"
+      :retry="loadProfile"
+    >
     <!-- 用户档案内容 -->
-    <template v-else-if="profile">
+    <template v-if="profile">
       <!-- 用户基本信息卡片 -->
       <div class="profile-header">
         <div class="avatar-section">
@@ -203,6 +192,7 @@
         </div>
       </div>
     </template>
+    </DataContainer>
 
     <!-- 角色管理弹窗 -->
     <a-modal
@@ -276,6 +266,7 @@ import { userApi, projectApi, roleApi } from '@/api'
 import type { UserProfileVO, UserProfileProjectRoleInfo } from '@/api/user'
 import { localizeActionShort, fieldLabelMap, localizeLinkType } from '@/utils/fieldLabels'
 import { UserAvatar, IssueStatusTag } from '@/components/base'
+import DataContainer from '@/components/base/DataContainer.vue'
 
 const route = useRoute()
 const router = useRouter()

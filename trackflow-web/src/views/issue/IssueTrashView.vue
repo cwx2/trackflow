@@ -132,7 +132,8 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { Message, Modal } from '@arco-design/web-vue'
+import { Message } from '@arco-design/web-vue'
+import { useConfirmDelete } from '@/composables/useConfirmDelete'
 import { IconUndo, IconDelete, IconSettings, IconFolder, IconCheckCircle } from '@arco-design/web-vue/es/icon'
 import { issueApi, projectApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
@@ -279,13 +280,12 @@ async function batchRestoreSelected() {
 }
 
 function handlePermanentDelete(record: IssueTrashVO) {
-  Modal.warning({
-    title: '永久删除',
-    content: `确定永久删除工单 ${record.issueKey} "${record.title}"？此操作不可撤销，所有关联数据（评论、附件、活动记录）将一并删除。`,
-    okText: '永久删除',
-    cancelText: '取消',
-    hideCancel: false,
-    onOk: async () => {
+  const { confirmDangerDelete } = useConfirmDelete()
+  confirmDangerDelete({
+    itemName: `工单 ${record.issueKey}「${record.title}」`,
+    impactDescription: '所有关联数据（评论、附件、活动记录）将一并删除',
+    confirmText: '永久删除',
+    onConfirm: async () => {
       try {
         await issueApi.permanentDelete(record.id)
         Message.success(`工单 ${record.issueKey} 已永久删除`)
@@ -299,13 +299,12 @@ function handlePermanentDelete(record: IssueTrashVO) {
 
 function batchPermanentDelete() {
   if (selectedIds.value.length === 0) return
-  Modal.warning({
-    title: '批量永久删除',
-    content: `确定永久删除选中的 ${selectedIds.value.length} 个工单？此操作不可撤销。`,
-    okText: '永久删除',
-    cancelText: '取消',
-    hideCancel: false,
-    onOk: async () => {
+  const { confirmDangerDelete } = useConfirmDelete()
+  confirmDangerDelete({
+    itemName: `选中的 ${selectedIds.value.length} 个工单`,
+    impactDescription: '永久删除后无法恢复',
+    confirmText: '永久删除',
+    onConfirm: async () => {
       let succeeded = 0
       let failed = 0
       for (const id of selectedIds.value) {

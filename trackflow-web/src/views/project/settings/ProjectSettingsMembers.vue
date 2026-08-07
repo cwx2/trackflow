@@ -155,7 +155,8 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { IconLock, IconHistory } from '@arco-design/web-vue/es/icon'
-import { Message, Modal } from '@arco-design/web-vue'
+import { Message } from '@arco-design/web-vue'
+import { useConfirmDelete } from '@/composables/useConfirmDelete'
 import { projectApi, userApi, workflowApi } from '@/api'
 import type { ProjectDetailVO, ProjectMemberVO, ProjectActivityVO } from '@/api/types'
 
@@ -396,34 +397,47 @@ async function confirmRemoveMember(member: ProjectMemberVO) {
     const res = await projectApi.getAssignedIssueCount(props.project.key, member.userId)
     const count = res.data?.count || 0
 
-    const content = count > 0
-      ? `确定要移除成员「${member.displayName || member.username}」？该成员当前有 ${count} 个工单指派，移除后这些工单的负责人将被清空。`
-      : `确定要移除成员「${member.displayName || member.username}」？`
-
-    Modal.warning({
-      title: '移除成员',
-      content,
-      okText: '确认移除',
-      cancelText: '取消',
-      onOk: async () => {
-        try {
-          await projectApi.removeMember(props.project.key, member.userId)
-          Message.success('成员已移除')
-          usersLoaded.value = false
-          await loadMembers()
-        } catch (e: any) {
-          Message.error(e.response?.data?.message || '移除成员失败')
+    if (count > 0) {
+      const { confirmDangerDelete } = useConfirmDelete()
+      confirmDangerDelete({
+        itemName: `成员「${member.displayName || member.username}」`,
+        impactDescription: `当前有 ${count} 个工单指派，移除后这些工单的负责人将被清空`,
+        confirmText: '确认移除',
+        onConfirm: async () => {
+          try {
+            await projectApi.removeMember(props.project.key, member.userId)
+            Message.success('成员已移除')
+            usersLoaded.value = false
+            await loadMembers()
+          } catch (e: any) {
+            Message.error(e.response?.data?.message || '移除成员失败')
+          }
         }
-      }
-    })
+      })
+    } else {
+      const { confirmDelete } = useConfirmDelete()
+      confirmDelete({
+        itemName: `成员「${member.displayName || member.username}」`,
+        confirmText: '确认移除',
+        onConfirm: async () => {
+          try {
+            await projectApi.removeMember(props.project.key, member.userId)
+            Message.success('成员已移除')
+            usersLoaded.value = false
+            await loadMembers()
+          } catch (e: any) {
+            Message.error(e.response?.data?.message || '移除成员失败')
+          }
+        }
+      })
+    }
   } catch (e: any) {
     // If pre-check fails, still allow removal with basic confirmation
-    Modal.warning({
-      title: '移除成员',
-      content: `确定要移除成员「${member.displayName || member.username}」？`,
-      okText: '确认移除',
-      cancelText: '取消',
-      onOk: async () => {
+    const { confirmDelete } = useConfirmDelete()
+    confirmDelete({
+      itemName: `成员「${member.displayName || member.username}」`,
+      confirmText: '确认移除',
+      onConfirm: async () => {
         try {
           await projectApi.removeMember(props.project.key, member.userId)
           Message.success('成员已移除')

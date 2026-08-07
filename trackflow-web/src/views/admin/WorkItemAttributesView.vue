@@ -6,22 +6,16 @@
       </a-button>
     </template>
 
-    <!-- Loading -->
-    <div v-if="loading" class="wia-loading">
-      <a-spin :size="20" />
-      <span>加载中...</span>
-    </div>
-
-    <!-- List -->
-    <div v-else class="wia-list">
-      <div v-if="attributes.length === 0" class="wia-empty">
-        <div class="empty-icon">🏷️</div>
-        <h3 class="empty-title">暂无工作项属性</h3>
-        <p class="empty-desc">创建属性来对工时记录进行分类，例如"工作类型"、"计费类别"等。</p>
-        <a-button type="primary" @click="showCreateDialog = true">创建第一个属性</a-button>
-      </div>
-
-      <div v-else class="attr-cards">
+    <!-- Content -->
+    <DataContainer
+      :loading="loading"
+      :is-empty="attributes.length === 0"
+      empty-title="暂无工作项属性"
+      empty-description="创建属性来对工时记录进行分类，例如"工作类型"、"计费类别"等。"
+      create-action="创建第一个属性"
+      @create="showCreateDialog = true"
+    >
+      <div class="attr-cards">
         <div
           v-for="attr in attributes"
           :key="attr.id"
@@ -51,7 +45,7 @@
           </div>
         </div>
       </div>
-    </div>
+    </DataContainer>
 
     <!-- Detail Panel (right side) -->
     <a-drawer
@@ -238,9 +232,11 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { Message, Modal } from '@arco-design/web-vue'
+import { useConfirmDelete } from '@/composables/useConfirmDelete'
 import { workItemAttributeApi } from '@/api/timeEntry'
 import type { WorkItemAttributeVO, AttributeValueVO, AttributeProjectVO } from '@/api/timeEntry'
 import AdminPageLayout from '@/components/admin/AdminPageLayout.vue'
+import DataContainer from '@/components/base/DataContainer.vue'
 import { projectApi } from '@/api'
 
 const loading = ref(true)
@@ -516,13 +512,10 @@ function confirmDelete() {
     })
     return
   }
-  Modal.warning({
-    title: '确认删除',
-    content: '确定删除此属性吗？此操作不可恢复。',
-    okText: '确认删除',
-    cancelText: '取消',
-    okButtonProps: { status: 'danger' },
-    onOk: async () => {
+  const { confirmDelete } = useConfirmDelete()
+  confirmDelete({
+    itemName: `属性「${selectedAttr.value.name}」`,
+    onConfirm: async () => {
       try {
         const res = await workItemAttributeApi.delete(selectedId.value)
         if (res.code === 0) {

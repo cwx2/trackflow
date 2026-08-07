@@ -230,7 +230,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, reactive, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Message, Modal } from '@arco-design/web-vue'
+import { Message } from '@arco-design/web-vue'
+import { useConfirmDelete } from '@/composables/useConfirmDelete'
 import { reportApi } from '@/api/report'
 import { useAuthStore } from '@/stores/auth'
 import ShareReportModal from './ShareReportModal.vue'
@@ -445,13 +446,11 @@ async function onShareSaved() {
 
 function handleDelete() {
   if (!report.value) return
-  Modal.warning({
-    title: '确认删除',
-    content: `确定要删除报表「${report.value.name}」吗？此操作不可恢复。`,
-    okText: '删除报表',
-    cancelText: '取消',
-    hideCancel: false,
-    onOk: async () => {
+  const { confirmDelete } = useConfirmDelete()
+  confirmDelete({
+    itemName: `报表「${report.value.name}」`,
+    confirmText: '删除报表',
+    onConfirm: async () => {
       try {
         await reportApi.delete(reportId.value)
         Message.success('报表已删除')
