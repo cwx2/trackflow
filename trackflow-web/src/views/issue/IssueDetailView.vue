@@ -84,6 +84,7 @@
             :has-more="activityHasMore"
             :loading-more="activityLoadingMore"
             :total-activities="activityTotal"
+            :loaded-activities="activities.length"
             @edit-comment="onEditComment"
             @delete-comment="onDeleteComment"
             @restore-comment="onRestoreComment"

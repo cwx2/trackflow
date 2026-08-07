@@ -196,8 +196,9 @@
       <div v-if="props.hasMore" class="load-more-wrap">
         <button class="load-more-btn" :disabled="props.loadingMore" @click="emit('loadMore')">
           <template v-if="props.loadingMore">加载中...</template>
-          <template v-else>加载更多活动<span v-if="props.totalActivities" class="load-more-hint">（共 {{ props.totalActivities }} 条）</span></template>
+          <template v-else>加载更多活动<span v-if="remainingActivities > 0" class="load-more-hint">（还有 {{ remainingActivities }} 条未加载）</span><span v-else-if="props.totalActivities" class="load-more-hint">（共 {{ props.totalActivities }} 条）</span></template>
         </button>
+        <p v-if="current !== 'all'" class="load-more-filter-hint">当前仅显示「{{ filters.find(f => f.key === current)?.label }}」，加载的内容为全部类型的活动记录</p>
       </div>
     </div>
 
@@ -230,7 +231,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onBeforeUnmount, nextTick } from 'vue'
+import { ref, computed, watch, onBeforeUnmount, nextTick } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { useEditor, EditorContent } from '@tiptap/vue-3'
 import StarterKit from '@tiptap/starter-kit'
@@ -286,6 +287,7 @@ const props = defineProps<{
   hasMore?: boolean
   loadingMore?: boolean
   totalActivities?: number
+  loadedActivities?: number
 }>()
 
 const emit = defineEmits<{
@@ -366,6 +368,31 @@ const sorted = computed(() => {
   const arr = [...filtered.value]
   arr.sort((a, b) => ascending.value ? a.ts - b.ts : b.ts - a.ts)
   return arr
+})
+
+// Track filtered count before load-more to detect "loaded but nothing visible"
+const filteredCountBeforeLoad = ref(0)
+
+watch(() => props.loadingMore, (newVal, oldVal) => {
+  if (newVal && !oldVal) {
+    // Loading started: capture current filtered count
+    filteredCountBeforeLoad.value = filtered.value.length
+  }
+  if (!newVal && oldVal) {
+    // Loading finished: check if filtered count increased (use nextTick to ensure items are updated)
+    nextTick(() => {
+      if (current.value !== 'all' && filtered.value.length === filteredCountBeforeLoad.value && props.hasMore) {
+        const filterLabel = filters.find(f => f.key === current.value)?.label || current.value
+        Message.info({ content: `已加载新的活动记录，当前「${filterLabel}」筛选下暂无新内容，可切换筛选查看`, duration: 4000 })
+      }
+    })
+  }
+})
+
+/** 剩余未加载的活动记录数量 */
+const remainingActivities = computed(() => {
+  if (!props.totalActivities || !props.loadedActivities) return 0
+  return Math.max(0, props.totalActivities - props.loadedActivities)
 })
 
 /**
@@ -946,5 +973,11 @@ onBeforeUnmount(() => { editEditor.value?.destroy() })
 .load-more-hint {
   color: var(--tf-text-muted);
   margin-left: 4px;
+}
+.load-more-filter-hint {
+  margin: 6px 0 0;
+  font-size: 11px;
+  color: var(--tf-text-tertiary);
+  text-align: center;
 }
 </style>
