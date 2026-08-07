@@ -1,5 +1,5 @@
 <template>
-  <div class="rich-editor" :class="{ focused }">
+  <div class="rich-editor" :class="{ focused, 'mode-inline': mode === 'inline' }">
     <div class="editor-toolbar" v-if="editor">
       <div class="paragraph-style-select" ref="paragraphDropdownRef">
         <button class="paragraph-style-btn" @click="toggleParagraphDropdown">
@@ -299,6 +299,9 @@ watch(() => props.modelValue, (val) => {
 .paragraph-preview-codeBlock { font-family: 'JetBrains Mono', monospace; font-size: 11px; }
 
 .editor-content { min-height: 160px; max-height: 400px; overflow-y: auto; padding: 12px 14px; }
+.rich-editor.mode-inline .editor-content { flex: 1; max-height: none; }
+.rich-editor.mode-inline { display: flex; flex-direction: column; }
+.rich-editor.mode-inline .md-source { flex: 1; max-height: none; }
 .editor-content :deep(.tiptap-body) { outline: none; font-size: 13px; line-height: 1.6; color: var(--tf-text-primary); }
 .editor-content :deep(.tiptap-body p) { margin: 4px 0; }
 .editor-content :deep(.tiptap-body h1) { font-size: 1.5em; font-weight: 700; margin: 12px 0 6px; }
