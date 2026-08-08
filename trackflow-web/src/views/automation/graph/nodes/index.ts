@@ -193,12 +193,13 @@ export function registerAllNodes(lf: LogicFlow) {
           const def = getNodeDefinition(nodeType)
           if (!data.properties.inputs)   data.properties.inputs   = def?.inputPorts  || []
           if (!data.properties.outputs)  data.properties.outputs  = def?.outputPorts || []
-          if (!data.properties.nodeMeta) data.properties.nodeMeta = {
-            title:       def?.meta.title       || nodeType,
-            icon:        def?.meta.icon        || '\u2B21',
-            color:       def?.meta.color       || '#6366f1',
-            description: def?.meta.description || '',
-          }
+          if (!data.properties.nodeMeta) data.properties.nodeMeta = {}
+          // 始终用节点定义补全缺失字段，兼容旧数据中某字段为空的情况
+          const meta = data.properties.nodeMeta
+          if (!meta.title)       meta.title       = def?.meta.title       || nodeType
+          if (!meta.icon)        meta.icon        = def?.meta.icon        || '⬡'
+          if (!meta.color)       meta.color       = def?.meta.color       || '#6366f1'
+          if (meta.description === undefined) meta.description = def?.meta.description || ''
           super.initNodeData(data)
         }
       }
