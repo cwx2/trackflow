@@ -1,4 +1,4 @@
-﻿package com.trackflow.issue.service;
+package com.trackflow.issue.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
@@ -801,7 +801,7 @@ public class IssueService {
      * @return 包含更新后版本号和动作执行结果
      * @throws BusinessException 当校验不通过时
      */
-    public TransitStatusResultVO performTransition(Long id, TransitStatusDTO dto) {
+    public TransitStatusResult performTransition(Long id, TransitStatusDTO dto) {
         Issue issue = getByIdWithAccessCheck(id);
         Long userId = SecurityUtils.getCurrentUserId();
 
@@ -881,7 +881,7 @@ public class IssueService {
      * @throws BusinessException 当校验不通过时
      */
     @Transactional(rollbackFor = Exception.class)
-    public TransitStatusResultVO undoTransitStatus(Long issueId, Long targetStatusId) {
+    public TransitStatusResult undoTransitStatus(Long issueId, Long targetStatusId) {
         IssueActivity lastStatusChange = getLastStatusChange(issueId);
         if (lastStatusChange == null) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "该工单没有状态变更记录，无法撤销");
