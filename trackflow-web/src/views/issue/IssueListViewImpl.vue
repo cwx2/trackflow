@@ -697,7 +697,7 @@
                   <template v-else>
                     <div class="dropdown-item" @click="selectAssignee(record, null)"><span class="unassigned-icon">&mdash;</span><span>未分配</span></div>
                     <div v-for="m in filteredAssigneeOptions" :key="m.userId" class="dropdown-item" @click="selectAssignee(record, m)">
-                      <span class="member-avatar">{{ m.displayName?.charAt(0) }}</span><span>{{ m.displayName }}</span>
+                      <UserAvatar :name="m.displayName || '?'" :size="20" /><span>{{ m.displayName }}</span>
                     </div>
                   </template>
                 </div>
@@ -1011,7 +1011,7 @@ import { useAuthStore } from '@/stores/auth'
 import { localizeStatusName, localizePriority, priorityLabelMap, priorityReverseLabelMap, queryFieldKeyToLabel, queryFieldLabelToKey } from '@/utils/fieldLabels'
 import { extractVersion, showActionFeedback } from '@/utils/transition'
 import { ERROR_CODES } from '@/api/error-codes'
-import { IssuePriorityBadge } from '@/components/base'
+import { IssuePriorityBadge, UserAvatar } from '@/components/base'
 import { useIssueList, useSelection, useInlineEdit, useBatchOps, usePermission, useColumnConfig, useViewSettings, useManualOrder, useDrafts } from './composables'
 import { loadPriorityOptions } from './composables/usePriorityOptions'
 import { loadIssueTypeOptions } from './composables/useIssueTypeOptions'

@@ -509,7 +509,7 @@
                         :alt="issue.assigneeName"
                         class="avatar-img"
                       />
-                      <span v-else class="avatar-initials">{{ getInitials(issue.assigneeName) }}</span>
+                      <UserAvatar v-else :name="issue.assigneeName || '?'" :size="24" />
                     </template>
                   </div>
                   <!-- 未分配 + 有权限：显示 Set assignee 按钮 -->
@@ -828,7 +828,7 @@
                               :alt="issue.assigneeName"
                               class="avatar-img"
                             />
-                            <span v-else class="avatar-initials">{{ getInitials(issue.assigneeName) }}</span>
+                            <UserAvatar v-else :name="issue.assigneeName || '?'" :size="24" />
                           </template>
                         </div>
                         <!-- 未分配 + 有权限：显示 Set assignee 按钮 -->

@@ -9,9 +9,8 @@
         @click="selectItem(index)"
         @mouseenter="selectedIndex = index"
       >
-        <span class="mention-avatar">
-          {{ getInitials(item.displayName || item.username) }}
-        </span>
+        <UserAvatar :name="item.displayName || item.username" :size="24" />
+
         <span class="mention-info">
           <span class="mention-name">{{ item.displayName || item.username }}</span>
           <span class="mention-username">@{{ item.username }}</span>
@@ -26,6 +25,7 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue'
+import { UserAvatar } from '@/components/base'
 
 export interface MentionItem {
   id: string
@@ -44,16 +44,6 @@ const selectedIndex = ref(0)
 watch(() => props.items, () => {
   selectedIndex.value = 0
 })
-
-function getInitials(name: string): string {
-  if (!name) return '?'
-  // 中文取第一个字，英文取首字母大写
-  const firstChar = name.charAt(0)
-  if (/[\u4e00-\u9fa5]/.test(firstChar)) {
-    return firstChar
-  }
-  return firstChar.toUpperCase()
-}
 
 function selectItem(index: number) {
   const item = props.items[index]
@@ -125,20 +115,6 @@ defineExpose({ onKeyDown })
 .mention-item:hover,
 .mention-item.is-selected {
   background: var(--tf-bg-hover);
-}
-
-.mention-avatar {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: var(--tf-accent);
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
-  font-weight: 600;
-  flex-shrink: 0;
 }
 
 .mention-info {

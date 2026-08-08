@@ -56,15 +56,12 @@
           <!-- 右侧：成员 + 操作 -->
           <div class="project-right">
             <div class="member-avatars">
-              <a-avatar-group :size="24">
-                <a-avatar
-                  v-for="(member, idx) in (project.topMembers || []).slice(0, 3)"
-                  :key="idx"
-                  :style="{ backgroundColor: getMemberColor(idx) }"
-                >
-                  {{ member.charAt(0) }}
-                </a-avatar>
-              </a-avatar-group>
+              <UserAvatar
+                v-for="(member, idx) in (project.topMembers || []).slice(0, 3)"
+                :key="idx"
+                :name="member"
+                :size="24"
+              />
               <span v-if="(project.memberCount || 0) > 3" class="member-overflow">
                 +{{ (project.memberCount || 0) - 3 }}
               </span>
@@ -123,15 +120,12 @@
         <!-- 右侧：成员 + 操作 -->
         <div class="project-right">
           <div class="member-avatars">
-            <a-avatar-group :size="24">
-              <a-avatar
-                v-for="(member, idx) in (project.topMembers || []).slice(0, 3)"
-                :key="idx"
-                :style="{ backgroundColor: getMemberColor(idx) }"
-              >
-                {{ member.charAt(0) }}
-              </a-avatar>
-            </a-avatar-group>
+            <UserAvatar
+              v-for="(member, idx) in (project.topMembers || []).slice(0, 3)"
+              :key="idx"
+              :name="member"
+              :size="24"
+            />
             <span v-if="(project.memberCount || 0) > 3" class="member-overflow">
               +{{ (project.memberCount || 0) - 3 }}
             </span>
@@ -591,6 +585,7 @@ import { projectApi, userApi, workflowApi } from '@/api'
 import type { ProjectActivityVO, ProjectCopySummaryVO } from '@/api/types'
 import { useAuthStore } from '@/stores/auth'
 import { loadProjectPermissions } from '@/composables/usePermission'
+import { UserAvatar } from '@/components/base'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -709,8 +704,6 @@ const colorPool = [
   '#795548', '#607d8b'
 ]
 
-const memberColors = ['#6366f1', '#ec4899', '#14b8a6', '#f59e0b', '#ef4444']
-
 function getProjectColor(project: any) {
   const idx = (project.id || 0) % colorPool.length
   return colorPool[idx]
@@ -718,10 +711,6 @@ function getProjectColor(project: any) {
 
 function getProjectAbbr(project: any) {
   return project.key?.substring(0, 3) || project.name?.charAt(0) || '?'
-}
-
-function getMemberColor(idx: number) {
-  return memberColors[idx % memberColors.length]
 }
 
 const filteredProjects = computed(() => {

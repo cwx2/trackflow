@@ -99,7 +99,7 @@
           </div>
           <div class="item-icon" :class="{ 'has-avatar': item.actorAvatar }">
             <img v-if="item.actorAvatar" :src="item.actorAvatar" :alt="item.actorName" class="actor-avatar" />
-            <span v-else-if="item.actorName" class="actor-initial">{{ item.actorName.charAt(0) }}</span>
+            <UserAvatar v-else-if="item.actorName" :name="item.actorName" :size="28" />
             <span v-else class="actor-system" title="系统操作">
               <icon-common :size="14" />
             </span>
@@ -207,6 +207,7 @@ import { useNotification } from '@/composables/useNotification'
 import { projectApi, issueApi } from '@/api'
 import type { NotificationVO, NotificationCategory } from '@/api/notification'
 import { Message } from '@arco-design/web-vue'
+import { UserAvatar } from '@/components/base'
 
 const router = useRouter()
 const {

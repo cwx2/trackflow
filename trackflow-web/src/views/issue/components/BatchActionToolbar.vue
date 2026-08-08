@@ -83,7 +83,8 @@
                 class="dropdown-item"
                 @click="handleBatchAssign(member)"
               >
-                <span class="member-avatar">{{ member.displayName?.charAt(0) }}</span>
+                <UserAvatar :name="member.displayName || '?'" :size="20" />
+
                 <span>{{ member.displayName }}</span>
               </div>
               <div v-if="filteredMembers.length === 0 && !memberLoading" class="dropdown-empty">
@@ -352,7 +353,7 @@ import { IconSwap, IconUser, IconSearch, IconCalendar, IconFire, IconDelete, Ico
 import { Message } from '@arco-design/web-vue'
 import { useConfirmDelete } from '@/composables/useConfirmDelete'
 import { issueApi, projectApi, sprintApi, tagApi } from '@/api'
-import { IssuePriorityBadge } from '@/components/base'
+import { IssuePriorityBadge, UserAvatar } from '@/components/base'
 import type { IssueVO, IssueTagVO, ProjectMemberVO, SprintVO, BatchAvailableStatusVO } from '@/api/types'
 import { localizeStatusName, linkTypeLabelMap } from '@/utils/fieldLabels'
 import { loadPriorityOptions } from '../composables/usePriorityOptions'

@@ -69,9 +69,7 @@
           <a-table-column title="用户" data-index="displayName" :width="280">
             <template #cell="{ record }">
               <div class="member-cell">
-                <a-avatar :size="32" :style="{ backgroundColor: getMemberColor(record.userId) }">
-                  {{ (record.displayName || record.username || '?').charAt(0) }}
-                </a-avatar>
+                <UserAvatar :name="record.displayName || record.username || '?'" :size="32" />
                 <div class="member-info">
                   <span class="member-name">{{ record.displayName || record.username }}</span>
                   <span class="member-email">{{ record.email || '' }}</span>
@@ -159,6 +157,7 @@ import { Message } from '@arco-design/web-vue'
 import { useConfirmDelete } from '@/composables/useConfirmDelete'
 import { projectApi, userApi, workflowApi } from '@/api'
 import type { ProjectDetailVO, ProjectMemberVO, ProjectActivityVO } from '@/api/types'
+import { UserAvatar } from '@/components/base'
 
 const props = defineProps<{
   project: ProjectDetailVO
@@ -194,16 +193,7 @@ const activityPage = ref(1)
 const activityHasMore = ref(false)
 
 // Color pool
-const colorPool = [
-  '#e91e63', '#9c27b0', '#673ab7', '#3f51b5', '#2196f3',
-  '#00bcd4', '#009688', '#4caf50', '#ff9800', '#ff5722',
-  '#795548', '#607d8b'
-]
 
-function getMemberColor(userId: string) {
-  const id = parseInt(userId || '0', 10)
-  return colorPool[id % colorPool.length]
-}
 
 function getMemberRoleNames(member: ProjectMemberVO): string[] {
   if (member.roleNames && member.roleNames.length > 0) {

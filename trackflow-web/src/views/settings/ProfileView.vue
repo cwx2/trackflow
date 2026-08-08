@@ -3,7 +3,7 @@
     <!-- 顶部：头像 + 基本信息概览 -->
     <div class="profile-header">
       <div class="profile-avatar">
-        <span class="avatar-text">{{ userInitial }}</span>
+        <UserAvatar :name="profileData?.displayName || displayName" :size="64" />
       </div>
       <div class="profile-header-info">
         <h1 class="profile-name">{{ profileData?.displayName || displayName }}</h1>
@@ -179,6 +179,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useTheme } from '@/composables/useTheme'
 import { authApi } from '@/api'
 import type { UserProfileVO } from '@/api/user'
+import { UserAvatar } from '@/components/base'
 import ProfileWorkspaceTab from './ProfileWorkspaceTab.vue'
 import NotificationSettingsView from './NotificationSettingsView.vue'
 import AccountSecurityView from './AccountSecurityView.vue'
@@ -219,11 +220,6 @@ const user = computed(() => authStore.user)
 const displayName = computed(() => user.value?.displayName || user.value?.username || '-')
 const username = computed(() => user.value?.username || '-')
 const email = computed(() => user.value?.email || '')
-
-const userInitial = computed(() => {
-  const name = profileData.value?.displayName || displayName.value
-  return name.charAt(0).toUpperCase()
-})
 
 const formattedCreatedAt = computed(() => {
   const dateStr = profileData.value?.createdAt

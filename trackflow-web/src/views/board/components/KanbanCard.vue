@@ -79,7 +79,7 @@
             :alt="issue.assigneeName"
             class="avatar-img"
           />
-          <span v-else class="avatar-initials">{{ getInitials(issue.assigneeName) }}</span>
+          <UserAvatar v-else :name="issue.assigneeName || '?'" :size="24" />
         </template>
       </div>
       <!-- 未分配 + 有权限：显示 Set assignee 按钮 -->
@@ -111,6 +111,7 @@ import { IconUser } from '@arco-design/web-vue/es/icon'
 import { localizePriority, localizeIssueType } from '@/utils/fieldLabels'
 import { getDueDateInfo } from '@/utils/dueDate'
 import type { IssueVO, BoardCardVO } from '@/api/types'
+import { UserAvatar } from '@/components/base'
 
 type BoardIssue = IssueVO | BoardCardVO
 
@@ -236,12 +237,5 @@ function priorityIcon(priority?: string): string {
   }
 }
 
-function getInitials(name: string): string {
-  if (!name) return '?'
-  const parts = name.trim().split(/\s+/)
-  if (parts.length >= 2) {
-    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
-  }
-  return name.substring(0, 2).toUpperCase()
-}
+
 </script>

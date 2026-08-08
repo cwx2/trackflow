@@ -55,7 +55,8 @@
               @click="openAssigneeEdit(issue)"
             >
               <span class="assignee-avatar" :class="{ 'unassigned-avatar': !issue.assigneeName }">
-                {{ issue.assigneeName ? issue.assigneeName.charAt(0) : '?' }}
+                <UserAvatar v-if="issue.assigneeName" :name="issue.assigneeName" :size="20" />
+                <template v-else>?</template>
               </span>
               <span class="assignee-text">{{ issue.assigneeName || '未分配' }}</span>
               <icon-loading v-if="savingIssueIds.has(issue.id)" class="cell-spinner" />
@@ -85,7 +86,8 @@
                     :class="{ active: m.userId === issue.assigneeId }"
                     @click="selectAssignee(issue, m)"
                   >
-                    <span class="member-avatar">{{ m.displayName?.charAt(0) }}</span>
+                    <UserAvatar :name="m.displayName || '?'" :size="20" />
+
                     <span>{{ m.displayName }}</span>
                     <icon-check v-if="m.userId === issue.assigneeId" class="check-icon" />
                   </div>
@@ -123,6 +125,7 @@ import { Message } from '@arco-design/web-vue'
 import { IconSearch, IconLoading, IconCheck } from '@arco-design/web-vue/es/icon'
 import { issueApi, projectApi } from '@/api'
 import type { IssueVO, ProjectMemberVO } from '@/api/types'
+import { UserAvatar } from '@/components/base'
 
 const props = defineProps<{
   visible: boolean

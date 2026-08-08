@@ -212,7 +212,8 @@
         >
           <a-option v-for="member in timeFormProjectMembers" :key="member.userId" :value="member.userId">
             <span class="time-author-option">
-              <span class="time-author-avatar">{{ (member.displayName || member.username || '?').charAt(0) }}</span>
+              <UserAvatar :name="member.displayName || member.username || '?'" :size="20" />
+
               <span class="time-author-name">{{ member.displayName || member.username }}</span>
               <span v-if="member.userId === currentUserId" class="time-author-self">（我）</span>
             </span>
@@ -269,6 +270,7 @@ import { useRoute, onBeforeRouteLeave } from 'vue-router'
 import { Modal } from '@arco-design/web-vue'
 import { IconLock } from '@arco-design/web-vue/es/icon'
 import { renderMarkdown } from '@/utils/markdown'
+import { UserAvatar } from '@/components/base'
 import { useTimerStore } from '@/stores/timer'
 import { useIssueDetailData } from './composables/useIssueDetailData'
 import { useIssueDetailActions } from './composables/useIssueDetailActions'

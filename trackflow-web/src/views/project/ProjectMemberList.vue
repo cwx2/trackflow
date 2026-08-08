@@ -6,9 +6,8 @@
     </div>
     <div v-else-if="members.length > 0" class="members-list">
       <div v-for="member in members" :key="member.id" class="member-row">
-        <a-avatar :size="28" :style="{ backgroundColor: getMemberColor(member.userId) }">
-          {{ (member.displayName || member.username || '?').charAt(0) }}
-        </a-avatar>
+        <UserAvatar :name="member.displayName || member.username || '?'" :size="28" />
+
         <div class="member-info">
           <span class="member-name">{{ member.displayName || member.username }}</span>
           <span class="member-email">{{ member.email }}</span>
@@ -26,6 +25,7 @@
 import { ref, onMounted } from 'vue'
 import { projectApi, workflowApi } from '@/api'
 import type { ProjectMemberVO } from '@/api/types'
+import { UserAvatar } from '@/components/base'
 
 const props = defineProps<{
   projectId: string
@@ -34,17 +34,6 @@ const props = defineProps<{
 const members = ref<ProjectMemberVO[]>([])
 const loading = ref(false)
 const roleMap = ref<Record<string, string>>({})
-
-const colorPool = [
-  '#e91e63', '#9c27b0', '#673ab7', '#3f51b5', '#2196f3',
-  '#00bcd4', '#009688', '#4caf50', '#ff9800', '#ff5722',
-  '#795548', '#607d8b'
-]
-
-function getMemberColor(userId: string) {
-  const id = parseInt(userId || '0', 10)
-  return colorPool[id % colorPool.length]
-}
 
 function getRoleName(roleId: string): string {
   return roleMap.value[roleId] || `角色 ${roleId}`
