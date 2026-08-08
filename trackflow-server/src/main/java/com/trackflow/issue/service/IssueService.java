@@ -41,8 +41,11 @@ import com.trackflow.workflow.service.TransitionActionEngine;
 import com.trackflow.workflow.service.WorkflowService;
 import com.trackflow.workflow.vo.ActionExecutionResult;
 import lombok.RequiredArgsConstructor;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -111,8 +114,10 @@ public class IssueService {
     private final IssueCommentService commentService;
     private final IssueAttachmentService attachmentService;
     private final IssueVOAssembler issueVOAssembler;
-    private final IssueBatchService issueBatchService;
-    private final IssueMoveService issueMoveService;
+    @Setter(onMethod_ = {@Autowired, @Lazy})
+    private IssueBatchService issueBatchService;
+    @Setter(onMethod_ = {@Autowired, @Lazy})
+    private IssueMoveService issueMoveService;
     private final IssueQueryService issueQueryService;
 
     /**
