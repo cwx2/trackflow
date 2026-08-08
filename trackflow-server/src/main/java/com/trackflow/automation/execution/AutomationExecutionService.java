@@ -38,6 +38,7 @@ public class AutomationExecutionService {
     private final AutomationNodeExecutionMapper nodeExecutionMapper;
     private final AutomationApprovalMapper approvalMapper;
     private final AutomationRuntimeCoordinator runtimeCoordinator;
+    private final WorkflowDefinitionValidator workflowDefinitionValidator;
 
     public Long startDraft(Long automationId, Map<String, Object> inputs, Long requestedActorUserId) {
         AutomationWorkflow workflow = workflowService.getById(automationId);
@@ -135,6 +136,12 @@ public class AutomationExecutionService {
         } catch (Exception exception) {
             throw new BusinessException(ErrorCode.INVALID_PARAMETER,
                     "工作流定义格式错误: " + exception.getMessage());
+        }
+        try {
+            workflowDefinitionValidator.validateExecutable(definition);
+        } catch (DAGBuilder.InvalidWorkflowException | DAGBuilder.CyclicWorkflowException exception) {
+            throw new BusinessException(ErrorCode.INVALID_PARAMETER,
+                    "工作流不可执行: " + exception.getMessage());
         }
         Long actorUserId = workflow.getActorUserId() != null
                 ? workflow.getActorUserId() : requestedActorUserId;

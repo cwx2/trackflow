@@ -4,13 +4,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class WorkflowDefinitionModelJsonTest {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Test
-    void acceptsCanvasOnlyPortMetadataWhenStartingAnExistingWorkflow() throws Exception {
+    void readsExplicitCanvasPortMetadataAsPartOfTheWorkflowContract() throws Exception {
         String definitionJson = """
                 {
                   "globalVariables": {},
@@ -35,6 +36,19 @@ class WorkflowDefinitionModelJsonTest {
         WorkflowDefinitionModel definition = objectMapper.readValue(definitionJson, WorkflowDefinitionModel.class);
 
         assertEquals("projectId", definition.nodes().getFirst().inputs().getFirst().name());
+        assertEquals("项目 ID", definition.nodes().getFirst().inputs().getFirst().label());
+        assertEquals(true, definition.nodes().getFirst().inputs().getFirst().optional());
         assertEquals("issues", definition.nodes().getFirst().outputs().getFirst().name());
+        assertEquals("需求列表", definition.nodes().getFirst().outputs().getFirst().label());
+    }
+
+    @Test
+    void rejectsFieldsOutsideTheWorkflowContract() {
+        String definitionJson = """
+                { "globalVariables": {}, "nodes": [], "edges": [], "legacyPatch": true }
+                """;
+
+        assertThrows(Exception.class,
+                () -> objectMapper.readValue(definitionJson, WorkflowDefinitionModel.class));
     }
 }

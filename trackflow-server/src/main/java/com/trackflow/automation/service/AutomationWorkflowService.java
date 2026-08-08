@@ -6,7 +6,7 @@ import com.trackflow.automation.dto.UpdateWorkflowDTO;
 import com.trackflow.automation.entity.AutomationWorkflow;
 import com.trackflow.automation.mapper.AutomationWorkflowMapper;
 import com.trackflow.automation.execution.DAGBuilder;
-import com.trackflow.automation.node.NodeRegistry;
+import com.trackflow.automation.execution.WorkflowDefinitionValidator;
 import com.trackflow.automation.node.model.WorkflowDefinitionModel;
 import com.trackflow.automation.runtime.AutomationRuntimeCoordinator;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -40,7 +40,7 @@ public class AutomationWorkflowService {
     private final AutomationWorkflowMapper workflowMapper;
     private final ObjectMapper objectMapper;
     private final DAGBuilder dagBuilder;
-    private final NodeRegistry nodeRegistry;
+    private final WorkflowDefinitionValidator workflowDefinitionValidator;
     private final AutomationRuntimeCoordinator runtimeCoordinator;
 
     private static final Set<String> TRIGGERS = Set.of(
@@ -88,6 +88,9 @@ public class AutomationWorkflowService {
         String definition = (dto.getDefinition() != null && !dto.getDefinition().isBlank())
                 ? dto.getDefinition()
                 : "{\"globalVariables\":{},\"nodes\":[],\"edges\":[]}";
+        if (dto.getDefinition() != null && !dto.getDefinition().isBlank()) {
+            validateDraftDefinition(definition);
+        }
         workflow.setDefinition(definition);
         workflowMapper.insert(workflow);
         log.info("创建工作流: id={}, name={}", workflow.getId(), workflow.getName());
@@ -116,6 +119,7 @@ public class AutomationWorkflowService {
             workflow.setDescription(dto.getDescription());
         }
         if (dto.getDefinition() != null) {
+            validateDraftDefinition(dto.getDefinition());
             workflow.setDefinition(dto.getDefinition());
         }
         if (dto.getProjectId() != null) workflow.setProjectId(dto.getProjectId());
@@ -231,25 +235,25 @@ public class AutomationWorkflowService {
         try {
             WorkflowDefinitionModel definition = objectMapper.readValue(
                     definitionJson != null ? definitionJson : "{}", WorkflowDefinitionModel.class);
-            dagBuilder.topologicalSort(definition.nodes(), definition.edges());
-            long startCount = definition.nodes().stream().filter(node -> "start".equals(node.type())).count();
-            if (startCount != 1) {
-                throw new BusinessException(ErrorCode.INVALID_PARAMETER, "工作流必须且只能包含一个开始节点");
-            }
-            if (definition.nodes().stream().noneMatch(node -> "end".equals(node.type()))) {
-                throw new BusinessException(ErrorCode.INVALID_PARAMETER, "工作流至少需要一个结束节点");
-            }
-            definition.nodes().forEach(node -> {
-                if (nodeRegistry.getExecutor(node.type()) == null) {
-                    throw new BusinessException(ErrorCode.INVALID_PARAMETER,
-                            "节点尚无可用执行器: " + node.type());
-                }
-            });
+            workflowDefinitionValidator.validateExecutable(definition);
         } catch (BusinessException exception) {
             throw exception;
         } catch (Exception exception) {
             throw new BusinessException(ErrorCode.INVALID_PARAMETER,
                     "工作流定义校验失败: " + exception.getMessage());
+        }
+    }
+
+    private void validateDraftDefinition(String definitionJson) {
+        try {
+            WorkflowDefinitionModel definition = objectMapper.readValue(
+                    definitionJson != null ? definitionJson : "{}", WorkflowDefinitionModel.class);
+            workflowDefinitionValidator.validateDraft(definition);
+        } catch (BusinessException exception) {
+            throw exception;
+        } catch (Exception exception) {
+            throw new BusinessException(ErrorCode.INVALID_PARAMETER,
+                    "工作流草稿结构错误: " + exception.getMessage());
         }
     }
 

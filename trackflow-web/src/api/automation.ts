@@ -20,19 +20,19 @@ export interface WorkflowVO {
 
 export interface WorkflowDetailVO extends WorkflowVO {
   definition: string // JSON string of WorkflowDefinition
-  projectId?: string
+  projectId?: number
   publishedDefinition?: string
   triggerConfig?: string
   concurrencyMode?: 'queue' | 'skip' | 'parallel'
   maxConcurrent?: number
-  actorUserId?: string
+  actorUserId?: number
   publishedAt?: string
 }
 
 export interface CreateWorkflowDTO {
   name: string
   description?: string
-  projectId?: string
+  projectId?: number
   definition?: string // 从模板克隆时传入初始画布数据
 }
 
@@ -41,12 +41,12 @@ export interface UpdateAutomationDTO {
   description?: string
   definition?: string // JSON string of WorkflowDefinition
   version?: number
-  projectId?: string
+  projectId?: number
   triggerType?: string
   triggerConfig?: string
   concurrencyMode?: string
   maxConcurrent?: number
-  actorUserId?: string
+  actorUserId?: number
 }
 
 // ====== 新 Schema：变量类型系统 ======
@@ -65,6 +65,8 @@ export interface VariableRef {
   type: 'ref'
   nodeId: string       // 来源节点 ID
   outputName: string   // 来源输出端口名称
+  /** 从 object/array 输出中显式读取字段，例如 trigger 的 issueId */
+  path?: string
 }
 
 /** 模板表达式值 — 混合文本和 {{nodeId.portName}} 变量引用 */

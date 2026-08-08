@@ -1,12 +1,17 @@
 package com.trackflow.automation.node.model;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-
 /**
- * 运行时输入槽。画布会额外保存 label、optional 等展示元数据；
- * 这些字段不参与执行，必须允许跨版本工作流继续反序列化。
+ * 节点输入槽的完整持久化模型。
+ *
+ * <p>画布展示字段不是“未知兼容字段”，而是工作流定义的一部分。保存、预览和执行
+ * 使用同一个模型，避免前端写出的定义在后端无法读取。</p>
  */
-@JsonIgnoreProperties(ignoreUnknown = true)
 public record InputParameter(
-    String name, String valueType, boolean required, String description, InputValue value
+        String name,
+        String label,
+        String valueType,
+        boolean required,
+        String description,
+        boolean optional,
+        InputValue value
 ) {}

@@ -47,7 +47,7 @@ public class ExecutionContext {
         for (InputParameter input : inputs) {
             Object value = null;
             if (input.value() instanceof VariableRef ref) {
-                value = getNodeOutput(ref.nodeId(), ref.outputName());
+                value = resolvePath(getNodeOutput(ref.nodeId(), ref.outputName()), ref.path());
             } else if (input.value() instanceof LiteralValue lit) {
                 value = lit.value();
             } else if (input.value() instanceof TemplateValue tmpl) {
@@ -73,6 +73,28 @@ public class ExecutionContext {
         }
         matcher.appendTail(sb);
         return sb.toString();
+    }
+
+    /** 只支持显式的 Map key 或数组下标，不使用反射读取对象属性。 */
+    private Object resolvePath(Object value, String path) {
+        if (value == null || path == null || path.isBlank()) return value;
+        Object current = value;
+        for (String segment : path.split("\\.")) {
+            if (current instanceof Map<?, ?> map) {
+                current = map.get(segment);
+            } else if (current instanceof List<?> list) {
+                try {
+                    int index = Integer.parseInt(segment);
+                    current = index >= 0 && index < list.size() ? list.get(index) : null;
+                } catch (NumberFormatException exception) {
+                    return null;
+                }
+            } else {
+                return null;
+            }
+            if (current == null) return null;
+        }
+        return current;
     }
 
     public Map<String, Object> collectFinalOutputs() {

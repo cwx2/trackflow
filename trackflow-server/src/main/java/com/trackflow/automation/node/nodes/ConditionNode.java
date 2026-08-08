@@ -22,7 +22,7 @@ public class ConditionNode implements NodeDefinition, NodeExecutor {
     @Override public String getDescription() { return "根据条件决定分支流转"; }
     @Override public String getCategory()    { return "控制流"; }
     @Override public List<InputPortDef> getInputPorts() {
-        return List.of(new InputPortDef("value", "string", true, "待判断的值"));
+        return List.of(new InputPortDef("value", "any", true, "待判断的值"));
     }
     @Override public List<OutputPortDef> getOutputPorts() {
         return List.of(

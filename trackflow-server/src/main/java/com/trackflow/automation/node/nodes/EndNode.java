@@ -21,7 +21,7 @@ public class EndNode implements NodeDefinition, NodeExecutor {
     @Override public String getDescription() { return "工作流终点，收集最终结果"; }
     @Override public String getCategory()    { return "特殊节点"; }
     @Override public List<InputPortDef>  getInputPorts()  {
-        return List.of(new InputPortDef("result", "object", false, "工作流最终输出"));
+        return List.of(new InputPortDef("result", "any", false, "工作流最终输出"));
     }
     @Override public List<OutputPortDef> getOutputPorts() { return List.of(); }
 

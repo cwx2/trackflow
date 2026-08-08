@@ -10,7 +10,7 @@ export const endDefinition: NodeDefinition = {
     category: '特殊节点',
   },
   inputPorts: [
-    { name: 'result', label: '最终结果', valueType: 'object', required: false, description: '工作流最终输出' },
+    { name: 'result', label: '最终结果', valueType: 'any', required: false, description: '工作流最终输出' },
   ],
   outputPorts: [],
   configFields: [],

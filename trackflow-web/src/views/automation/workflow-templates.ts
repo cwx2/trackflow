@@ -1,279 +1,142 @@
 /**
- * 内置工作流模板
+ * 内置工作流模板。
  *
- * 所有模板在此文件硬编码管理，通过 git 版本控制。
- * 节点结构必须与 node-definitions/ 中的端口定义保持一致。
- *
- * 注意：修改此文件后同步更新后端 BuiltinWorkflowTemplates.java
+ * 模板不是手写的端口副本：节点快照从 node-definitions 注册表生成，避免节点升级后
+ * 模板仍携带过期端口。模板只保留真实可执行的配置和值绑定。
  */
-import type { WorkflowTemplateVO } from '@/api/automation'
+import type { InputValue, NodeType, WorkflowDefinition, WorkflowNode, WorkflowTemplateVO } from '@/api/automation'
+import { getNodeDefinition } from './node-definitions'
 
-// ─── 模板1：定时巡检并 AI 处理待办工单 ───────────────────────────────────────
+type Position = { x: number; y: number }
 
-const TEMPLATE_AI_PATROL = {
+function node(
+  id: string,
+  type: NodeType,
+  position: Position,
+  values: Record<string, InputValue> = {},
+  config: Record<string, unknown> = {},
+): WorkflowNode {
+  const definition = getNodeDefinition(type)
+  if (!definition) throw new Error(`内置模板引用了未注册节点：${type}`)
+
+  return {
+    id,
+    type,
+    position,
+    nodeMeta: { ...definition.meta },
+    inputs: definition.inputPorts.map(port => ({
+      name: port.name,
+      label: port.label,
+      valueType: port.valueType,
+      required: port.required,
+      description: port.description,
+      optional: port.optional,
+      value: values[port.name] ?? port.defaultValue ?? null,
+    })),
+    outputs: definition.outputPorts.map(port => ({ ...port })),
+    config,
+  }
+}
+
+function definition(value: WorkflowDefinition): string {
+  return JSON.stringify(value)
+}
+
+/** 无外部依赖；空触发参数也能完整试运行。 */
+const PENDING_WORK_CHECK: WorkflowDefinition = {
   globalVariables: {},
   nodes: [
-    {
-      id: 'start-1', type: 'start',
-      position: { x: 250, y: 50 },
-      nodeMeta: { title: '开始', icon: '▶️', description: '定时触发或手动触发', color: '#52c41a' },
-      inputs: [], outputs: [], config: {},
-    },
-    {
-      id: 'search-1', type: 'trackflow-issue-search',
-      position: { x: 250, y: 180 },
-      nodeMeta: { title: '查找待办需求', icon: '🔎', description: '按项目、状态、优先级、类型和关键词筛选', color: '#0ea5e9' },
-      inputs: [
-        { name: 'projectId',    label: '项目 ID',         valueType: 'number',  required: false, value: null },
-        { name: 'statusIds',    label: '状态 ID',         valueType: 'string',  required: false, value: null },
-        { name: 'priority',     label: '优先级',          valueType: 'string',  required: false, value: null },
-        { name: 'issueType',    label: '工单类型',        valueType: 'string',  required: false, value: null },
-        { name: 'tagIds',       label: '标签 ID',         valueType: 'string',  required: false, value: null },
-        { name: 'keyword',      label: '关键词',          valueType: 'string',  required: false, optional: true, value: null },
-        { name: 'assignedToMe', label: '仅分配给执行身份', valueType: 'boolean', required: false, optional: true, value: null },
-        { name: 'sort',         label: '排序',            valueType: 'string',  required: false, optional: true, value: null },
-        { name: 'limit',        label: '数量上限',        valueType: 'number',  required: false, optional: true, value: { type: 'literal', value: 20 } },
-      ],
-      outputs: [
-        { name: 'issues',   label: '需求列表', valueType: 'array' },
-        { name: 'count',    label: '数量',     valueType: 'number' },
-        { name: 'hasWork',  label: '有待办',   valueType: 'boolean' },
-      ],
-      config: {},
-    },
-    {
-      id: 'condition-1', type: 'condition',
-      position: { x: 250, y: 340 },
-      nodeMeta: { title: '有待处理工单？', icon: '❓', description: '判断是否有搜索结果', color: '#faad14' },
-      inputs: [
-        { name: 'expression', valueType: 'string', required: true, value: { type: 'literal', value: '{output}' } },
-      ],
-      outputs: [
-        { name: 'result', valueType: 'boolean' },
-      ],
-      config: { variable: '{output}', operator: 'is_not_empty', value: '' },
-    },
-    {
-      id: 'loop-1', type: 'loop',
-      position: { x: 250, y: 490 },
-      nodeMeta: { title: '遍历工单', icon: '🔁', description: '逐个处理搜索到的工单', color: '#722ed1' },
-      inputs: [
-        { name: 'items', valueType: 'array', required: true, value: { type: 'ref', nodeId: 'search-1', outputName: 'issues' } },
-      ],
-      outputs: [
-        { name: 'currentItem', valueType: 'object' },
-      ],
-      config: { maxRetries: 50, interval: 0, exitOperator: 'is_empty', exitVariable: '{currentItem}' },
-    },
-    {
-      id: 'agent-1', type: 'role-agent',
-      position: { x: 250, y: 640 },
-      nodeMeta: { title: 'AI 分析工单', icon: '🤖', description: 'AI Agent 分析工单内容并给出处理建议', color: '#eb2f96' },
-      inputs: [
-        { name: 'roleId',   label: 'Agent 角色',   valueType: 'number', required: false, value: null },
-        { name: 'task',     label: '任务描述',     valueType: 'string', required: true,  value: { type: 'literal', value: '分析此工单，给出处理建议、优先级评估和可能的解决方案' } },
-        { name: 'context',  label: '上下文（可选）', valueType: 'object', required: false, value: { type: 'ref', nodeId: 'loop-1', outputName: 'currentItem' } },
-        { name: 'workDir',  label: '工作目录',     valueType: 'string', required: false, value: null },
-      ],
-      outputs: [
-        { name: 'response', label: 'Agent 响应', valueType: 'string' },
-      ],
-      config: {},
-    },
-    {
-      id: 'comment-1', type: 'trackflow-issue-comment',
-      position: { x: 250, y: 790 },
-      nodeMeta: { title: '添加 AI 评论', icon: '💬', description: '将 AI 分析结果作为评论添加到工单', color: '#13c2c2' },
-      inputs: [
-        { name: 'issueId', label: '工单 ID',   valueType: 'number', required: true, value: null },
-        { name: 'content', label: '评论内容', valueType: 'string', required: true, value: { type: 'ref', nodeId: 'agent-1', outputName: 'response' } },
-      ],
-      outputs: [
-        { name: 'comment', label: '评论', valueType: 'object' },
-      ],
-      config: {},
-    },
-    {
-      id: 'end-1', type: 'end',
-      position: { x: 250, y: 940 },
-      nodeMeta: { title: '结束', icon: '⏹️', description: '工作流结束', color: '#f5222d' },
-      inputs: [], outputs: [], config: {},
-    },
+    node('start', 'start', { x: 220, y: 180 }),
+    node('search', 'trackflow-issue-search', { x: 520, y: 180 }, {
+      // projectId 不传时按当前执行身份可见范围检索，传入时则精确限定项目。
+      projectId: { type: 'ref', nodeId: 'start', outputName: 'trigger', path: 'projectId' },
+    }, { limit: 20 }),
+    node('has-work', 'condition', { x: 820, y: 180 }, {
+      value: { type: 'ref', nodeId: 'search', outputName: 'hasWork' },
+    }, { operator: 'equals', compareValue: 'true' }),
+    node('work-found', 'end', { x: 1120, y: 100 }, {
+      result: { type: 'ref', nodeId: 'has-work', outputName: 'true' },
+    }),
+    node('no-work', 'end', { x: 1120, y: 260 }, {
+      result: { type: 'ref', nodeId: 'has-work', outputName: 'false' },
+    }),
   ],
   edges: [
-    { id: 'e1', sourceNodeId: 'start-1',     sourcePortName: 'next',         targetNodeId: 'search-1',    targetPortName: 'input' },
-    { id: 'e2', sourceNodeId: 'search-1',    sourcePortName: 'issues',       targetNodeId: 'condition-1', targetPortName: 'expression' },
-    { id: 'e3', sourceNodeId: 'condition-1', sourcePortName: 'true',         targetNodeId: 'loop-1',      targetPortName: 'items' },
-    { id: 'e4', sourceNodeId: 'loop-1',      sourcePortName: 'currentItem',  targetNodeId: 'agent-1',     targetPortName: 'context' },
-    { id: 'e5', sourceNodeId: 'agent-1',     sourcePortName: 'response',     targetNodeId: 'comment-1',   targetPortName: 'content' },
-    { id: 'e6', sourceNodeId: 'comment-1',   sourcePortName: 'comment',      targetNodeId: 'end-1',       targetPortName: 'input' },
-    { id: 'e7', sourceNodeId: 'condition-1', sourcePortName: 'false',        targetNodeId: 'end-1',       targetPortName: 'input' },
+    { id: 'start-search', sourceNodeId: 'start', sourcePortName: 'trigger', targetNodeId: 'search', targetPortName: 'projectId' },
+    { id: 'search-condition', sourceNodeId: 'search', sourcePortName: 'hasWork', targetNodeId: 'has-work', targetPortName: 'value' },
+    { id: 'condition-work', sourceNodeId: 'has-work', sourcePortName: 'true', targetNodeId: 'work-found', targetPortName: 'result' },
+    { id: 'condition-empty', sourceNodeId: 'has-work', sourcePortName: 'false', targetNodeId: 'no-work', targetPortName: 'result' },
   ],
 }
 
-// ─── 模板2：新工单自动 AI 分析并评论建议 ──────────────────────────────────────
-
-const TEMPLATE_AI_NEW_ISSUE = {
+/** 审批节点的两个分支都有明确终点，可直接用于验证暂停、审批与恢复链路。 */
+const APPROVAL_CHECK: WorkflowDefinition = {
   globalVariables: {},
   nodes: [
-    {
-      id: 'start-1', type: 'start',
-      position: { x: 250, y: 50 },
-      nodeMeta: { title: '开始', icon: '▶️', description: '新工单创建时触发', color: '#52c41a' },
-      inputs: [], outputs: [], config: {},
-    },
-    {
-      id: 'get-1', type: 'trackflow-issue-get',
-      position: { x: 250, y: 180 },
-      nodeMeta: { title: '获取需求', icon: '📋', description: '按 ID 或编号读取需求（含评论、标签、自定义字段）', color: '#2563eb' },
-      inputs: [
-        { name: 'issue', label: '工单 ID / 编号', valueType: 'string', required: true, value: null },
-      ],
-      outputs: [
-        { name: 'issue', label: '工单（完整）', valueType: 'object' },
-      ],
-      config: {},
-    },
-    {
-      id: 'agent-1', type: 'role-agent',
-      position: { x: 250, y: 330 },
-      nodeMeta: { title: 'AI 分析', icon: '🤖', description: '分析工单内容，给出处理建议', color: '#eb2f96' },
-      inputs: [
-        { name: 'roleId',  label: 'Agent 角色',    valueType: 'number', required: false, value: null },
-        { name: 'task',    label: '任务描述',      valueType: 'string', required: true,  value: { type: 'literal', value: '分析此工单，给出处理建议、优先级评估和可能的解决方案' } },
-        { name: 'context', label: '上下文（可选）', valueType: 'object', required: false, value: { type: 'ref', nodeId: 'get-1', outputName: 'issue' } },
-        { name: 'workDir', label: '工作目录',      valueType: 'string', required: false, value: null },
-      ],
-      outputs: [
-        { name: 'response', label: 'Agent 响应', valueType: 'string' },
-      ],
-      config: {},
-    },
-    {
-      id: 'comment-1', type: 'trackflow-issue-comment',
-      position: { x: 250, y: 490 },
-      nodeMeta: { title: '添加建议评论', icon: '💬', description: '将 AI 建议作为评论发布', color: '#13c2c2' },
-      inputs: [
-        { name: 'issueId', label: '工单 ID',   valueType: 'number', required: true, value: null },
-        { name: 'content', label: '评论内容', valueType: 'string', required: true, value: { type: 'ref', nodeId: 'agent-1', outputName: 'response' } },
-      ],
-      outputs: [
-        { name: 'comment', label: '评论', valueType: 'object' },
-      ],
-      config: {},
-    },
-    {
-      id: 'end-1', type: 'end',
-      position: { x: 250, y: 640 },
-      nodeMeta: { title: '结束', icon: '⏹️', description: '工作流结束', color: '#f5222d' },
-      inputs: [], outputs: [], config: {},
-    },
+    node('start', 'start', { x: 220, y: 180 }),
+    node('approval', 'approval', { x: 560, y: 180 }, {
+      title: { type: 'literal', value: '确认执行自动化操作' },
+      description: { type: 'literal', value: '请确认本次自动化请求的输入和影响范围。' },
+      payload: { type: 'ref', nodeId: 'start', outputName: 'trigger' },
+    }, { riskLevel: 'medium', expiryHours: 24 }),
+    node('approved-end', 'end', { x: 900, y: 100 }, {
+      result: { type: 'ref', nodeId: 'approval', outputName: 'approved' },
+    }),
+    node('rejected-end', 'end', { x: 900, y: 260 }, {
+      result: { type: 'ref', nodeId: 'approval', outputName: 'rejected' },
+    }),
   ],
   edges: [
-    { id: 'e1', sourceNodeId: 'start-1',   sourcePortName: 'next',     targetNodeId: 'get-1',     targetPortName: 'input' },
-    { id: 'e2', sourceNodeId: 'get-1',     sourcePortName: 'issue',    targetNodeId: 'agent-1',   targetPortName: 'context' },
-    { id: 'e3', sourceNodeId: 'agent-1',   sourcePortName: 'response', targetNodeId: 'comment-1', targetPortName: 'content' },
-    { id: 'e4', sourceNodeId: 'comment-1', sourcePortName: 'comment',  targetNodeId: 'end-1',     targetPortName: 'input' },
+    { id: 'start-approval', sourceNodeId: 'start', sourcePortName: 'trigger', targetNodeId: 'approval', targetPortName: 'payload' },
+    { id: 'approval-approved', sourceNodeId: 'approval', sourcePortName: 'approved', targetNodeId: 'approved-end', targetPortName: 'result' },
+    { id: 'approval-rejected', sourceNodeId: 'approval', sourcePortName: 'rejected', targetNodeId: 'rejected-end', targetPortName: 'result' },
   ],
 }
 
-// ─── 模板3：工单状态变更时自动通知负责人 ──────────────────────────────────────
-
-const TEMPLATE_STATUS_NOTIFY = {
+/** 固定五秒的延时流程，验证暂停、恢复和终止链路，不依赖伪造的 HTTP 服务。 */
+const DELAY_CHECK: WorkflowDefinition = {
   globalVariables: {},
   nodes: [
-    {
-      id: 'start-1', type: 'start',
-      position: { x: 250, y: 50 },
-      nodeMeta: { title: '开始', icon: '▶️', description: '工单状态变更时触发', color: '#52c41a' },
-      inputs: [], outputs: [], config: {},
-    },
-    {
-      id: 'get-1', type: 'trackflow-issue-get',
-      position: { x: 250, y: 180 },
-      nodeMeta: { title: '获取需求', icon: '📋', description: '按 ID 或编号读取需求（含评论、标签、自定义字段）', color: '#2563eb' },
-      inputs: [
-        { name: 'issue', label: '工单 ID / 编号', valueType: 'string', required: true, value: null },
-      ],
-      outputs: [
-        { name: 'issue', label: '工单（完整）', valueType: 'object' },
-      ],
-      config: {},
-    },
-    {
-      id: 'condition-1', type: 'condition',
-      position: { x: 250, y: 330 },
-      nodeMeta: { title: '有负责人？', icon: '❓', description: '判断工单是否已分配负责人', color: '#faad14' },
-      inputs: [
-        { name: 'expression', valueType: 'string', required: true, value: { type: 'literal', value: '{output}' } },
-      ],
-      outputs: [
-        { name: 'result', valueType: 'boolean' },
-      ],
-      config: { variable: '{output}', operator: 'is_not_empty', value: '' },
-    },
-    {
-      id: 'http-1', type: 'http-request',
-      position: { x: 250, y: 480 },
-      nodeMeta: { title: '发送通知', icon: '📤', description: '通过 HTTP 接口发送状态变更通知', color: '#fa8c16' },
-      inputs: [
-        { name: 'url',     label: 'URL',      valueType: 'string', required: true,  value: { type: 'literal', value: 'http://localhost:8090/api/v1/notifications/send' } },
-        { name: 'method',  label: 'HTTP 方法', valueType: 'string', required: true,  value: { type: 'literal', value: 'POST' } },
-        { name: 'body',    label: '请求体',   valueType: 'object', required: false, value: null },
-        { name: 'headers', label: 'Headers',  valueType: 'object', required: false, value: null },
-        { name: 'timeout', label: '超时（秒）', valueType: 'number', required: false, value: null },
-      ],
-      outputs: [
-        { name: 'response',   label: 'HTTP 响应', valueType: 'object' },
-        { name: 'statusCode', label: '状态码',    valueType: 'number' },
-        { name: 'success',    label: '是否成功',  valueType: 'boolean' },
-      ],
-      config: {},
-    },
-    {
-      id: 'end-1', type: 'end',
-      position: { x: 250, y: 630 },
-      nodeMeta: { title: '结束', icon: '⏹️', description: '工作流结束', color: '#f5222d' },
-      inputs: [], outputs: [], config: {},
-    },
+    node('start', 'start', { x: 220, y: 180 }),
+    node('delay', 'delay', { x: 560, y: 180 }, {
+      duration: { type: 'literal', value: 5 },
+    }),
+    node('end', 'end', { x: 900, y: 180 }, {
+      result: { type: 'ref', nodeId: 'delay', outputName: 'done' },
+    }),
   ],
   edges: [
-    { id: 'e1', sourceNodeId: 'start-1',     sourcePortName: 'next',    targetNodeId: 'get-1',       targetPortName: 'input' },
-    { id: 'e2', sourceNodeId: 'get-1',       sourcePortName: 'issue',   targetNodeId: 'condition-1', targetPortName: 'expression' },
-    { id: 'e3', sourceNodeId: 'condition-1', sourcePortName: 'true',    targetNodeId: 'http-1',      targetPortName: 'url' },
-    { id: 'e4', sourceNodeId: 'http-1',      sourcePortName: 'success', targetNodeId: 'end-1',       targetPortName: 'input' },
-    { id: 'e5', sourceNodeId: 'condition-1', sourcePortName: 'false',   targetNodeId: 'end-1',       targetPortName: 'input' },
+    { id: 'start-delay', sourceNodeId: 'start', sourcePortName: 'trigger', targetNodeId: 'delay', targetPortName: 'duration' },
+    { id: 'delay-end', sourceNodeId: 'delay', sourcePortName: 'done', targetNodeId: 'end', targetPortName: 'result' },
   ],
 }
-
-// ─── 导出 ─────────────────────────────────────────────────────────────────────
 
 export const BUILTIN_WORKFLOW_TEMPLATES: WorkflowTemplateVO[] = [
   {
-    id: 'builtin-1',
-    name: '定时巡检并 AI 处理待办工单',
-    description: '定时搜索待办工单，逐个调用 AI Agent 分析并自动添加处理建议评论',
-    category: 'ai_task',
-    icon: '🤖',
+    id: 'builtin-pending-work-check',
+    name: '待办工单检测',
+    description: '在当前执行身份可访问的范围内检查待办工单，并输出是否存在待办。',
+    category: 'issue_management',
+    icon: '🔎',
     isBuiltin: true,
-    definition: JSON.stringify(TEMPLATE_AI_PATROL),
+    definition: definition(PENDING_WORK_CHECK),
   },
   {
-    id: 'builtin-2',
-    name: '新工单自动 AI 分析并评论建议',
-    description: '工单创建时触发，AI 自动分析内容并发布处理建议评论',
-    category: 'ai_task',
-    icon: '✨',
+    id: 'builtin-approval-check',
+    name: '人工审批流程',
+    description: '演示审批挂起、批准/拒绝分支与恢复执行，适合验证审批链路。',
+    category: 'general',
+    icon: '🛡️',
     isBuiltin: true,
-    definition: JSON.stringify(TEMPLATE_AI_NEW_ISSUE),
+    definition: definition(APPROVAL_CHECK),
   },
   {
-    id: 'builtin-3',
-    name: '工单状态变更时自动通知负责人',
-    description: '工单状态变更时检查是否有负责人，有则通过 HTTP 接口发送通知',
-    category: 'notification',
-    icon: '🔔',
+    id: 'builtin-delay-check',
+    name: '延时执行',
+    description: '等待五秒后结束，用于验证延时任务的持久化恢复链路。',
+    category: 'general',
+    icon: '⏱',
     isBuiltin: true,
-    definition: JSON.stringify(TEMPLATE_STATUS_NOTIFY),
+    definition: definition(DELAY_CHECK),
   },
 ]

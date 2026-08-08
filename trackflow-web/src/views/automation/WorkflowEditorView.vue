@@ -198,6 +198,21 @@
         </a-form-item>
       </a-form>
     </a-modal>
+
+    <a-modal
+      v-model:visible="showRunInputModal"
+      title="试运行输入"
+      ok-text="开始试运行"
+      :ok-loading="isRunning"
+      @ok="confirmRun"
+    >
+      <p class="run-input-hint">传入触发节点的 JSON 对象。没有输入参数时保持 <code>{}</code> 即可。</p>
+      <a-textarea
+        v-model="runInputText"
+        :auto-size="{ minRows: 7, maxRows: 14 }"
+        placeholder='例如：{ "issueId": 123, "projectId": 1 }'
+      />
+    </a-modal>
   </div>
 </template>
 
@@ -210,6 +225,7 @@ import LogicFlow from '@logicflow/core'
 import { Control, MiniMap, Snapshot } from '@logicflow/extension'
 import { automationApi, type WorkflowDefinition, type NodeType, type GlobalVariable } from '@/api'
 import { DRAGGABLE_NODES, getNodeDefinition } from './node-definitions'
+import { validateExecutableWorkflow } from './workflow-validator'
 import { FlowEdge } from './graph/edges/FlowEdge'
 import { registerAllNodes } from './graph/nodes/index'
 import CliAgentConfig from './components/config/CliAgentConfig.vue'
@@ -305,6 +321,8 @@ const nodeStatusMap = ref<Record<string, CanvasNodeStatus>>({})
 const streamingOutput = ref<Record<string, string>>({})
 const isRunning = ref(false)
 const currentExecutionId = ref<string | null>(null)
+const showRunInputModal = ref(false)
+const runInputText = ref('{}')
 let activeEvtSource: EventSource | null = null
 
 // 底部工具栏
@@ -952,18 +970,61 @@ function onDragStart(_e: MouseEvent, node: { type: string; label: string; icon: 
 // ── 试运行 ────────────────────────────────────────────────
 async function handleRun() {
   if (isRunning.value || !lf) return
+  const graphData = lf.getGraphData() as { nodes: any[]; edges: any[] }
+  const runDefinition: WorkflowDefinition = {
+    globalVariables: globalVariables.value,
+    nodes: graphData.nodes.map((n: any) => ({
+      id: n.id,
+      type: (n.properties?.nodeType || n.type) as NodeType,
+      position: { x: n.x - 100, y: n.y - 30 },
+      nodeMeta: n.properties?.nodeMeta,
+      inputs: n.properties?.inputs || [],
+      outputs: n.properties?.outputs || [],
+      config: extractNodeConfig(n.properties || {}),
+    })),
+    edges: graphData.edges.map((e: any) => ({
+      id: e.id,
+      sourceNodeId: e.sourceNodeId,
+      sourcePortName: e.properties?.sourcePortName || 'output',
+      targetNodeId: e.targetNodeId,
+      targetPortName: e.properties?.targetPortName || 'input',
+    })),
+  }
+  const validationError = validateExecutableWorkflow(runDefinition)
+  if (validationError) {
+    Message.error(`无法试运行：${validationError}`)
+    return
+  }
   if (!(await handleSave())) return
+  runInputText.value = '{}'
+  showRunInputModal.value = true
+}
+
+async function confirmRun() {
+  let runInputs: Record<string, unknown>
+  try {
+    const parsed = JSON.parse(runInputText.value || '{}')
+    if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object') {
+      Message.error('试运行输入必须是 JSON 对象')
+      return
+    }
+    runInputs = parsed as Record<string, unknown>
+  } catch {
+    Message.error('试运行输入不是合法 JSON')
+    return
+  }
   isRunning.value = true
   nodeStatusMap.value = {}
   streamingOutput.value = {}
 
   try {
-    const res = await automationApi.execute(workflowId.value, {})
+    const res = await automationApi.execute(workflowId.value, runInputs)
     if (res.code !== 0) {
       Message.error(res.message || '触发执行失败')
       isRunning.value = false
       return
     }
+    showRunInputModal.value = false
     currentExecutionId.value = res.data.executionId
 
     // SSE 监听
@@ -1285,6 +1346,12 @@ onUnmounted(() => {
   background: var(--tf-bg-surface);
   border: 1px solid var(--tf-border);
   border-radius: 6px;
+}
+
+.run-input-hint {
+  margin: 0 0 12px;
+  color: var(--tf-text-secondary);
+  font-size: 13px;
 }
 
 /* LogicFlow 的选中态没有传入 Vue 节点属性，在画布层补上可感知的选择反馈。 */
