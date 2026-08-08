@@ -1,70 +1,83 @@
 <template>
-  <div class="comment-input">
-    <TiptapEditor
-      ref="tiptapRef"
-      model-value=""
-      placeholder="添加评论... 支持 Markdown 语法，输入 @ 提及成员"
-      :toolbar="true"
-      :mention="true"
-      :mention-suggestion="mentionConfig"
-      :submit-on-enter="true"
-      :reply-blockquote="true"
-      :reply-blockquote-extension="ReplyBlockquote"
-      :min-height="80"
-      :max-height="200"
-      content-format="html"
-      @submit="submit"
-    >
-      <template #toolbar-end>
-        <!-- Visible to selector -->
-        <div class="visibility-selector" v-if="groups.length > 0 && canSetVisibility">
-          <button class="visibility-btn" :class="{ restricted: selectedGroupIds.length > 0 }" @click="showVisibilityDropdown = !showVisibilityDropdown" title="设置评论可见范围">
-            <span class="lock-icon">{{ selectedGroupIds.length > 0 ? '🔒' : '👁' }}</span>
-            <span class="visibility-label">{{ visibilityLabel }}</span>
-            <span class="dropdown-arrow">▾</span>
-          </button>
-          <div v-if="showVisibilityDropdown" class="visibility-dropdown" @mouseleave="showVisibilityDropdown = false">
-            <div class="dropdown-header">可见范围</div>
-            <div class="dropdown-option" :class="{ selected: selectedGroupIds.length === 0 }" @click="clearVisibility">
-              <span class="check">{{ selectedGroupIds.length === 0 ? '✓' : '' }}</span>
-              全部成员可见
+  <div ref="rootRef" class="comment-input" :class="{ 'comment-input--expanded': isExpanded }">
+    <!-- Collapsed state: single-line placeholder -->
+    <div v-if="!isExpanded" class="comment-collapsed" @click="expand">
+      <UserAvatar :name="currentUserName" :size="28" />
+      <span class="comment-collapsed-placeholder">添加评论... 支持 Markdown 语法，输入 @ 提及成员</span>
+    </div>
+
+    <!-- Expanded state: full TiptapEditor -->
+    <Transition name="comment-expand">
+      <div v-if="isExpanded" class="comment-expanded">
+        <TiptapEditor
+          ref="tiptapRef"
+          model-value=""
+          placeholder="添加评论... 支持 Markdown 语法，输入 @ 提及成员"
+          :toolbar="true"
+          :mention="true"
+          :mention-suggestion="mentionConfig"
+          :submit-on-enter="true"
+          :reply-blockquote="true"
+          :reply-blockquote-extension="ReplyBlockquote"
+          :min-height="80"
+          :max-height="200"
+          content-format="html"
+          @submit="submit"
+        >
+          <template #toolbar-end>
+            <!-- Visible to selector -->
+            <div class="visibility-selector" v-if="groups.length > 0 && canSetVisibility">
+              <button class="visibility-btn" :class="{ restricted: selectedGroupIds.length > 0 }" @click="showVisibilityDropdown = !showVisibilityDropdown" title="设置评论可见范围">
+                <span class="lock-icon">{{ selectedGroupIds.length > 0 ? '🔒' : '👁' }}</span>
+                <span class="visibility-label">{{ visibilityLabel }}</span>
+                <span class="dropdown-arrow">▾</span>
+              </button>
+              <div v-if="showVisibilityDropdown" class="visibility-dropdown" @mouseleave="showVisibilityDropdown = false">
+                <div class="dropdown-header">可见范围</div>
+                <div class="dropdown-option" :class="{ selected: selectedGroupIds.length === 0 }" @click="clearVisibility">
+                  <span class="check">{{ selectedGroupIds.length === 0 ? '✓' : '' }}</span>
+                  全部成员可见
+                </div>
+                <div class="dropdown-divider"></div>
+                <div
+                  v-for="group in groups"
+                  :key="group.id"
+                  class="dropdown-option"
+                  :class="{ selected: selectedGroupIds.includes(group.id) }"
+                  @click="toggleGroup(group.id)"
+                >
+                  <span class="check">{{ selectedGroupIds.includes(group.id) ? '✓' : '' }}</span>
+                  {{ group.name }}
+                </div>
+              </div>
             </div>
-            <div class="dropdown-divider"></div>
-            <div
-              v-for="group in groups"
-              :key="group.id"
-              class="dropdown-option"
-              :class="{ selected: selectedGroupIds.includes(group.id) }"
-              @click="toggleGroup(group.id)"
-            >
-              <span class="check">{{ selectedGroupIds.includes(group.id) ? '✓' : '' }}</span>
-              {{ group.name }}
+          </template>
+          <template #footer="{ isEmpty: editorEmpty }">
+            <div class="editor-footer">
+              <div class="footer-actions">
+                <button class="btn-cancel" @click="collapse">取消</button>
+                <button v-if="showAddTime" class="btn-add-time" @click="emit('addTime')" title="添加花费的时间">⏱ 记录工时</button>
+                <button v-if="showAddTime && !timerRunning" class="btn-start-timer" @click="emit('startTimer')" title="开始计时">▶ 开始计时</button>
+                <button v-if="showAddTime && timerRunning && timerIssueMatch" class="btn-stop-timer" @click="emit('stopTimer')" title="停止计时">⏹ 停止计时 ({{ timerElapsed }})</button>
+                <span v-if="showAddTime && timerRunning && !timerIssueMatch" class="timer-elsewhere-hint" title="计时器正在其他工单运行">⏱ 计时中...</span>
+              </div>
+              <button class="btn-submit" :disabled="editorEmpty || (tiptapRef?.isComposing ?? false)" @click="submit">发布评论</button>
             </div>
-          </div>
-        </div>
-      </template>
-      <template #footer="{ isEmpty: editorEmpty }">
-        <div class="editor-footer">
-          <div class="footer-actions">
-            <button v-if="showAddTime" class="btn-add-time" @click="emit('addTime')" title="添加花费的时间">⏱ 添加花费的时间</button>
-            <button v-if="showAddTime && !timerRunning" class="btn-start-timer" @click="emit('startTimer')" title="开始计时">▶ 开始计时</button>
-            <button v-if="showAddTime && timerRunning && timerIssueMatch" class="btn-stop-timer" @click="emit('stopTimer')" title="停止计时">⏹ 停止计时 ({{ timerElapsed }})</button>
-            <span v-if="showAddTime && timerRunning && !timerIssueMatch" class="timer-elsewhere-hint" title="计时器正在其他工单运行">⏱ 计时中...</span>
-          </div>
-          <button class="btn-submit" :disabled="editorEmpty || (tiptapRef?.isComposing ?? false)" @click="submit">提交评论</button>
-        </div>
-      </template>
-    </TiptapEditor>
+          </template>
+        </TiptapEditor>
+      </div>
+    </Transition>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, nextTick } from 'vue'
-import { TiptapEditor } from '@/components/base'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { TiptapEditor, UserAvatar } from '@/components/base'
 import { ReplyBlockquote } from '../extensions/ReplyBlockquote'
 import { groupApi } from '@/api'
 import type { GroupSimpleVO } from '@/api/types'
 import { useMentionSuggestion } from '../composables/useMentionSuggestion'
+import { useAuthStore } from '@/stores/auth'
 
 const props = withDefaults(defineProps<{
   projectId?: string
@@ -88,12 +101,17 @@ const emit = defineEmits<{
   stopTimer: []
 }>()
 
+const authStore = useAuthStore()
+const currentUserName = computed(() => authStore.user?.displayName || authStore.user?.username || '?')
+
+const rootRef = ref<HTMLElement | null>(null)
 const tiptapRef = ref<InstanceType<typeof TiptapEditor> | null>(null)
 const groups = ref<GroupSimpleVO[]>([])
 const selectedGroupIds = ref<string[]>([])
 const showVisibilityDropdown = ref(false)
+const isExpanded = ref(false)
 
-// Mention suggestion 配置
+// Mention suggestion config
 const { suggestion } = useMentionSuggestion(() => props.projectId)
 const mentionConfig = { suggestion }
 
@@ -120,7 +138,44 @@ function clearVisibility() {
   showVisibilityDropdown.value = false
 }
 
+/** Expand the comment input to full editor */
+function expand() {
+  isExpanded.value = true
+  nextTick(() => {
+    tiptapRef.value?.editor?.commands.focus()
+  })
+}
+
+/** Collapse the comment input back to single-line placeholder */
+function collapse() {
+  const editor = tiptapRef.value?.editor
+  if (editor) {
+    editor.commands.clearContent()
+  }
+  selectedGroupIds.value = []
+  showVisibilityDropdown.value = false
+  isExpanded.value = false
+}
+
+/** Handle click outside: only collapse if editor is empty */
+function handleDocumentClick(e: MouseEvent) {
+  if (!isExpanded.value) return
+  if (!rootRef.value) return
+  // If click is inside the component, ignore
+  if (rootRef.value.contains(e.target as Node)) return
+  // Also check tippy popups (mentions, dropdowns) which may be outside our root
+  const target = e.target as HTMLElement
+  if (target.closest('.tippy-box') || target.closest('.arco-trigger-popup')) return
+
+  const editor = tiptapRef.value?.editor
+  if (editor && editor.isEmpty) {
+    isExpanded.value = false
+  }
+  // If editor has content, stay expanded to prevent accidental data loss
+}
+
 onMounted(async () => {
+  document.addEventListener('mousedown', handleDocumentClick, true)
   try {
     const res = await groupApi.listSimple()
     if (res.code === 0 && res.data) {
@@ -129,6 +184,10 @@ onMounted(async () => {
   } catch (e) {
     console.error('[CommentInput] 加载用户组列表失败:', e)
   }
+})
+
+onUnmounted(() => {
+  document.removeEventListener('mousedown', handleDocumentClick, true)
 })
 
 function submit() {
@@ -140,39 +199,46 @@ function submit() {
   emit('submit', html, visibleTo)
   editorInstance.clearContent()
   selectedGroupIds.value = []
+  // Collapse after successful submit
+  isExpanded.value = false
 }
 
 /**
- * 在编辑器中插入回复引用块。
- * @param displayName 被回复者的显示名
- * @param content 被引用的原评论纯文本（已截取前 100 字）
- * @param commentId 被引用的原评论 ID（用于点击引用跳转）
+ * Insert a reply quote into the editor.
+ * If collapsed, expand first.
  */
 function insertReplyQuote(displayName: string, content: string, commentId?: string) {
-  const editorInstance = tiptapRef.value
-  if (!editorInstance) return
-  const editor = editorInstance.editor
-  if (!editor) return
-
-  const truncated = content.length > 100 ? content.slice(0, 100) + '...' : content
-  const replyAttr = commentId ? ` data-reply-to-comment-id="${commentId}"` : ''
-  const quoteHtml = `<blockquote${replyAttr}><p>@${displayName}：${truncated}</p></blockquote><p></p>`
-
-  const isCurrentEmpty = editor.isEmpty
-
-  if (isCurrentEmpty) {
-    editor.commands.setContent(quoteHtml)
-  } else {
-    const currentContent = editor.getHTML()
-    editor.commands.setContent(quoteHtml + currentContent)
+  // Auto-expand when replying
+  if (!isExpanded.value) {
+    isExpanded.value = true
   }
-  editor.commands.focus('end')
 
   nextTick(() => {
-    const el = document.querySelector('.comment-input')
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    const editorInstance = tiptapRef.value
+    if (!editorInstance) return
+    const editor = editorInstance.editor
+    if (!editor) return
+
+    const truncated = content.length > 100 ? content.slice(0, 100) + '...' : content
+    const replyAttr = commentId ? ` data-reply-to-comment-id="${commentId}"` : ''
+    const quoteHtml = `<blockquote${replyAttr}><p>@${displayName}：${truncated}</p></blockquote><p></p>`
+
+    const isCurrentEmpty = editor.isEmpty
+
+    if (isCurrentEmpty) {
+      editor.commands.setContent(quoteHtml)
+    } else {
+      const currentContent = editor.getHTML()
+      editor.commands.setContent(quoteHtml + currentContent)
     }
+    editor.commands.focus('end')
+
+    nextTick(() => {
+      const el = document.querySelector('.comment-input')
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }
+    })
   })
 }
 
@@ -181,10 +247,60 @@ defineExpose({ insertReplyQuote })
 
 <style scoped>
 .comment-input {
-  margin-top: 16px;
+  margin-top: 0;
 }
-.comment-input :deep(.tiptap-editor) {
+
+/* Collapsed state */
+.comment-collapsed {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--tf-border);
   border-radius: 6px;
+  cursor: text;
+  transition: border-color 150ms, background 150ms;
+}
+.comment-collapsed:hover {
+  border-color: var(--tf-border-hover, var(--tf-text-muted));
+  background: var(--tf-bg-hover);
+}
+.comment-collapsed-placeholder {
+  font-size: 13px;
+  color: var(--tf-text-muted);
+  user-select: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Expanded state */
+.comment-expanded {
+  animation: comment-expand-in 200ms ease-out;
+}
+.comment-expanded :deep(.tiptap-editor) {
+  border-radius: 6px;
+}
+
+/* Expand animation */
+@keyframes comment-expand-in {
+  from {
+    opacity: 0.6;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Transition for v-if switch */
+.comment-expand-enter-active {
+  animation: comment-expand-in 200ms ease-out;
+}
+.comment-expand-leave-active {
+  animation: comment-expand-in 150ms ease-in reverse;
 }
 
 /* Visibility selector */
@@ -238,6 +354,12 @@ defineExpose({ insertReplyQuote })
 .footer-actions {
   display: flex; align-items: center; gap: 4px;
 }
+.btn-cancel {
+  font-size: 12px; padding: 4px 12px; border-radius: 3px; border: none;
+  background: none; color: var(--tf-text-secondary); cursor: pointer;
+  transition: color 150ms, background 150ms;
+}
+.btn-cancel:hover { color: var(--tf-text-primary); background: var(--tf-bg-hover); }
 .btn-add-time {
   font-size: 12px; padding: 4px 12px; border-radius: 3px; border: none;
   background: none; color: var(--tf-text-tertiary); cursor: pointer;
@@ -270,7 +392,7 @@ defineExpose({ insertReplyQuote })
 </style>
 
 <style>
-/* Tippy.js mention 主题（全局样式） */
+/* Tippy.js mention theme (global style) */
 .tippy-box[data-theme~='mention'] {
   background: transparent;
   border: none;

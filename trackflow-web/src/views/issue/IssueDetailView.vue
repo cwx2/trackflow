@@ -913,26 +913,24 @@ onBeforeRouteLeave((_to, _from, next) => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 8px 24px;
-  border-top: 1px solid var(--tf-border-light);
-  background: var(--tf-bg-body);
+  padding: 4px 24px;
 }
 
 .load-more-fixed .load-more-btn {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 6px 16px;
+  padding: 4px 12px;
   font-size: 12px;
-  color: var(--tf-text-secondary);
-  background: var(--tf-bg-surface);
-  border: 1px solid var(--tf-border);
-  border-radius: 6px;
+  color: var(--tf-text-tertiary);
+  background: none;
+  border: none;
+  border-radius: 3px;
   cursor: pointer;
   transition: background 150ms, color 150ms;
 }
 .load-more-fixed .load-more-btn:hover:not(:disabled) {
-  color: var(--tf-text-primary);
+  color: var(--tf-text-secondary);
   background: var(--tf-bg-hover);
 }
 .load-more-fixed .load-more-btn:disabled {
@@ -944,7 +942,7 @@ onBeforeRouteLeave((_to, _from, next) => {
   margin-left: 4px;
 }
 .load-more-fixed .load-more-filter-hint {
-  margin: 4px 0 0;
+  margin: 2px 0 0;
   font-size: 11px;
   color: var(--tf-text-tertiary);
   text-align: center;
@@ -952,8 +950,7 @@ onBeforeRouteLeave((_to, _from, next) => {
 
 .comment-input-fixed {
   flex-shrink: 0;
-  border-top: 1px solid var(--tf-border-light);
-  padding: 12px 24px 16px;
+  padding: 8px 24px 12px;
 }
 
 .comment-input-fixed :deep(.comment-input) {
