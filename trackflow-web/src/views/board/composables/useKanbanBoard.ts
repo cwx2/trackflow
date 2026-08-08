@@ -191,7 +191,7 @@ function getVisibleCustomFieldDetails(issue: BoardIssue) {
 
 /** 获取卡片可见的标签列表（根据卡片尺寸限制显示数量） */
 function getVisibleTags(issue: BoardIssue): Array<{ id: string; name: string; color?: string }> {
-  const tags = (issue as any).tags as Array<{ id: string; name: string; color?: string }> | undefined
+  const tags = issue.tags
   if (!tags || tags.length === 0) return []
   // M 尺寸最多显示 2 个标签，L/XL 最多 4 个
   const maxTags = cardSize.value === 'M' ? 2 : 4
@@ -527,7 +527,7 @@ function onPreviewGoDetail(issueId: string) {
 }
 
 /** Handle issue updates from preview panel (inline editing) */
-function onPreviewIssueUpdated(issueId: string, changes: Record<string, any>) {
+function onPreviewIssueUpdated(issueId: string, changes: Partial<Pick<IssueVO, 'statusId' | 'statusName' | 'statusColor' | 'priority' | 'assigneeId' | 'assigneeName' | 'sprintId' | 'sprintName' | 'issueType' | 'title' | 'version'>>) {
   const issue = issues.value.find(i => i.id === issueId)
   if (!issue) return
 
@@ -932,7 +932,7 @@ function groupByTag(allIssues: BoardIssue[]): SwimlaneRow[] {
   const noTag: BoardIssue[] = []
 
   for (const issue of allIssues) {
-    const tags = (issue as any).tags as Array<{ id: string; name: string }> | undefined
+    const tags = issue.tags
     if (!tags || tags.length === 0) {
       noTag.push(issue)
     } else {

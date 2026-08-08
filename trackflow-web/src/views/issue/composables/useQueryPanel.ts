@@ -277,8 +277,9 @@ export function useQueryPanel(options: QueryPanelOptions) {
         }
       }
       loadPanel()
-    } catch (e: any) {
-      Message.error(e.response?.data?.message || '更新失败')
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string } } }
+      Message.error(err.response?.data?.message || '更新失败')
     } finally {
       editQueryLoading.value = false
     }
@@ -309,8 +310,9 @@ export function useQueryPanel(options: QueryPanelOptions) {
         activeQueryName.value = renameQueryForm.name.trim()
       }
       loadPanel()
-    } catch (e: any) {
-      Message.error(e.response?.data?.message || '重命名失败')
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string } } }
+      Message.error(err.response?.data?.message || '重命名失败')
     } finally {
       renameQueryLoading.value = false
     }
@@ -492,8 +494,9 @@ export function useQueryPanel(options: QueryPanelOptions) {
         tag.favorited = true
       }
       await loadTags()
-    } catch (e: any) {
-      Message.error(e.response?.data?.message || '操作失败')
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string } } }
+      Message.error(err.response?.data?.message || '操作失败')
     }
   }
 
@@ -502,16 +505,17 @@ export function useQueryPanel(options: QueryPanelOptions) {
     try {
       panelLoadFailed.value = false
       const res = await queryApi.getPanel(activeProjectId.value || undefined, hideResolved.value)
-      const data = res.data || {}
+      const data = res.data || { pinned: [], queries: [] }
       savedQueries.value = [...(data.pinned || []), ...(data.queries || [])]
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (axios.isCancel(error)) return
       panelLoadFailed.value = true
       if (savedQueries.value.length === 0 || savedQueries.value[0]?.id === '1') {
         savedQueries.value = []
       }
-      if (error?.response?.status === 429) {
-        const retryAfter = parseInt(error.response.headers?.['retry-after'] || '60', 10)
+      const err = error as { response?: { status?: number; headers?: Record<string, string> } }
+      if (err?.response?.status === 429) {
+        const retryAfter = parseInt(err.response.headers?.['retry-after'] || '60', 10)
         setTimeout(() => loadPanel(), Math.min(retryAfter, 120) * 1000)
       }
     }
