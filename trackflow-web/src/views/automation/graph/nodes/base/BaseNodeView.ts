@@ -39,6 +39,8 @@ export abstract class BaseNodeView extends HtmlNode {
         model.setProperty(key, val)
       },
       onNodeClick: () => {
+        // 点击时将节点置顶（toFront）
+        model.graphModel?.toFront(model.id)
         // 触发外部点击事件（打开右侧配置面板）
         model.graphModel?.eventCenter?.emit('node:click', {
           data: { ...model.getData(), _openPanel: true }
