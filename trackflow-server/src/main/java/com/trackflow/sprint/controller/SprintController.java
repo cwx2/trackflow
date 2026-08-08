@@ -36,7 +36,9 @@ public class SprintController {
     public R<PageResult<SprintVO>> list(@PathVariable("projectId") Long projectId,
                                         @RequestParam(value = "page", defaultValue = "1") int page,
                                         @RequestParam(value = "pageSize", defaultValue = "20") int pageSize) {
-        return R.ok(sprintService.listByProjectWithStatsPage(projectId, page, pageSize));
+        var result = sprintService.listByProjectWithStatsPage(projectId, page, pageSize);
+        return R.ok(new PageResult<>(sprintConverter.statsRowToVOList(result.getList()),
+                result.getPagination().getTotal(), result.getPagination().getPage(), result.getPagination().getPageSize()));
     }
 
     /**
@@ -50,7 +52,9 @@ public class SprintController {
             @RequestParam(value = "projectId", required = false) Long projectId,
             @RequestParam(value = "page", defaultValue = "1") int page,
             @RequestParam(value = "pageSize", defaultValue = "50") int pageSize) {
-        return R.ok(sprintService.listAllWithStats(projectId, page, pageSize));
+        var result = sprintService.listAllWithStats(projectId, page, pageSize);
+        return R.ok(new PageResult<>(sprintConverter.statsRowToVOList(result.getList()),
+                result.getPagination().getTotal(), result.getPagination().getPage(), result.getPagination().getPageSize()));
     }
 
     @PostMapping("/api/v1/projects/{projectId}/sprints")
@@ -68,7 +72,7 @@ public class SprintController {
     @GetMapping("/api/v1/sprints/{id}")
     @PreAuthorize("@perm.checkSprint(#id, 'sprint:view')")
     public R<SprintVO> getById(@PathVariable("id") Long id) {
-        return R.ok(sprintService.getByIdWithStats(id));
+        return R.ok(sprintConverter.statsRowToVO(sprintService.getByIdWithStats(id)));
     }
 
     @PutMapping("/api/v1/sprints/{id}")

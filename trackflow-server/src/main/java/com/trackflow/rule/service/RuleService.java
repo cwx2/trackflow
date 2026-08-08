@@ -77,7 +77,7 @@ public class RuleService {
     }
 
     @Transactional
-    public RuleDefinitionVO createRule(SaveRuleDefinitionDTO dto) {
+    public RuleDefinition createRule(SaveRuleDefinitionDTO dto) {
         validateRuleDTO(dto);
 
         RuleDefinition rule = new RuleDefinition();
@@ -89,11 +89,11 @@ public class RuleService {
         ruleMapper.insert(rule);
         log.info("[Rule] 创建规则: id={}, name={}", rule.getId(), rule.getName());
 
-        return ruleConverter.toDefinitionVO(rule);
+        return rule;
     }
 
     @Transactional
-    public RuleDefinitionVO updateRule(Long id, SaveRuleDefinitionDTO dto) {
+    public RuleDefinition updateRule(Long id, SaveRuleDefinitionDTO dto) {
         validateRuleDTO(dto);
         RuleDefinition rule = getRuleOrThrow(id);
 
@@ -103,7 +103,7 @@ public class RuleService {
         ruleMapper.updateById(rule);
         log.info("[Rule] 更新规则: id={}, name={}", rule.getId(), rule.getName());
 
-        return ruleConverter.toDefinitionVO(rule);
+        return rule;
     }
 
     @Transactional

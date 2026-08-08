@@ -17,12 +17,12 @@ import com.trackflow.sprint.dto.UpdateSprintDTO;
 import com.trackflow.sprint.entity.Sprint;
 import com.trackflow.sprint.entity.SprintStatus;
 import com.trackflow.sprint.mapper.SprintMapper;
+import com.trackflow.sprint.mapper.result.SprintStatsRow;
 import com.trackflow.sprint.vo.CompletionPreviewVO;
 import com.trackflow.sprint.vo.CreationPreviewVO;
 import com.trackflow.sprint.vo.DeletionPreviewVO;
 import com.trackflow.sprint.vo.SprintCompleteResultVO;
 import com.trackflow.sprint.vo.SprintOverlapWarningVO;
-import com.trackflow.sprint.vo.SprintVO;
 import com.trackflow.project.service.ProjectActivityService;
 import com.trackflow.project.service.ProjectService;
 import lombok.RequiredArgsConstructor;
@@ -61,14 +61,14 @@ public class SprintService {
 
     /**
      * 查询项目的 Sprint 列表（带工单统计 + 状态推导）。
-     * MyBatis resultMap 直接映射为 SprintVO，然后根据日期推导状态一致性。
+     * MyBatis resultMap 直接映射为 SprintStatsRow，然后根据日期推导状态一致性。
      * 使用 readOnly 事务确保多步查询在同一个数据库快照中执行，避免并发修改导致数据不一致。
      */
     @Transactional(readOnly = true)
-    public List<SprintVO> listByProjectWithStats(Long projectId) {
-        List<SprintVO> sprints = sprintMapper.selectSprintsWithStats(projectId);
+    public List<SprintStatsRow> listByProjectWithStats(Long projectId) {
+        List<SprintStatsRow> sprints = sprintMapper.selectSprintsWithStats(projectId);
         LocalDate today = LocalDate.now();
-        for (SprintVO sprint : sprints) {
+        for (SprintStatsRow sprint : sprints) {
             computeStatusHint(sprint, today);
         }
         return sprints;
@@ -85,16 +85,16 @@ public class SprintService {
      * @return 分页结果
      */
     @Transactional(readOnly = true)
-    public com.trackflow.common.model.PageResult<SprintVO> listByProjectWithStatsPage(Long projectId, int page, int pageSize) {
+    public com.trackflow.common.model.PageResult<SprintStatsRow> listByProjectWithStatsPage(Long projectId, int page, int pageSize) {
         // 安全限制
         int safePage = Math.max(1, page);
         int safePageSize = Math.min(Math.max(1, pageSize), 200);
         int offset = (safePage - 1) * safePageSize;
 
         long total = sprintMapper.countByProjectId(projectId);
-        List<SprintVO> sprints = sprintMapper.selectSprintsWithStatsPage(projectId, offset, safePageSize);
+        List<SprintStatsRow> sprints = sprintMapper.selectSprintsWithStatsPage(projectId, offset, safePageSize);
         LocalDate today = LocalDate.now();
-        for (SprintVO sprint : sprints) {
+        for (SprintStatsRow sprint : sprints) {
             computeStatusHint(sprint, today);
         }
         return new com.trackflow.common.model.PageResult<>(sprints, total, safePage, safePageSize);
@@ -109,7 +109,7 @@ public class SprintService {
      * @param pageSize  每页数量
      */
     @Transactional(readOnly = true)
-    public com.trackflow.common.model.PageResult<SprintVO> listAllWithStats(Long projectId, int page, int pageSize) {
+    public com.trackflow.common.model.PageResult<SprintStatsRow> listAllWithStats(Long projectId, int page, int pageSize) {
         int safePage = Math.max(1, page);
         int safePageSize = Math.min(Math.max(1, pageSize), 200);
         int offset = (safePage - 1) * safePageSize;
@@ -130,9 +130,9 @@ public class SprintService {
         }
 
         long total = sprintMapper.countByProjectIds(projectIds);
-        List<SprintVO> sprints = sprintMapper.selectSprintsWithStatsMultiProject(projectIds, offset, safePageSize);
+        List<SprintStatsRow> sprints = sprintMapper.selectSprintsWithStatsMultiProject(projectIds, offset, safePageSize);
         LocalDate today = LocalDate.now();
-        for (SprintVO sprint : sprints) {
+        for (SprintStatsRow sprint : sprints) {
             computeStatusHint(sprint, today);
         }
         return new com.trackflow.common.model.PageResult<>(sprints, total, safePage, safePageSize);
@@ -141,7 +141,7 @@ public class SprintService {
     /**
      * 根据 Sprint 的 status 和日期范围，推导状态是否合理并设置提示信息。
      */
-    private void computeStatusHint(SprintVO sprint, LocalDate today) {
+    private void computeStatusHint(SprintStatsRow sprint, LocalDate today) {
         String status = sprint.getStatus();
         LocalDate startDate = sprint.getStartDate();
         LocalDate endDate = sprint.getEndDate();
@@ -182,11 +182,11 @@ public class SprintService {
      * 使用 readOnly 事务确保统计数据与 Sprint 基本信息在同一个快照中获取。
      */
     @Transactional(readOnly = true)
-    public SprintVO getByIdWithStats(Long id) {
-        SprintVO vo = sprintMapper.selectSprintWithStats(id);
-        if (vo == null) throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Sprint not found");
-        computeStatusHint(vo, LocalDate.now());
-        return vo;
+    public SprintStatsRow getByIdWithStats(Long id) {
+        SprintStatsRow row = sprintMapper.selectSprintWithStats(id);
+        if (row == null) throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Sprint not found");
+        computeStatusHint(row, LocalDate.now());
+        return row;
     }
 
     /**

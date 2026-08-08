@@ -280,9 +280,10 @@ public class IssueCommentService {
 
     /**
      * 获取评论列表 —— 单次 JOIN 查询（含可见性过滤）
+     * 返回已过滤的 CommentRow 列表（业务逻辑：权限过滤），VO 转换交给 Controller。
      */
     @Transactional(readOnly = true)
-    public List<IssueCommentVO> listCommentsWithUser(Long issueId) {
+    public List<CommentRow> listVisibleComments(Long issueId) {
         List<CommentRow> rows = issueMapper.selectCommentsWithUser(issueId);
 
         Long currentUserId = SecurityUtils.getCurrentUserId();
@@ -291,9 +292,18 @@ public class IssueCommentService {
         Issue issue = getIssueById(issueId);
         boolean canManageComments = permissionService.hasPermission(currentUserId, issue.getProjectId(), "issue:manage_comments");
 
-        List<CommentRow> visibleRows = rows.stream()
+        return rows.stream()
                 .filter(row -> isCommentVisibleToUser(row, currentUserId, currentUserGroupIds, canManageComments))
                 .toList();
+    }
+
+    /**
+     * @deprecated 仅为向后兼容保留，新代码应使用 {@link #listVisibleComments(Long)} + Controller 层转换
+     */
+    @Deprecated
+    @Transactional(readOnly = true)
+    public List<IssueCommentVO> listCommentsWithUser(Long issueId) {
+        List<CommentRow> visibleRows = listVisibleComments(issueId);
 
         Set<Long> allGroupIds = visibleRows.stream()
                 .filter(row -> row.getVisibleToGroupIds() != null && !row.getVisibleToGroupIds().isEmpty())

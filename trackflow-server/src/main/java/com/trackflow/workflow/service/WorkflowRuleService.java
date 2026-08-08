@@ -21,7 +21,6 @@ import com.trackflow.workflow.dto.WorkflowRuleImportDTO;
 import com.trackflow.workflow.entity.WorkflowRule;
 import com.trackflow.workflow.mapper.WorkflowRuleMapper;
 import com.trackflow.workflow.vo.WorkflowRuleImportResultVO;
-import com.trackflow.workflow.vo.WorkflowRuleVO;
 import com.trackflow.workflow.vo.WorkflowRuleValidationVO;
 import com.trackflow.workflow.vo.WorkflowRuleValidationVO.ValidationError;
 import lombok.RequiredArgsConstructor;
@@ -57,7 +56,7 @@ public class WorkflowRuleService {
     /**
      * 查询项目规则列表（含全局规则）
      */
-    public List<WorkflowRuleVO> listRules(Long projectId) {
+    public List<WorkflowRule> listRules(Long projectId) {
         List<WorkflowRule> rules;
         if (projectId != null && projectId > 0) {
             rules = ruleMapper.findByProjectIncludeGlobal(projectId);
@@ -70,19 +69,19 @@ public class WorkflowRuleService {
                             .orderByAsc(WorkflowRule::getId)
             );
         }
-        return workflowRuleConverter.toVOList(rules);
+        return rules;
     }
 
     /**
      * 获取单个规则（带权限校验）
      */
-    public WorkflowRuleVO getRule(Long id) {
+    public WorkflowRule getRule(Long id) {
         WorkflowRule rule = ruleMapper.selectById(id);
         if (rule == null) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "规则不存在");
         }
         checkRuleViewPermission(rule);
-        return workflowRuleConverter.toVO(rule);
+        return rule;
     }
 
     /** 合法的规则类型 */
@@ -93,7 +92,7 @@ public class WorkflowRuleService {
      * 创建规则
      */
     @Transactional(rollbackFor = Exception.class)
-    public WorkflowRuleVO createRule(Long projectId, WorkflowRuleDTO dto) {
+    public WorkflowRule createRule(Long projectId, WorkflowRuleDTO dto) {
         String ruleType = dto.getRuleType() != null ? dto.getRuleType() : "on_change";
         validateRuleTypeAndFields(ruleType, dto);
         validateJson(dto.getConditionJson(), "条件");
@@ -124,14 +123,14 @@ public class WorkflowRuleService {
         ruleMapper.insert(rule);
         log.info("[WorkflowRule] Created {} rule '{}' (id={}) for project={}",
                 ruleType, rule.getName(), rule.getId(), rule.getProjectId());
-        return workflowRuleConverter.toVO(rule);
+        return rule;
     }
 
     /**
      * 更新规则
      */
     @Transactional(rollbackFor = Exception.class)
-    public WorkflowRuleVO updateRule(Long id, WorkflowRuleDTO dto) {
+    public WorkflowRule updateRule(Long id, WorkflowRuleDTO dto) {
         WorkflowRule rule = ruleMapper.selectById(id);
         if (rule == null) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "规则不存在");
@@ -169,7 +168,7 @@ public class WorkflowRuleService {
 
         ruleMapper.updateById(rule);
         log.info("[WorkflowRule] Updated rule '{}' (id={})", rule.getName(), rule.getId());
-        return workflowRuleConverter.toVO(rule);
+        return rule;
     }
 
     /**
@@ -190,7 +189,7 @@ public class WorkflowRuleService {
      * 切换规则启用/禁用
      */
     @Transactional(rollbackFor = Exception.class)
-    public WorkflowRuleVO toggleRule(Long id) {
+    public WorkflowRule toggleRule(Long id) {
         WorkflowRule rule = ruleMapper.selectById(id);
         if (rule == null) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "规则不存在");
@@ -214,7 +213,7 @@ public class WorkflowRuleService {
         rule.setUpdatedAt(LocalDateTime.now());
         ruleMapper.updateById(rule);
         log.info("[WorkflowRule] Toggled rule '{}' (id={}) enabled={}", rule.getName(), id, rule.getEnabled());
-        return workflowRuleConverter.toVO(rule);
+        return rule;
     }
 
     /**
@@ -399,9 +398,8 @@ public class WorkflowRuleService {
     /**
      * 获取指定工单可用的 Action Rule 列表（Guard 条件通过的）。
      */
-    public List<WorkflowRuleVO> getAvailableActionRules(Long issueId, Long projectId) {
-        List<WorkflowRule> available = ruleEngine.getAvailableActionRules(issueId, projectId);
-        return workflowRuleConverter.toVOList(available);
+    public List<WorkflowRule> getAvailableActionRules(Long issueId, Long projectId) {
+        return ruleEngine.getAvailableActionRules(issueId, projectId);
     }
 
     /**

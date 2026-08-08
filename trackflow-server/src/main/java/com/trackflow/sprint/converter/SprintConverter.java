@@ -3,6 +3,7 @@ package com.trackflow.sprint.converter;
 import com.trackflow.common.converter.BaseConverter;
 import com.trackflow.sprint.entity.Sprint;
 import com.trackflow.sprint.entity.SprintStatus;
+import com.trackflow.sprint.mapper.result.SprintStatsRow;
 import com.trackflow.sprint.vo.SprintVO;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
@@ -31,6 +32,52 @@ public interface SprintConverter extends BaseConverter {
     SprintVO toVO(Sprint entity);
 
     List<SprintVO> toVOList(List<Sprint> entities);
+
+    /**
+     * 将 Mapper 查询结果（含统计数据）转为 API 响应 VO。
+     * SprintStatsRow 与 SprintVO 字段一一对应，直接映射。
+     */
+    default SprintVO statsRowToVO(SprintStatsRow row) {
+        if (row == null) {
+            return null;
+        }
+        SprintVO vo = new SprintVO();
+        vo.setId(row.getId());
+        vo.setProjectId(row.getProjectId());
+        vo.setProjectName(row.getProjectName());
+        vo.setProjectKey(row.getProjectKey());
+        vo.setName(row.getName());
+        vo.setGoal(row.getGoal());
+        vo.setStatus(row.getStatus());
+        vo.setStartDate(row.getStartDate());
+        vo.setEndDate(row.getEndDate());
+        vo.setCreatedAt(row.getCreatedAt());
+        vo.setStatusHint(row.getStatusHint());
+        vo.setOverdue(row.isOverdue());
+        vo.setTotalIssues(row.getTotalIssues());
+        vo.setDoneIssues(row.getDoneIssues());
+        vo.setInProgressIssues(row.getInProgressIssues());
+        vo.setTodoIssues(row.getTodoIssues());
+        vo.setOverdueIssues(row.getOverdueIssues());
+        vo.setUnassignedIssues(row.getUnassignedIssues());
+        vo.setStartedAt(row.getStartedAt());
+        vo.setStartScopeHours(row.getStartScopeHours());
+        vo.setStartScopeIssues(row.getStartScopeIssues());
+        vo.setTotalEstimatedHours(row.getTotalEstimatedHours());
+        vo.setCompletedEstimatedHours(row.getCompletedEstimatedHours());
+        return vo;
+    }
+
+    default List<SprintVO> statsRowToVOList(List<SprintStatsRow> rows) {
+        if (rows == null) {
+            return null;
+        }
+        List<SprintVO> result = new java.util.ArrayList<>(rows.size());
+        for (SprintStatsRow row : rows) {
+            result.add(statsRowToVO(row));
+        }
+        return result;
+    }
 
     default String sprintStatusToString(SprintStatus status) {
         return status != null ? status.getValue() : null;

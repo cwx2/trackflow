@@ -1,6 +1,7 @@
 package com.trackflow.workflow.controller;
 
 import com.trackflow.common.model.R;
+import com.trackflow.workflow.converter.WorkflowRuleConverter;
 import com.trackflow.workflow.dto.WorkflowRuleDTO;
 import com.trackflow.workflow.dto.WorkflowRuleExportDTO;
 import com.trackflow.workflow.dto.WorkflowRuleImportDTO;
@@ -27,6 +28,7 @@ public class WorkflowRuleController {
 
     private final WorkflowRuleService ruleService;
     private final ScheduledRuleService scheduledRuleService;
+    private final WorkflowRuleConverter workflowRuleConverter;
 
     /**
      * 获取项目规则列表（含全局规则）
@@ -36,7 +38,7 @@ public class WorkflowRuleController {
     @PreAuthorize("T(com.trackflow.workflow.WorkflowScope).isGlobal(#projectId) ? @perm.checkGlobal('system:admin') : @perm.check(#projectId, 'project:manage_workflow')")
     public R<List<WorkflowRuleVO>> listRules(@PathVariable("projectId") Long projectId) {
         Long effectiveProjectId = com.trackflow.workflow.WorkflowScope.fromApi(projectId);
-        return R.ok(ruleService.listRules(effectiveProjectId));
+        return R.ok(workflowRuleConverter.toVOList(ruleService.listRules(effectiveProjectId)));
     }
 
     /**
@@ -45,7 +47,7 @@ public class WorkflowRuleController {
     @GetMapping("/workflow-rules/{id}")
     @PreAuthorize("isAuthenticated()")
     public R<WorkflowRuleVO> getRule(@PathVariable("id") Long id) {
-        return R.ok(ruleService.getRule(id));
+        return R.ok(workflowRuleConverter.toVO(ruleService.getRule(id)));
     }
 
     /**
@@ -56,7 +58,7 @@ public class WorkflowRuleController {
     public R<WorkflowRuleVO> createRule(@PathVariable("projectId") Long projectId,
                                          @Valid @RequestBody WorkflowRuleDTO dto) {
         Long effectiveProjectId = com.trackflow.workflow.WorkflowScope.fromApi(projectId);
-        return R.ok(ruleService.createRule(effectiveProjectId, dto));
+        return R.ok(workflowRuleConverter.toVO(ruleService.createRule(effectiveProjectId, dto)));
     }
 
     /**
@@ -66,7 +68,7 @@ public class WorkflowRuleController {
     @PreAuthorize("isAuthenticated()")
     public R<WorkflowRuleVO> updateRule(@PathVariable("id") Long id,
                                          @Valid @RequestBody WorkflowRuleDTO dto) {
-        return R.ok(ruleService.updateRule(id, dto));
+        return R.ok(workflowRuleConverter.toVO(ruleService.updateRule(id, dto)));
     }
 
     /**
@@ -85,7 +87,7 @@ public class WorkflowRuleController {
     @PatchMapping("/workflow-rules/{id}/toggle")
     @PreAuthorize("isAuthenticated()")
     public R<WorkflowRuleVO> toggleRule(@PathVariable("id") Long id) {
-        return R.ok(ruleService.toggleRule(id));
+        return R.ok(workflowRuleConverter.toVO(ruleService.toggleRule(id)));
     }
 
     /**
@@ -142,7 +144,7 @@ public class WorkflowRuleController {
             return R.ok(List.of());
         }
         var rules = ruleService.getAvailableActionRules(issueId, issue.getProjectId());
-        return R.ok(rules);
+        return R.ok(workflowRuleConverter.toVOList(rules));
     }
 
     /**

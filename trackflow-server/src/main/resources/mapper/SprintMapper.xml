@@ -2,8 +2,8 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.trackflow.sprint.mapper.SprintMapper">
 
-    <!-- SprintVO 的 resultMap：处理 Long→String 的 ID 转换 + 统计字段 -->
-    <resultMap id="sprintWithStatsMap" type="com.trackflow.sprint.vo.SprintVO">
+    <!-- SprintStatsRow 的 resultMap：处理 Long→String 的 ID 转换 + 统计字段 -->
+    <resultMap id="sprintWithStatsMap" type="com.trackflow.sprint.mapper.result.SprintStatsRow">
         <id property="id" column="id" javaType="java.lang.String"/>
         <result property="projectId" column="project_id" javaType="java.lang.String"/>
         <result property="projectName" column="project_name"/>

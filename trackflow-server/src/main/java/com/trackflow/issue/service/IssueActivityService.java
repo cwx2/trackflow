@@ -82,9 +82,29 @@ public class IssueActivityService {
     }
 
     /**
-     * 获取活动列表 —— 单次 JOIN 查询（消除 N+1）
-     * assignee 字段的 old/new value 在 SQL 层自动解析为用户显示名
+     * 获取活动记录的原始行数据 —— 单次 JOIN 查询（消除 N+1）。
+     * Service 层返回 Row 类型，VO 转换交给 Controller 层。
      */
+    @Transactional(readOnly = true)
+    public List<ActivityRow> listActivityRows(Long issueId) {
+        return issueMapper.selectActivitiesWithUser(issueId);
+    }
+
+    /**
+     * 获取活动记录的原始行数据（分页） —— 按时间倒序。
+     */
+    @Transactional(readOnly = true)
+    public PageResult<ActivityRow> listActivityRowsPaged(Long issueId, int page, int pageSize) {
+        int offset = (page - 1) * pageSize;
+        List<ActivityRow> rows = issueMapper.selectActivitiesWithUserPaged(issueId, offset, pageSize);
+        long total = issueMapper.countActivities(issueId);
+        return new PageResult<>(rows, total, page, pageSize);
+    }
+
+    /**
+     * @deprecated 仅为向后兼容保留，新代码应使用 {@link #listActivityRows(Long)} + Controller 层转换
+     */
+    @Deprecated
     @Transactional(readOnly = true)
     public List<IssueActivityVO> listActivitiesWithUser(Long issueId) {
         List<ActivityRow> rows = issueMapper.selectActivitiesWithUser(issueId);
@@ -92,8 +112,9 @@ public class IssueActivityService {
     }
 
     /**
-     * 获取活动列表（分页） —— 按时间倒序，支持加载更多
+     * @deprecated 仅为向后兼容保留，新代码应使用 {@link #listActivityRowsPaged(Long, int, int)} + Controller 层转换
      */
+    @Deprecated
     @Transactional(readOnly = true)
     public PageResult<IssueActivityVO> listActivitiesWithUserPaged(Long issueId, int page, int pageSize) {
         int offset = (page - 1) * pageSize;

@@ -2,6 +2,7 @@ package com.trackflow.rule.controller;
 
 import com.trackflow.common.model.PageResult;
 import com.trackflow.common.model.R;
+import com.trackflow.rule.converter.RuleConverter;
 import com.trackflow.rule.dto.CreateExecutionLogDTO;
 import com.trackflow.rule.dto.RuleExecutionLogQuery;
 import com.trackflow.rule.dto.SaveRuleDefinitionDTO;
@@ -29,6 +30,7 @@ import java.util.Map;
 public class RuleController {
 
     private final RuleService ruleService;
+    private final RuleConverter ruleConverter;
 
     // ==================== 规则定义管理 ====================
 
@@ -48,14 +50,14 @@ public class RuleController {
     @PostMapping
     @PreAuthorize("@perm.checkGlobal('rule:manage')")
     public R<RuleDefinitionVO> createRule(@RequestBody @Valid SaveRuleDefinitionDTO dto) {
-        return R.ok(ruleService.createRule(dto));
+        return R.ok(ruleConverter.toDefinitionVO(ruleService.createRule(dto)));
     }
 
     @PutMapping("/{id}")
     @PreAuthorize("@perm.checkGlobal('rule:manage')")
     public R<RuleDefinitionVO> updateRule(@PathVariable("id") Long id,
                                           @RequestBody @Valid SaveRuleDefinitionDTO dto) {
-        return R.ok(ruleService.updateRule(id, dto));
+        return R.ok(ruleConverter.toDefinitionVO(ruleService.updateRule(id, dto)));
     }
 
     @DeleteMapping("/{id}")
