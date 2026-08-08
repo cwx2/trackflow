@@ -34,8 +34,11 @@ const FALLBACK_LABELS: Record<string, string> = {
 /** 回退颜色映射（API 不可用时） — 引用 issueColors 单一来源 */
 import { ISSUE_TYPE_COLORS as FALLBACK_COLORS } from '@/utils/issueColors'
 
-/** 默认工单类型选项（API 不可用时的回退） */
-const FALLBACK_OPTIONS: IssueTypeOption[] = [
+/** 默认工单类型颜色回退值 */
+export const DEFAULT_ISSUE_TYPE_COLOR = FALLBACK_COLORS['Task'] || '#6366f1'
+
+/** 默认工单类型选项（API 不可用时的回退，也作为初始值） */
+export const DEFAULT_ISSUE_TYPE_OPTIONS: IssueTypeOption[] = [
   { value: 'Bug', label: '缺陷', color: FALLBACK_COLORS['Bug'], description: '软件缺陷，需要修复', isDefault: false },
   { value: 'Task', label: '任务', color: FALLBACK_COLORS['Task'], description: '常规任务', isDefault: true },
   { value: 'Feature', label: '需求', color: FALLBACK_COLORS['Feature'], description: '新功能需求', isDefault: false },
@@ -70,7 +73,7 @@ export async function loadIssueTypeOptions(projectId: string): Promise<IssueType
     console.warn('[useIssueTypeOptions] 加载工单类型选项失败，使用默认值', e)
   }
 
-  return FALLBACK_OPTIONS
+  return DEFAULT_ISSUE_TYPE_OPTIONS
 }
 
 /**
@@ -124,13 +127,13 @@ export function getIssueTypeLabel(issueType: string | null | undefined, projectI
  * 组合式函数：响应式的工单类型选项
  */
 export function useIssueTypeOptions(projectIdRef: { value: string | null | undefined }) {
-  const options = ref<IssueTypeOption[]>(FALLBACK_OPTIONS)
+  const options = ref<IssueTypeOption[]>(DEFAULT_ISSUE_TYPE_OPTIONS)
   const loading = ref(false)
 
   async function refresh() {
     const projectId = projectIdRef.value
     if (!projectId) {
-      options.value = FALLBACK_OPTIONS
+      options.value = DEFAULT_ISSUE_TYPE_OPTIONS
       return
     }
     loading.value = true

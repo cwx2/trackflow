@@ -40,8 +40,11 @@ const FALLBACK_LABELS: Record<string, string> = {
 /** 回退颜色映射（API 不可用时） — 引用 issueColors 单一来源 */
 import { PRIORITY_COLORS as FALLBACK_COLORS } from '@/utils/issueColors'
 
-/** 默认优先级选项（API 不可用时的回退） */
-const FALLBACK_OPTIONS: PriorityOption[] = [
+/** 默认优先级颜色回退值 */
+export const DEFAULT_PRIORITY_COLOR = FALLBACK_COLORS['普通'] || '#6366f1'
+
+/** 默认优先级选项（API 不可用时的回退，也作为初始值） */
+export const DEFAULT_PRIORITY_OPTIONS: PriorityOption[] = [
   { value: '阻塞', label: '阻塞', color: FALLBACK_COLORS['阻塞'], description: '阻塞性问题，必须立即解决', isDefault: false },
   { value: '紧急', label: '紧急', color: FALLBACK_COLORS['紧急'], description: '严重问题，影响核心功能', isDefault: false },
   { value: '高', label: '高', color: FALLBACK_COLORS['高'], description: '高优先级，需要尽快处理', isDefault: false },
@@ -76,7 +79,7 @@ export async function loadPriorityOptions(projectId: string): Promise<PriorityOp
     console.warn('[usePriorityOptions] 加载优先级选项失败，使用默认值', e)
   }
 
-  return FALLBACK_OPTIONS
+  return DEFAULT_PRIORITY_OPTIONS
 }
 
 /**
@@ -112,13 +115,13 @@ export function getPriorityColor(priority: string | null | undefined, projectId?
  * 组合式函数：响应式的优先级选项
  */
 export function usePriorityOptions(projectIdRef: { value: string | null | undefined }) {
-  const options = ref<PriorityOption[]>(FALLBACK_OPTIONS)
+  const options = ref<PriorityOption[]>(DEFAULT_PRIORITY_OPTIONS)
   const loading = ref(false)
 
   async function refresh() {
     const projectId = projectIdRef.value
     if (!projectId) {
-      options.value = FALLBACK_OPTIONS
+      options.value = DEFAULT_PRIORITY_OPTIONS
       return
     }
     loading.value = true

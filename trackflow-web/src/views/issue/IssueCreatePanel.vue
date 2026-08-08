@@ -718,7 +718,8 @@ import { loadIssueTypeOptions } from './composables/useIssueTypeOptions'
 import { onSessionEvent, saveSessionRecoveryDraft } from '@/utils/sessionEvents'
 import RichEditor from './components/RichEditor.vue'
 import { localizeLinkType, localizeStatusName } from '@/utils/fieldLabels'
-import { DEFAULT_PRIORITY_OPTIONS, DEFAULT_ISSUE_TYPE_OPTIONS, DEFAULT_PRIORITY_COLOR, DEFAULT_ISSUE_TYPE_COLOR } from '@/utils/issueColors'
+import { DEFAULT_PRIORITY_OPTIONS, DEFAULT_PRIORITY_COLOR } from '@/composables/usePriorityOptions'
+import { DEFAULT_ISSUE_TYPE_OPTIONS, DEFAULT_ISSUE_TYPE_COLOR } from './composables/useIssueTypeOptions'
 import type { CustomFieldDefinitionVO, IssueTemplateVO, FilterRule, IssueStatusVO, IssueVO as SimilarIssue } from '@/api/types'
 
 const props = defineProps<{
