@@ -18,7 +18,10 @@ import java.util.Map;
  * 监听 NotificationPushEvent，在事务提交后通过 WebSocket 推送轻量事件到指定用户。
  * 使用与 IssueRealtimeListener 相同的 @TransactionalEventListener(AFTER_COMMIT) + @Async 模式。
  * <p>
- * 推送 topic: /topic/users/{userId}/notifications
+ * 使用 convertAndSendToUser 实现用户级隔离推送：
+ * - 服务端按 Principal.getName()（用户 DB ID）路由，只推送给目标用户的连接
+ * - 客户端订阅 /user/queue/notifications（无需在路径中暴露 userId）
+ * - 其他用户无法订阅他人的通知队列
  */
 @Slf4j
 @Component
@@ -39,8 +42,9 @@ public class NotificationWebSocketListener {
             payload.put("resourceId", event.resourceId() != null ? event.resourceId().toString() : null);
             payload.put("timestamp", LocalDateTime.now().toString());
 
-            messagingTemplate.convertAndSend(
-                    "/topic/users/" + event.userId() + "/notifications",
+            messagingTemplate.convertAndSendToUser(
+                    event.userId().toString(),
+                    "/queue/notifications",
                     (Object) payload
             );
             log.debug("[Notification] WebSocket 推送: userId={}, type={}", event.userId(), event.type());

@@ -303,14 +303,9 @@ export function useNotification() {
       const client = getClient()
       if (!client?.connected) return
 
-      // 使用用户 DB ID 订阅专属通知 topic（与 IssueRealtimeListener 使用相同的 /topic 推送模式）
-      const userId = authStore.user?.userId
-      if (!userId) {
-        console.warn('[Notification] No userId available, cannot subscribe to notifications')
-        return
-      }
-
-      wsSubscription = client.subscribe(`/topic/users/${userId}/notifications`, (message) => {
+      // 使用 /user/queue/notifications — Spring 按 Principal 自动路由到当前用户
+      // 无需在路径中暴露 userId，其他用户无法订阅此队列
+      wsSubscription = client.subscribe(`/user/queue/notifications`, (message) => {
         try {
           const event = JSON.parse(message.body)
           if (event.event === 'NEW_NOTIFICATION') {
