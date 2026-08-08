@@ -1115,13 +1115,14 @@ onUnmounted(() => {
 .canvas-world-watermark {
   transform: translate(-50%, -50%);
   white-space: nowrap;
-  font-size: clamp(160px, 12vw, 220px);
+  font-size: clamp(96px, 8vw, 144px);
   line-height: 1;
-  font-weight: 900;
-  letter-spacing: 0.08em;
+  font-weight: 800;
+  letter-spacing: 0.12em;
   /* 字体主体与画布同色，只让槽口边缘显形 */
   color: var(--wf-canvas-bg);
-  -webkit-text-stroke: 1.25px var(--wf-canvas-watermark-edge);
+  opacity: 0.55;
+  -webkit-text-stroke: 1px var(--wf-canvas-watermark-edge);
   text-shadow:
     -3px -3px 2px var(--wf-canvas-watermark-shadow),
     3px 3px 2px var(--wf-canvas-watermark-highlight),
@@ -1284,6 +1285,12 @@ onUnmounted(() => {
   background: var(--tf-bg-surface);
   border: 1px solid var(--tf-border);
   border-radius: 6px;
+}
+
+/* LogicFlow 的选中态没有传入 Vue 节点属性，在画布层补上可感知的选择反馈。 */
+:deep(.lf-node-selected) .node-card {
+  border-color: color-mix(in srgb, var(--node-color) 76%, var(--wf-node-border));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--node-color) 18%, transparent), var(--wf-node-shadow-hover);
 }
 
 /* ── 节点配置面板：字段描述文字 ─────────────────────── */

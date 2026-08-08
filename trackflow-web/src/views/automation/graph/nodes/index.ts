@@ -6,7 +6,8 @@
  */
 import { BaseNodeView } from './base/BaseNodeView'
 import { BaseNodeModel } from './base/BaseNodeModel'
-import { HtmlNode, HtmlNodeModel } from '@logicflow/core'
+import { HtmlNodeModel } from '@logicflow/core'
+import TerminalNode from './base/TerminalNode.vue'
 
 // ─── 通用工作流节点（使用 NodeCard.vue）─────────────────────────────────────
 
@@ -24,38 +25,31 @@ export const WorkflowNodeDef = {
   model: WorkflowNodeModel,
 }
 
-// ─── Start 节点（绿色圆形，只有输出端口）────────────────────────────────────
+// ─── 开始 / 结束节点（紧凑的流程端点，与普通节点保持同一视觉语言） ─────────
 
-class StartView extends HtmlNode {
-  private _mounted = false
-  getText() { return null }
+class TerminalNodeView extends BaseNodeView {
+  getVueComponent() { return TerminalNode }
 
-  setHtml(rootEl: SVGForeignObjectElement) {
-    if (this._mounted) return
-    this._mounted = true
-    const el = document.createElement('div')
-    el.style.cssText = 'width:80px;height:80px;'
-    rootEl.appendChild(el)
-    el.innerHTML = `
-      <div style="width:80px;height:80px;border-radius:50%;
-        background:var(--wf-node-bg);border:2px solid var(--wf-status-success);
-        display:flex;flex-direction:column;align-items:center;
-        justify-content:center;cursor:pointer;box-shadow:var(--wf-glow-success);
-        transition:box-shadow 200ms;">
-        <span style="font-size:22px;">&#9654;</span>
-        <span style="font-size:10px;color:var(--wf-status-success);margin-top:2px;font-weight:600;">开始</span>
-      </div>`
+  getInitialProps(model: any) {
+    return {
+      ...super.getInitialProps(model),
+      variant: this.nodeType,
+    }
   }
+}
+
+class StartView extends TerminalNodeView {
+  get nodeType() { return 'start' as const }
 }
 
 class StartModel extends HtmlNodeModel {
   initNodeData(data: any) {
     super.initNodeData(data)
-    this.width = 80; this.height = 80
+    this.width = 112; this.height = 64
     this.text = { value: '', x: 0, y: 0, draggable: false, editable: false }
   }
   getDefaultAnchor() {
-    return [{ id: `${this.id}-out-trigger`, x: this.x + 40, y: this.y, type: 'output', edgeAddable: true, connectable: true }]
+    return [{ id: `${this.id}-out-trigger`, x: this.x + 56, y: this.y, type: 'output', edgeAddable: true, connectable: true }]
   }
   getOutlineStyle() {
     const s = super.getOutlineStyle()
@@ -66,39 +60,18 @@ class StartModel extends HtmlNodeModel {
 
 export const StartNodeDef = { type: 'start', view: StartView, model: StartModel }
 
-// ─── End 节点（红色圆形，只有输入端口）──────────────────────────────────────
-
-class EndView extends HtmlNode {
-  private _mounted = false
-  getText() { return null }
-
-  setHtml(rootEl: SVGForeignObjectElement) {
-    if (this._mounted) return
-    this._mounted = true
-    const el = document.createElement('div')
-    el.style.cssText = 'width:80px;height:80px;'
-    rootEl.appendChild(el)
-    el.innerHTML = `
-      <div style="width:80px;height:80px;border-radius:50%;
-        background:var(--wf-node-bg);border:2px solid var(--wf-status-failed);
-        display:flex;flex-direction:column;align-items:center;
-        justify-content:center;cursor:pointer;
-        box-shadow:0 0 0 2px var(--wf-status-failed),0 0 16px rgba(239,68,68,0.2);
-        transition:box-shadow 200ms;">
-        <span style="font-size:22px;">&#9209;</span>
-        <span style="font-size:10px;color:var(--wf-status-failed);margin-top:2px;font-weight:600;">结束</span>
-      </div>`
-  }
+class EndView extends TerminalNodeView {
+  get nodeType() { return 'end' as const }
 }
 
 class EndModel extends HtmlNodeModel {
   initNodeData(data: any) {
     super.initNodeData(data)
-    this.width = 80; this.height = 80
+    this.width = 112; this.height = 64
     this.text = { value: '', x: 0, y: 0, draggable: false, editable: false }
   }
   getDefaultAnchor() {
-    return [{ id: `${this.id}-in-result`, x: this.x - 40, y: this.y, type: 'input', edgeAddable: true, connectable: true }]
+    return [{ id: `${this.id}-in-result`, x: this.x - 56, y: this.y, type: 'input', edgeAddable: true, connectable: true }]
   }
   getOutlineStyle() {
     const s = super.getOutlineStyle()

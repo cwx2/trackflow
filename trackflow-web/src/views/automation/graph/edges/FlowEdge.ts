@@ -42,9 +42,9 @@ export function checkTypeCompatibility(sourceType: string, targetType: string): 
 
 // ─── 常量 ─────────────────────────────────────────────────────────────────────
 
-const STROKE_WIDTH_NORMAL  = '2'
+const STROKE_WIDTH_NORMAL  = '1.75'
 const STROKE_WIDTH_RUNNING = '2.5'
-const OPACITY_NORMAL       = '0.75'
+const OPACITY_NORMAL       = '0.58'
 const OPACITY_RUNNING      = '1'
 const OPACITY_DOT_NORMAL   = '0.8'
 
@@ -85,12 +85,30 @@ export class FlowEdgeView extends BezierEdge {
     const status     = props?.flowStatus || 'idle'
     const typeCompat: TypeCompat = props?.typeCompat || 'compatible'
     const isRunning  = status === 'running'
+    const isSelected = Boolean(model?.isSelected)
 
     const pathD  = buildPathD(model)
-    const color  = resolveEdgeColor(status, typeCompat)
+    const color  = resolveEdgeColor(status, typeCompat, isSelected)
     const isDashed = typeCompat === 'warning' || typeCompat === 'incompatible'
     const { startPoint } = model
     const pathId = `flow-path-${model.id}`
+
+    const hitArea = h('path', {
+      d: pathD,
+      fill: 'none',
+      stroke: 'transparent',
+      'stroke-width': '14',
+      'pointer-events': 'stroke',
+    })
+
+    const selectionHalo = isSelected ? h('path', {
+      d: pathD,
+      fill: 'none',
+      stroke: color,
+      'stroke-width': '6',
+      'stroke-linecap': 'round',
+      opacity: '0.16',
+    }) : null
 
     const mainPath = h('path', {
       d: pathD,
@@ -122,7 +140,7 @@ export class FlowEdgeView extends BezierEdge {
       )
     }
 
-    return h('g', {}, [mainPath, startDot, warningBadge, ...particles].filter(Boolean))
+    return h('g', {}, [hitArea, selectionHalo, mainPath, startDot, warningBadge, ...particles].filter(Boolean))
   }
 
   /** 末端箭头：小实心三角（9×8） */
@@ -132,7 +150,7 @@ export class FlowEdgeView extends BezierEdge {
     const status     = props?.flowStatus || 'idle'
     const typeCompat: TypeCompat = props?.typeCompat || 'compatible'
     const isRunning  = status === 'running'
-    const color      = resolveEdgeColor(status, typeCompat)
+    const color      = resolveEdgeColor(status, typeCompat, Boolean(model?.isSelected))
 
     return h('polygon', {
       points: '5,0 -4,4 -4,-4',
@@ -149,11 +167,12 @@ export class FlowEdgeView extends BezierEdge {
 // ─── 纯函数工具（无副作用，可单元测试） ────────────────────────────────────────
 
 /** 根据运行状态和类型兼容性计算边颜色（CSS 变量优先，硬编码兜底） */
-export function resolveEdgeColor(status: string, typeCompat: TypeCompat): string {
+export function resolveEdgeColor(status: string, typeCompat: TypeCompat, selected = false): string {
   if (status === 'running')             return 'var(--wf-status-running, #3b82f6)'
   if (status === 'done')                return 'var(--wf-status-success, #22c55e)'
   if (typeCompat === 'warning')         return 'var(--wf-status-warning, #f59e0b)'
   if (typeCompat === 'incompatible')    return 'var(--wf-status-failed, #ef4444)'
+  if (selected)                         return 'var(--wf-edge-color-hover, #60a5fa)'
   return 'var(--wf-edge-color, #6366f1)'
 }
 

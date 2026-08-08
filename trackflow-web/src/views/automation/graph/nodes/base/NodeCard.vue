@@ -2,10 +2,11 @@
   <div
     class="node-card"
     :class="`status-${runStatus}`"
+    :style="{ '--node-color': nodeMeta.color }"
     @click.stop="onNodeClick"
   >
     <!-- ── 标题区 ── -->
-    <div class="node-header" :style="{ '--node-color': nodeMeta.color }">
+    <div class="node-header">
       <div class="color-bar" />
       <div class="node-icon" :style="{ background: nodeMeta.color + '22' }">
         <component
@@ -216,19 +217,24 @@ function onNodeClick() {
   height: fit-content;
   border-radius: 10px;
   background: var(--wf-node-bg);
-  border: 1.5px solid var(--wf-node-border);
+  border: 1px solid var(--wf-node-border);
   box-shadow: var(--wf-node-shadow);
   overflow: hidden;
   cursor: pointer;
-  transition: border-color 150ms, box-shadow 150ms;
+  transition: transform 150ms ease, border-color 150ms ease, box-shadow 150ms ease, background 150ms ease;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   position: relative;
   box-sizing: border-box;
 }
 
 .node-card:hover {
+  transform: translateY(-1px);
   border-color: var(--wf-node-border-hover);
   box-shadow: var(--wf-node-shadow-hover);
+}
+
+.node-card:focus-within {
+  border-color: color-mix(in srgb, var(--node-color) 70%, var(--wf-node-border));
 }
 
 /* ── 运行状态 ── */
@@ -246,13 +252,13 @@ function onNodeClick() {
   padding: 10px 10px 10px 0;
   border-bottom: 1px solid var(--wf-node-header-border);
   border-radius: 10px 10px 0 0;
-  background: var(--wf-node-bg);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--node-color) 8%, var(--wf-node-bg)), var(--wf-node-bg) 54%);
 }
 
 .color-bar {
-  width: 4px;
+  width: 3px;
   align-self: stretch;
-  border-radius: 0 2px 2px 0;
+  border-radius: 0 3px 3px 0;
   background: var(--node-color, #6366f1);
   flex-shrink: 0;
 }
@@ -260,7 +266,7 @@ function onNodeClick() {
 .node-icon {
   width: 28px;
   height: 28px;
-  border-radius: 7px;
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -322,7 +328,7 @@ function onNodeClick() {
   width: 22px;
   height: 22px;
   border: none;
-  background: var(--wf-node-border);
+  background: color-mix(in srgb, var(--wf-node-border) 86%, transparent);
   border-radius: 5px;
   cursor: pointer;
   color: var(--wf-port-label);
@@ -431,15 +437,19 @@ function onNodeClick() {
   gap: 6px;
   height: 28px;
   padding: 0 10px;
+  transition: background 120ms ease;
 }
+
+.port-row:hover { background: color-mix(in srgb, var(--node-color) 6%, transparent); }
 
 .port-row.port-out {
   justify-content: flex-end;
 }
 
 .port-dot {
-  width: 8px;
-  height: 8px;
+  width: 9px;
+  height: 9px;
+  border: 2px solid var(--wf-node-bg);
   border-radius: 50%;
   flex-shrink: 0;
 }
@@ -447,14 +457,17 @@ function onNodeClick() {
 /* 输入圆点：负 margin 让圆心贴近节点左边框，与线条锚点位置对齐 */
 .port-dot.in {
   background: var(--wf-port-in);
-  margin-left: -6px;   /* padding-left(10) - 半径(4) = 6，圆心正好在边框 */
+  margin-left: -7px;   /* padding-left(10) - 半径(4.5) - border(2) */
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--wf-port-in) 58%, transparent);
 }
 
 /* 输出圆点：负 margin 让圆心贴近节点右边框 */
 .port-dot.out {
   background: var(--wf-port-out);
-  margin-right: -6px;  /* 同理 */
+  margin-right: -7px;  /* 同理 */
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--wf-port-out) 58%, transparent);
 }
+.port-row:hover .port-dot { transform: scale(1.14); }
 .port-label {
   font-size: 11px;
   color: var(--wf-port-label);
@@ -469,6 +482,10 @@ function onNodeClick() {
   font-size: 10px;
   color: var(--wf-port-type);
   flex-shrink: 0;
+  line-height: 16px;
+  padding: 0 5px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--wf-port-type) 9%, transparent);
 }
 
 /* ── 可选端口折叠区 ── */
