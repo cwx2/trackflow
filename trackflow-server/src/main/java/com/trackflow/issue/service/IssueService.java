@@ -1,4 +1,4 @@
-package com.trackflow.issue.service;
+﻿package com.trackflow.issue.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
@@ -33,6 +33,8 @@ import com.trackflow.system.mapper.SysUserMapper;
 import com.trackflow.system.mapper.UserGroupMemberMapper;
 import com.trackflow.system.mapper.UserGroupMapper;
 import com.trackflow.issue.converter.IssueConverter;
+import com.trackflow.issue.dto.BatchOperationResult;
+import com.trackflow.issue.dto.TransitStatusResult;
 import com.trackflow.issue.vo.*;
 import com.trackflow.workflow.service.TransitionActionEngine;
 import com.trackflow.workflow.service.WorkflowService;
@@ -592,45 +594,6 @@ public class IssueService {
     }
 
     /**
-     * 将 Issue 实体列表转为 SimilarIssueVO 列表（包含状态名和负责人名）
-     */
-    public List<SimilarIssueVO> buildSimilarIssueVOs(List<Issue> issues) {
-        if (issues.isEmpty()) return List.of();
-
-        Map<Long, IssueStatus> statusMap = statusMapper.selectList(null).stream()
-                .collect(Collectors.toMap(IssueStatus::getId, s -> s, (a, b) -> a));
-
-        Set<Long> userIds = issues.stream()
-                .map(Issue::getAssigneeId)
-                .filter(java.util.Objects::nonNull)
-                .collect(Collectors.toSet());
-        Map<Long, SysUser> userMap = userIds.isEmpty() ? Map.of()
-                : sysUserMapper.selectBatchIds(userIds).stream()
-                .collect(Collectors.toMap(SysUser::getId, u -> u, (a, b) -> a));
-
-        return issues.stream().map(issue -> {
-            SimilarIssueVO vo = new SimilarIssueVO();
-            vo.setId(String.valueOf(issue.getId()));
-            vo.setIssueKey(issue.getIssueKey());
-            vo.setTitle(issue.getTitle());
-            if (issue.getStatusId() != null) {
-                IssueStatus status = statusMap.get(issue.getStatusId());
-                if (status != null) {
-                    vo.setStatusName(status.getLocalizedName());
-                    vo.setStatusColor(status.getColor());
-                }
-            }
-            if (issue.getAssigneeId() != null) {
-                SysUser user = userMap.get(issue.getAssigneeId());
-                if (user != null) {
-                    vo.setAssigneeName(user.getDisplayName());
-                }
-            }
-            return vo;
-        }).toList();
-    }
-
-    /**
      * 查询项目看板是否开启了 allowMultipleSprints 配置
      */
     private boolean isAllowMultipleSprints(Long projectId) {
@@ -878,12 +841,12 @@ public class IssueService {
 
         // 字段校验失败时，返回校验结果但不更新版本号
         if (actionResult != null && actionResult.getOutcome() == ActionExecutionResult.Outcome.FIELD_VALIDATION_FAILED) {
-            return TransitStatusResultVO.of(dto.getVersion(), actionResult);
+            return TransitStatusResult.of(dto.getVersion(), actionResult);
         }
 
         // 返回更新后的版本号 + 动作执行结果
         Issue updated = getById(id);
-        return TransitStatusResultVO.of(updated.getVersion(), actionResult);
+        return TransitStatusResult.of(updated.getVersion(), actionResult);
     }
 
     /**
@@ -952,7 +915,7 @@ public class IssueService {
 
         // 返回更新后的版本号
         Issue updated = getById(issueId);
-        return TransitStatusResultVO.of(updated.getVersion(), actionResult);
+        return TransitStatusResult.of(updated.getVersion(), actionResult);
     }
 
     /**
@@ -1846,14 +1809,14 @@ public class IssueService {
      * 批量操作通用执行模板。
      * <p>
      * 遍历 issueIds，对每个 issue 执行：getById → assertProjectActive → 权限校验 → action。
-     * 部分成功部分失败是设计意图（非事务），结果收集在 BatchOperationResultVO 中。
+     * 部分成功部分失败是设计意图（非事务），结果收集在 BatchOperationResult 中。
      *
      * @param issueIds       工单 ID 列表
      * @param permissionCode 权限代码（如 "issue:edit"）
      * @param action         对单个 issue 执行的业务动作（入参为已通过校验的 issue），返回 null 表示成功，返回非空字符串表示业务拒绝原因
      * @param operationName  操作名称（用于日志）
      */
-    private BatchOperationResultVO executeBatch(
+    private BatchOperationResult executeBatch(
             List<Long> issueIds,
             String permissionCode,
             BatchIssueAction action,
@@ -1865,7 +1828,7 @@ public class IssueService {
      * 支持静默模式的批量操作执行引擎。
      * silent=true 时通知事件监听器会跳过通知发送。
      */
-    private BatchOperationResultVO executeBatchWithSilent(
+    private BatchOperationResult executeBatchWithSilent(
             List<Long> issueIds,
             String permissionCode,
             BatchIssueAction action,
@@ -1887,14 +1850,14 @@ public class IssueService {
     /**
      * 批量操作核心逻辑。
      */
-    private BatchOperationResultVO doExecuteBatch(
+    private BatchOperationResult doExecuteBatch(
             List<Long> issueIds,
             String permissionCode,
             BatchIssueAction action,
             String operationName) {
 
         Long currentUserId = SecurityUtils.getCurrentUserId();
-        BatchOperationResultVO result = new BatchOperationResultVO();
+        BatchOperationResult result = new BatchOperationResult();
         result.setTotal(issueIds.size());
 
         for (Long issueId : issueIds) {
@@ -1937,83 +1900,6 @@ public class IssueService {
     }
 
     /**
-     * 获取批量操作中每个状态的可达性信息。
-     * 对选中的所有工单，统计每个状态可被多少个工单转换到。
-     * <p>
-     * 性能优化：按 (projectId, issueType, statusId, isAuthor, isAssignee) 分组，
-     * 相同组合的工单共享同一工作流转换结果，将 O(N) 次 DB 调用降至 O(G) 次（G=分组数，通常 2-5）。
-     */
-    public List<BatchAvailableStatusVO> getBatchAvailableTransitions(List<Long> issueIds) {
-        Long currentUserId = SecurityUtils.getCurrentUserId();
-
-        // 1. 批量获取所有工单（1 次 DB 查询）
-        List<Issue> issues = issueMapper.selectBatchIds(issueIds);
-        if (issues.isEmpty()) {
-            return List.of();
-        }
-
-        // 2. 获取所有状态（1 次 DB 查询）
-        List<IssueStatus> allStatuses = statusMapper.selectList(
-                new LambdaQueryWrapper<IssueStatus>().orderByAsc(IssueStatus::getSortOrder));
-
-        // 3. 按 (projectId, issueType, statusId, isAuthor, isAssignee) 分组
-        //    相同组合的工单可用转换完全相同——无需逐个查询
-        Map<String, List<Issue>> groupedIssues = issues.stream()
-                .collect(Collectors.groupingBy(issue -> buildTransitionGroupKey(issue, currentUserId)));
-
-        // 4. 每组只查一次可用转换（通常 2-5 组，最多 G 次 DB）
-        Map<Long, Integer> reachabilityMap = new java.util.HashMap<>();
-
-        for (Map.Entry<String, List<Issue>> entry : groupedIssues.entrySet()) {
-            Issue representative = entry.getValue().get(0);
-            int groupSize = entry.getValue().size();
-
-            try {
-                List<IssueStatus> available = workflowService.getAvailableTransitions(representative, currentUserId);
-                for (IssueStatus status : available) {
-                    reachabilityMap.merge(status.getId(), groupSize, Integer::sum);
-                }
-            } catch (Exception e) {
-                log.warn("获取工单可用转换失败 groupKey={}, representativeId={}",
-                        entry.getKey(), representative.getId(), e);
-            }
-        }
-
-        // 5. 构建结果
-        int totalCount = issues.size();
-        List<BatchAvailableStatusVO> result = new java.util.ArrayList<>();
-        for (IssueStatus status : allStatuses) {
-            int reachable = reachabilityMap.getOrDefault(status.getId(), 0);
-            if (reachable == 0) {
-                continue; // 完全不可达的状态不显示
-            }
-            BatchAvailableStatusVO vo = new BatchAvailableStatusVO();
-            vo.setId(String.valueOf(status.getId()));
-            vo.setName(status.getName());
-            vo.setColor(status.getColor());
-            vo.setCategory(status.getCategory());
-            vo.setIsClosed(status.getIsClosed());
-            vo.setSortOrder(status.getSortOrder());
-            vo.setReachableCount(reachable);
-            vo.setTotalCount(totalCount);
-            result.add(vo);
-        }
-
-        return result;
-    }
-
-    /**
-     * 构建工作流转换分组 key。
-     * 相同 key 的工单，其可用状态转换完全一致（工作流规则仅依赖这些维度）。
-     */
-    private String buildTransitionGroupKey(Issue issue, Long currentUserId) {
-        boolean isAuthor = currentUserId.equals(issue.getCreatedBy());
-        boolean isAssignee = currentUserId.equals(issue.getAssigneeId());
-        return issue.getProjectId() + ":" + issue.getIssueType() + ":"
-                + issue.getStatusId() + ":" + isAuthor + ":" + isAssignee;
-    }
-
-    /**
      * 批量状态转换（带乐观锁 + 备注支持）。
      *
      * @param issueIds 要转换的工单 ID 列表
@@ -2022,7 +1908,7 @@ public class IssueService {
      * @param versions 乐观锁版本映射（issueId → version），为 null 时跳过版本校验
      * @param silent   静默模式，为 true 时不发送通知
      */
-    public BatchOperationResultVO batchTransitStatus(List<Long> issueIds, Long statusId,
+    public BatchOperationResult batchTransitStatus(List<Long> issueIds, Long statusId,
                                                      String comment, Map<Long, Integer> versions, boolean silent) {
         return executeBatchWithSilent(issueIds, "issue:change_status", (issue, userId) -> {
             if (!workflowService.isTransitionAllowed(issue, statusId, userId)) {
@@ -2045,7 +1931,7 @@ public class IssueService {
     /**
      * 批量分配
      */
-    public BatchOperationResultVO batchAssign(List<Long> issueIds, Long assigneeId, boolean silent) {
+    public BatchOperationResult batchAssign(List<Long> issueIds, Long assigneeId, boolean silent) {
         return executeBatchWithSilent(issueIds, "issue:assign", (issue, userId) -> {
             assign(issue.getId(), assigneeId);
             return null;
@@ -2055,7 +1941,7 @@ public class IssueService {
     /**
      * 批量更新 Sprint
      */
-    public BatchOperationResultVO batchUpdateSprint(List<Long> issueIds, Long sprintId, boolean silent) {
+    public BatchOperationResult batchUpdateSprint(List<Long> issueIds, Long sprintId, boolean silent) {
         return executeBatchWithSilent(issueIds, "issue:edit", (issue, userId) -> {
             UpdateIssueDTO dto = new UpdateIssueDTO();
             dto.setSprintId(sprintId);
@@ -2067,7 +1953,7 @@ public class IssueService {
     /**
      * 批量更新优先级
      */
-    public BatchOperationResultVO batchUpdatePriority(List<Long> issueIds, String priority, boolean silent) {
+    public BatchOperationResult batchUpdatePriority(List<Long> issueIds, String priority, boolean silent) {
         return executeBatchWithSilent(issueIds, "issue:edit", (issue, userId) -> {
             UpdateIssueDTO dto = new UpdateIssueDTO();
             dto.setPriority(priority);
@@ -2079,7 +1965,7 @@ public class IssueService {
     /**
      * 批量添加标签
      */
-    public BatchOperationResultVO batchAddTag(List<Long> issueIds, Long tagId, boolean silent) {
+    public BatchOperationResult batchAddTag(List<Long> issueIds, Long tagId, boolean silent) {
         return executeBatchWithSilent(issueIds, "issue:edit", (issue, userId) -> {
             tagService.addTagToIssue(issue.getId(), tagId);
             return null;
@@ -2089,7 +1975,7 @@ public class IssueService {
     /**
      * 批量移除标签
      */
-    public BatchOperationResultVO batchRemoveTag(List<Long> issueIds, Long tagId, boolean silent) {
+    public BatchOperationResult batchRemoveTag(List<Long> issueIds, Long tagId, boolean silent) {
         return executeBatchWithSilent(issueIds, "issue:edit", (issue, userId) -> {
             tagService.removeTagFromIssue(issue.getId(), tagId);
             return null;
@@ -2099,7 +1985,7 @@ public class IssueService {
     /**
      * 批量删除
      */
-    public BatchOperationResultVO batchDelete(List<Long> issueIds) {
+    public BatchOperationResult batchDelete(List<Long> issueIds) {
         return executeBatch(issueIds, "issue:delete", (issue, userId) -> {
             delete(issue.getId());
             return null;
@@ -2110,9 +1996,9 @@ public class IssueService {
      * 批量恢复（从回收站还原）
      * 注意：此方法不使用 executeBatch 模板，因为已删除工单 getById() 会抛异常
      */
-    public BatchOperationResultVO batchRestore(List<Long> issueIds) {
+    public BatchOperationResult batchRestore(List<Long> issueIds) {
         Long currentUserId = SecurityUtils.getCurrentUserId();
-        BatchOperationResultVO result = new BatchOperationResultVO();
+        BatchOperationResult result = new BatchOperationResult();
         result.setTotal(issueIds.size());
 
         for (Long issueId : issueIds) {

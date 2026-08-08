@@ -382,7 +382,7 @@ public class ProjectService {
     /**
      * 获取项目详情（含当前用户角色和成员统计）
      */
-    public ProjectDetailVO getProjectDetail(Long projectId, Long currentUserId) {
+    ProjectDetailVO assembleProjectDetail(Long projectId, Long currentUserId) {
         Project project = getById(projectId);
 
         // 使用 Converter 映射基础字段
@@ -769,7 +769,7 @@ public class ProjectService {
     /**
      * 获取项目回收站保留策略
      */
-    public ProjectTrashSettingsVO getTrashSettings(Long id) {
+    ProjectTrashSettingsVO assembleTrashSettings(Long id) {
         Project project = getById(id);
         ProjectTrashSettingsVO vo = new ProjectTrashSettingsVO();
         vo.setTrashRetentionDays(parseRetentionDays(project.getSettings()));
@@ -809,7 +809,7 @@ public class ProjectService {
     /**
      * 获取项目成员列表（包含用户信息）
      */
-    public List<ProjectMemberVO> listMembersVO(Long projectId) {
+    List<ProjectMemberVO> assembleMembers(Long projectId) {
         List<ProjectMember> members = memberMapper.selectList(
                 new LambdaQueryWrapper<ProjectMember>().eq(ProjectMember::getProjectId, projectId)
         );
@@ -872,7 +872,7 @@ public class ProjectService {
      * 按关键词搜索项目成员，用于 @ mention 懒加载场景。
      * 在数据库层过滤，避免全量加载后内存过滤。
      */
-    public List<ProjectMemberVO> searchMembersVO(Long projectId, String keyword, int limit) {
+    List<ProjectMemberVO> assembleSearchMembers(Long projectId, String keyword, int limit) {
         // 先拿项目成员的 userId 列表
         List<ProjectMember> members = memberMapper.selectList(
                 new LambdaQueryWrapper<ProjectMember>().eq(ProjectMember::getProjectId, projectId)
@@ -922,7 +922,7 @@ public class ProjectService {
      * 查询 user_group_role 表中 project_id 匹配的组角色记录，
      * 并展开组成员信息。
      */
-    public List<ProjectGroupMemberVO> listProjectGroupMembers(Long projectId) {
+    List<ProjectGroupMemberVO> assembleGroupMembers(Long projectId) {
         // 1. 查询绑定到该项目的组角色分配
         List<com.trackflow.system.entity.UserGroupRole> groupRoles =
                 userGroupRoleMapper.selectGroupRolesByProjectId(projectId);
@@ -1008,10 +1008,10 @@ public class ProjectService {
      * 获取项目成员完整视图（对标 YouTrack People 页面）
      * 包含直接成员和组成员两部分
      */
-    public ProjectMembersViewVO listMembersFullView(Long projectId) {
+    ProjectMembersViewVO assembleMembersFullView(Long projectId) {
         ProjectMembersViewVO view = new ProjectMembersViewVO();
-        view.setDirectMembers(listMembersVO(projectId));
-        view.setGroupMembers(listProjectGroupMembers(projectId));
+        view.setDirectMembers(assembleMembers(projectId));
+        view.setGroupMembers(assembleGroupMembers(projectId));
         return view;
     }
 
@@ -1094,7 +1094,7 @@ public class ProjectService {
      * 同时返回"已离开项目但仍有工单被分配"的历史用户（标记为 formerMember），
      * 参照 YouTrack 行为：移除成员不自动清除 Assignee 候选值，保留历史有效性。
      */
-    public List<ProjectMemberVO> listAssignableMembersVO(Long projectId) {
+    List<ProjectMemberVO> assembleAssignableMembers(Long projectId) {
         // 查询项目中拥有 issue:edit 权限的成员 user_id
         List<Long> assignableUserIds = memberMapper.selectUserIdsWithPermission(projectId, "issue:edit");
 
@@ -1820,7 +1820,7 @@ public class ProjectService {
     /**
      * 删除前预检查 — 返回受影响数据量供前端确认弹窗展示
      */
-    public ProjectDeletePreCheckVO preCheckDelete(Long projectId) {
+    ProjectDeletePreCheckVO assembleDeletePreCheck(Long projectId) {
         Project project = getById(projectId);
 
         ProjectDeletePreCheckVO vo = new ProjectDeletePreCheckVO();
@@ -1961,7 +1961,7 @@ public class ProjectService {
      * 获取项目概览统计数据
      */
     @Transactional(readOnly = true)
-    public ProjectStatisticsVO getProjectStatistics(Long projectId) {
+    ProjectStatisticsVO assembleStatistics(Long projectId) {
         var vo = new ProjectStatisticsVO();
 
         // 1. 查询各状态工单数量（聚合查询，不加载全量数据）
@@ -2142,7 +2142,7 @@ public class ProjectService {
     /**
      * 获取项目时间追踪设置 VO。
      */
-    public com.trackflow.project.vo.ProjectTimeTrackingSettingsVO getTimeTrackingSettingsVO(Long projectId) {
+    com.trackflow.project.vo.ProjectTimeTrackingSettingsVO assembleTimeTrackingSettings(Long projectId) {
         com.trackflow.project.vo.ProjectTimeTrackingSettingsVO vo = new com.trackflow.project.vo.ProjectTimeTrackingSettingsVO();
         vo.setEnabled(isTimeTrackingEnabled(projectId));
         return vo;
@@ -2152,12 +2152,12 @@ public class ProjectService {
      * 更新项目时间追踪设置并返回最新的设置 VO。
      */
     @Transactional(rollbackFor = Exception.class)
-    public com.trackflow.project.vo.ProjectTimeTrackingSettingsVO updateTimeTrackingSettingsVO(
+    com.trackflow.project.vo.ProjectTimeTrackingSettingsVO assembleUpdateTimeTrackingSettings(
             Long projectId, com.trackflow.project.dto.UpdateTimeTrackingSettingsDTO dto) {
         if (dto.getEnabled() != null) {
             updateTimeTrackingEnabled(projectId, dto.getEnabled());
         }
-        return getTimeTrackingSettingsVO(projectId);
+        return assembleTimeTrackingSettings(projectId);
     }
 
     /**

@@ -6,14 +6,20 @@ import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.entity.IssueSprint;
 import com.trackflow.issue.entity.IssueStatus;
 import com.trackflow.issue.entity.IssueTag;
+import com.trackflow.issue.mapper.IssueMapper;
 import com.trackflow.issue.mapper.IssueSprintMapper;
 import com.trackflow.issue.mapper.IssueStatusMapper;
+import com.trackflow.issue.vo.BatchAvailableStatusVO;
 import com.trackflow.issue.vo.IssueTagVO;
 import com.trackflow.issue.vo.IssueVO;
+import com.trackflow.issue.vo.SimilarIssueVO;
 import com.trackflow.sprint.mapper.SprintMapper;
 import com.trackflow.sprint.entity.Sprint;
+import com.trackflow.common.util.SecurityUtils;
 import com.trackflow.system.entity.SysUser;
 import com.trackflow.system.mapper.SysUserMapper;
+import com.trackflow.workflow.service.WorkflowService;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -42,8 +48,10 @@ public class IssueVOAssembler {
     private final IssueStatusMapper statusMapper;
     private final SprintMapper sprintMapper;
     private final IssueSprintMapper issueSprintMapper;
+    private final IssueMapper issueMapper;
     private final CustomFieldService customFieldService;
     private final IssueTagService tagService;
+    private final WorkflowService workflowService;
     private final com.trackflow.board.mapper.BoardGeneralConfigMapper boardGeneralConfigMapper;
 
     /**
@@ -237,5 +245,118 @@ public class IssueVOAssembler {
                 voList.get(i).setTags(tagVOs);
             }
         }
+    }
+
+    // ========== 以下方法从 IssueService 迁移，属于 VO 组装逻辑 ==========
+
+    /**
+     * 将 Issue 实体列表转为 SimilarIssueVO 列表（包含状态名和负责人名）
+     */
+    public List<SimilarIssueVO> buildSimilarIssueVOs(List<Issue> issues) {
+        if (issues.isEmpty()) return List.of();
+
+        Map<Long, IssueStatus> statusMap = statusMapper.selectList(null).stream()
+                .collect(java.util.stream.Collectors.toMap(IssueStatus::getId, s -> s, (a, b) -> a));
+
+        Set<Long> userIds = issues.stream()
+                .map(Issue::getAssigneeId)
+                .filter(Objects::nonNull)
+                .collect(java.util.stream.Collectors.toSet());
+        Map<Long, SysUser> userMap = userIds.isEmpty() ? Map.of()
+                : sysUserMapper.selectBatchIds(userIds).stream()
+                .collect(java.util.stream.Collectors.toMap(SysUser::getId, u -> u, (a, b) -> a));
+
+        return issues.stream().map(issue -> {
+            SimilarIssueVO vo = new SimilarIssueVO();
+            vo.setId(String.valueOf(issue.getId()));
+            vo.setIssueKey(issue.getIssueKey());
+            vo.setTitle(issue.getTitle());
+            if (issue.getStatusId() != null) {
+                IssueStatus status = statusMap.get(issue.getStatusId());
+                if (status != null) {
+                    vo.setStatusName(status.getLocalizedName());
+                    vo.setStatusColor(status.getColor());
+                }
+            }
+            if (issue.getAssigneeId() != null) {
+                SysUser user = userMap.get(issue.getAssigneeId());
+                if (user != null) {
+                    vo.setAssigneeName(user.getDisplayName());
+                }
+            }
+            return vo;
+        }).toList();
+    }
+
+    /**
+     * 获取批量操作中每个状态的可达性信息。
+     * 对选中的所有工单，统计每个状态可被多少个工单转换到。
+     * <p>
+     * 性能优化：按 (projectId, issueType, statusId, isAuthor, isAssignee) 分组，
+     * 相同组合的工单共享同一工作流转换结果，将 O(N) 次 DB 调用降至 O(G) 次（G=分组数，通常 2-5）。
+     */
+    public List<BatchAvailableStatusVO> getBatchAvailableTransitions(List<Long> issueIds) {
+        Long currentUserId = SecurityUtils.getCurrentUserId();
+
+        // 1. 批量获取所有工单（1 次 DB 查询）
+        List<Issue> issues = issueMapper.selectBatchIds(issueIds);
+        if (issues.isEmpty()) {
+            return List.of();
+        }
+
+        // 2. 获取所有状态（1 次 DB 查询）
+        List<IssueStatus> allStatuses = statusMapper.selectList(
+                new LambdaQueryWrapper<IssueStatus>().orderByAsc(IssueStatus::getSortOrder));
+
+        // 3. 按 (projectId, issueType, statusId, isAuthor, isAssignee) 分组
+        Map<String, List<Issue>> groupedIssues = issues.stream()
+                .collect(java.util.stream.Collectors.groupingBy(issue -> buildTransitionGroupKey(issue, currentUserId)));
+
+        // 4. 每组只查一次可用转换（通常 2-5 组）
+        Map<Long, Integer> reachabilityMap = new HashMap<>();
+
+        for (Map.Entry<String, List<Issue>> entry : groupedIssues.entrySet()) {
+            Issue representative = entry.getValue().get(0);
+            int groupSize = entry.getValue().size();
+
+            try {
+                List<IssueStatus> available = workflowService.getAvailableTransitions(representative, currentUserId);
+                for (IssueStatus status : available) {
+                    reachabilityMap.merge(status.getId(), groupSize, Integer::sum);
+                }
+            } catch (Exception e) {
+                log.warn("获取工单可用转换失败 groupKey={}, representativeId={}",
+                        entry.getKey(), representative.getId(), e);
+            }
+        }
+
+        // 5. 构建结果
+        int totalCount = issues.size();
+        List<BatchAvailableStatusVO> result = new ArrayList<>();
+        for (IssueStatus status : allStatuses) {
+            int reachable = reachabilityMap.getOrDefault(status.getId(), 0);
+            if (reachable == 0) {
+                continue;
+            }
+            BatchAvailableStatusVO vo = new BatchAvailableStatusVO();
+            vo.setId(String.valueOf(status.getId()));
+            vo.setName(status.getName());
+            vo.setColor(status.getColor());
+            vo.setCategory(status.getCategory());
+            vo.setIsClosed(status.getIsClosed());
+            vo.setSortOrder(status.getSortOrder());
+            vo.setReachableCount(reachable);
+            vo.setTotalCount(totalCount);
+            result.add(vo);
+        }
+
+        return result;
+    }
+
+    private String buildTransitionGroupKey(Issue issue, Long currentUserId) {
+        boolean isAuthor = currentUserId.equals(issue.getCreatedBy());
+        boolean isAssignee = currentUserId.equals(issue.getAssigneeId());
+        return issue.getProjectId() + ":" + issue.getIssueType() + ":"
+                + issue.getStatusId() + ":" + isAuthor + ":" + isAssignee;
     }
 }

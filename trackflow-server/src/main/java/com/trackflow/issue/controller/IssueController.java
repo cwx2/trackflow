@@ -194,13 +194,13 @@ public class IssueController {
     @PreAuthorize("isAuthenticated()")
     public R<List<BatchAvailableStatusVO>> getBatchAvailableTransitions(
             @RequestBody @Valid BatchAvailableTransitionsDTO dto) {
-        List<BatchAvailableStatusVO> result = issueService.getBatchAvailableTransitions(dto.getIssueIds());
+        List<BatchAvailableStatusVO> result = issueVOAssembler.getBatchAvailableTransitions(dto.getIssueIds());
         return R.ok(result);
     }
 
     @PostMapping("/batch")
     @PreAuthorize("isAuthenticated()")
-    public R<BatchOperationResultVO> batchOperation(@Valid @RequestBody BatchOperationDTO dto) {
+    public R<BatchOperationResult> batchOperation(@Valid @RequestBody BatchOperationDTO dto) {
         boolean silent = Boolean.TRUE.equals(dto.getSilent());
 
         // WIP 限制预检查（仅 status 操作）
@@ -212,7 +212,7 @@ public class IssueController {
             }
         }
 
-        BatchOperationResultVO result = switch (dto.getOperation()) {
+        BatchOperationResult result = switch (dto.getOperation()) {
             case "status" -> {
                 if (dto.getStatusId() == null) {
                     yield null;
@@ -315,14 +315,14 @@ public class IssueController {
 
     @PostMapping("/{id}/transitions")
     @PreAuthorize("@perm.checkIssue(#id, 'issue:change_status')")
-    public R<TransitStatusResultVO> transitStatus(@PathVariable("id") Long id, @Valid @RequestBody TransitStatusDTO dto) {
+    public R<TransitStatusResult> transitStatus(@PathVariable("id") Long id, @Valid @RequestBody TransitStatusDTO dto) {
         return R.ok(issueService.performTransition(id, dto));
     }
 
     @PostMapping("/{id}/transitions/undo")
     @PreAuthorize("@perm.checkIssue(#id, 'issue:edit')")
-    public R<TransitStatusResultVO> undoTransitStatus(@PathVariable("id") Long id, @Valid @RequestBody TransitStatusDTO dto) {
-        TransitStatusResultVO result = issueService.undoTransitStatus(id, dto.getStatusId());
+    public R<TransitStatusResult> undoTransitStatus(@PathVariable("id") Long id, @Valid @RequestBody TransitStatusDTO dto) {
+        TransitStatusResult result = issueService.undoTransitStatus(id, dto.getStatusId());
         return R.ok(result);
     }
 

@@ -3,6 +3,7 @@ package com.trackflow.issue.controller;
 import com.trackflow.common.model.R;
 import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.service.IssueService;
+import com.trackflow.issue.service.IssueVOAssembler;
 import com.trackflow.issue.vo.SimilarIssueVO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -20,6 +21,7 @@ import java.util.*;
 public class IssueSearchController {
 
     private final IssueService issueService;
+    private final IssueVOAssembler issueVOAssembler;
 
     /**
      * 查找相似工单 — 创建工单时用于重复检测。
@@ -32,6 +34,6 @@ public class IssueSearchController {
             @RequestParam(value = "limit", defaultValue = "5") int limit) {
         if (limit > 10) limit = 10;
         List<Issue> issues = issueService.findSimilarIssues(keyword, projectId, limit);
-        return R.ok(issueService.buildSimilarIssueVOs(issues));
+        return R.ok(issueVOAssembler.buildSimilarIssueVOs(issues));
     }
 }
