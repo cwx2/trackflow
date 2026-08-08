@@ -31,10 +31,13 @@
           </a-form-item>
 
           <a-form-item label="项目描述">
-            <RichEditor
+            <TiptapEditor
               v-model="form.description"
               placeholder="简要描述项目用途和目标"
-              mode="inline"
+              :toolbar="true"
+              :mode-switch="true"
+              :min-height="120"
+              content-format="markdown"
               :class="{ 'editor-disabled': !canEdit || isArchived }"
             />
           </a-form-item>
@@ -214,7 +217,7 @@ import type { OrgVO } from '@/api/organization'
 import { useAuthStore } from '@/stores/auth'
 import { invalidateProjectPermissions } from '@/composables/usePermission'
 import type { ProjectDetailVO, ProjectMemberVO } from '@/api/types'
-import RichEditor from '@/views/issue/components/RichEditor.vue'
+import { TiptapEditor } from '@/components/base'
 
 const props = defineProps<{
   project: ProjectDetailVO

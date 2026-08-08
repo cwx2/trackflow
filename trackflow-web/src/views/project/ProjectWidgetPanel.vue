@@ -146,7 +146,7 @@ import { Message, Modal } from '@arco-design/web-vue'
 import { projectApi } from '@/api'
 import { customDashboardApi } from '@/api/customDashboard'
 import type { DashboardDetailVO, DashboardWidgetVO } from '@/api/customDashboard'
-import WidgetCard from '@/views/report/dashboard/WidgetCard.vue'
+import WidgetCard from '@/components/base/WidgetCard.vue'
 
 const props = defineProps<{
   projectId: string

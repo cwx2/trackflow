@@ -90,7 +90,7 @@ import { PieChart, BarChart, LineChart } from 'echarts/charts'
 import { TooltipComponent, LegendComponent, GridComponent } from 'echarts/components'
 import VChart from 'vue-echarts'
 import { localizeStatusName, priorityLabelMap } from '@/utils/fieldLabels'
-import { getPriorityColor } from '@/views/issue/composables/usePriorityOptions'
+import { getPriorityColor } from '@/composables/usePriorityOptions'
 import type { ReportDataVO } from '@/api/report'
 
 // 注册 ECharts 组件（按需引入）

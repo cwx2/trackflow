@@ -13,7 +13,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { getPriorityColor } from '@/views/issue/composables/usePriorityOptions'
+import { getPriorityColor } from '@/composables/usePriorityOptions'
 
 /**
  * 优先级展示组件 - 统一所有场景的优先级 badge 渲染

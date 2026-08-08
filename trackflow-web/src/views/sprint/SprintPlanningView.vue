@@ -476,8 +476,8 @@ import { useProjectStore } from '@/stores/project'
 import { useProjectList } from '@/composables/useProjectList'
 import { usePermission } from '@/composables/usePermission'
 import { localizeIssueType, localizePriority } from '@/utils/fieldLabels'
-import IssueCreatePanel from '@/views/issue/IssueCreatePanel.vue'
-import { useDrafts } from '@/views/issue/composables/useDrafts'
+import IssueCreatePanel from '@/components/IssueCreatePanel.vue'
+import { useDrafts } from '@/composables/useDrafts'
 import type { IssueVO, SprintVO, ProjectMemberVO, SprintVelocityVO, CreationPreviewVO, SprintOverlapWarning } from '@/api/types'
 
 const router = useRouter()

@@ -17,7 +17,7 @@ import { TooltipComponent, LegendComponent, GridComponent } from 'echarts/compon
 import VChart from 'vue-echarts'
 import { IconBarChart } from '@arco-design/web-vue/es/icon'
 import { reportApi } from '@/api/report'
-import { getPriorityColor } from '@/views/issue/composables/usePriorityOptions'
+import { getPriorityColor } from '@/composables/usePriorityOptions'
 import type { ReportDataVO } from '@/api/report'
 
 use([CanvasRenderer, PieChart, BarChart, LineChart, TooltipComponent, LegendComponent, GridComponent])

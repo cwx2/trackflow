@@ -300,7 +300,7 @@ import { IconMoon, IconSun, IconCommon, IconLeft, IconRight } from '@arco-design
 import TabBar from './TabBar.vue'
 import NotificationPanel from './NotificationPanel.vue'
 import ServiceStatusBanner from './ServiceStatusBanner.vue'
-import IssueCreatePanel from '@/views/issue/IssueCreatePanel.vue'
+import IssueCreatePanel from '@/components/IssueCreatePanel.vue'
 import trackflowLogoUrl from '@/assets/trackflow-watermark.svg'
 import { UserAvatar } from '@/components/base'
 import trackflowIconUrl from '@/assets/trackflow-icon.svg'

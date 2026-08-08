@@ -1154,8 +1154,8 @@ import BacklogPanel from './BacklogPanel.vue'
 import BoardChartPanel from './BoardChartPanel.vue'
 import IssuePreviewDrawer from './IssuePreviewDrawer.vue'
 import CloneBoardModal from './CloneBoardModal.vue'
-import IssueCreatePanel from '@/views/issue/IssueCreatePanel.vue'
-import BatchActionToolbar from '@/views/issue/components/BatchActionToolbar.vue'
+import IssueCreatePanel from '@/components/IssueCreatePanel.vue'
+import BatchActionToolbar from '@/components/BatchActionToolbar.vue'
 import { IconSettings, IconSearch, IconList, IconBarChart, IconPlus, IconFile, IconCalendar, IconUser, IconCopy } from '@arco-design/web-vue/es/icon'
 
 const {
