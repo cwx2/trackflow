@@ -31,7 +31,7 @@
           placeholder="5"
           style="width: 100%"
         />
-        <template #extra>每次重试之间的等待时间（0-300秒）</template>
+        <template #extra>每轮之间的冷却等待时间（0-300 秒）；设为 0 则立即重试，适合高频轮询场景</template>
       </a-form-item>
       
       <a-divider style="margin: 16px 0 12px" />
@@ -50,7 +50,7 @@
           <a-option value="{status}">&#123;status&#125; - 执行状态</a-option>
           <a-option value="{test_result}">&#123;test_result&#125; - 测试结果</a-option>
         </a-select>
-        <template #extra>使用 {变量名} 格式引用变量</template>
+        <template #extra>使用 {变量名} 格式引用上游节点的输出变量，如 {output}、{test_result}</template>
       </a-form-item>
       
       <a-form-item label="运算符">
@@ -66,7 +66,7 @@
       
       <a-form-item v-if="showValueInput" label="比较值">
         <a-input v-model="localData.exitValue" placeholder="输入比较值" />
-        <template #extra>支持 {变量名} 引用其他变量</template>
+        <template #extra>支持 {变量名} 动态引用，或直接输入期望匹配的字符串（如 "PASS"、"done"）</template>
       </a-form-item>
       
       <a-alert type="info" style="margin-top: 12px">

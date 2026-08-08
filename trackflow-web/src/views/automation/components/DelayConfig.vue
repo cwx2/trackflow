@@ -25,7 +25,7 @@
           >
             <template #suffix>秒</template>
           </a-input-number>
-          <template #extra>范围 1-3600 秒（1小时）</template>
+          <template #extra>固定等待时长，范围 1-3600 秒（最长 1 小时）；超长等待建议拆分为多个节点</template>
         </a-form-item>
       </template>
       
@@ -42,7 +42,7 @@
             <a-option value="{delay}">&#123;delay&#125;</a-option>
             <a-option value="{timeout}">&#123;timeout&#125;</a-option>
           </a-select>
-          <template #extra>运行时从变量读取等待秒数，使用 &#123;变量名&#125; 格式</template>
+          <template #extra>运行时从该变量读取等待秒数，使用 {变量名} 格式；变量值必须为正整数</template>
         </a-form-item>
       </template>
       
