@@ -27,10 +27,10 @@ public class RoleAgentNode implements NodeDefinition, NodeExecutor {
     @Override public String getCategory() { return "Agent"; }
     @Override public List<InputPortDef> getInputPorts() {
         return List.of(
-                new InputPortDef("roleId", "number", true, "Agent 角色 ID"),
-                new InputPortDef("task", "string", true, "本次任务"),
-                new InputPortDef("context", "object", false, "需求、代码或前序结果"),
-                new InputPortDef("workDir", "string", false, "角色允许范围内的工作目录")
+                new InputPortDef("roleId", "number", true, "Agent 角色 ID", false),
+                new InputPortDef("task", "string", true, "本次任务", false),
+                new InputPortDef("context", "object", false, "需求、代码或前序结果", true),
+                new InputPortDef("workDir", "string", false, "角色允许范围内的工作目录", true)
         );
     }
     @Override public List<OutputPortDef> getOutputPorts() {

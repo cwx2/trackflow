@@ -27,10 +27,10 @@ public class IssueTransitionNode implements NodeDefinition, NodeExecutor {
     @Override public String getCategory() { return "TrackFlow"; }
     @Override public List<InputPortDef> getInputPorts() {
         return List.of(
-                new InputPortDef("issueId", "number", true, "工单 ID"),
-                new InputPortDef("statusId", "number", true, "目标状态 ID"),
-                new InputPortDef("comment", "string", false, "状态变更说明"),
-                new InputPortDef("version", "number", false, "乐观锁版本")
+                new InputPortDef("issueId", "number", true, "工单 ID", false),
+                new InputPortDef("statusId", "number", true, "目标状态 ID", false),
+                new InputPortDef("comment", "string", false, "状态变更说明", true),
+                new InputPortDef("version", "number", false, "乐观锁版本", true)
         );
     }
     @Override public List<OutputPortDef> getOutputPorts() {

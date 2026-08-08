@@ -32,15 +32,15 @@ public class IssueSearchNode implements NodeDefinition, NodeExecutor {
     @Override
     public List<InputPortDef> getInputPorts() {
         return List.of(
-                new InputPortDef("projectId", "number", false, "项目 ID；留空时查询有权访问的项目"),
-                new InputPortDef("statusIds", "string", false, "状态 ID，多个用逗号分隔"),
-                new InputPortDef("priority", "string", false, "优先级，多个用逗号分隔（critical,high,medium,low）"),
-                new InputPortDef("issueType", "string", false, "工单类型，多个用逗号分隔（Bug,Feature,Task 等）"),
-                new InputPortDef("tagIds", "string", false, "标签 ID，多个用逗号分隔"),
-                new InputPortDef("keyword", "string", false, "标题、描述或编号关键词"),
-                new InputPortDef("assignedToMe", "boolean", false, "只查分配给执行身份的工单"),
-                new InputPortDef("sort", "string", false, "排序：-priority（默认），created_at，-updated_at"),
-                new InputPortDef("limit", "number", false, "最多返回 100 条")
+                new InputPortDef("projectId", "number", false, "项目 ID；留空时查询有权访问的项目", false),
+                new InputPortDef("statusIds", "string", false, "状态 ID，多个用逗号分隔", false),
+                new InputPortDef("priority", "string", false, "优先级，多个用逗号分隔（critical,high,medium,low）", false),
+                new InputPortDef("issueType", "string", false, "工单类型，多个用逗号分隔（Bug,Feature,Task 等）", false),
+                new InputPortDef("tagIds", "string", false, "标签 ID，多个用逗号分隔", false),
+                new InputPortDef("keyword", "string", false, "标题、描述或编号关键词", true),
+                new InputPortDef("assignedToMe", "boolean", false, "只查分配给执行身份的工单", true),
+                new InputPortDef("sort", "string", false, "排序：-priority（默认），created_at，-updated_at", true),
+                new InputPortDef("limit", "number", false, "最多返回 100 条", true)
         );
     }
 

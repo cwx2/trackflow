@@ -16,10 +16,10 @@ export const issueSearchDefinition: NodeDefinition = {
     { name: 'priority', label: '优先级', valueType: 'string', required: false },
     { name: 'issueType', label: '工单类型', valueType: 'string', required: false },
     { name: 'tagIds', label: '标签 ID', valueType: 'string', required: false },
-    { name: 'keyword', label: '关键词', valueType: 'string', required: false },
-    { name: 'assignedToMe', label: '仅分配给执行身份', valueType: 'boolean', required: false },
-    { name: 'sort', label: '排序', valueType: 'string', required: false },
-    { name: 'limit', label: '数量上限', valueType: 'number', required: false, defaultValue: { type: 'literal', value: 20 } },
+    { name: 'keyword', label: '关键词', valueType: 'string', required: false, optional: true },
+    { name: 'assignedToMe', label: '仅分配给执行身份', valueType: 'boolean', required: false, optional: true },
+    { name: 'sort', label: '排序', valueType: 'string', required: false, optional: true },
+    { name: 'limit', label: '数量上限', valueType: 'number', required: false, optional: true, defaultValue: { type: 'literal', value: 20 } },
   ],
   outputPorts: [
     { name: 'issues', label: '需求列表', valueType: 'array' },
@@ -49,8 +49,8 @@ export const issueTransitionDefinition: NodeDefinition = {
   inputPorts: [
     { name: 'issueId', label: '工单 ID', valueType: 'number', required: true },
     { name: 'statusId', label: '目标状态 ID', valueType: 'number', required: true },
-    { name: 'comment', label: '流转说明', valueType: 'string', required: false },
-    { name: 'version', label: '工单版本', valueType: 'number', required: false },
+    { name: 'comment', label: '流转说明', valueType: 'string', required: false, optional: true },
+    { name: 'version', label: '工单版本', valueType: 'number', required: false, optional: true },
   ],
   outputPorts: [
     { name: 'issue', label: '更新后工单', valueType: 'object' },

@@ -96,6 +96,12 @@
   --tf-code-block-bg: #0d1117;
   --tf-code-block-text: #e6edf3;
 
+  /* 优先级颜色 */
+  --tf-priority-critical: #ef4444;
+  --tf-priority-high: #f97316;
+  --tf-priority-medium: #eab308;
+  --tf-priority-low: #6b7280;
+
   /* 看板列指示色 */
   --tf-indicator-warning: #f59e0b;
   --tf-indicator-indigo: #6366f1;
@@ -209,6 +215,12 @@
   --tf-code-block-bg: #f6f8fa;
   --tf-code-block-text: #1f2328;
 
+  /* 优先级颜色 */
+  --tf-priority-critical: #dc2626;
+  --tf-priority-high: #ea580c;
+  --tf-priority-medium: #ca8a04;
+  --tf-priority-low: #6b7280;
+
   /* 看板列指示色 */
   --tf-indicator-warning: #d97706;
   --tf-indicator-indigo: #4f46e5;
@@ -321,6 +333,12 @@
   /* 代码块颜色 */
   --tf-code-block-bg: #232A2E;
   --tf-code-block-text: #D3C6AA;
+
+  /* 优先级颜色 */
+  --tf-priority-critical: #E67E80;
+  --tf-priority-high: #E69875;
+  --tf-priority-medium: #DBBC7F;
+  --tf-priority-low: #859289;
 
   /* 看板列指示色 */
   --tf-indicator-warning: #DBBC7F;

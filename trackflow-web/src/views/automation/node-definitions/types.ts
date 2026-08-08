@@ -12,6 +12,8 @@ export interface InputPortDef {
   description?: string
   /** 默认值（新拖入节点时预填） */
   defaultValue?: InputValue
+  /** 是否可选折叠（true=默认折叠，用户主动展开才显示） */
+  optional?: boolean
 }
 
 /** 输出端口定义 */

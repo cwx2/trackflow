@@ -51,7 +51,7 @@ export interface UpdateAutomationDTO {
 // ====== 新 Schema：变量类型系统 ======
 
 /** 变量数据类型 */
-export type ValueType = 'string' | 'number' | 'boolean' | 'array' | 'object'
+export type ValueType = 'string' | 'number' | 'boolean' | 'array' | 'object' | 'any'
 
 /** 字面值（直接填写的固定值） */
 export interface LiteralValue {
@@ -66,8 +66,14 @@ export interface VariableRef {
   outputName: string   // 来源输出端口名称
 }
 
-/** 输入参数的值：字面值、变量引用、或未填写 */
-export type InputValue = LiteralValue | VariableRef | null
+/** 模板表达式值 — 混合文本和 {{nodeId.portName}} 变量引用 */
+export interface TemplateValue {
+  type: 'template'
+  template: string     // 模板字符串，如 "审核: {{node1.context}}"
+}
+
+/** 输入参数的值：字面值、变量引用、模板表达式、或未填写 */
+export type InputValue = LiteralValue | VariableRef | TemplateValue | null
 
 /** 输入参数定义（节点配置时的一个输入槽） */
 export interface InputParameter {

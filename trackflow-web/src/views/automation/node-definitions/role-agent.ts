@@ -6,8 +6,8 @@ export const roleAgentDefinition: NodeDefinition = {
   inputPorts: [
     { name: 'roleId', label: '角色 ID', valueType: 'number', required: true },
     { name: 'task', label: '任务', valueType: 'string', required: true },
-    { name: 'context', label: '上下文', valueType: 'object', required: false },
-    { name: 'workDir', label: '工作目录', valueType: 'string', required: false },
+    { name: 'context', label: '上下文', valueType: 'object', required: false, optional: true },
+    { name: 'workDir', label: '工作目录', valueType: 'string', required: false, optional: true },
   ],
   outputPorts: [
     { name: 'output', label: '原始输出', valueType: 'string' },

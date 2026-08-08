@@ -2,6 +2,7 @@ package com.trackflow.automation.execution;
 
 import com.trackflow.automation.node.model.InputParameter;
 import com.trackflow.automation.node.model.LiteralValue;
+import com.trackflow.automation.node.model.TemplateValue;
 import com.trackflow.automation.node.model.VariableRef;
 
 import java.util.HashMap;
@@ -9,8 +10,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class ExecutionContext {
+    private static final Pattern TEMPLATE_VAR_PATTERN = Pattern.compile("\\{\\{([^.}]+)\\.([^}]+)}}");
+
     private final Map<String, Map<String, Object>> nodeOutputs = new ConcurrentHashMap<>();
     private final Map<String, Object> globalVars;
     private final Map<String, Object> triggerInputs;
@@ -45,10 +50,29 @@ public class ExecutionContext {
                 value = getNodeOutput(ref.nodeId(), ref.outputName());
             } else if (input.value() instanceof LiteralValue lit) {
                 value = lit.value();
+            } else if (input.value() instanceof TemplateValue tmpl) {
+                value = resolveTemplate(tmpl.template());
             }
             resolved.put(input.name(), value);
         }
         return resolved;
+    }
+
+    /**
+     * 解析模板字符串，将 {{nodeId.portName}} 替换为实际运行时值
+     */
+    private String resolveTemplate(String template) {
+        if (template == null || template.isBlank()) return "";
+        Matcher matcher = TEMPLATE_VAR_PATTERN.matcher(template);
+        StringBuilder sb = new StringBuilder();
+        while (matcher.find()) {
+            String nodeId = matcher.group(1);
+            String portName = matcher.group(2);
+            Object resolved = getNodeOutput(nodeId, portName);
+            matcher.appendReplacement(sb, Matcher.quoteReplacement(resolved != null ? String.valueOf(resolved) : ""));
+        }
+        matcher.appendTail(sb);
+        return sb.toString();
     }
 
     public Map<String, Object> collectFinalOutputs() {
