@@ -37,6 +37,7 @@ export const PORT_ROW_H         = 28   // 每个端口行高
 export const HEADER_H           = 48   // 标题区高度
 export const PADDING_V          = 8    // 端口区上下 padding
 export const OPTIONAL_TOGGLE_H  = 24   // "可选参数"提示行高
+export const PORT_HANDLE_OFFSET = 6    // 端口外伸距离，让连线落在卡片前沿而不是被节点遮住
 
 export abstract class BaseNodeModel extends HtmlNodeModel {
   /** 子类需覆盖：提供节点类型名（用于从 node-definitions 读取默认值） */
@@ -143,12 +144,13 @@ export abstract class BaseNodeModel extends HtmlNodeModel {
 
     const anchors: any[] = []
 
-    // 输入端口锚点：左侧（贴近节点左边框，与 port-dot 视觉对齐）
+    // 输入/输出端口锚点外伸到卡片边界之外，与悬浮端口圆点的中心对齐。
+    // 边仍处于节点图层下方，但连接终点不会被卡片本体遮住。
     const startY = y - height / 2 + HEADER_H + PADDING_V + PORT_ROW_H / 2
     inputsForAnchors.forEach((p, i) => {
       anchors.push({
         id:          `${id}-in-${p.name}`,
-        x:           x - width / 2,
+        x:           x - width / 2 - PORT_HANDLE_OFFSET,
         y:           startY + i * PORT_ROW_H,
         type:        'input',
         edgeAddable: true,
@@ -157,7 +159,6 @@ export abstract class BaseNodeModel extends HtmlNodeModel {
       })
     })
 
-    // 输出端口锚点：右侧（贴近节点右边框，与 port-dot 视觉对齐）
     const hiddenOptionalCount = this._getHiddenOptionalCount(properties as any)
     const toggleHeight = (hiddenOptionalCount > 0 && !optionalExpanded) || optionalExpanded
       ? OPTIONAL_TOGGLE_H : 0
@@ -165,7 +166,7 @@ export abstract class BaseNodeModel extends HtmlNodeModel {
     outputs.forEach((p, i) => {
       anchors.push({
         id:          `${id}-out-${p.name}`,
-        x:           x + width / 2,
+        x:           x + width / 2 + PORT_HANDLE_OFFSET,
         y:           outStartY + i * PORT_ROW_H,
         type:        'output',
         edgeAddable: true,

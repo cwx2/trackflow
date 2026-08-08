@@ -219,7 +219,8 @@ function onNodeClick() {
   background: var(--wf-node-bg);
   border: 1px solid var(--wf-node-border);
   box-shadow: var(--wf-node-shadow);
-  overflow: hidden;
+  /* 让端口圆点伸出卡片边界，作为线条与参数的清晰连接点。 */
+  overflow: visible;
   cursor: pointer;
   transition: transform 150ms ease, border-color 150ms ease, box-shadow 150ms ease, background 150ms ease;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -419,7 +420,7 @@ function onNodeClick() {
 
 /* ── 端口区 ── */
 .node-body {
-  overflow: hidden;
+  overflow: visible;
 }
 
 .port-section {
@@ -437,6 +438,7 @@ function onNodeClick() {
   gap: 6px;
   height: 28px;
   padding: 0 10px;
+  position: relative;
   transition: background 120ms ease;
 }
 
@@ -452,19 +454,22 @@ function onNodeClick() {
   border: 2px solid var(--wf-node-bg);
   border-radius: 50%;
   flex-shrink: 0;
+  position: relative;
+  z-index: 2;
+  transition: transform 120ms ease, box-shadow 120ms ease;
 }
 
 /* 输入圆点：负 margin 让圆心贴近节点左边框，与线条锚点位置对齐 */
 .port-dot.in {
   background: var(--wf-port-in);
-  margin-left: -7px;   /* padding-left(10) - 半径(4.5) - border(2) */
+  margin-left: -22px;  /* 圆心外伸 6px，与 BaseNodeModel 的锚点对齐 */
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--wf-port-in) 58%, transparent);
 }
 
 /* 输出圆点：负 margin 让圆心贴近节点右边框 */
 .port-dot.out {
   background: var(--wf-port-out);
-  margin-right: -7px;  /* 同理 */
+  margin-right: -22px; /* 同理 */
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--wf-port-out) 58%, transparent);
 }
 .port-row:hover .port-dot { transform: scale(1.14); }

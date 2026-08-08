@@ -106,6 +106,6 @@ defineProps<{
   transform: translateY(-50%);
 }
 
-.terminal-port-start { right: -6px; }
-.terminal-port-end { left: -6px; }
+.terminal-port-start { right: -13px; }
+.terminal-port-end { left: -13px; }
 </style>

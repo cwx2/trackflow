@@ -49,7 +49,7 @@ class StartModel extends HtmlNodeModel {
     this.text = { value: '', x: 0, y: 0, draggable: false, editable: false }
   }
   getDefaultAnchor() {
-    return [{ id: `${this.id}-out-trigger`, x: this.x + 56, y: this.y, type: 'output', edgeAddable: true, connectable: true }]
+    return [{ id: `${this.id}-out-trigger`, x: this.x + 62, y: this.y, type: 'output', edgeAddable: true, connectable: true }]
   }
   getOutlineStyle() {
     const s = super.getOutlineStyle()
@@ -71,7 +71,7 @@ class EndModel extends HtmlNodeModel {
     this.text = { value: '', x: 0, y: 0, draggable: false, editable: false }
   }
   getDefaultAnchor() {
-    return [{ id: `${this.id}-in-result`, x: this.x - 56, y: this.y, type: 'input', edgeAddable: true, connectable: true }]
+    return [{ id: `${this.id}-in-result`, x: this.x - 62, y: this.y, type: 'input', edgeAddable: true, connectable: true }]
   }
   getOutlineStyle() {
     const s = super.getOutlineStyle()
