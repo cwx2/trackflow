@@ -129,7 +129,6 @@
 
       <!-- Planned actions -->
       <template v-if="isPlanned">
-        <a-button v-if="sprint.totalIssues > 0" size="mini" type="text" @click="$emit('viewOnBoard', sprint)">在看板中查看</a-button>
         <a-button v-if="canEdit" size="mini" type="text" @click="$emit('edit', sprint)">编辑</a-button>
         <a-tooltip :content="activateTooltip">
           <span class="tooltip-wrapper">
