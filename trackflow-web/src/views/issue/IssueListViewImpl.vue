@@ -1002,19 +1002,22 @@ import { useRouter, useRoute, onBeforeRouteLeave } from 'vue-router'
 import { IconPlus, IconSearch, IconLoading, IconEdit, IconPenFill, IconShareExternal, IconPushpin, IconDelete, IconLock, IconCheckCircle, IconEye, IconLayout, IconExpand, IconDownload, IconFile, IconCode, IconCopy, IconLink, IconCalendar, IconRight, IconSettings, IconMinusCircle, IconExclamationCircleFill } from '@arco-design/web-vue/es/icon'
 import { Message, Modal } from '@arco-design/web-vue'
 import { useConfirmDelete } from '@/composables/useConfirmDelete'
-import axios from 'axios'
-import { projectApi, issueApi, queryApi, sprintApi, tagApi, customFieldApi } from '@/api'
+import { projectApi, issueApi, sprintApi, customFieldApi } from '@/api'
 import type { IssueVO, IssueStatusVO, ProjectMemberVO, SprintVO, CustomFieldValueVO } from '@/api/types'
-import type { TagPanelItemVO, AvailableTagVO } from '@/api/tag'
 import type { TableData } from '@arco-design/web-vue'
 import { useAuthStore } from '@/stores/auth'
-import { localizeStatusName, localizePriority, priorityLabelMap, priorityReverseLabelMap, queryFieldKeyToLabel, queryFieldLabelToKey } from '@/utils/fieldLabels'
+import { localizeStatusName } from '@/utils/fieldLabels'
 import { DEFAULT_PRIORITY_OPTIONS, DEFAULT_PRIORITY_COLOR } from '@/composables/usePriorityOptions'
 import { DEFAULT_ISSUE_TYPE_OPTIONS, DEFAULT_ISSUE_TYPE_COLOR } from './composables/useIssueTypeOptions'
 import { extractVersion, showActionFeedback } from '@/utils/transition'
 import { ERROR_CODES } from '@/api/error-codes'
 import { IssuePriorityBadge, UserAvatar } from '@/components/base'
-import { useIssueList, useSelection, useInlineEdit, useBatchOps, usePermission, useColumnConfig, useViewSettings, useManualOrder, useDrafts } from './composables'
+import {
+  useIssueList, useSelection, useInlineEdit, useBatchOps, usePermission,
+  useColumnConfig, useViewSettings, useManualOrder, useDrafts,
+  useQueryPanel, useKeyboardNav, useContextMenu, useIssueExport,
+  useDashboardFilter, useProjectTagPanel, useTableConfig
+} from './composables'
 import { loadPriorityOptions } from './composables/usePriorityOptions'
 import { loadIssueTypeOptions } from './composables/useIssueTypeOptions'
 import type { IssueDraft } from './composables'
@@ -1038,7 +1041,7 @@ import IssueListLayout from './components/IssueListLayout.vue'
 const router = useRouter()
 const route = useRoute()
 
-// Composables
+// ===== Core composables =====
 const {
   issues, totalIssues, currentPage, pageSize, loading, loadError,
   sortState, loadIssues, goPage, changePageSize, updateLocalIssue, removeLocalIssue
@@ -1053,43 +1056,34 @@ const { isCellEditing, executeEdit } = useInlineEdit(issues)
 const { batchTransitStatus, batchAssign, batchUpdateSprint, batchUpdatePriority, batchTagAdd, batchTagRemove, batchAddLink, batchDelete } = useBatchOps()
 const { loadPermissions, canEditIssue, canDeleteIssue } = usePermission(issues)
 
-// View settings (layout/density/structure)
 const {
   layout, density, structure,
   isTreeMode, isListLayout, isTableLayout,
   setLayout, setDensity, setStructure
 } = useViewSettings()
 
-// Manual order (drag sorting)
 const {
   isManualSorted, isOwnerOrder, manualOrderData,
   loadManualOrder, saveOrder: saveManualOrder, discardOrder: discardManualOrder, reset: resetManualOrder
 } = useManualOrder()
 
-// 全局级创建权限：统一使用 authStore.canCreateIssue
+// Auth & permissions
 const authStore = useAuthStore()
 const canCreateIssueGlobal = authStore.canCreateIssue
 
-// 全局级批量操作权限：控制 checkbox 列和批量工具栏是否显示
 const canBatchOps = computed(() => {
   if (authStore.hasGlobalPermission('system:admin')) return true
-  if (authStore.permissionsLoaded) {
-    return authStore.hasGlobalPermission('nav:batch_ops')
-  }
-  // 权限未加载时乐观显示
+  if (authStore.permissionsLoaded) return authStore.hasGlobalPermission('nav:batch_ops')
   return true
 })
 
-// 全局级 Sprint 查看权限：控制是否预加载 Sprint 数据
 const canViewSprintGlobal = computed(() => {
   if (authStore.hasGlobalPermission('system:admin')) return true
-  if (authStore.permissionsLoaded) {
-    return authStore.hasGlobalPermission('nav:sprint_view') || authStore.hasGlobalPermission('nav:sprint_manage')
-  }
+  if (authStore.permissionsLoaded) return authStore.hasGlobalPermission('nav:sprint_view') || authStore.hasGlobalPermission('nav:sprint_manage')
   return true
 })
 
-// Panel state (declared before useColumnConfig so it can be passed as ref)
+// Shared state (declared early for composable dependencies)
 const activeProjectId = ref<string | null>(null)
 const filterBarRef = ref<InstanceType<typeof FilterBar> | null>(null)
 
