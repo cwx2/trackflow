@@ -13,7 +13,7 @@
           style="width: 100%"
           @change="(val: any) => setInputLiteral('issueId', val)"
         />
-        <template #extra>通常来自上游"查找工单"节点的输出</template>
+        <template #extra>通常由上游"查找工单"节点通过连线自动传入，也可手动填写固定 ID</template>
       </a-form-item>
 
       <a-form-item label="目标状态">
@@ -29,7 +29,7 @@
             {{ s.name }}
           </a-option>
         </a-select>
-        <template #extra>若 issueId 来自上游变量，此处展示所有状态供选择</template>
+        <template #extra>需符合该项目的工作流规则；工单 ID 动态传入时此处展示全部可用状态</template>
       </a-form-item>
 
       <a-form-item label="流转说明">

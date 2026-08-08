@@ -13,7 +13,7 @@
             {{ p.name }}
           </a-option>
         </a-select>
-        <template #extra>留空表示搜索所有项目的工单</template>
+        <template #extra>留空则搜索所有项目的工单；指定项目后只返回该项目内的结果</template>
       </a-form-item>
 
       <a-form-item label="状态筛选">
@@ -30,7 +30,7 @@
             {{ s.name }}
           </a-option>
         </a-select>
-        <template #extra>多选，最终以逗号分隔的 ID 字符串存储</template>
+        <template #extra>多选；运行时存储为逗号分隔的状态 ID 字符串，如 "3,7,12"</template>
       </a-form-item>
 
       <a-form-item label="优先级">
@@ -54,7 +54,7 @@
             <span class="priority-dot" style="background: var(--tf-priority-low)"></span> Low
           </a-option>
         </a-select>
-        <template #extra>多选，只返回指定优先级的工单</template>
+        <template #extra>多选；留空不过滤优先级，只返回勾选级别的工单</template>
       </a-form-item>
 
       <a-form-item label="工单类型">
@@ -71,7 +71,7 @@
           <a-option value="Chore">Chore</a-option>
           <a-option value="Epic">Epic</a-option>
         </a-select>
-        <template #extra>多选，只返回指定类型的工单</template>
+        <template #extra>多选；留空不过滤类型，只返回勾选类型的工单</template>
       </a-form-item>
 
       <a-form-item label="排序方式">

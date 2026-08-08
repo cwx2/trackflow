@@ -13,10 +13,7 @@
           style="width: 100%"
           @change="(val: any) => setInputLiteral('issueId', val)"
         />
-        <template #extra>通常来自上游"查找工单"节点的输出</template>
-      </a-form-item>
-
-      <a-form-item label="优先级">
+        <template #extra>通常由上游"查找工单"节点通过连线自动传入，也可手动填写固定 ID</template>
         <a-select
           :model-value="getInputLiteral('priority')"
           placeholder="不修改"
@@ -36,7 +33,7 @@
             <span class="priority-dot" style="background: var(--tf-priority-low)"></span> Low
           </a-option>
         </a-select>
-        <template #extra>留空则不修改优先级</template>
+        <template #extra>留空则不修改当前优先级，选择后将覆盖原值</template>
       </a-form-item>
 
       <a-form-item label="负责人">
@@ -51,7 +48,7 @@
           style="width: 100%"
           @change="(val: any) => setInputLiteral('assigneeId', val || undefined)"
         />
-        <template #extra>设置工单负责人的用户 ID</template>
+        <template #extra>填入系统用户 ID（整数）；留空不变，填 0 可清空负责人</template>
       </a-form-item>
 
       <a-form-item label="标签 ID">
@@ -66,7 +63,7 @@
           allow-clear
           @input="(val: any) => setInputLiteral('tagIds', val || undefined)"
         />
-        <template #extra>全量替换工单标签；留空不修改，设为空串清空所有标签</template>
+        <template #extra>全量替换，格式如 "1,2,3"；留空不修改；传入空字符串则清空所有标签</template>
       </a-form-item>
 
       <a-form-item label="自定义字段">
@@ -81,7 +78,7 @@
           :auto-size="{ minRows: 2, maxRows: 4 }"
           @input="(val: any) => setInputLiteral('customFields', val || undefined)"
         />
-        <template #extra>JSON 格式的自定义字段键值对，留空不修改</template>
+        <template #extra>JSON 对象，键为字段 key，值为新内容；只更新传入的字段，其余字段不受影响</template>
       </a-form-item>
 
       <a-alert type="info" style="margin-top: 8px">

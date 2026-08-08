@@ -1193,4 +1193,21 @@ onUnmounted(() => {
   border: 1px solid var(--tf-border);
   border-radius: 6px;
 }
+
+/* ── 节点配置面板：字段描述文字 ─────────────────────── */
+/* Arco Design extra slot 渲染为 .arco-form-item-extra */
+.panel-inner :deep(.arco-form-item-extra) {
+  font-size: 10px;
+  line-height: 1.5;
+  color: var(--tf-text-tertiary);
+  margin-top: 3px;
+  opacity: 0.85;
+}
+
+/* label 字号保持 12px，与 extra 形成明显层级差 */
+.panel-inner :deep(.arco-form-item-label) {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--tf-text-secondary);
+}
 </style>
