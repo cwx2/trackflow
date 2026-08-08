@@ -80,6 +80,7 @@
             <template v-if="isVideo(att)">
               <span class="att-file-icon">{{ getFileIcon(att.fileName) }}</span>
               <div class="att-video-play-overlay">
+                <!-- 保留 SVG：Arco 无等效图标，此处为自定义半透明圆形背景+三角播放按钮，组件无法复现 -->
                 <svg class="att-play-icon" viewBox="0 0 24 24" width="28" height="28">
                   <circle cx="12" cy="12" r="11" fill="rgba(0,0,0,0.6)" stroke="rgba(255,255,255,0.8)" stroke-width="1.5" />
                   <polygon points="10,8 10,16 17,12" fill="rgba(255,255,255,0.9)" />
