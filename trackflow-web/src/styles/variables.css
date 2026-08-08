@@ -77,6 +77,14 @@
   --tf-streaming: #a3e635;
   --tf-warning-strong: rgba(210, 153, 34, 0.3);
 
+  /* 语义色补充：更轻的半透明背景（用于警告/危险提示区块） */
+  --tf-danger-subtle: rgba(248, 81, 73, 0.06);
+  --tf-warning-subtle: rgba(210, 153, 34, 0.06);
+  --tf-muted-bg: rgba(139, 148, 158, 0.15);
+
+  /* Star/Watch 按钮高亮色 */
+  --tf-star: #f0a020;
+
   /* Issue 类型颜色 */
   --tf-type-bug: #f85149;
   --tf-type-task: #58a6ff;
@@ -182,6 +190,14 @@
   --tf-streaming: #65a30d;
   --tf-warning-strong: rgba(154, 103, 0, 0.3);
 
+  /* 语义色补充：更轻的半透明背景（用于警告/危险提示区块） */
+  --tf-danger-subtle: rgba(207, 34, 46, 0.05);
+  --tf-warning-subtle: rgba(154, 103, 0, 0.05);
+  --tf-muted-bg: rgba(139, 148, 158, 0.12);
+
+  /* Star/Watch 按钮高亮色 */
+  --tf-star: #d97706;
+
   /* Issue 类型颜色 */
   --tf-type-bug: #cf222e;
   --tf-type-task: #0969da;
@@ -286,6 +302,14 @@
   --tf-info: #D699B6;
   --tf-streaming: #A7C080;
   --tf-warning-strong: rgba(219, 188, 127, 0.3);
+
+  /* 语义色补充：更轻的半透明背景（用于警告/危险提示区块） */
+  --tf-danger-subtle: rgba(230, 126, 128, 0.06);
+  --tf-warning-subtle: rgba(219, 188, 127, 0.06);
+  --tf-muted-bg: rgba(133, 146, 137, 0.15);
+
+  /* Star/Watch 按钮高亮色 */
+  --tf-star: #DBBC7F;
 
   /* Issue 类型颜色 */
   --tf-type-bug: #E67E80;
