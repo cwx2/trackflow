@@ -30,7 +30,7 @@
           <p class="empty-desc">创建您的第一个 Agent 工作流，自动化处理需求、测试和代码审核</p>
           <div class="empty-actions">
             <a-button type="primary" @click="showCreateModal = true">新建工作流</a-button>
-            <a-button @click="showTemplateModal = true">从模板创建</a-button>
+            <a-button @click="showTemplateModal = true; loadTemplates()">从模板创建</a-button>
           </div>
         </div>
 
