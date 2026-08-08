@@ -1039,8 +1039,6 @@ import ViewSettingsMenu from './components/ViewSettingsMenu.vue'
 import IssueListLayout from './components/IssueListLayout.vue'
 
 const router = useRouter()
-
-const router = useRouter()
 const route = useRoute()
 
 // ===== Core composables =====
