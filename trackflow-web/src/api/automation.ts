@@ -79,8 +79,11 @@ export type InputValue = LiteralValue | VariableRef | TemplateValue | null
 /** 输入参数定义（节点配置时的一个输入槽） */
 export interface InputParameter {
   name: string
+  /** 画布展示名称，不参与运行时变量解析 */
+  label?: string
   valueType: ValueType
   required: boolean
+  optional?: boolean
   description?: string
   value: InputValue
 }
@@ -88,6 +91,8 @@ export interface InputParameter {
 /** 输出端口声明（该节点执行后会产出什么） */
 export interface OutputPort {
   name: string
+  /** 画布展示名称，不参与运行时变量解析 */
+  label?: string
   valueType: ValueType
   description?: string
 }
