@@ -16,7 +16,8 @@ import com.trackflow.project.entity.ProjectVisibility;
 import com.trackflow.project.mapper.ProjectMapper;
 import com.trackflow.project.mapper.ProjectMemberMapper;
 import com.trackflow.project.service.ProjectModuleService;
-import com.trackflow.system.service.SystemAuditService;
+import com.trackflow.common.annotation.AuditLog;
+import com.trackflow.common.audit.AuditContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -54,7 +55,6 @@ public class BoardCloneService {
     private final BoardSwimlaneConfigMapper boardSwimlaneConfigMapper;
     private final BoardChartConfigMapper boardChartConfigMapper;
     private final ProjectModuleService projectModuleService;
-    private final SystemAuditService systemAuditService;
 
     /** project_admin 角色 ID */
     private static final Long PROJECT_ADMIN_ROLE_ID = SystemRoleIds.PROJECT_ADMIN;
@@ -65,6 +65,7 @@ public class BoardCloneService {
      * @param dto 克隆请求
      * @return 新创建的看板基本信息
      */
+    @AuditLog(action = "board_clone", targetType = "board", targetId = "#result.projectId")
     @Transactional(rollbackFor = Exception.class)
     public CloneBoardResultVO cloneBoard(CloneBoardDTO dto) {
         Long currentUserId = SecurityUtils.getCurrentUserId();
@@ -128,18 +129,11 @@ public class BoardCloneService {
         copyBoardConfigWithResetPermissions(source.getId(), newProjectId, dto.getNewName().trim(), now);
 
         // 8. 记录审计日志
-        systemAuditService.log(
-                "board_clone",
-                "board",
-                newProjectId,
-                Map.of(
-                        "sourceProjectId", source.getId(),
-                        "sourceProjectKey", source.getKey(),
-                        "sourceProjectName", source.getName(),
-                        "newProjectKey", dto.getNewKey(),
-                        "newBoardName", dto.getNewName()
-                )
-        );
+        AuditContext.put("sourceProjectId", source.getId());
+        AuditContext.put("sourceProjectKey", source.getKey());
+        AuditContext.put("sourceProjectName", source.getName());
+        AuditContext.put("newProjectKey", dto.getNewKey());
+        AuditContext.put("newBoardName", dto.getNewName());
 
         log.info("Board clone completed: {} → {} (newProjectId={})",
                 source.getKey(), dto.getNewKey(), newProjectId);

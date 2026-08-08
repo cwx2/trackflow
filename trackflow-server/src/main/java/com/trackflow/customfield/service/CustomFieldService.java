@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.trackflow.auth.service.PermissionService;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
+import com.trackflow.common.annotation.AuditLog;
 import com.trackflow.common.model.PageResult;
 import com.trackflow.common.util.SecurityUtils;
 import com.trackflow.customfield.converter.CustomFieldConverter;
@@ -98,7 +99,6 @@ public class CustomFieldService {
     private final CustomFieldDisplayService displayService;
     private final SysUserMapper sysUserMapper;
     private final com.trackflow.customfield.handler.CustomFieldHandlerRegistry handlerRegistry;
-    private final com.trackflow.system.service.SystemAuditService systemAuditService;
 
     // ========== 全局字段定义 CRUD ==========
 
@@ -346,6 +346,7 @@ public class CustomFieldService {
         return usage;
     }
 
+    @AuditLog(action = "delete_custom_field", targetType = "custom_field", targetId = "#id")
     @Transactional(rollbackFor = Exception.class)
     public void delete(Long id, boolean confirm) {
         if (definitionMapper.selectById(id) == null) {
@@ -413,9 +414,6 @@ public class CustomFieldService {
         cascadeDeleteFieldRelations(id);
 
         definitionMapper.deleteById(id);
-
-        // 审计日志
-        systemAuditService.log("delete_custom_field", "custom_field", id, java.util.Map.of());
 
         log.info("Deleted custom field definition: {}", id);
     }
