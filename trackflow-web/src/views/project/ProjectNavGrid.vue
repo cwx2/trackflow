@@ -116,10 +116,10 @@ defineEmits<{
   color: var(--tf-text-on-accent);
 }
 
-.issues-icon { background: #3f51b5; }
-.board-icon { background: #009688; }
-.sprint-icon { background: #ff9800; }
-.members-icon { background: #9c27b0; }
+.issues-icon { background: var(--tf-accent); }
+.board-icon { background: var(--tf-success); }
+.sprint-icon { background: var(--tf-warning); }
+.members-icon { background: var(--tf-purple); }
 
 .nav-card-info {
   flex: 1;

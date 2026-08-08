@@ -222,8 +222,8 @@ watch(() => props.streamingOutput[selectedNodeId.value || ''], () => {
 .node-row:hover           { background: var(--tf-bg-hover); }
 .node-row.selected        { background: var(--tf-bg-elevated); border-left-color: var(--tf-accent); }
 .node-row.running .node-status-icon { color: var(--tf-accent); }
-.node-row.success .node-status-icon { color: #10b981; }
-.node-row.failed  .node-status-icon { color: #ef4444; }
+.node-row.success .node-status-icon { color: var(--tf-success); }
+.node-row.failed  .node-status-icon { color: var(--tf-danger); }
 .node-row.skipped .node-status-icon,
 .node-row.cancelled .node-status-icon { color: var(--tf-text-tertiary); }
 
@@ -260,8 +260,8 @@ watch(() => props.streamingOutput[selectedNodeId.value || ''], () => {
   white-space: pre-wrap;
   word-break: break-all;
 }
-.detail-json.streaming { max-height: 140px; color: #a3e635; }
-.error-text { color: #f87171; }
+.detail-json.streaming { max-height: 140px; color: var(--tf-streaming); }
+.error-text { color: var(--tf-danger); }
 
 .empty-hint { padding: 16px 10px; text-align: center; color: var(--tf-text-tertiary); font-size: 12px; }
 </style>

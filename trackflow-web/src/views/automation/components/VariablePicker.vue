@@ -196,9 +196,9 @@ watch(() => props.modelValue, (val) => {
 .ref-node { color: var(--tf-accent); font-weight: 500; }
 .ref-sep  { color: var(--tf-text-muted); }
 .ref-port { color: var(--tf-text-primary); }
-.ref-type { color: #64748b; font-size: 10px; }
-.clear-btn { color: #64748b; cursor: pointer; font-size: 10px; }
-.clear-btn:hover { color: #ef4444; }
+.ref-type { color: var(--tf-text-tertiary); font-size: 10px; }
+.clear-btn { color: var(--tf-text-tertiary); cursor: pointer; font-size: 10px; }
+.clear-btn:hover { color: var(--tf-danger); }
 
 .var-dropdown {
   position: absolute;
@@ -237,5 +237,5 @@ watch(() => props.modelValue, (val) => {
 .port-type { color: var(--tf-text-tertiary); font-size: 10px; }
 
 .empty-hint { padding: 12px; text-align: center; color: var(--tf-text-tertiary); font-size: 12px; }
-.invalid-hint { margin-top: 4px; color: #f59e0b; font-size: 11px; }
+.invalid-hint { margin-top: 4px; color: var(--tf-warning); font-size: 11px; }
 </style>
