@@ -4,6 +4,7 @@
     <div class="mode-tabs">
       <button :class="['mode-tab', mode === 'literal' ? 'active' : '']" @click="setMode('literal')">手动输入</button>
       <button :class="['mode-tab', mode === 'ref' ? 'active' : '']" @click="setMode('ref')">引用变量</button>
+      <button :class="['mode-tab', mode === 'template' ? 'active' : '']" @click="setMode('template')">模板表达式</button>
     </div>
 
     <!-- 字面值输入 -->
@@ -55,6 +56,37 @@
 
     <!-- 引用失效警告 -->
     <div v-if="isInvalid" class="invalid-hint">⚠ 引用节点已删除</div>
+
+    <!-- 模板表达式输入 -->
+    <div v-if="mode === 'template'" class="template-input">
+      <a-textarea
+        :model-value="templateValue"
+        :placeholder="'混合文本和变量引用，如：\n审核以下需求：{{node_id.port_name}}'"
+        size="small"
+        :auto-size="{ minRows: 2, maxRows: 6 }"
+        @input="onTemplateInput"
+      />
+      <div class="template-hint">
+        <span>使用 <code>{<!-- -->{nodeId.portName}}</code> 引用变量</span>
+        <button class="insert-var-btn" @click="showInsertDropdown = !showInsertDropdown">插入变量 ▾</button>
+      </div>
+      <!-- 插入变量下拉 -->
+      <div v-if="showInsertDropdown" class="var-dropdown template-dropdown" v-click-outside="() => showInsertDropdown = false">
+        <div v-if="availableVars.length === 0" class="empty-hint">暂无可用上游变量</div>
+        <template v-for="group in availableVars" :key="group.nodeId">
+          <div class="var-group-title">{{ group.nodeName }}</div>
+          <div
+            v-for="port in group.ports"
+            :key="port.name"
+            class="var-option"
+            @click="insertTemplateVar(group, port)"
+          >
+            <span class="port-name">{{ '{{' + group.nodeId + '.' + port.name + '}}' }}</span>
+            <span class="port-type">{{ port.valueType }}</span>
+          </div>
+        </template>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -88,15 +120,23 @@ const emit = defineEmits<{
 }>()
 
 const showDropdown = ref(false)
+const showInsertDropdown = ref(false)
 
 // 当前模式
-const mode = ref<'literal' | 'ref'>(
-  props.modelValue?.type === 'ref' ? 'ref' : 'literal'
+const mode = ref<'literal' | 'ref' | 'template'>(
+  props.modelValue?.type === 'ref' ? 'ref'
+    : props.modelValue?.type === 'template' ? 'template'
+    : 'literal'
 )
 
 // 字面值
 const literalValue = computed(() =>
   props.modelValue?.type === 'literal' ? String(props.modelValue.value ?? '') : ''
+)
+
+// 模板值
+const templateValue = computed(() =>
+  props.modelValue?.type === 'template' ? (props.modelValue as any).template ?? '' : ''
 )
 
 // 当前引用信息
@@ -128,10 +168,12 @@ const availableVars = computed<PortGroup[]>(() =>
     .filter(g => g.ports.length > 0)
 )
 
-function setMode(m: 'literal' | 'ref') {
+function setMode(m: 'literal' | 'ref' | 'template') {
   mode.value = m
   if (m === 'literal') {
     emit('update:modelValue', { type: 'literal', value: '' })
+  } else if (m === 'template') {
+    emit('update:modelValue', { type: 'template', template: '' } as any)
   } else {
     emit('update:modelValue', null)
   }
@@ -151,9 +193,20 @@ function clearRef() {
   emit('update:modelValue', null)
 }
 
+function onTemplateInput(val: string) {
+  emit('update:modelValue', { type: 'template', template: val } as any)
+}
+
+function insertTemplateVar(group: PortGroup, port: { name: string; valueType: string }) {
+  const varRef = `{{${group.nodeId}.${port.name}}}`
+  const current = templateValue.value
+  emit('update:modelValue', { type: 'template', template: current + varRef } as any)
+  showInsertDropdown.value = false
+}
+
 // 监听外部值变化同步 mode
 watch(() => props.modelValue, (val) => {
-  mode.value = val?.type === 'ref' ? 'ref' : 'literal'
+  mode.value = val?.type === 'ref' ? 'ref' : val?.type === 'template' ? 'template' : 'literal'
 })
 </script>
 
@@ -238,4 +291,33 @@ watch(() => props.modelValue, (val) => {
 
 .empty-hint { padding: 12px; text-align: center; color: var(--tf-text-tertiary); font-size: 12px; }
 .invalid-hint { margin-top: 4px; color: var(--tf-warning); font-size: 11px; }
+
+/* Template mode */
+.template-input { position: relative; }
+.template-hint {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 4px;
+  font-size: 10px;
+  color: var(--tf-text-tertiary);
+}
+.template-hint code {
+  background: var(--tf-bg-surface);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 10px;
+}
+.insert-var-btn {
+  border: none;
+  background: none;
+  color: var(--tf-accent);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 3px;
+  transition: background 0.15s;
+}
+.insert-var-btn:hover { background: var(--tf-accent-bg); }
+.template-dropdown { margin-top: 2px; }
 </style>

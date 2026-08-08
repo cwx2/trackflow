@@ -81,9 +81,14 @@ function addPreset(key: string, value: string) {
 
 // 同步数据变化
 watch(localVars, (val) => {
+  const validVars = val.filter(v => v.key)
+  // Build varValues map for new per-port output mode
+  const varValues: Record<string, string> = {}
+  validVars.forEach(({ key, value }) => { varValues[key] = value })
   emit('update:data', {
     ...props.data,
-    vars: val.filter(v => v.key).map(({ key, value }) => ({ key, value }))
+    vars: validVars.map(({ key, value }) => ({ key, value })),
+    varValues,
   })
 }, { deep: true })
 

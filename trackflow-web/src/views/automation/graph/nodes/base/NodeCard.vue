@@ -6,77 +6,72 @@
   >
     <!-- ── 标题区 ── -->
     <div class="node-header" :style="{ '--node-color': nodeMeta.color }">
-      <!-- 左侧彩色条 -->
       <div class="color-bar" />
-
-      <!-- 图标 -->
       <div class="node-icon" :style="{ background: nodeMeta.color + '22' }">
         <span>{{ nodeMeta.icon }}</span>
       </div>
-
-      <!-- 标题 + 描述 -->
       <div class="node-title-wrap">
         <span class="node-title">{{ nodeMeta.title }}</span>
         <span v-if="nodeMeta.description" class="node-desc">{{ nodeMeta.description }}</span>
       </div>
-
-      <!-- 右侧：hover 操作 + 运行状态 + 展开/折叠 -->
       <div class="node-header-actions">
         <span v-if="runStatus === 'running'" class="status-dot running" />
         <span v-else-if="runStatus === 'success'" class="status-icon success">✓</span>
         <span v-else-if="runStatus === 'failed'"  class="status-icon failed">✗</span>
         <span v-else-if="runStatus === 'skipped'" class="status-icon skipped">−</span>
         <span v-else-if="runStatus === 'cancelled'" class="status-icon cancelled">■</span>
-
-        <!-- hover 时浮出的操作按钮 -->
         <div class="hover-actions">
-          <!-- 运行 -->
           <button class="hover-btn" title="运行此节点" @click.stop="emit('run-node')">
             <icon-play-arrow-fill :size="12" />
           </button>
-          <!-- 更多菜单 -->
           <div class="hover-more-wrap" ref="moreMenuRef">
             <button class="hover-btn" title="更多操作" @click.stop="moreMenuOpen = !moreMenuOpen">
               <icon-more :size="14" />
             </button>
-            <!-- 下拉菜单 -->
             <div v-if="moreMenuOpen" class="more-menu" @click.stop>
               <button class="more-menu-item" @click="onMenuAction('rename')">重命名</button>
               <button class="more-menu-item" @click="onMenuAction('duplicate')">创建副本</button>
               <button class="more-menu-item danger" @click="onMenuAction('delete')">删除</button>
               <div class="more-menu-divider" />
-              <button class="more-menu-item" @click="onMenuAction('help')">
-                帮助文档
-                <span class="help-icon">?</span>
-              </button>
+              <button class="more-menu-item" @click="onMenuAction('help')">帮助文档<span class="help-icon">?</span></button>
             </div>
           </div>
         </div>
-
-        <!-- 展开/折叠按钮 -->
-        <button
-          class="expand-btn"
-          :title="expanded ? '收起' : '展开'"
-          @click.stop="onToggleExpand"
-        >
+        <button class="expand-btn" :title="expanded ? '收起' : '展开'" @click.stop="onToggleExpand">
           <icon-up v-if="expanded" :size="14" />
           <icon-down v-else :size="14" />
         </button>
       </div>
     </div>
 
-    <!-- ── 端口区（永远显示） ── -->
+    <!-- ── 端口区（永远显示，但只显示非折叠端口） ── -->
     <div class="node-body">
-      <!-- 输入端口 -->
-      <div v-if="inputs.length" class="port-section">
-        <div v-for="port in inputs" :key="port.name" class="port-row port-in">
+      <!-- 输入端口（只显示 visible 的） -->
+      <div v-if="visibleInputs.length" class="port-section">
+        <div v-for="port in visibleInputs" :key="port.name" class="port-row port-in">
           <div class="port-dot in" />
           <span class="port-label">{{ port.label || port.name }}</span>
           <span class="port-type">{{ typeLabel(port.valueType) }}</span>
         </div>
       </div>
+      <!-- 可选端口折叠提示 -->
+      <div v-if="hiddenOptionalCount > 0 && !optionalExpanded" class="optional-toggle" @click.stop="optionalExpanded = true">
+        <span>+ {{ hiddenOptionalCount }} 个可选参数</span>
+      </div>
+      <!-- 展开的可选输入端口 -->
+      <div v-if="optionalExpanded && optionalInputs.length" class="port-section optional-ports">
+        <div v-for="port in optionalInputs" :key="port.name" class="port-row port-in">
+          <div class="port-dot in" />
+          <span class="port-label">{{ port.label || port.name }}</span>
+          <span class="port-type">{{ typeLabel(port.valueType) }}</span>
+          <button class="port-collapse-btn" title="收起此参数" @click.stop="removeOptionalPort(port.name)">×</button>
+        </div>
+        <div class="optional-toggle collapse" @click.stop="optionalExpanded = false">
+          <span>收起可选参数</span>
+        </div>
+      </div>
       <!-- 分隔线 -->
-      <div v-if="inputs.length && outputs.length" class="port-divider" />
+      <div v-if="(visibleInputs.length || optionalExpanded) && outputs.length" class="port-divider" />
       <!-- 输出端口 -->
       <div v-if="outputs.length" class="port-section">
         <div v-for="port in outputs" :key="port.name" class="port-row port-out">
@@ -86,28 +81,30 @@
         </div>
       </div>
 
-      <!-- ── 展开追加区（端口下方滑入） ── -->
+      <!-- ── 展开追加区 ── -->
       <div class="expand-extra" :class="{ visible: expanded }">
         <div class="expand-extra-inner">
           <!-- 输入参数详情 -->
-          <section v-if="inputs.length" class="param-section">
+          <section v-if="allInputs.length" class="param-section">
             <div class="param-section-header">
               <span class="param-section-title">输入参数</span>
-              <button class="add-param-btn">+</button>
+              <button class="add-param-btn" title="添加输入端口" @click.stop="showAddPortDialog('input')">+</button>
             </div>
             <div class="param-table-head">
               <span>参数名称</span>
               <span>参数值</span>
             </div>
-            <div v-for="port in inputs" :key="port.name" class="param-row">
+            <div v-for="port in allInputs" :key="port.name" class="param-row">
               <div class="param-name">
                 <div class="port-dot in small" />
                 <span>{{ port.name }}</span>
                 <span v-if="port.required" class="required-badge">必填</span>
+                <span v-else-if="port.optional" class="optional-badge">可选</span>
               </div>
               <div class="param-value">
                 <span class="param-type-tag">{{ typeLabel(port.valueType) }}</span>
-                <button class="param-more">···</button>
+                <button v-if="!port.required && isCustomPort(port.name)" class="param-delete" title="删除端口" @click.stop="removePort('input', port.name)">×</button>
+                <button v-else class="param-more">···</button>
               </div>
             </div>
           </section>
@@ -118,7 +115,7 @@
           <section v-if="outputs.length" class="param-section">
             <div class="param-section-header">
               <span class="param-section-title">输出参数</span>
-              <button class="add-param-btn">+</button>
+              <button class="add-param-btn" title="添加输出端口" @click.stop="showAddPortDialog('output')">+</button>
             </div>
             <div class="param-table-head">
               <span>参数名称</span>
@@ -131,11 +128,39 @@
               </div>
               <div class="param-value">
                 <span class="param-type-tag">{{ typeLabel(port.valueType) }}</span>
-                <button class="param-more">···</button>
+                <button v-if="isCustomPort(port.name)" class="param-delete" title="删除端口" @click.stop="removePort('output', port.name)">×</button>
+                <button v-else class="param-more">···</button>
               </div>
             </div>
           </section>
         </div>
+      </div>
+    </div>
+
+    <!-- ── 添加端口弹窗 ── -->
+    <div v-if="addPortVisible" class="add-port-dialog" @click.stop>
+      <div class="add-port-title">添加{{ addPortType === 'input' ? '输入' : '输出' }}端口</div>
+      <div class="add-port-field">
+        <label>端口名称</label>
+        <input v-model="newPortName" placeholder="例如: myVariable" class="add-port-input" />
+      </div>
+      <div class="add-port-field">
+        <label>类型</label>
+        <select v-model="newPortType" class="add-port-select">
+          <option value="string">文本</option>
+          <option value="number">数字</option>
+          <option value="boolean">布尔</option>
+          <option value="object">对象</option>
+          <option value="array">数组</option>
+          <option value="any">任意</option>
+        </select>
+      </div>
+      <div v-if="addPortType === 'input'" class="add-port-field">
+        <label><input type="checkbox" v-model="newPortRequired" /> 必填</label>
+      </div>
+      <div class="add-port-actions">
+        <button class="add-port-confirm" @click.stop="confirmAddPort">确认</button>
+        <button class="add-port-cancel" @click.stop="addPortVisible = false">取消</button>
       </div>
     </div>
   </div>
@@ -144,6 +169,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import type { PortDef, NodeMeta, NodeRunStatus } from './BaseNodeModel'
+import type { ValueType } from '@/api/automation'
+import { getNodeDefinition } from '../../../node-definitions'
 
 const props = defineProps<{
   nodeId: string
@@ -165,14 +192,93 @@ const nodeMeta    = computed<NodeMeta>(() => props.properties?.nodeMeta ?? {
   title: '节点', icon: '⬡', color: '#6366f1', description: '',
 })
 
-// 更多菜单
+// ── 可选端口折叠逻辑 ──
+const optionalExpanded = ref(false)
+
+/** 获取节点定义中的 optional 标记 */
+const nodeDefinition = computed(() => {
+  const nodeType = props.properties?.nodeType
+  return nodeType ? getNodeDefinition(nodeType) : undefined
+})
+
+/** 非可选的输入端口（始终显示） */
+const visibleInputs = computed<PortDef[]>(() => {
+  const def = nodeDefinition.value
+  if (!def) return inputs.value
+  const optionalNames = new Set(
+    def.inputPorts.filter(p => p.optional).map(p => p.name)
+  )
+  return inputs.value.filter(p => !optionalNames.has(p.name))
+})
+
+/** 可选的输入端口（折叠时隐藏） */
+const optionalInputs = computed<PortDef[]>(() => {
+  const def = nodeDefinition.value
+  if (!def) return []
+  const optionalNames = new Set(
+    def.inputPorts.filter(p => p.optional).map(p => p.name)
+  )
+  return inputs.value.filter(p => optionalNames.has(p.name))
+})
+
+/** 隐藏的可选端口数量 */
+const hiddenOptionalCount = computed(() => optionalInputs.value.length)
+
+/** 所有输入端口（展开态参数列表用） */
+const allInputs = computed<PortDef[]>(() => inputs.value)
+
+/** 判断端口是否为用户自定义新增（非节点定义中声明的） */
+function isCustomPort(portName: string): boolean {
+  const def = nodeDefinition.value
+  if (!def) return true
+  const builtinInputs = def.inputPorts.map(p => p.name)
+  const builtinOutputs = def.outputPorts.map(p => p.name)
+  return !builtinInputs.includes(portName) && !builtinOutputs.includes(portName)
+}
+
+/** 移除可选端口（从视图隐藏） */
+function removeOptionalPort(_portName: string) {
+  // 如果所有可选端口都被单独收起，则关闭可选区
+  optionalExpanded.value = false
+}
+
+// ── 动态端口增删 ──
+const addPortVisible = ref(false)
+const addPortType = ref<'input' | 'output'>('input')
+const newPortName = ref('')
+const newPortType = ref<ValueType>('string')
+const newPortRequired = ref(false)
+
+function showAddPortDialog(type: 'input' | 'output') {
+  addPortType.value = type
+  newPortName.value = ''
+  newPortType.value = 'string'
+  newPortRequired.value = false
+  addPortVisible.value = true
+}
+
+function confirmAddPort() {
+  if (!newPortName.value.trim()) return
+  addPortVisible.value = false
+  // Emit event for the parent model to handle adding the port
+  emit('menu-action', `add-${addPortType.value}-port`, JSON.stringify({
+    name: newPortName.value.trim(),
+    valueType: newPortType.value,
+    required: newPortRequired.value,
+  }))
+}
+
+function removePort(type: 'input' | 'output', portName: string) {
+  emit('menu-action', `remove-${type}-port`, portName)
+}
+
+// ── 更多菜单 ──
 const moreMenuOpen = ref(false)
 const moreMenuRef  = ref<HTMLElement | null>(null)
 
 function onMenuAction(action: string) {
   moreMenuOpen.value = false
   emit('menu-action', action, props.nodeId)
-  // 内置处理：onNodeClick 对应的操作通知外部
   props.onNodeClick?.()
 }
 
@@ -630,4 +736,146 @@ function onNodeClick() {
   background: var(--wf-node-header-border);
   margin: 0 12px;
 }
+
+/* ── 可选端口折叠区 ── */
+.optional-toggle {
+  padding: 4px 10px;
+  font-size: 11px;
+  color: var(--wf-port-label);
+  cursor: pointer;
+  transition: color 150ms;
+  user-select: none;
+}
+.optional-toggle:hover {
+  color: var(--wf-node-title);
+}
+.optional-toggle.collapse {
+  padding-top: 2px;
+}
+
+.optional-ports {
+  border-left: 2px dashed var(--wf-node-border-hover);
+  margin-left: 6px;
+}
+
+.port-collapse-btn {
+  width: 16px;
+  height: 16px;
+  border: none;
+  background: none;
+  color: var(--wf-port-label);
+  cursor: pointer;
+  font-size: 12px;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 150ms, background 150ms;
+  flex-shrink: 0;
+}
+.port-row:hover .port-collapse-btn { opacity: 1; }
+.port-collapse-btn:hover { background: var(--wf-node-border); color: var(--wf-status-failed); }
+
+.optional-badge {
+  font-size: 10px;
+  color: var(--wf-port-label);
+  flex-shrink: 0;
+}
+
+/* ── 添加端口弹窗 ── */
+.add-port-dialog {
+  position: absolute;
+  bottom: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--wf-node-bg);
+  border: 1px solid var(--wf-node-border-hover);
+  border-radius: 8px;
+  padding: 12px;
+  min-width: 200px;
+  box-shadow: var(--tf-shadow-lg);
+  z-index: 200;
+}
+
+.add-port-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--wf-node-title);
+  margin-bottom: 10px;
+}
+
+.add-port-field {
+  margin-bottom: 8px;
+}
+.add-port-field label {
+  display: block;
+  font-size: 11px;
+  color: var(--wf-port-label);
+  margin-bottom: 3px;
+}
+
+.add-port-input,
+.add-port-select {
+  width: 100%;
+  height: 28px;
+  border: 1px solid var(--wf-node-border);
+  border-radius: 4px;
+  background: var(--wf-node-bg);
+  color: var(--wf-node-title);
+  padding: 0 8px;
+  font-size: 12px;
+  box-sizing: border-box;
+}
+.add-port-input:focus,
+.add-port-select:focus {
+  outline: none;
+  border-color: var(--wf-node-border-hover);
+}
+
+.add-port-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.add-port-confirm,
+.add-port-cancel {
+  flex: 1;
+  height: 26px;
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 150ms;
+}
+.add-port-confirm {
+  background: var(--wf-node-border-hover);
+  color: var(--wf-node-title);
+}
+.add-port-confirm:hover { background: var(--wf-port-label); }
+.add-port-cancel {
+  background: var(--wf-node-border);
+  color: var(--wf-port-label);
+}
+.add-port-cancel:hover { background: var(--wf-node-border-hover); }
+
+/* ── 端口删除按钮 ── */
+.param-delete {
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: none;
+  color: var(--wf-status-failed);
+  cursor: pointer;
+  border-radius: 3px;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 150ms, background 150ms;
+}
+.param-row:hover .param-delete { opacity: 1; }
+.param-delete:hover { background: rgba(239,68,68,0.1); }
 </style>
