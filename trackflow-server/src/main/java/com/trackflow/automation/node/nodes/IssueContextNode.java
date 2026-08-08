@@ -1,12 +1,12 @@
 package com.trackflow.automation.node.nodes;
 
 import com.trackflow.automation.execution.ExecutionContext;
-import com.trackflow.automation.node.InputPortDef;
 import com.trackflow.automation.node.NodeDefinition;
-import com.trackflow.automation.node.NodeExecutor;
-import com.trackflow.automation.node.OutputPortDef;
 import com.trackflow.automation.node.NodeExecutionException;
-import com.trackflow.automation.node.WorkflowNodeModel;
+import com.trackflow.automation.node.NodeExecutor;
+import com.trackflow.automation.node.model.InputPortDef;
+import com.trackflow.automation.node.model.OutputPortDef;
+import com.trackflow.automation.node.model.WorkflowNodeModel;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 

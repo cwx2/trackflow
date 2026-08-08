@@ -63,6 +63,8 @@
             <SubWorkflowConfig v-else-if="selectedNode.properties?.nodeType === 'sub-workflow'" v-model:data="selectedNode.properties" />
             <IssueSearchConfig v-else-if="selectedNode.properties?.nodeType === 'trackflow-issue-search'" v-model:data="selectedNode.properties" />
             <IssueTransitionConfig v-else-if="selectedNode.properties?.nodeType === 'trackflow-issue-transition'" v-model:data="selectedNode.properties" />
+            <IssueContextConfig v-else-if="selectedNode.properties?.nodeType === 'trackflow-issue-context'" v-model:data="selectedNode.properties" />
+            <IssueUpdateConfig v-else-if="selectedNode.properties?.nodeType === 'trackflow-issue-update'" v-model:data="selectedNode.properties" />
             <RoleAgentConfig v-else-if="selectedNode.properties?.nodeType === 'role-agent'" v-model:data="selectedNode.properties" />
             <GenericNodeConfig
               v-else
@@ -190,6 +192,8 @@ import HttpRequestConfig from './components/HttpRequestConfig.vue'
 import SubWorkflowConfig from './components/SubWorkflowConfig.vue'
 import IssueSearchConfig from './components/IssueSearchConfig.vue'
 import IssueTransitionConfig from './components/IssueTransitionConfig.vue'
+import IssueContextConfig from './components/IssueContextConfig.vue'
+import IssueUpdateConfig from './components/IssueUpdateConfig.vue'
 import RoleAgentConfig from './components/RoleAgentConfig.vue'
 import GenericNodeConfig from './components/GenericNodeConfig.vue'
 import GlobalVariablesConfig from './components/GlobalVariablesConfig.vue'
@@ -948,6 +952,8 @@ function deleteSelectedNode() {
 
 // 获取节点标题
 function getNodeTitle(type: string): string {
+  const def = getNodeDefinition(type)
+  if (def) return def.meta.title
   switch (type) {
     case 'cli-agent': return 'CLI Agent'
     case 'variables': return '变量设置'

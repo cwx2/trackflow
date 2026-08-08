@@ -33,6 +33,60 @@
         <div class="form-hint">多选，最终以逗号分隔的 ID 字符串存储</div>
       </a-form-item>
 
+      <a-form-item label="优先级">
+        <a-select
+          :model-value="priorityArray"
+          placeholder="选择一个或多个优先级"
+          multiple
+          allow-clear
+          @change="onPriorityChange"
+        >
+          <a-option value="critical">
+            <span class="priority-dot" style="background: #ef4444"></span> Critical
+          </a-option>
+          <a-option value="high">
+            <span class="priority-dot" style="background: #f97316"></span> High
+          </a-option>
+          <a-option value="medium">
+            <span class="priority-dot" style="background: #eab308"></span> Medium
+          </a-option>
+          <a-option value="low">
+            <span class="priority-dot" style="background: #6b7280"></span> Low
+          </a-option>
+        </a-select>
+        <div class="form-hint">多选，只返回指定优先级的工单</div>
+      </a-form-item>
+
+      <a-form-item label="工单类型">
+        <a-select
+          :model-value="issueTypeArray"
+          placeholder="选择一个或多个类型"
+          multiple
+          allow-clear
+          @change="onIssueTypeChange"
+        >
+          <a-option value="Bug">Bug</a-option>
+          <a-option value="Feature">Feature</a-option>
+          <a-option value="Task">Task</a-option>
+          <a-option value="Chore">Chore</a-option>
+          <a-option value="Epic">Epic</a-option>
+        </a-select>
+        <div class="form-hint">多选，只返回指定类型的工单</div>
+      </a-form-item>
+
+      <a-form-item label="排序方式">
+        <a-select
+          :model-value="getInputLiteral('sort') || '-priority,-created_at'"
+          @change="(val: any) => setInputLiteral('sort', val)"
+        >
+          <a-option value="-priority,-created_at">优先级降序（默认）</a-option>
+          <a-option value="created_at">创建时间升序</a-option>
+          <a-option value="-created_at">创建时间降序</a-option>
+          <a-option value="-updated_at">更新时间降序</a-option>
+          <a-option value="due_date">截止日期升序</a-option>
+        </a-select>
+      </a-form-item>
+
       <a-form-item label="只查分配给执行人的工单">
         <a-switch
           :model-value="Boolean(getInputLiteral('assignedToMe'))"
@@ -89,9 +143,39 @@ const statusIdArray = computed(() => {
   return []
 })
 
+// Compute priority as array
+const priorityArray = computed(() => {
+  const raw = getInputLiteral('priority')
+  if (!raw) return []
+  if (typeof raw === 'string') {
+    return raw.split(',').filter(Boolean).map(s => s.trim())
+  }
+  return []
+})
+
+// Compute issueType as array
+const issueTypeArray = computed(() => {
+  const raw = getInputLiteral('issueType')
+  if (!raw) return []
+  if (typeof raw === 'string') {
+    return raw.split(',').filter(Boolean).map(s => s.trim())
+  }
+  return []
+})
+
 function onStatusChange(selectedIds: string[]) {
   const value = selectedIds.length ? selectedIds.join(',') : undefined
   setInputLiteral('statusIds', value)
+}
+
+function onPriorityChange(selected: string[]) {
+  const value = selected.length ? selected.join(',') : undefined
+  setInputLiteral('priority', value)
+}
+
+function onIssueTypeChange(selected: string[]) {
+  const value = selected.length ? selected.join(',') : undefined
+  setInputLiteral('issueType', value)
 }
 
 // Input helpers (same pattern as GenericNodeConfig)
@@ -165,6 +249,15 @@ onMounted(() => {
 }
 
 .status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+.priority-dot {
   display: inline-block;
   width: 8px;
   height: 8px;
