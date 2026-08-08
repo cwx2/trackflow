@@ -61,6 +61,9 @@
             <CodeConfig v-else-if="selectedNode.properties?.nodeType === 'code'" v-model:data="selectedNode.properties" />
             <HttpRequestConfig v-else-if="selectedNode.properties?.nodeType === 'http-request'" v-model:data="selectedNode.properties" />
             <SubWorkflowConfig v-else-if="selectedNode.properties?.nodeType === 'sub-workflow'" v-model:data="selectedNode.properties" />
+            <IssueSearchConfig v-else-if="selectedNode.properties?.nodeType === 'trackflow-issue-search'" v-model:data="selectedNode.properties" />
+            <IssueTransitionConfig v-else-if="selectedNode.properties?.nodeType === 'trackflow-issue-transition'" v-model:data="selectedNode.properties" />
+            <RoleAgentConfig v-else-if="selectedNode.properties?.nodeType === 'role-agent'" v-model:data="selectedNode.properties" />
             <GenericNodeConfig
               v-else
               v-model:data="selectedNode.properties"
@@ -185,6 +188,9 @@ import DelayConfig from './components/DelayConfig.vue'
 import CodeConfig from './components/CodeConfig.vue'
 import HttpRequestConfig from './components/HttpRequestConfig.vue'
 import SubWorkflowConfig from './components/SubWorkflowConfig.vue'
+import IssueSearchConfig from './components/IssueSearchConfig.vue'
+import IssueTransitionConfig from './components/IssueTransitionConfig.vue'
+import RoleAgentConfig from './components/RoleAgentConfig.vue'
 import GenericNodeConfig from './components/GenericNodeConfig.vue'
 import GlobalVariablesConfig from './components/GlobalVariablesConfig.vue'
 import ExecutionPanel from './components/ExecutionPanel.vue'
