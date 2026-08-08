@@ -111,6 +111,9 @@ public class IssueService {
     private final IssueCommentService commentService;
     private final IssueAttachmentService attachmentService;
     private final IssueVOAssembler issueVOAssembler;
+    private final IssueBatchService issueBatchService;
+    private final IssueMoveService issueMoveService;
+    private final IssueQueryService issueQueryService;
 
     /**
      * 创建 Issue
@@ -306,289 +309,25 @@ public class IssueService {
     }
 
     /**
-     * Issue 列表（接受 IssueQuery，完整筛选支持）
-     * 强制按用户所属项目过滤：如果指定了 projectId，校验成员关系；如果未指定，自动限定为所属项目。
-     * <p>
-     * 注：此方法使用 QueryWrapper（非 LambdaQueryWrapper），因为：
-     * 1. applyFilter/applyNegativeFilter 辅助方法通过动态列名参数化实现通用筛选
-     * 2. applyKeywordFilter 和 excludeDoneBefore 使用 .apply() 子查询语法，需要 raw SQL
-     * 这些场景 LambdaQueryWrapper 无法覆盖，故保留 QueryWrapper。
+     * Issue 列表（接受 IssueQuery，完整筛选支持）。委托给 {@link IssueQueryService}。
      */
     public Page<Issue> listByQuery(IssueQuery query) {
-        Long currentUserId = SecurityUtils.getCurrentUserId();
-        QueryWrapper<Issue> wrapper = new QueryWrapper<>();
-        wrapper.isNull("deleted_at");
-
-        if (query.getProjectId() != null) {
-            // 指定了 projectId，校验可访问性（兼容 internal/public 项目的非成员访问）
-            projectService.assertProjectAccessible(currentUserId, query.getProjectId());
-            wrapper.eq("project_id", query.getProjectId());
-        } else {
-            // 未指定 projectId，自动限定为用户所属项目
-            List<Long> accessibleProjectIds = projectService.getAccessibleProjectIds(currentUserId);
-            if (accessibleProjectIds != null) {
-                // 非系统管理员：限定项目范围
-                if (accessibleProjectIds.isEmpty()) {
-                    return new Page<>();
-                }
-                wrapper.in("project_id", accessibleProjectIds);
-            }
-            // accessibleProjectIds == null 表示系统管理员，不加限制
-        }
-
-        // statusId: supports single or comma-separated
-        applyFilter(wrapper, "status_id", query.getStatusId(), true);
-        // priority: supports single or comma-separated
-        applyFilter(wrapper, "priority", query.getPriority(), false);
-        // assigneeId: supports single or comma-separated (skipped when assignedToMe=true, which takes priority)
-        if (!"true".equalsIgnoreCase(query.getAssignedToMe())) {
-            applyFilter(wrapper, "assignee_id", query.getAssigneeId(), true);
-        }
-        // assigneeName: lookup by display name (used by report drill-down)
-        if (query.getAssigneeName() != null && !query.getAssigneeName().isBlank()) {
-            wrapper.apply("assignee_id IN (SELECT id FROM sys_user WHERE display_name = {0})", query.getAssigneeName().trim());
-        }
-        if (query.getReporterId() != null) wrapper.eq("reporter_id", query.getReporterId());
-        // sprintId: supports single or comma-separated
-        applyFilter(wrapper, "sprint_id", query.getSprintId(), true);
-        // issueType: supports single or comma-separated
-        applyFilter(wrapper, "issue_type", query.getIssueType(), false);
-
-        // Negative filters
-        applyNegativeFilter(wrapper, "status_id", query.getStatusIdNot(), true);
-        applyNegativeFilter(wrapper, "priority", query.getPriorityNot(), false);
-        applyNegativeFilter(wrapper, "assignee_id", query.getAssigneeIdNot(), true);
-        applyNegativeFilter(wrapper, "sprint_id", query.getSprintIdNot(), true);
-        applyNegativeFilter(wrapper, "issue_type", query.getIssueTypeNot(), false);
-
-        // Tag filter: EXISTS subquery on issue_tag_relation (OR semantics for multiple tags)
-        if (query.getTagId() != null && !query.getTagId().isBlank()) {
-            String tagIdValue = query.getTagId().trim();
-            if (tagIdValue.contains(",")) {
-                List<Long> tagIds = java.util.Arrays.stream(tagIdValue.split(","))
-                        .map(String::trim).filter(s -> !s.isEmpty())
-                        .map(Long::parseLong).toList();
-                wrapper.apply("EXISTS (SELECT 1 FROM issue_tag_relation itr WHERE itr.issue_id = issue.id AND itr.tag_id IN ("
-                        + tagIds.stream().map(String::valueOf).collect(Collectors.joining(",")) + "))");
-            } else {
-                wrapper.apply("EXISTS (SELECT 1 FROM issue_tag_relation itr WHERE itr.issue_id = issue.id AND itr.tag_id = {0})",
-                        Long.parseLong(tagIdValue));
-            }
-        }
-
-        // Parent/child relationship filters
-        if (query.getParentId() != null) {
-            wrapper.eq("parent_id", query.getParentId());
-        }
-        if ("true".equals(query.getHasParent())) {
-            wrapper.isNotNull("parent_id");
-        } else if ("false".equals(query.getHasParent())) {
-            wrapper.isNull("parent_id");
-        }
-
-        // Date range filters
-        if (query.getCreatedAfter() != null) {
-            wrapper.ge("created_at", query.getCreatedAfter().atStartOfDay());
-        }
-        if (query.getCreatedBefore() != null) {
-            wrapper.le("created_at", query.getCreatedBefore().atTime(23, 59, 59));
-        }
-        if (query.getUpdatedAfter() != null) {
-            wrapper.ge("updated_at", query.getUpdatedAfter().atStartOfDay());
-        }
-        if (query.getUpdatedBefore() != null) {
-            wrapper.le("updated_at", query.getUpdatedBefore().atTime(23, 59, 59));
-        }
-        if (query.getResolvedAfter() != null) {
-            wrapper.ge("resolved_at", query.getResolvedAfter().atStartOfDay());
-        }
-        if (query.getResolvedBefore() != null) {
-            wrapper.le("resolved_at", query.getResolvedBefore().atTime(23, 59, 59));
-        }
-
-        // hideResolved: exclude all is_closed=true statuses
-        if ("true".equals(query.getHideResolved())) {
-            Set<Long> closedStatusIds = statusCacheHelper.getClosedStatusIds();
-            if (!closedStatusIds.isEmpty()) {
-                wrapper.notIn("status_id", closedStatusIds);
-            }
-        }
-
-        // onlyResolved: only show is_closed=true statuses
-        if ("true".equals(query.getOnlyResolved())) {
-            Set<Long> closedStatusIds = statusCacheHelper.getClosedStatusIds();
-            if (!closedStatusIds.isEmpty()) {
-                wrapper.in("status_id", closedStatusIds);
-            } else {
-                // No closed statuses defined — return nothing
-                wrapper.apply("1 = 0");
-            }
-        }
-
-        // Special filters: overdue, dueSoon, reportedByMe (all exclude done/cancelled statuses)
-        boolean needClosedExclusion = "true".equals(query.getOverdue())
-                || "true".equals(query.getDueSoon())
-                || "true".equals(query.getReportedByMe());
-
-        if (needClosedExclusion) {
-            List<IssueStatus> allStatuses = statusMapper.selectList(null);
-            List<Long> closedIds = allStatuses.stream()
-                    .filter(s -> IssueStatusCategory.isClosed(s.getCategory()))
-                    .map(IssueStatus::getId).toList();
-            if (!closedIds.isEmpty()) {
-                wrapper.notIn("status_id", closedIds);
-            }
-        }
-
-        if ("true".equals(query.getOverdue()) || "true".equals(query.getDueSoon())) {
-            wrapper.isNotNull("due_date");
-            if ("true".equals(query.getOverdue())) {
-                wrapper.lt("due_date", LocalDate.now());
-            }
-            if ("true".equals(query.getDueSoon())) {
-                wrapper.le("due_date", LocalDate.now().plusDays(7));
-            }
-        }
-
-        // dueAfter / dueBefore: 按截止日期范围筛选（用于日历 Widget 等场景）
-        if (query.getDueAfter() != null) {
-            wrapper.ge("due_date", query.getDueAfter());
-        }
-        if (query.getDueBefore() != null) {
-            wrapper.le("due_date", query.getDueBefore());
-        }
-
-        // reportedByMe: reporter_id = current user
-        if ("true".equals(query.getReportedByMe())) {
-            wrapper.eq("reporter_id", currentUserId);
-        }
-
-        // assignedToMe: assignee_id = current user
-        if ("true".equalsIgnoreCase(query.getAssignedToMe())) {
-            wrapper.eq("assignee_id", currentUserId);
-        }
-
-        // excludeDoneBefore: 排除在此日期之前完成的工单（看板"已完成保留天数"服务端过滤）
-        // 逻辑：status 不属于 done/cancelled → 保留；属于 done/cancelled → resolved_at >= cutoff 或 resolved_at IS NULL 时保留
-        if (query.getExcludeDoneBefore() != null) {
-            Set<Long> closedStatusIds = statusCacheHelper.getClosedStatusIds();
-            if (!closedStatusIds.isEmpty()) {
-                // NOT (status_id IN (closed) AND resolved_at < cutoff)
-                // 等价于：status NOT closed OR resolved_at >= cutoff OR resolved_at IS NULL
-                wrapper.and(w -> w
-                        .notIn("status_id", closedStatusIds)
-                        .or()
-                        .ge("resolved_at", query.getExcludeDoneBefore().atStartOfDay())
-                        .or()
-                        .isNull("resolved_at")
-                );
-            }
-        }
-
-        String keyword = query.getKeyword();
-        if (keyword != null && !keyword.isBlank()) {
-            applyKeywordFilter(wrapper, keyword);
-        }
-
-        // 处理排序：自定义字段排序通过子查询实现，内置字段通过 toPage() 处理
-        String sort = query.getSort();
-        boolean hasCustomFieldSort = false;
-        boolean hasSpecialSort = false;
-        if (sort != null && !sort.isBlank()) {
-            // 解析排序方向（-fieldName 降序，fieldName 升序）
-            boolean desc = sort.startsWith("-");
-            String sortField = desc ? sort.substring(1) : sort;
-            if (customFieldSortHelper.isCustomFieldSortKey(sortField)) {
-                hasCustomFieldSort = customFieldSortHelper.applyCustomFieldSort(wrapper, sortField, !desc);
-            } else if ("remaining".equals(sortField)) {
-                // remaining 是派生字段（estimated_hours - COALESCE(spent_hours, 0)），不对应实际列，需特殊处理
-                hasSpecialSort = true;
-                if (desc) {
-                    wrapper.last("ORDER BY (COALESCE(estimated_hours, 0) - COALESCE(spent_hours, 0)) DESC NULLS LAST");
-                } else {
-                    wrapper.last("ORDER BY (COALESCE(estimated_hours, 0) - COALESCE(spent_hours, 0)) ASC NULLS LAST");
-                }
-            } else if ("priority".equals(sortField)) {
-                // 使用 IssuePriorityHelper 统一优先级排序逻辑
-                // ASC = 优先级从高到低（紧急→低），DESC = 优先级从低到高（低→紧急）
-                hasSpecialSort = true;
-                if (desc) {
-                    wrapper.last("ORDER BY " + IssuePriorityHelper.PRIORITY_ORDER_EXPR + " DESC, updated_at DESC");
-                } else {
-                    wrapper.last("ORDER BY " + IssuePriorityHelper.PRIORITY_ORDER_EXPR + " ASC, updated_at DESC");
-                }
-            }
-        }
-
-        // 默认排序兜底（当无有效自定义字段排序且 toPage() 也无有效排序时生效）
-        if (!hasCustomFieldSort && !hasSpecialSort) {
-            wrapper.orderByDesc("updated_at");
-        }
-
-        // 对于自定义字段排序或特殊字段排序，清空 sort 参数避免 toPage() 产生冲突的 ORDER BY
-        if (hasCustomFieldSort || hasSpecialSort) {
-            String originalSort = query.getSort();
-            query.setSort(null);
-            Page<Issue> result = issueMapper.selectPage(query.toPage(), wrapper);
-            query.setSort(originalSort); // 恢复原值，避免影响调用方
-            return result;
-        }
-        return issueMapper.selectPage(query.toPage(), wrapper);
+        return issueQueryService.listByQuery(query);
     }
 
     /**
      * 工单列表查询（返回分页结果）。
-     * Controller 负责通过 Converter + Assembler 将结果转为 VO。
      */
     @Transactional(readOnly = true)
     public Page<Issue> listIssuesPage(IssueQuery query) {
-        return listByQuery(query);
+        return issueQueryService.listByQuery(query);
     }
 
     /**
-     * 查找与给定关键词相似的工单（用于创建工单时的重复检测）。
-     * 使用全文索引 + trigram 匹配搜索标题相似的工单，结果轻量只包含展示必要字段。
-     *
-     * @param keyword   搜索关键词（来自新工单的标题）
-     * @param projectId 限定搜索的项目 ID（可选，为 null 时搜索用户有权访问的所有项目）
-     * @param limit     最大返回数量
-     * @return 相似工单列表
+     * 查找与给定关键词相似的工单。委托给 {@link IssueQueryService}。
      */
     public List<Issue> findSimilarIssues(String keyword, Long projectId, int limit) {
-        if (keyword == null || keyword.isBlank() || keyword.length() < 3) {
-            return Collections.emptyList();
-        }
-
-        QueryWrapper<Issue> wrapper = new QueryWrapper<>();
-        wrapper.isNull("deleted_at");
-
-        // 限定项目范围
-        if (projectId != null) {
-            wrapper.eq("project_id", projectId);
-        } else {
-            // 如果未指定项目，限制搜索范围为用户可访问的项目
-            Long currentUserId = SecurityUtils.getCurrentUserId();
-            List<Long> accessibleProjectIds = projectService.getAccessibleProjectIds(currentUserId);
-            if (accessibleProjectIds != null) {
-                if (accessibleProjectIds.isEmpty()) {
-                    return Collections.emptyList();
-                }
-                wrapper.in("project_id", accessibleProjectIds);
-            }
-            // null 表示系统管理员，不加限制
-        }
-
-        // 复用关键词搜索逻辑
-        applyKeywordFilter(wrapper, keyword);
-
-        // 只取标题相关度最高的结果，按更新时间倒序
-        wrapper.orderByDesc("updated_at");
-
-        Page<Issue> page = new Page<>(1, limit);
-        page.setSearchCount(false); // 不需要 count 查询，提高性能
-        Page<Issue> result = issueMapper.selectPage(page, wrapper);
-
-        return result.getRecords();
+        return issueQueryService.findSimilarIssues(keyword, projectId, limit);
     }
 
     /**
@@ -914,77 +653,6 @@ public class IssueService {
         // 返回更新后的版本号
         Issue updated = getById(issueId);
         return TransitStatusResult.of(updated.getVersion(), actionResult);
-    }
-
-    /**
-     * 通用筛选条件应用（支持逗号分隔多值和 "none" 关键字）。
-     * 使用字符串列名以实现多字段复用，避免为每个字段写重复代码。
-     */
-    private void applyFilter(QueryWrapper<Issue> wrapper, String column, String value, boolean isNumeric) {
-        if (value == null || value.isBlank()) return;
-        // "none" means IS NULL (e.g. sprintId=none → issues with no sprint)
-        if ("none".equalsIgnoreCase(value.trim())) {
-            wrapper.isNull(column);
-            return;
-        }
-        if (value.contains(",")) {
-            List<?> values = isNumeric
-                    ? java.util.Arrays.stream(value.split(",")).map(String::trim).filter(s -> !s.isEmpty()).map(Long::parseLong).toList()
-                    : java.util.Arrays.stream(value.split(",")).map(String::trim).filter(s -> !s.isEmpty()).toList();
-            wrapper.in(column, values);
-        } else {
-            if (isNumeric) {
-                wrapper.eq(column, Long.parseLong(value.trim()));
-            } else {
-                wrapper.eq(column, value.trim());
-            }
-        }
-    }
-
-    private void applyNegativeFilter(QueryWrapper<Issue> wrapper, String column, String value, boolean isNumeric) {
-        if (value == null || value.isBlank()) return;
-        // "none" means IS NOT NULL (e.g. assigneeIdNot=none → issues with assignee)
-        if ("none".equalsIgnoreCase(value.trim())) {
-            wrapper.isNotNull(column);
-            return;
-        }
-        List<?> values = isNumeric
-                ? java.util.Arrays.stream(value.split(",")).map(String::trim).filter(s -> !s.isEmpty()).map(Long::parseLong).toList()
-                : java.util.Arrays.stream(value.split(",")).map(String::trim).filter(s -> !s.isEmpty()).toList();
-        wrapper.notIn(column, values);
-    }
-
-    /**
-     * 关键词过滤：使用混合搜索策略兼顾中英文和性能。
-     * <p>
-     * 搜索策略（OR 组合，确保覆盖范围不缩小）：
-     * <ul>
-     *   <li>全文搜索 (tsvector @@ plainto_tsquery) — 利用 idx_issue_fulltext GIN 索引，对空格分隔的英文词效果最佳</li>
-     *   <li>title ILIKE — 利用 idx_issue_title_trgm trigram GIN 索引，对中文子串匹配有效</li>
-     *   <li>description ILIKE — 利用 idx_issue_description_trgm trigram GIN 索引，匹配描述中的关键词</li>
-     *   <li>issue_key ILIKE — 精确匹配工单编号</li>
-     *   <li>assignee 名称 ILIKE — 利用 idx_sys_user_display_name_trgm 索引</li>
-     * </ul>
-     */
-    private void applyKeywordFilter(QueryWrapper<Issue> wrapper, String keyword) {
-        String escaped = SqlUtils.escapeLikePattern(keyword);
-        String likePattern = "%" + escaped + "%";
-        wrapper.and(w -> w
-                // 全文搜索：利用 idx_issue_fulltext GIN 索引（对空格分隔的英文词效果最佳）
-                .apply("to_tsvector('simple', COALESCE(title,'') || ' ' || COALESCE(description,'')) @@ plainto_tsquery('simple', {0})", keyword)
-                .or()
-                // title 子串匹配：利用 idx_issue_title_trgm trigram GIN 索引（对中文子串有效）
-                .apply("title ILIKE {0} ESCAPE '\\'", likePattern)
-                .or()
-                // description 子串匹配：利用 idx_issue_description_trgm trigram GIN 索引
-                .apply("description ILIKE {0} ESCAPE '\\'", likePattern)
-                .or()
-                // issue_key 匹配
-                .apply("issue_key ILIKE {0} ESCAPE '\\'", likePattern)
-                .or()
-                // assignee 名称匹配：利用 idx_sys_user_display_name_trgm / idx_sys_user_username_trgm
-                .apply("assignee_id IN (SELECT id FROM sys_user WHERE display_name ILIKE {0} ESCAPE '\\' OR username ILIKE {0} ESCAPE '\\')", likePattern)
-        );
     }
 
     /**
@@ -1469,286 +1137,21 @@ public class IssueService {
      * 6. 通知触发
      */
     @Transactional(rollbackFor = Exception.class)
+    /**
+     * 移动工单到另一个项目。委托给 {@link IssueMoveService}。
+     * @deprecated 优先直接注入 IssueMoveService 调用
+     */
     public Issue moveToProject(Long issueId, MoveIssueDTO dto) {
-        Issue issue = getById(issueId);
-        Long sourceProjectId = issue.getProjectId();
-        Long targetProjectId = dto.getTargetProjectId();
-
-        // 不能移动到同一个项目
-        if (sourceProjectId.equals(targetProjectId)) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST, "工单已在该项目中，无需移动");
-        }
-
-        // 源项目和目标项目都不能是归档状态
-        projectService.assertProjectActive(sourceProjectId);
-        projectService.assertProjectActive(targetProjectId);
-
-        Long currentUserId = SecurityUtils.getCurrentUserId();
-
-        // 权限校验：源项目需要 issue:move，目标项目需要 issue:create
-        if (!permissionService.hasPermission(currentUserId, sourceProjectId, "issue:move")) {
-            throw new BusinessException(ErrorCode.ACCESS_DENIED, "您没有在源项目中移动工单的权限");
-        }
-        if (!permissionService.hasPermission(currentUserId, targetProjectId, "issue:create")) {
-            throw new BusinessException(ErrorCode.ACCESS_DENIED, "您没有在目标项目中创建工单的权限");
-        }
-
-        // 获取源/目标项目信息
-        var sourceProject = projectService.getById(sourceProjectId);
-        var targetProject = projectService.getById(targetProjectId);
-        if (targetProject == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "目标项目不存在");
-        }
-
-        // 生成新的 issue_key
-        String oldIssueKey = issue.getIssueKey();
-        int newSeq = projectService.nextIssueSequence(targetProjectId);
-        String newIssueKey = targetProject.getKey() + "-" + newSeq;
-
-        // 字段清理：Sprint 置空（不同项目的 Sprint 不通用）
-        Long oldSprintId = issue.getSprintId();
-        issue.setSprintId(null);
-
-        // 字段清理：如果 assignee 不是目标项目成员，置空
-        Long oldAssigneeId = issue.getAssigneeId();
-        if (oldAssigneeId != null && !projectService.isProjectMember(oldAssigneeId, targetProjectId)) {
-            issue.setAssigneeId(null);
-        }
-
-        // 更新核心字段
-        issue.setProjectId(targetProjectId);
-        issue.setIssueKey(newIssueKey);
-
-        // 子工单处理：清理 parentId（如果父工单不在目标项目中）
-        if (issue.getParentId() != null) {
-            Issue parent = issueMapper.selectById(issue.getParentId());
-            if (parent == null || !parent.getProjectId().equals(targetProjectId)) {
-                issue.setParentId(null);
-            }
-        }
-
-        // 保存旧 Key 到历史表，实现 Key 重定向
-        IssueKeyHistory keyHistory = new IssueKeyHistory();
-        keyHistory.setIssueId(issueId);
-        keyHistory.setOldKey(oldIssueKey);
-        keyHistory.setNewKey(newIssueKey);
-        keyHistory.setChangedBy(currentUserId);
-        issueKeyHistoryMapper.insert(keyHistory);
-
-        // 状态兼容性检查：当前 statusId 在目标项目工作流中是否可达
-        boolean statusValid = workflowService.isStatusInWorkflow(
-                targetProjectId, issue.getIssueType(), issue.getStatusId());
-        if (!statusValid) {
-            // 自动回退到系统默认状态（对标 YouTrack：移动后状态不兼容时重置为默认值）
-            var defaultStatus = workflowService.getDefaultStatus();
-            if (defaultStatus != null) {
-                Long oldStatusId = issue.getStatusId();
-                issue.setStatusId(defaultStatus.getId());
-                String oldStatusName = statusCacheHelper.getStatusName(oldStatusId);
-                String newStatusName = defaultStatus.getLocalizedName();
-                recordActivity(issueId, currentUserId, "status_reset", "status",
-                        oldStatusName, newStatusName);
-                log.info("Issue {} moved to project {}: status auto-reset from {} to default ({})",
-                        issueId, targetProjectId, oldStatusName, newStatusName);
-            }
-        }
-
-        int rows = issueMapper.updateById(issue);
-        if (rows == 0) {
-            throw new BusinessException(ErrorCode.CONFLICT, "该工单已被其他人修改，请刷新页面后重试");
-        }
-
-        // 自定义字段清理：移除不适用于目标项目的字段值
-        customFieldService.removeOrphanValues(issueId, issue.getIssueType(), targetProjectId);
-
-        // 子工单反向清理：清除源项目中仍引用此工单的子工单的 parent_id
-        List<Issue> orphanChildren = issueMapper.selectList(
-                new LambdaQueryWrapper<Issue>()
-                        .eq(Issue::getParentId, issueId)
-                        .isNull(Issue::getDeletedAt));
-        if (!orphanChildren.isEmpty()) {
-            issueMapper.clearParentId(issueId);
-            for (Issue child : orphanChildren) {
-                recordActivity(child.getId(), currentUserId, "updated", "parent",
-                        oldIssueKey, null, oldIssueKey, null);
-            }
-            // 刷新被移动工单的 childCount/childClosedCount（子工单已解除，归零）
-            ancestorRefreshService.refreshAncestorChain(issueId);
-            log.info("Issue {} moved: cleared parent_id on {} child issues in source project",
-                    issueId, orphanChildren.size());
-        }
-
-        // 关联数据：更新 time_entry 的 project_id
-        timeEntryMapper.update(null,
-                new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<com.trackflow.timeentry.entity.TimeEntry>()
-                        .eq(com.trackflow.timeentry.entity.TimeEntry::getIssueId, issueId)
-                        .set(com.trackflow.timeentry.entity.TimeEntry::getProjectId, targetProjectId));
-
-        // 活动记录
-        String sourceProjectName = sourceProject != null ? sourceProject.getName() : String.valueOf(sourceProjectId);
-        String targetProjectName = targetProject.getName();
-        recordActivity(issueId, currentUserId, "moved_to_project", "project",
-                sourceProjectName, targetProjectName);
-
-        // Sprint 清空活动记录（如果原来有值）
-        if (oldSprintId != null) {
-            String oldSprintName = null;
-            var oldSprint = sprintMapper.selectById(oldSprintId);
-            if (oldSprint != null) oldSprintName = oldSprint.getName();
-            recordActivity(issueId, currentUserId, "updated", "sprint",
-                    String.valueOf(oldSprintId), null, oldSprintName, null);
-        }
-
-        // Assignee 清空活动记录（如果因移动被清空）
-        if (oldAssigneeId != null && issue.getAssigneeId() == null) {
-            String oldAssigneeName = getUserDisplayName(oldAssigneeId);
-            recordActivity(issueId, currentUserId, "assigned", "assignee", oldAssigneeName, null);
-        }
-
-        // issue_key 变更活动
-        recordActivity(issueId, currentUserId, "updated", "issue_key", oldIssueKey, newIssueKey);
-
-        // 失效两个项目的缓存
-        eventPublisher.publishEvent(ReportCacheInvalidationEvent.of(sourceProjectId, "issue_moved"));
-        eventPublisher.publishEvent(ReportCacheInvalidationEvent.of(targetProjectId, "issue_moved"));
-
-        // 通知：通知工单相关人
-        eventPublisher.publishEvent(new IssueNotificationEvent.Moved(issue, sourceProjectId, targetProjectId, currentUserId));
-
-        log.info("Issue {} moved from project {} ({}) to project {} ({}). Key: {} → {}",
-                issueId, sourceProjectId, sourceProjectName, targetProjectId, targetProjectName,
-                oldIssueKey, newIssueKey);
-
-        return issue;
+        return issueMoveService.moveToProject(issueId, dto);
     }
 
     /**
-     * 自动化规则使用的内部移动方法——跳过权限检查，使用指定的 operatorId 作为操作者。
-     * 用于 WorkflowRuleEngine 的 move_to_project 动作。
-     *
-     * @param issueId         要移动的工单 ID
-     * @param targetProjectId 目标项目 ID
-     * @param operatorId      操作者 ID（规则创建者）
-     * @return 移动后的 Issue 实体
+     * 自动化规则使用的内部移动方法。委托给 {@link IssueMoveService}。
+     * @deprecated 优先直接注入 IssueMoveService 调用
      */
     @Transactional(rollbackFor = Exception.class)
     public Issue moveToProjectByAutomation(Long issueId, Long targetProjectId, Long operatorId) {
-        Issue issue = getById(issueId);
-        Long sourceProjectId = issue.getProjectId();
-
-        if (sourceProjectId.equals(targetProjectId)) {
-            log.warn("[Automation] moveToProject: issue {} already in target project {}", issueId, targetProjectId);
-            return issue;
-        }
-
-        var sourceProject = projectService.getById(sourceProjectId);
-        var targetProject = projectService.getById(targetProjectId);
-        if (targetProject == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "目标项目不存在: " + targetProjectId);
-        }
-
-        // 生成新的 issue_key
-        String oldIssueKey = issue.getIssueKey();
-        int newSeq = projectService.nextIssueSequence(targetProjectId);
-        String newIssueKey = targetProject.getKey() + "-" + newSeq;
-
-        // Sprint 置空
-        Long oldSprintId = issue.getSprintId();
-        issue.setSprintId(null);
-
-        // Assignee 清理：如果不在目标项目
-        Long oldAssigneeId = issue.getAssigneeId();
-        if (oldAssigneeId != null && !projectService.isProjectMember(oldAssigneeId, targetProjectId)) {
-            issue.setAssigneeId(null);
-        }
-
-        // 更新核心字段
-        issue.setProjectId(targetProjectId);
-        issue.setIssueKey(newIssueKey);
-
-        // 子工单处理
-        if (issue.getParentId() != null) {
-            Issue parent = issueMapper.selectById(issue.getParentId());
-            if (parent == null || !parent.getProjectId().equals(targetProjectId)) {
-                issue.setParentId(null);
-            }
-        }
-
-        // 保存旧 Key 到历史表
-        IssueKeyHistory keyHistory = new IssueKeyHistory();
-        keyHistory.setIssueId(issueId);
-        keyHistory.setOldKey(oldIssueKey);
-        keyHistory.setNewKey(newIssueKey);
-        keyHistory.setChangedBy(operatorId);
-        issueKeyHistoryMapper.insert(keyHistory);
-
-        // 状态兼容性检查
-        boolean statusValid = workflowService.isStatusInWorkflow(
-                targetProjectId, issue.getIssueType(), issue.getStatusId());
-        if (!statusValid) {
-            var defaultStatus = workflowService.getDefaultStatus();
-            if (defaultStatus != null) {
-                Long oldStatusId = issue.getStatusId();
-                issue.setStatusId(defaultStatus.getId());
-                String oldStatusName = statusCacheHelper.getStatusName(oldStatusId);
-                String newStatusName = defaultStatus.getLocalizedName();
-                recordActivity(issueId, operatorId, "status_reset", "status",
-                        oldStatusName, newStatusName);
-            }
-        }
-
-        issueMapper.updateById(issue);
-
-        // 自定义字段清理
-        customFieldService.removeOrphanValues(issueId, issue.getIssueType(), targetProjectId);
-
-        // 子工单反向清理
-        List<Issue> orphanChildren = issueMapper.selectList(
-                new LambdaQueryWrapper<Issue>()
-                        .eq(Issue::getParentId, issueId)
-                        .isNull(Issue::getDeletedAt));
-        if (!orphanChildren.isEmpty()) {
-            issueMapper.clearParentId(issueId);
-            for (Issue child : orphanChildren) {
-                recordActivity(child.getId(), operatorId, "updated", "parent",
-                        oldIssueKey, null, oldIssueKey, null);
-            }
-            ancestorRefreshService.refreshAncestorChain(issueId);
-        }
-
-        // 更新 time_entry 的 project_id
-        timeEntryMapper.update(null,
-                new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<com.trackflow.timeentry.entity.TimeEntry>()
-                        .eq(com.trackflow.timeentry.entity.TimeEntry::getIssueId, issueId)
-                        .set(com.trackflow.timeentry.entity.TimeEntry::getProjectId, targetProjectId));
-
-        // 活动记录
-        String sourceProjectName = sourceProject != null ? sourceProject.getName() : String.valueOf(sourceProjectId);
-        String targetProjectName = targetProject.getName();
-        recordActivity(issueId, operatorId, "moved_to_project", "project",
-                sourceProjectName, targetProjectName);
-
-        if (oldSprintId != null) {
-            var oldSprint = sprintMapper.selectById(oldSprintId);
-            String oldSprintName = oldSprint != null ? oldSprint.getName() : null;
-            recordActivity(issueId, operatorId, "updated", "sprint",
-                    String.valueOf(oldSprintId), null, oldSprintName, null);
-        }
-
-        if (oldAssigneeId != null && issue.getAssigneeId() == null) {
-            String oldAssigneeName = getUserDisplayName(oldAssigneeId);
-            recordActivity(issueId, operatorId, "assigned", "assignee", oldAssigneeName, null);
-        }
-
-        recordActivity(issueId, operatorId, "updated", "issue_key", oldIssueKey, newIssueKey);
-
-        eventPublisher.publishEvent(ReportCacheInvalidationEvent.of(sourceProjectId, "issue_moved"));
-        eventPublisher.publishEvent(ReportCacheInvalidationEvent.of(targetProjectId, "issue_moved"));
-
-        log.info("[Automation] Issue {} moved from project {} to project {}. Key: {} → {}",
-                issueId, sourceProjectId, targetProjectId, oldIssueKey, newIssueKey);
-
-        return issue;
+        return issueMoveService.moveToProjectByAutomation(issueId, targetProjectId, operatorId);
     }
 
     // ========== 父子关系逻辑 ==========
@@ -1807,233 +1210,47 @@ public class IssueService {
         return issueMapper.selectCount(wrapper);
     }
 
-    // ========== 批量操作 ==========
+    // ========== 批量操作（委托给 IssueBatchService） ==========
 
-    /**
-     * 批量操作通用执行模板。
-     * <p>
-     * 遍历 issueIds，对每个 issue 执行：getById → assertProjectActive → 权限校验 → action。
-     * 部分成功部分失败是设计意图（非事务），结果收集在 BatchOperationResult 中。
-     *
-     * @param issueIds       工单 ID 列表
-     * @param permissionCode 权限代码（如 "issue:edit"）
-     * @param action         对单个 issue 执行的业务动作（入参为已通过校验的 issue），返回 null 表示成功，返回非空字符串表示业务拒绝原因
-     * @param operationName  操作名称（用于日志）
-     */
-    private BatchOperationResult executeBatch(
-            List<Long> issueIds,
-            String permissionCode,
-            BatchIssueAction action,
-            String operationName) {
-        return executeBatchWithSilent(issueIds, permissionCode, action, operationName, false);
-    }
-
-    /**
-     * 支持静默模式的批量操作执行引擎。
-     * silent=true 时通知事件监听器会跳过通知发送。
-     */
-    private BatchOperationResult executeBatchWithSilent(
-            List<Long> issueIds,
-            String permissionCode,
-            BatchIssueAction action,
-            String operationName,
-            boolean silent) {
-
-        if (silent) {
-            NotificationContext.setSilent(true);
-        }
-        try {
-            return doExecuteBatch(issueIds, permissionCode, action, operationName);
-        } finally {
-            if (silent) {
-                NotificationContext.clear();
-            }
-        }
-    }
-
-    /**
-     * 批量操作核心逻辑。
-     */
-    private BatchOperationResult doExecuteBatch(
-            List<Long> issueIds,
-            String permissionCode,
-            BatchIssueAction action,
-            String operationName) {
-
-        Long currentUserId = SecurityUtils.getCurrentUserId();
-        BatchOperationResult result = new BatchOperationResult();
-        result.setTotal(issueIds.size());
-
-        for (Long issueId : issueIds) {
-            Issue issue = null;
-            try {
-                issue = getById(issueId);
-                projectService.assertProjectActive(issue.getProjectId());
-                // 使用资源级权限检查：reporter/assignee 对 issue:edit 和 issue:change_status 有额外权限
-                if (!permissionService.hasIssuePermission(currentUserId, issue, permissionCode)) {
-                    result.addFailure(issueId, issue.getIssueKey(), "无" + operationName + "权限");
-                    continue;
-                }
-                String rejectReason = action.execute(issue, currentUserId);
-                if (rejectReason != null) {
-                    result.addFailure(issueId, issue.getIssueKey(), rejectReason);
-                } else {
-                    result.addSuccess();
-                }
-            } catch (BusinessException e) {
-                String key = issue != null ? issue.getIssueKey() : "?";
-                result.addFailure(issueId, key, e.getMessage());
-            } catch (Exception e) {
-                String key = issue != null ? issue.getIssueKey() : "?";
-                result.addFailure(issueId, key, "操作失败");
-                log.warn("批量{}失败 issueId={}", operationName, issueId, e);
-            }
-        }
-        return result;
-    }
-
-    /**
-     * 批量操作的单条执行动作接口
-     */
-    @FunctionalInterface
-    private interface BatchIssueAction {
-        /**
-         * @return null 表示成功，非空字符串表示业务拒绝原因
-         */
-        String execute(Issue issue, Long currentUserId) throws Exception;
-    }
-
-    /**
-     * 批量状态转换（带乐观锁 + 备注支持）。
-     *
-     * @param issueIds 要转换的工单 ID 列表
-     * @param statusId 目标状态 ID
-     * @param comment  可选备注（记录到活动日志）
-     * @param versions 乐观锁版本映射（issueId → version），为 null 时跳过版本校验
-     * @param silent   静默模式，为 true 时不发送通知
-     */
+    /** @deprecated 优先直接注入 IssueBatchService 调用 */
     public BatchOperationResult batchTransitStatus(List<Long> issueIds, Long statusId,
-                                                     String comment, Map<Long, Integer> versions, boolean silent) {
-        return executeBatchWithSilent(issueIds, "issue:change_status", (issue, userId) -> {
-            if (!workflowService.isTransitionAllowed(issue, statusId, userId)) {
-                return "工作流不允许此状态转换";
-            }
-            Integer expectedVersion = versions != null ? versions.get(issue.getId()) : null;
-            ActionExecutionResult transitResult = transitStatus(
-                    issue.getId(), statusId, comment, null, false, expectedVersion, true);
-            if (transitResult != null
-                    && transitResult.getOutcome() == ActionExecutionResult.Outcome.FIELD_VALIDATION_FAILED) {
-                String warningMessage = transitResult.getWarningMessage();
-                return warningMessage != null && !warningMessage.isBlank()
-                        ? warningMessage
-                        : "字段校验失败，无法完成状态转换";
-            }
-            return null;
-        }, "状态转换", silent);
+                                                   String comment, Map<Long, Integer> versions, boolean silent) {
+        return issueBatchService.batchTransitStatus(issueIds, statusId, comment, versions, silent);
     }
 
-    /**
-     * 批量分配
-     */
+    /** @deprecated 优先直接注入 IssueBatchService 调用 */
     public BatchOperationResult batchAssign(List<Long> issueIds, Long assigneeId, boolean silent) {
-        return executeBatchWithSilent(issueIds, "issue:assign", (issue, userId) -> {
-            assign(issue.getId(), assigneeId);
-            return null;
-        }, "分配", silent);
+        return issueBatchService.batchAssign(issueIds, assigneeId, silent);
     }
 
-    /**
-     * 批量更新 Sprint
-     */
+    /** @deprecated 优先直接注入 IssueBatchService 调用 */
     public BatchOperationResult batchUpdateSprint(List<Long> issueIds, Long sprintId, boolean silent) {
-        return executeBatchWithSilent(issueIds, "issue:edit", (issue, userId) -> {
-            UpdateIssueDTO dto = new UpdateIssueDTO();
-            dto.setSprintId(sprintId);
-            update(issue.getId(), dto);
-            return null;
-        }, "Sprint移动", silent);
+        return issueBatchService.batchUpdateSprint(issueIds, sprintId, silent);
     }
 
-    /**
-     * 批量更新优先级
-     */
+    /** @deprecated 优先直接注入 IssueBatchService 调用 */
     public BatchOperationResult batchUpdatePriority(List<Long> issueIds, String priority, boolean silent) {
-        return executeBatchWithSilent(issueIds, "issue:edit", (issue, userId) -> {
-            UpdateIssueDTO dto = new UpdateIssueDTO();
-            dto.setPriority(priority);
-            update(issue.getId(), dto);
-            return null;
-        }, "优先级变更", silent);
+        return issueBatchService.batchUpdatePriority(issueIds, priority, silent);
     }
 
-    /**
-     * 批量添加标签
-     */
+    /** @deprecated 优先直接注入 IssueBatchService 调用 */
     public BatchOperationResult batchAddTag(List<Long> issueIds, Long tagId, boolean silent) {
-        return executeBatchWithSilent(issueIds, "issue:edit", (issue, userId) -> {
-            tagService.addTagToIssue(issue.getId(), tagId);
-            return null;
-        }, "添加标签", silent);
+        return issueBatchService.batchAddTag(issueIds, tagId, silent);
     }
 
-    /**
-     * 批量移除标签
-     */
+    /** @deprecated 优先直接注入 IssueBatchService 调用 */
     public BatchOperationResult batchRemoveTag(List<Long> issueIds, Long tagId, boolean silent) {
-        return executeBatchWithSilent(issueIds, "issue:edit", (issue, userId) -> {
-            tagService.removeTagFromIssue(issue.getId(), tagId);
-            return null;
-        }, "移除标签", silent);
+        return issueBatchService.batchRemoveTag(issueIds, tagId, silent);
     }
 
-    /**
-     * 批量删除
-     */
+    /** @deprecated 优先直接注入 IssueBatchService 调用 */
     public BatchOperationResult batchDelete(List<Long> issueIds) {
-        return executeBatch(issueIds, "issue:delete", (issue, userId) -> {
-            delete(issue.getId());
-            return null;
-        }, "删除");
+        return issueBatchService.batchDelete(issueIds);
     }
 
-    /**
-     * 批量恢复（从回收站还原）
-     * 注意：此方法不使用 executeBatch 模板，因为已删除工单 getById() 会抛异常
-     */
+    /** @deprecated 优先直接注入 IssueBatchService 调用 */
     public BatchOperationResult batchRestore(List<Long> issueIds) {
-        Long currentUserId = SecurityUtils.getCurrentUserId();
-        BatchOperationResult result = new BatchOperationResult();
-        result.setTotal(issueIds.size());
-
-        for (Long issueId : issueIds) {
-            try {
-                DeletedIssueRow row = issueMapper.selectByIdIgnoreDeleted(issueId);
-                if (row == null || row.getDeletedAt() == null) {
-                    result.addFailure(issueId, "?", "工单不在回收站中");
-                    continue;
-                }
-                Long projectId = row.getProjectId();
-                if (!permissionService.hasPermission(currentUserId, projectId, "issue:delete")) {
-                    String key = row.getIssueKey() != null ? row.getIssueKey() : "?";
-                    result.addFailure(issueId, key, "无恢复权限");
-                    continue;
-                }
-                issueMapper.restoreById(issueId);
-                recordActivity(issueId, currentUserId, "restored", null, null, null);
-                // 发布恢复通知事件
-                Issue restoredIssue = issueMapper.selectById(issueId);
-                if (restoredIssue != null) {
-                    eventPublisher.publishEvent(new IssueNotificationEvent.Restored(restoredIssue, currentUserId));
-                }
-                // 失效 Dashboard + 看板缓存（恢复的工单重新出现在列统计中）
-                eventPublisher.publishEvent(ReportCacheInvalidationEvent.of(projectId, "issue_restored"));
-                result.addSuccess();
-            } catch (Exception e) {
-                result.addFailure(issueId, "?", "恢复失败");
-                log.warn("批量恢复失败 issueId={}", issueId, e);
-            }
-        }
-        return result;
+        return issueBatchService.batchRestore(issueIds);
     }
 
     /**
