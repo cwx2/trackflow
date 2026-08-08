@@ -4,6 +4,8 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.trackflow.auth.service.PermissionService;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
+import com.trackflow.common.annotation.AuditLog;
+import com.trackflow.common.audit.AuditContext;
 import com.trackflow.system.entity.ApiKey;
 import com.trackflow.system.entity.SysPermission;
 import com.trackflow.system.mapper.ApiKeyMapper;
@@ -49,7 +51,6 @@ public class ApiKeyService {
 
     private final ApiKeyMapper apiKeyMapper;
     private final SysPermissionMapper sysPermissionMapper;
-    private final SystemAuditService systemAuditService;
     private final ObjectMapper objectMapper;
     private final PermissionService permissionService;
 
@@ -62,6 +63,7 @@ public class ApiKeyService {
      *
      * @return 包含明文 key 的 CreateApiKeyResultVO（明文仅此一次返回）
      */
+    @AuditLog(action = "create_api_key", targetType = "api_key", targetId = "#result.id")
     @Transactional(rollbackFor = Exception.class)
     public CreateApiKeyResultVO create(Long userId, String name, List<String> permissions, LocalDateTime expiresAt) {
         // 校验：Key 数量上限
@@ -122,12 +124,10 @@ public class ApiKeyService {
         }
 
         // 审计日志
-        Map<String, Object> auditDetails = new HashMap<>();
-        auditDetails.put("key_name", name);
-        auditDetails.put("key_prefix", apiKey.getPrefix());
-        auditDetails.put("permissions", permissions != null ? permissions : List.of());
-        auditDetails.put("expires_at", expiresAt != null ? expiresAt.toString() : "never");
-        systemAuditService.log("create_api_key", "api_key", apiKey.getId(), auditDetails);
+        AuditContext.put("key_name", name);
+        AuditContext.put("key_prefix", apiKey.getPrefix());
+        AuditContext.put("permissions", permissions != null ? permissions : List.of());
+        AuditContext.put("expires_at", expiresAt != null ? expiresAt.toString() : "never");
 
         // 构建返回 VO（明文 key 仅此一次返回）
         CreateApiKeyResultVO resultVO = new CreateApiKeyResultVO();
@@ -155,6 +155,7 @@ public class ApiKeyService {
     /**
      * 撤销 API Key
      */
+    @AuditLog(action = "revoke_api_key", targetType = "api_key", targetId = "#id")
     @Transactional(rollbackFor = Exception.class)
     public void revoke(Long id, Long userId) {
         ApiKey apiKey = apiKeyMapper.selectById(id);
@@ -164,10 +165,8 @@ public class ApiKeyService {
         apiKeyMapper.deleteById(id);
 
         // 审计日志
-        Map<String, Object> auditDetails = new HashMap<>();
-        auditDetails.put("key_name", apiKey.getName());
-        auditDetails.put("key_prefix", apiKey.getPrefix());
-        systemAuditService.log("revoke_api_key", "api_key", id, auditDetails);
+        AuditContext.put("key_name", apiKey.getName());
+        AuditContext.put("key_prefix", apiKey.getPrefix());
     }
 
     /**
@@ -189,11 +188,9 @@ public class ApiKeyService {
 
         // 审计日志
         List<String> prefixes = keys.stream().map(ApiKey::getPrefix).collect(Collectors.toList());
-        Map<String, Object> auditDetails = new HashMap<>();
-        auditDetails.put("reason", "user_disabled");
-        auditDetails.put("revoked_count", count);
-        auditDetails.put("key_prefixes", prefixes);
-        systemAuditService.log("revoke_all_api_keys", "api_key", userId, auditDetails);
+        AuditContext.put("reason", "user_disabled");
+        AuditContext.put("revoked_count", count);
+        AuditContext.put("key_prefixes", prefixes);
 
         log.info("用户 {} 被禁用，已批量吊销 {} 个 API Key", userId, count);
         return count;

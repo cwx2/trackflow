@@ -57,6 +57,7 @@ public class RoleService {
     private final SysPermissionMapper permissionMapper;
     private final SysUserMapper userMapper;
     private final PermissionService permissionService;
+    private final SystemAuditService systemAuditService;
     private final ProjectMemberMapper projectMemberMapper;
     private final ProjectMapper projectMapper;
     private final UserConverter userConverter;
