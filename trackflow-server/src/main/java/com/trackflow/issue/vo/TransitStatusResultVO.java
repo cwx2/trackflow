@@ -1,30 +1,23 @@
 package com.trackflow.issue.vo;
 
-import com.trackflow.workflow.vo.ActionExecutionResult;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import com.trackflow.issue.dto.TransitStatusResult;
 
 /**
- * 状态转换 API 响应体。
- * <p>
- * 包含更新后的版本号（乐观锁同步）和可选的动作执行结果摘要。
+ * @deprecated Use {@link TransitStatusResult} instead.
+ * This class is kept for backward compatibility during migration.
  */
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
-public class TransitStatusResultVO {
+@Deprecated(forRemoval = true)
+public class TransitStatusResultVO extends TransitStatusResult {
 
-    /** 更新后的乐观锁版本号 */
-    private Integer version;
+    public TransitStatusResultVO() {
+        super();
+    }
 
-    /**
-     * 自动化动作执行结果（可为 null，表示无动作配置）。
-     * 前端据此显示自动分配反馈 Toast。
-     */
-    private ActionExecutionResult actionResult;
+    public TransitStatusResultVO(Integer version, com.trackflow.workflow.vo.ActionExecutionResult actionResult) {
+        super(version, actionResult);
+    }
 
-    public static TransitStatusResultVO of(Integer version, ActionExecutionResult actionResult) {
+    public static TransitStatusResultVO of(Integer version, com.trackflow.workflow.vo.ActionExecutionResult actionResult) {
         return new TransitStatusResultVO(version, actionResult);
     }
 }

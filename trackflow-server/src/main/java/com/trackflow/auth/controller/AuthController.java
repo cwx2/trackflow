@@ -15,6 +15,7 @@ import com.trackflow.system.entity.SysUser;
 import com.trackflow.system.mapper.SysUserMapper;
 import com.trackflow.system.service.SystemAuditService;
 import com.trackflow.system.service.UserService;
+import com.trackflow.system.service.UserVOAssembler;
 import com.trackflow.system.vo.UserProfileVO;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -41,6 +42,7 @@ public class AuthController {
     private final SysUserMapper sysUserMapper;
     private final SystemAuditService systemAuditService;
     private final UserService userService;
+    private final UserVOAssembler userVOAssembler;
 
     @GetMapping("/me")
     @PreAuthorize("isAuthenticated()")
@@ -100,7 +102,7 @@ public class AuthController {
         if (userId == null) {
             throw new BusinessException(ErrorCode.AUTH_MISSING);
         }
-        UserProfileVO profile = userService.getUserProfile(userId);
+        UserProfileVO profile = userVOAssembler.getUserProfile(userId);
         return R.ok(profile);
     }
 
@@ -115,7 +117,7 @@ public class AuthController {
         if (userId == null) {
             throw new BusinessException(ErrorCode.AUTH_MISSING);
         }
-        UserProfileVO profile = userService.updateMyProfile(userId, dto);
+        UserProfileVO profile = userVOAssembler.updateMyProfile(userId, dto);
         return R.ok(profile);
     }
 

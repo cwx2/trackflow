@@ -15,6 +15,7 @@ import com.trackflow.system.entity.SysRole;
 import com.trackflow.system.entity.SysUser;
 import com.trackflow.system.service.RoleService;
 import com.trackflow.system.service.UserService;
+import com.trackflow.system.service.UserVOAssembler;
 import com.trackflow.system.vo.UserDataExportVO;
 import com.trackflow.system.vo.UserDetailVO;
 import com.trackflow.system.vo.UserProfileVO;
@@ -38,6 +39,7 @@ import java.util.Set;
 public class UserController {
 
     private final UserService userService;
+    private final UserVOAssembler userVOAssembler;
     private final RoleService roleService;
     private final UserConverter userConverter;
 
@@ -66,7 +68,7 @@ public class UserController {
         Page<SysUser> pageObj = PageHelper.buildPage(page, pageSize, sort,
                 Set.of("id", "username", "display_name", "email", "status",
                         "org_id", "created_at", "updated_at", "last_login_at"));
-        PageResult<UserVO> result = userService.listUsersWithRoles(
+        PageResult<UserVO> result = userVOAssembler.listUsersWithRoles(
                 pageObj, keyword, username, displayName, email, orgId, status, banStatus, roleId);
         return R.ok(result);
     }
@@ -86,7 +88,7 @@ public class UserController {
     @GetMapping("/{id}/profile")
     @PreAuthorize("@perm.checkGlobal('system:manage_users')")
     public R<UserProfileVO> getProfile(@PathVariable("id") Long id) {
-        UserProfileVO profile = userService.getUserProfile(id);
+        UserProfileVO profile = userVOAssembler.getUserProfile(id);
         return R.ok(profile);
     }
 
@@ -155,7 +157,7 @@ public class UserController {
     @GetMapping("/{id}/export")
     @PreAuthorize("@perm.checkGlobal('system:manage_users')")
     public R<UserDataExportVO> exportUserData(@PathVariable("id") Long id) {
-        UserDataExportVO exportData = userService.exportUserData(id);
+        UserDataExportVO exportData = userVOAssembler.exportUserData(id);
         return R.ok(exportData);
     }
 
@@ -188,7 +190,7 @@ public class UserController {
     @PreAuthorize("isAuthenticated()")
     public R<UserPublicProfileVO> getPublicProfile(@PathVariable("id") Long id) {
         Long requesterId = com.trackflow.common.util.SecurityUtils.getCurrentUserId();
-        UserPublicProfileVO profile = userService.getUserPublicProfile(id, requesterId);
+        UserPublicProfileVO profile = userVOAssembler.getUserPublicProfile(id, requesterId);
         return R.ok(profile);
     }
 }

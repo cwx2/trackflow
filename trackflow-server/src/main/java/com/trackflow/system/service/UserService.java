@@ -820,7 +820,7 @@ public class UserService {
      * @return 更新后的完整用户档案
      */
     @Transactional(rollbackFor = Exception.class)
-    public UserProfileVO updateMyProfile(Long userId, UpdateMyProfileDTO dto) {
+    UserProfileVO assembleUpdateMyProfile(Long userId, UpdateMyProfileDTO dto) {
         SysUser user = getById(userId);
 
         // 白名单校验 firstDayOfWeek
@@ -857,7 +857,7 @@ public class UserService {
         log.info("用户 {} 更新个人资料: displayName={}, timezone={}, language={}",
                 user.getUsername(), dto.getDisplayName(), dto.getTimezone(), dto.getLanguage());
 
-        return getUserProfile(userId);
+        return assembleUserProfile(userId);
     }
 
     private List<UserProfileVO.RoleInfo> buildGlobalRoles(Long userId) {
@@ -1040,7 +1040,7 @@ public class UserService {
      * @return 包含用户所有数据的导出对象
      * @throws BusinessException 当用户不存在时
      */
-    public UserDataExportVO exportUserData(Long userId) {
+    UserDataExportVO assembleExportUserData(Long userId) {
         SysUser user = userMapper.selectById(userId);
         if (user == null) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "用户不存在: " + userId);
