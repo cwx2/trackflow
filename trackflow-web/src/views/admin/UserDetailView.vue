@@ -36,7 +36,7 @@
               <span class="meta-label">状态</span>
               <IssueStatusTag
                 :name="statusLabel(profile.status, profile.banStatus)"
-                :color="profile.status === 'active' ? '#4caf50' : '#f44336'"
+                :color="profile.status === 'active' ? 'var(--tf-success)' : 'var(--tf-danger)'"
                 size="medium"
                 :show-dot="false"
               />
@@ -813,7 +813,7 @@ onMounted(() => {
   font-size: var(--font-size-xs);
   font-weight: 500;
   color: var(--accent-blue);
-  background: rgba(88,166,255,0.08);
+  background: var(--tf-accent-light);
   padding: 2px 6px;
   border-radius: var(--radius-sm);
   flex-shrink: 0;
@@ -939,8 +939,8 @@ onMounted(() => {
   margin-top: 12px;
 }
 .ban-info-card {
-  background: rgba(244, 67, 54, 0.06);
-  border: 1px solid rgba(244, 67, 54, 0.2);
+  background: var(--tf-danger-subtle);
+  border: 1px solid var(--tf-danger-medium);
   border-radius: var(--radius-md);
   padding: 10px 12px;
 }
@@ -978,8 +978,8 @@ onMounted(() => {
   align-items: center;
   gap: 6px;
   padding: 8px 12px;
-  background: rgba(88, 166, 255, 0.06);
-  border: 1px solid rgba(88, 166, 255, 0.15);
+  background: var(--tf-accent-subtle);
+  border: 1px solid var(--tf-accent-medium);
   border-radius: var(--radius-md);
   margin-bottom: 12px;
 }
