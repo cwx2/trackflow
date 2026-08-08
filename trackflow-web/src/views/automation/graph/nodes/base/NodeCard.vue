@@ -203,7 +203,7 @@ import {
   IconSearch, IconFile, IconCode, IconLink, IconSettings,
   IconSync, IconSend, IconClockCircle, IconList, IconRobot,
   IconBranch, IconLoop, IconStorage, IconApps, IconCheck,
-  IconEdit, IconMessage, IconPlayCircle, IconStopCircle,
+  IconEdit, IconMessage, IconPlayCircle, IconRecordStop,
 } from '@arco-design/web-vue/es/icon'
 import type { PortDef, NodeMeta, NodeRunStatus } from './BaseNodeModel'
 import type { ValueType } from '@/api/automation'
@@ -237,7 +237,7 @@ const ICON_MAP: Record<string, any> = {
   '🧠': IconRobot,
   // Start / End
   '▶️': IconPlayCircle,
-  '⏹️': IconStopCircle,
+  '⏹️': IconRecordStop,
   // Code
   '</>': IconCode,
 }
