@@ -451,20 +451,6 @@ function handleClose() {
   color: var(--color-text-3);
 }
 
-.member-avatar {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: var(--color-fill-3);
-  color: var(--color-text-2);
-  font-size: 10px;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
 .check-icon {
   margin-left: auto;
   font-size: 12px;

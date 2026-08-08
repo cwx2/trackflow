@@ -935,20 +935,6 @@ function confirmBatchDelete() {
   flex-shrink: 0;
 }
 
-.member-avatar {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: var(--tf-accent-bg);
-  color: var(--tf-accent);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 11px;
-  font-weight: 500;
-  flex-shrink: 0;
-}
-
 .unassigned-icon {
   width: 24px;
   text-align: center;

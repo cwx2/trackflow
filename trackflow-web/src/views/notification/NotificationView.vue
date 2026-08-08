@@ -780,13 +780,6 @@ onMounted(() => {
   border-radius: 50%;
 }
 
-.actor-initial {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--tf-text-secondary);
-  text-transform: uppercase;
-}
-
 .actor-system {
   display: flex;
   align-items: center;

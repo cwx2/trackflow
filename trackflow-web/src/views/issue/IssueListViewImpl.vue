@@ -4590,7 +4590,6 @@ onBeforeRouteLeave((_to, _from, next) => {
 .dropdown-loading { display: flex; justify-content: center; padding: 12px; }
 .dropdown-empty { padding: 12px; text-align: center; font-size: 12px; color: var(--tf-text-tertiary); }
 .status-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-.member-avatar { width: 24px; height: 24px; border-radius: 50%; background: var(--tf-accent-bg); color: var(--tf-accent); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 500; flex-shrink: 0; }
 .unassigned-icon { width: 24px; text-align: center; color: var(--tf-text-tertiary); }
 
 /* Empty state */

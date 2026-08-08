@@ -343,20 +343,9 @@ onMounted(() => {
 }
 
 .profile-avatar {
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  background: var(--tf-accent);
   display: flex;
   align-items: center;
-  justify-content: center;
   flex-shrink: 0;
-}
-
-.avatar-text {
-  font-size: 22px;
-  font-weight: 600;
-  color: #fff;
 }
 
 .profile-header-info {
