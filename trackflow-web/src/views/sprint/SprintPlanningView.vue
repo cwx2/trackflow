@@ -142,17 +142,18 @@
                 @click="onCardClick($event, issue, 'backlog')"
                 @contextmenu.prevent="onCardContextMenu($event, issue, 'backlog')"
               >
-                <div class="card-top">
-                  <span class="card-key">{{ issue.issueKey }}</span>
-                  <span class="card-priority" :class="issue.priority?.toLowerCase()">
-                    {{ priorityIcon(issue.priority) }}
-                  </span>
-                </div>
-                <div class="card-title">{{ issue.title }}</div>
-                <div class="card-meta">
-                  <span class="card-type">{{ localizeIssueType(issue.issueType) }}</span>
-                  <span v-if="issue.estimatedHours" class="card-estimation">⏱ {{ issue.estimatedHours }}h</span>
-                  <span v-if="issue.assigneeName" class="card-assignee">{{ issue.assigneeName }}</span>
+                <div class="card-left-border" :style="{ backgroundColor: getPriorityColor(issue.priority) }"></div>
+                <div class="card-content">
+                  <div class="card-top">
+                    <span class="card-key">{{ issue.issueKey }}</span>
+                    <IssuePriorityBadge :priority="issue.priority" mode="dot" size="small" />
+                  </div>
+                  <div class="card-title">{{ issue.title }}</div>
+                  <div class="card-meta">
+                    <span class="card-type">{{ localizeIssueType(issue.issueType) }}</span>
+                    <span v-if="issue.estimatedHours" class="card-estimation">⏱ {{ issue.estimatedHours }}h</span>
+                    <span v-if="issue.assigneeName" class="card-assignee">{{ issue.assigneeName }}</span>
+                  </div>
                 </div>
               </div>
 
@@ -318,17 +319,18 @@
                 @click="onCardClick($event, issue, sprint.id)"
                 @contextmenu.prevent="onCardContextMenu($event, issue, sprint.id)"
               >
-                <div class="card-top">
-                  <span class="card-key">{{ issue.issueKey }}</span>
-                  <span class="card-priority" :class="issue.priority?.toLowerCase()">
-                    {{ priorityIcon(issue.priority) }}
-                  </span>
-                </div>
-                <div class="card-title">{{ issue.title }}</div>
-                <div class="card-meta">
-                  <span class="card-type">{{ localizeIssueType(issue.issueType) }}</span>
-                  <span v-if="issue.estimatedHours" class="card-estimation">⏱ {{ issue.estimatedHours }}h</span>
-                  <span v-if="issue.assigneeName" class="card-assignee">{{ issue.assigneeName }}</span>
+                <div class="card-left-border" :style="{ backgroundColor: getPriorityColor(issue.priority) }"></div>
+                <div class="card-content">
+                  <div class="card-top">
+                    <span class="card-key">{{ issue.issueKey }}</span>
+                    <IssuePriorityBadge :priority="issue.priority" mode="dot" size="small" />
+                  </div>
+                  <div class="card-title">{{ issue.title }}</div>
+                  <div class="card-meta">
+                    <span class="card-type">{{ localizeIssueType(issue.issueType) }}</span>
+                    <span v-if="issue.estimatedHours" class="card-estimation">⏱ {{ issue.estimatedHours }}h</span>
+                    <span v-if="issue.assigneeName" class="card-assignee">{{ issue.assigneeName }}</span>
+                  </div>
                 </div>
               </div>
 
@@ -477,6 +479,8 @@ import { useProjectStore } from '@/stores/project'
 import { useProjectList } from '@/composables/useProjectList'
 import { usePermission } from '@/composables/usePermission'
 import { localizeIssueType, localizePriority } from '@/utils/fieldLabels'
+import { getPriorityColor } from '@/composables/usePriorityOptions'
+import IssuePriorityBadge from '@/components/base/IssuePriorityBadge.vue'
 import IssueCreatePanel from '@/components/IssueCreatePanel.vue'
 import { useDrafts } from '@/composables/useDrafts'
 import type { IssueVO, SprintVO, ProjectMemberVO, SprintVelocityVO, CreationPreviewVO, SprintOverlapWarning } from '@/api/types'
@@ -651,11 +655,6 @@ function getVelocityTooltip(): string {
   const count = velocityData.value?.sprintCount || 0
   if (avg <= 0 || count === 0) return '暂无历史数据'
   return `基于最近 ${count} 个已完成 Sprint，平均完成 ${formatHours(avg)}/Sprint`
-}
-
-function priorityIcon(priority?: string): string {
-  const map: Record<string, string> = { Critical: '🔴', High: '🟠', Normal: '🔵', Low: '⚪' }
-  return map[priority || ''] || '🔵'
 }
 
 function clearSelection() {
@@ -1503,10 +1502,12 @@ onMounted(async () => {
   background: var(--color-bg-2);
   border: 1px solid var(--color-border);
   border-radius: 6px;
-  padding: 8px 10px;
+  padding: 0;
   cursor: grab;
   transition: border-color 0.15s, box-shadow 0.15s, opacity 0.15s;
   user-select: none;
+  display: flex;
+  overflow: hidden;
 }
 .planning-card:hover {
   border-color: var(--tf-accent);
@@ -1524,6 +1525,18 @@ onMounted(async () => {
   opacity: 0.4;
 }
 
+.card-left-border {
+  width: 3px;
+  flex-shrink: 0;
+  border-radius: 3px 0 0 3px;
+}
+
+.card-content {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+}
+
 .card-top {
   display: flex;
   align-items: center;
@@ -1535,9 +1548,6 @@ onMounted(async () => {
   font-weight: 500;
   color: var(--color-text-3);
   font-family: monospace;
-}
-.card-priority {
-  font-size: 10px;
 }
 .card-title {
   font-size: 12px;
