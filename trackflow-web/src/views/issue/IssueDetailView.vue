@@ -615,7 +615,11 @@ function buildCustomFieldSidebarEntries(i: IssueDetailVO, canEdit: boolean): Sid
       valuesMap.set(v.customFieldId, { value: v.value || '', values: v.values, displayValue: v.displayValue || v.value || '', displayValues: v.displayValues, isMulti: v.isMulti, color: v.color, colors: v.colors })
     }
   }
+  // 已由侧边栏专用条目渲染的内置字段名称（REQ-387: 避免重复展示）
+  const SYSTEM_RENDERED_BUILTIN = new Set(['priority', 'type', 'state'])
   const visibleDefs = customFieldDefs.value.filter(cf => {
+    // 跳过已有独立系统控件的内置字段
+    if (cf.isBuiltIn && SYSTEM_RENDERED_BUILTIN.has(cf.name.toLowerCase())) return false
     if (!cf.conditionFieldId || !cf.conditionValues || cf.conditionValues.length === 0) return true
     const condStored = valuesMap.get(cf.conditionFieldId)
     const condValue = condStored?.value || ''

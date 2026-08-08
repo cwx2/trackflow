@@ -249,13 +249,14 @@ public class IssueService {
         // 应用默认值并校验必填字段
         // 子工单或快速创建模式使用 PARTIAL 模式：跳过必填校验（允许快速创建，仅标题必填）
         // 顶层工单使用 FULL 模式：所有必填字段必须有值
+        // skipActivity=true: 创建工单时自定义字段初始赋值不记录活动（REQ-387）
         if (isSubIssue || isQuickCreate) {
             // 子工单/快速创建：应用默认值但不强制必填，允许快速创建
             Map<Long, String> mergedFieldValues = customFieldService.applyDefaultsOnly(
                     userFieldValues, issue.getIssueType(), issue.getProjectId());
             if (!mergedFieldValues.isEmpty()) {
                 customFieldService.saveValues(issue.getId(), mergedFieldValues,
-                        issue.getIssueType(), issue.getProjectId(), CustomFieldValidateMode.PARTIAL);
+                        issue.getIssueType(), issue.getProjectId(), CustomFieldValidateMode.PARTIAL, true);
             }
         } else {
             // 顶层工单：完整必填校验
@@ -263,7 +264,7 @@ public class IssueService {
                     userFieldValues, issue.getIssueType(), issue.getProjectId());
             if (!mergedFieldValues.isEmpty()) {
                 customFieldService.saveValues(issue.getId(), mergedFieldValues,
-                        issue.getIssueType(), issue.getProjectId());
+                        issue.getIssueType(), issue.getProjectId(), CustomFieldValidateMode.FULL, true);
             }
         }
 

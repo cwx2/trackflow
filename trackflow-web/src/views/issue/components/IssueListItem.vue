@@ -288,9 +288,17 @@ function handleSprintClick() {
   // a-trigger 会自动在 click 触发时打开下拉，无需手动设置
 }
 
-// Limit custom fields shown (max 4)
+// Limit custom fields shown (max 4), excluding built-in fields that already
+// have dedicated rendering (Priority badge, Type/State columns) - REQ-387
+const SYSTEM_RENDERED_BUILTIN_FIELD_IDS = new Set([
+  '1000000000000000001', // Priority
+  '1000000000000000002', // Type
+  '1000000000000000004', // State
+])
 const limitedCustomFieldDetails = computed((): CustomFieldValueVO[] => {
-  return (props.issue.customFieldDetails || []).slice(0, 4)
+  return (props.issue.customFieldDetails || [])
+    .filter(d => !SYSTEM_RENDERED_BUILTIN_FIELD_IDS.has(d.customFieldId))
+    .slice(0, 4)
 })
 
 // Integer badge rendering

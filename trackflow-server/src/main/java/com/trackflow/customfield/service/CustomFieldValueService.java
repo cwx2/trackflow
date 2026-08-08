@@ -142,7 +142,7 @@ public class CustomFieldValueService {
     @Transactional(rollbackFor = Exception.class)
     public void saveValues(Long issueId, Map<Long, String> fieldValues, String issueType, Long projectId,
                            List<CustomFieldDefinition> applicableFields) {
-        saveValues(issueId, fieldValues, issueType, projectId, applicableFields, CustomFieldValidateMode.FULL);
+        saveValues(issueId, fieldValues, issueType, projectId, applicableFields, CustomFieldValidateMode.FULL, false);
     }
 
     /**
@@ -151,6 +151,18 @@ public class CustomFieldValueService {
     @Transactional(rollbackFor = Exception.class)
     public void saveValues(Long issueId, Map<Long, String> fieldValues, String issueType, Long projectId,
                            List<CustomFieldDefinition> applicableFields, CustomFieldValidateMode mode) {
+        saveValues(issueId, fieldValues, issueType, projectId, applicableFields, mode, false);
+    }
+
+    /**
+     * 保存自定义字段值（指定验证模式和活动记录控制）。
+     *
+     * @param skipActivity 为 true 时跳过初始赋值的活动记录（用于工单创建场景，REQ-387）
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void saveValues(Long issueId, Map<Long, String> fieldValues, String issueType, Long projectId,
+                           List<CustomFieldDefinition> applicableFields, CustomFieldValidateMode mode,
+                           boolean skipActivity) {
         if (fieldValues == null || fieldValues.isEmpty()) return;
 
         Map<Long, CustomFieldDefinition> fieldMap = applicableFields.stream()
@@ -289,9 +301,13 @@ public class CustomFieldValueService {
                 }
 
                 if (!oldValues.equals(newValues)) {
-                    String displayOld = displayService.resolveMultiDisplayValue(field, oldValues);
-                    String displayNew = displayService.resolveMultiDisplayValue(field, newValues);
-                    recordCustomFieldActivity(issueId, field.getName(), displayOld, displayNew);
+                    // 跳过初始赋值的活动记录（REQ-387: 创建时从空到默认值不记为变更）
+                    boolean isInitialAssignment = oldValues.isEmpty();
+                    if (!(skipActivity && isInitialAssignment)) {
+                        String displayOld = displayService.resolveMultiDisplayValue(field, oldValues);
+                        String displayNew = displayService.resolveMultiDisplayValue(field, newValues);
+                        recordCustomFieldActivity(issueId, field.getName(), displayOld, displayNew);
+                    }
                 }
             } else {
                 valueMapper.acquireSingleValueLock(issueId, entry.getKey());
@@ -325,9 +341,13 @@ public class CustomFieldValueService {
 
                 String effectiveNew = (newValue == null || newValue.isBlank()) ? null : newValue;
                 if (!Objects.equals(oldValue, effectiveNew)) {
-                    String displayOldValue = displayService.resolveDisplayValue(field, oldValue);
-                    String displayNewValue = displayService.resolveDisplayValue(field, effectiveNew);
-                    recordCustomFieldActivity(issueId, field.getName(), displayOldValue, displayNewValue);
+                    // 跳过初始赋值的活动记录（REQ-387: 创建时从空到默认值不记为变更）
+                    boolean isInitialAssignment = oldValue == null;
+                    if (!(skipActivity && isInitialAssignment)) {
+                        String displayOldValue = displayService.resolveDisplayValue(field, oldValue);
+                        String displayNewValue = displayService.resolveDisplayValue(field, effectiveNew);
+                        recordCustomFieldActivity(issueId, field.getName(), displayOldValue, displayNewValue);
+                    }
                 }
             }
         }

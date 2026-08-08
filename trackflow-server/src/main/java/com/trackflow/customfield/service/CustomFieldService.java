@@ -102,10 +102,24 @@ public class CustomFieldService {
 
     // ========== 全局字段定义 CRUD ==========
 
+    /**
+     * 与内置字段语义重叠的保留名称（不区分大小写）。
+     * 用户不得创建与这些名称相同的自定义字段，以避免 UI/数据层重复（REQ-387）。
+     */
+    private static final java.util.Set<String> RESERVED_FIELD_NAMES = java.util.Set.of(
+            "state", "priority", "type", "due date", "fix versions", "affected versions"
+    );
+
     @Transactional(rollbackFor = Exception.class)
     public CustomFieldDefinition create(CreateCustomFieldDTO dto) {
         if (!handlerRegistry.getSupportedFormats().contains(dto.getFieldFormat())) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "不支持的字段类型: " + dto.getFieldFormat());
+        }
+
+        // 拒绝与内置字段同名的自定义字段创建（REQ-387）
+        if (RESERVED_FIELD_NAMES.contains(dto.getName().trim().toLowerCase())) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST,
+                    "字段名称「" + dto.getName() + "」与系统内置字段冲突，不允许重复创建");
         }
 
         boolean exists = definitionMapper.exists(new LambdaQueryWrapper<CustomFieldDefinition>()
@@ -623,6 +637,20 @@ public class CustomFieldService {
         fieldValues = excludeStateFieldValue(fieldValues);
         List<CustomFieldDefinition> applicableFields = excludeStateField(listByProject(projectId, issueType));
         valueService.saveValues(issueId, fieldValues, issueType, projectId, applicableFields, mode);
+        // 级联清除
+        cascadeClearForBatch(issueId, fieldValues, projectId);
+    }
+
+    /**
+     * 委托给 {@link CustomFieldValueService}，支持跳过初始赋值活动记录。
+     * 用于工单创建场景：自定义字段初始赋值不应生成"未设置→默认值"的活动记录（REQ-387）。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void saveValues(Long issueId, Map<Long, String> fieldValues, String issueType, Long projectId,
+                           CustomFieldValidateMode mode, boolean skipActivity) {
+        fieldValues = excludeStateFieldValue(fieldValues);
+        List<CustomFieldDefinition> applicableFields = excludeStateField(listByProject(projectId, issueType));
+        valueService.saveValues(issueId, fieldValues, issueType, projectId, applicableFields, mode, skipActivity);
         // 级联清除
         cascadeClearForBatch(issueId, fieldValues, projectId);
     }

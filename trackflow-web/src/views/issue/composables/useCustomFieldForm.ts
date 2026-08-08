@@ -20,8 +20,19 @@ export function useCustomFieldForm(
    * 条件逻辑：如果字段有 conditionFieldId，则只有当条件源字段的当前值
    * 在 conditionValues 列表中时才显示
    */
+  /**
+   * 内置字段中已由创建面板系统控件渲染的字段名（不区分大小写）。
+   * State 已由后端 excludeStateField 排除，此处排除 Priority/Type 避免与
+   * 硬编码的"优先级"/"类型"选择器重复显示（REQ-387）。
+   */
+  const SYSTEM_RENDERED_BUILTIN_NAMES = new Set(['priority', 'type'])
+
   const fields = computed<CustomFieldDefinitionVO[]>(() => {
     return allFields.value.filter(cf => {
+      // 跳过已有独立系统控件的内置字段，避免重复渲染
+      if (cf.isBuiltIn && SYSTEM_RENDERED_BUILTIN_NAMES.has(cf.name.toLowerCase())) {
+        return false
+      }
       if (!cf.conditionFieldId || !cf.conditionValues || cf.conditionValues.length === 0) {
         return true // 无条件，始终显示
       }
