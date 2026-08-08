@@ -97,6 +97,7 @@ public class ScheduledRuleService {
     // ============ 核心执行逻辑 ============
 
     @Transactional(rollbackFor = Exception.class)
+    @com.trackflow.common.annotation.SlowLog(alwaysLog = true)
     protected WorkflowRuleExecutionLogVO executeRule(WorkflowRule rule, LocalDateTime now) {
         long startTime = System.currentTimeMillis();
         int matched = 0, success = 0, failure = 0;
