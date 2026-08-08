@@ -1118,7 +1118,7 @@ onUnmounted(() => {
 }
 
 .config-panel .panel-inner {
-  width: 300px;
+  width: 360px;
 }
 
 /* 收起/展开按钮 */
