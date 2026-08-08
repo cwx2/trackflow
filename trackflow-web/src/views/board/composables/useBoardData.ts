@@ -99,7 +99,7 @@ export function useBoardData(deps: DataDeps) {
   } = deps
 
   // ===== Project list =====
-  const { projects, loadState: projectLoadState, load: loadProjects } = useProjectList()
+  const { projects, projectLoadState, loadProjects } = useProjectList()
 
   // ===== Data loading functions =====
 
