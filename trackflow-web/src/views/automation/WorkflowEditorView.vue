@@ -563,10 +563,16 @@ function initLogicFlow() {
         strokeWidth: 2,
       },
       anchor: {
-        fill: 'var(--wf-edge-color, var(--tf-accent))',
-        stroke: 'var(--tf-bg-surface)',
-        strokeWidth: 2,
-        r: 5
+        fill: 'transparent',
+        stroke: 'transparent',
+        strokeWidth: 0,
+        r: 4,
+        hover: {
+          fill: 'var(--wf-edge-color, var(--tf-accent))',
+          stroke: 'var(--tf-bg-surface)',
+          strokeWidth: 2,
+          r: 5,
+        }
       }
     }
   })

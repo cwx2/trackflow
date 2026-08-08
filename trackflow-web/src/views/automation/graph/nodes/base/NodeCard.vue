@@ -443,9 +443,18 @@ function onNodeClick() {
   border-radius: 50%;
   flex-shrink: 0;
 }
-.port-dot.in  { background: var(--wf-port-in); }
-.port-dot.out { background: var(--wf-port-out); }
 
+/* 输入圆点：负 margin 让圆心贴近节点左边框，与线条锚点位置对齐 */
+.port-dot.in {
+  background: var(--wf-port-in);
+  margin-left: -6px;   /* padding-left(10) - 半径(4) = 6，圆心正好在边框 */
+}
+
+/* 输出圆点：负 margin 让圆心贴近节点右边框 */
+.port-dot.out {
+  background: var(--wf-port-out);
+  margin-right: -6px;  /* 同理 */
+}
 .port-label {
   font-size: 11px;
   color: var(--wf-port-label);
