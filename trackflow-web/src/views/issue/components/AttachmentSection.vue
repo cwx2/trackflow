@@ -599,16 +599,16 @@ function confirmDeleteAll() {
   height: 28px;
   border-radius: 4px;
   border: none;
-  background: rgba(255, 255, 255, 0.15);
+  background: var(--tf-fill-medium);
   color: var(--tf-text-on-accent);
   cursor: pointer;
   transition: background 150ms;
 }
 .att-ov-btn:hover {
-  background: rgba(255, 255, 255, 0.3);
+  background: var(--tf-fill-heavy);
 }
 .att-ov-btn--danger:hover {
-  background: rgba(248, 81, 73, 0.6);
+  background: var(--tf-danger-strong);
 }
 
 /* File info under thumbnail */

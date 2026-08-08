@@ -568,7 +568,7 @@ onMounted(() => {
 }
 .action-link.danger:hover:not(:disabled) {
   color: var(--tf-danger);
-  background: rgba(230, 126, 128, 0.08);
+  background: var(--tf-danger-bg);
 }
 
 /* Category Tabs */

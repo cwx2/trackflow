@@ -428,8 +428,8 @@ onMounted(() => {
   font-weight: 500;
 }
 
-.priority-critical { background: rgba(248, 81, 73, 0.15); color: var(--tf-danger); }
-.priority-major { background: rgba(210, 153, 34, 0.15); color: var(--tf-warning); }
+.priority-critical { background: var(--tf-danger-medium); color: var(--tf-danger); }
+.priority-major { background: var(--tf-warning-medium); color: var(--tf-warning); }
 .priority-normal { background: var(--tf-accent-bg-light); color: var(--tf-accent); }
 .priority-minor { background: var(--tf-bg-hover); color: var(--tf-text-tertiary); }
 

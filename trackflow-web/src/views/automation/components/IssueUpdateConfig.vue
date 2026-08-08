@@ -24,16 +24,16 @@
           @change="(val: any) => setInputLiteral('priority', val)"
         >
           <a-option value="critical">
-            <span class="priority-dot" style="background: #ef4444"></span> Critical
+            <span class="priority-dot" style="background: var(--tf-priority-critical)"></span> Critical
           </a-option>
           <a-option value="high">
-            <span class="priority-dot" style="background: #f97316"></span> High
+            <span class="priority-dot" style="background: var(--tf-priority-high)"></span> High
           </a-option>
           <a-option value="medium">
-            <span class="priority-dot" style="background: #eab308"></span> Medium
+            <span class="priority-dot" style="background: var(--tf-priority-medium)"></span> Medium
           </a-option>
           <a-option value="low">
-            <span class="priority-dot" style="background: #6b7280"></span> Low
+            <span class="priority-dot" style="background: var(--tf-priority-low)"></span> Low
           </a-option>
         </a-select>
         <div class="form-hint">留空则不修改优先级</div>

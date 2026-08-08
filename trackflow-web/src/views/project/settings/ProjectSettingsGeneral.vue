@@ -679,7 +679,7 @@ async function submitDelete() {
   align-items: flex-start;
   gap: 8px;
   padding: 12px;
-  background: rgba(245, 63, 63, 0.06);
+  background: var(--tf-danger-subtle);
   border-radius: 6px;
   font-size: 13px;
   color: var(--tf-text-primary);

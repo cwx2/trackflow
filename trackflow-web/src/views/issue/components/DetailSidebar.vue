@@ -704,7 +704,7 @@ defineExpose({ highlightField })
 }
 
 .resize-handle:hover {
-  background: rgba(88, 166, 255, 0.08);
+  background: var(--tf-accent-light);
 }
 
 /* ========== 折叠控制按钮 ========== */

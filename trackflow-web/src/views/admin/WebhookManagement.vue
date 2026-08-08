@@ -506,7 +506,7 @@ onMounted(async () => {
   color: var(--tf-success);
 }
 .status-badge.inactive {
-  background: rgba(139, 148, 158, 0.15);
+  background: var(--tf-muted-bg);
   color: var(--tf-text-tertiary);
 }
 
@@ -611,7 +611,7 @@ onMounted(async () => {
   color: var(--tf-success);
 }
 .log-status.failed {
-  background: rgba(248, 81, 73, 0.15);
+  background: var(--tf-danger-medium);
   color: var(--tf-danger);
 }
 

@@ -116,7 +116,7 @@ function workTypeLabel(type: string): string {
 .day-column:last-child { border-right: none; }
 .day-column:hover { background: var(--tf-bg-hover); }
 .day-column.today { background: var(--tf-accent-bg); }
-.day-column.today:hover { background: rgba(56, 139, 253, 0.12); }
+.day-column.today:hover { background: var(--tf-accent-medium); }
 .day-column.weekend { background: var(--tf-bg-surface); }
 .day-column.weekend:hover { background: var(--tf-bg-hover); }
 .day-header { display: flex; align-items: baseline; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--tf-border-light); flex-shrink: 0; }

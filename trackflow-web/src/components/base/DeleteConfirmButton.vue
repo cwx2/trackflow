@@ -97,7 +97,7 @@ function handleClick() {
 }
 
 .delete-confirm-btn:hover:not(:disabled) {
-  background: rgba(248, 81, 73, 0.1);
+  background: var(--tf-danger-bg);
 }
 
 .delete-confirm-btn:disabled {

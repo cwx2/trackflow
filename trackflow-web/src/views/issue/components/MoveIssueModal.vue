@@ -166,8 +166,8 @@ defineExpose({ resetSubmitting })
   display: flex;
   gap: 10px;
   padding: 12px;
-  background: rgba(210, 153, 34, 0.06);
-  border: 1px solid rgba(210, 153, 34, 0.2);
+  background: var(--tf-warning-subtle);
+  border: 1px solid var(--tf-warning-medium);
   border-radius: 6px;
 }
 

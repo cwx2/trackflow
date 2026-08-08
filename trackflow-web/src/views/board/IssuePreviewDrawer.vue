@@ -734,7 +734,7 @@ function renderCommentContent(content: string): string {
 }
 .preview-status-badge--editable:hover {
   opacity: 0.85;
-  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.15);
+  box-shadow: 0 0 0 2px var(--tf-fill-medium);
 }
 
 .preview-priority {

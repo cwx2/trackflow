@@ -834,7 +834,7 @@ onBeforeRouteLeave((_to, _from, next) => {
 
 .realtime-update-close:hover {
   opacity: 1;
-  background: rgba(255,255,255,0.15);
+  background: var(--tf-fill-medium);
 }
 
 /* Banner 滑入/滑出动画 */
@@ -869,7 +869,7 @@ onBeforeRouteLeave((_to, _from, next) => {
   gap: 12px;
   padding: 10px 16px;
   background: var(--tf-warning-bg);
-  border-bottom: 1px solid rgba(210, 153, 34, 0.25);
+  border-bottom: 1px solid var(--tf-warning-medium);
   flex-shrink: 0;
 }
 

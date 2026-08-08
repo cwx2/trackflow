@@ -602,7 +602,7 @@ function formatRelativeTime(time?: string) {
 }
 
 .type-badge.type-by_status { color: var(--tf-accent); background: var(--tf-accent-bg-light); }
-.type-badge.type-by_assignee { color: var(--tf-purple); background: rgba(163, 113, 247, 0.1); }
+.type-badge.type-by_assignee { color: var(--tf-purple); background: var(--tf-purple-bg); }
 .type-badge.type-by_priority { color: var(--tf-warning); background: var(--tf-warning-bg); }
 .type-badge.type-by_type { color: var(--tf-success); background: var(--tf-success-bg); }
 .type-badge.type-issue_count { color: var(--tf-success); background: var(--tf-success-bg); }

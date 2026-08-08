@@ -200,6 +200,7 @@ import type { IssueVO, CustomFieldValueVO, SprintVO } from '@/api/types'
 import type { DensityLevel } from '../composables'
 import { localizeStatusName } from '@/utils/fieldLabels'
 import { IssuePriorityBadge } from '@/components/base'
+import { DEFAULT_BADGE_COLOR } from '@/utils/uiColors'
 import TimeProgressIndicator from './TimeProgressIndicator.vue'
 
 interface IssueListItemIssue extends IssueVO {
@@ -299,8 +300,6 @@ interface BadgeItem {
   value: number
   color: string
 }
-
-const DEFAULT_BADGE_COLOR = '#3b82f6'
 
 function resolveBadgeColor(value: number, rules?: BadgeColorRule[] | null): string {
   if (!rules || rules.length === 0) return DEFAULT_BADGE_COLOR

@@ -2317,7 +2317,7 @@ onMounted(() => {
   border-bottom-right-radius: var(--border-radius-small, 4px);
   border-top-left-radius: 0;
   border-bottom-left-radius: 0;
-  border-left: 1px solid rgba(255, 255, 255, 0.3);
+  border-left: 1px solid var(--tf-fill-heavy);
   background: var(--tf-accent);
   color: var(--tf-text-on-accent);
   cursor: pointer;

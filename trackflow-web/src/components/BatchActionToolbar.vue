@@ -914,7 +914,7 @@ function confirmBatchDelete() {
   padding: 8px 12px;
   font-size: 12px;
   color: var(--tf-warning);
-  background: rgba(210, 153, 34, 0.1);
+  background: var(--tf-warning-bg);
   border-radius: 4px;
   margin: 4px;
 }
@@ -923,7 +923,7 @@ function confirmBatchDelete() {
   padding: 8px 12px;
   font-size: 12px;
   color: var(--tf-danger);
-  background: rgba(248, 81, 73, 0.1);
+  background: var(--tf-danger-bg);
   border-radius: 4px;
   margin: 4px;
 }

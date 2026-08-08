@@ -1784,7 +1784,7 @@ watch(projects, () => {
   font-weight: 500;
   padding: 1px 6px;
   border-radius: 3px;
-  background: rgba(156, 163, 175, 0.15);
+  background: var(--tf-muted-bg);
   color: var(--tf-text-tertiary);
   white-space: nowrap;
 }
@@ -1802,7 +1802,7 @@ watch(projects, () => {
   gap: 8px;
   padding: 10px 12px;
   background: var(--tf-danger-bg);
-  border: 1px solid rgba(248, 81, 73, 0.2);
+  border: 1px solid var(--tf-danger-medium);
   border-radius: var(--tf-radius-md);
   font-size: 13px;
   color: var(--tf-danger);
