@@ -4,7 +4,17 @@
       <h1 class="page-title">自动化工作流</h1>
       <div class="header-actions">
         <a-button @click="router.push('/automation-operations')">角色与审批</a-button>
-        <a-button v-if="workflows.length > 0" type="primary" @click="showCreateModal = true">
+        <a-dropdown v-if="workflows.length > 0" trigger="hover" @select="handleCreateSelect">
+          <a-button type="primary">
+            <template #icon><span class="btn-icon">➕</span></template>
+            新建工作流 <span class="dropdown-arrow">▾</span>
+          </a-button>
+          <template #content>
+            <a-doption value="blank">空白工作流</a-doption>
+            <a-doption value="template">从模板创建</a-doption>
+          </template>
+        </a-dropdown>
+        <a-button v-else type="primary" @click="showCreateModal = true">
           <template #icon><span class="btn-icon">➕</span></template>
           新建工作流
         </a-button>
@@ -18,7 +28,10 @@
           <div class="empty-icon">🤖</div>
           <h3 class="empty-title">暂无工作流</h3>
           <p class="empty-desc">创建您的第一个 Agent 工作流，自动化处理需求、测试和代码审核</p>
-          <a-button type="primary" @click="showCreateModal = true">新建工作流</a-button>
+          <div class="empty-actions">
+            <a-button type="primary" @click="showCreateModal = true">新建工作流</a-button>
+            <a-button @click="showTemplateModal = true">从模板创建</a-button>
+          </div>
         </div>
 
         <!-- 工作流列表表格 -->
@@ -87,6 +100,42 @@
         </a-form-item>
       </a-form>
     </a-modal>
+
+    <!-- 模板选择弹窗 -->
+    <a-modal
+      v-model:visible="showTemplateModal"
+      title="从模板创建工作流"
+      :footer="false"
+      :width="640"
+      @cancel="showTemplateModal = false"
+    >
+      <a-spin :loading="templateLoading" class="template-spin">
+        <div v-if="templates.length === 0 && !templateLoading" class="template-empty">
+          <p>暂无可用模板</p>
+        </div>
+        <div v-else class="template-grid">
+          <div
+            v-for="tpl in templates"
+            :key="tpl.id"
+            class="template-card"
+            @click="handleCloneTemplate(tpl)"
+          >
+            <div class="template-card-header">
+              <span class="template-icon">{{ tpl.icon || '📋' }}</span>
+              <span class="template-name">{{ tpl.name }}</span>
+            </div>
+            <p class="template-desc">{{ tpl.description || '无描述' }}</p>
+            <div class="template-meta">
+              <a-tag size="small" color="arcoblue">{{ getCategoryLabel(tpl.category) }}</a-tag>
+              <span class="template-nodes">{{ countNodes(tpl.definition) }} 个节点</span>
+            </div>
+            <a-button type="primary" size="small" class="template-use-btn" :loading="cloneLoadingId === tpl.id">
+              使用此模板
+            </a-button>
+          </div>
+        </div>
+      </a-spin>
+    </a-modal>
   </div>
 </template>
 
@@ -95,7 +144,7 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
 import { useConfirmDelete } from '@/composables/useConfirmDelete'
-import { automationApi, type WorkflowVO, type CreateWorkflowDTO } from '@/api'
+import { automationApi, type WorkflowVO, type CreateWorkflowDTO, type WorkflowTemplateVO } from '@/api'
 
 const router = useRouter()
 
@@ -105,6 +154,12 @@ const workflows = ref<WorkflowVO[]>([])
 const showCreateModal = ref(false)
 const createLoading = ref(false)
 const createForm = ref<CreateWorkflowDTO>({ name: '', description: '' })
+
+// 模板相关状态
+const showTemplateModal = ref(false)
+const templateLoading = ref(false)
+const templates = ref<WorkflowTemplateVO[]>([])
+const cloneLoadingId = ref<string | null>(null)
 
 // 表格列配置
 const columns = [
@@ -127,6 +182,73 @@ async function toggleRuntime(workflow: WorkflowVO) {
     }
   } catch (e: any) {
     Message.error(e.response?.data?.message || (workflow.runtimeEnabled ? '停止失败' : '启动失败'))
+  }
+}
+
+// 下拉菜单选择
+function handleCreateSelect(value: string | number | Record<string, any> | undefined) {
+  if (value === 'blank') {
+    showCreateModal.value = true
+  } else if (value === 'template') {
+    showTemplateModal.value = true
+    loadTemplates()
+  }
+}
+
+// 加载模板列表
+async function loadTemplates() {
+  templateLoading.value = true
+  try {
+    const res = await automationApi.listTemplates()
+    if (res.code === 0) {
+      templates.value = res.data || []
+    } else {
+      Message.error(res.message || '加载模板失败')
+    }
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '加载模板失败')
+  } finally {
+    templateLoading.value = false
+  }
+}
+
+// 从模板克隆
+async function handleCloneTemplate(tpl: WorkflowTemplateVO) {
+  cloneLoadingId.value = tpl.id
+  try {
+    const res = await automationApi.cloneFromTemplate(tpl.id)
+    if (res.code === 0) {
+      Message.success('已从模板创建工作流')
+      showTemplateModal.value = false
+      router.push(`/automation/${res.data.id}`)
+    } else {
+      Message.error(res.message || '克隆失败')
+    }
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '克隆失败')
+  } finally {
+    cloneLoadingId.value = null
+  }
+}
+
+// 获取分类标签
+function getCategoryLabel(category?: string): string {
+  switch (category) {
+    case 'ai_task': return '🤖 AI 任务'
+    case 'notification': return '🔔 通知'
+    case 'issue_management': return '📋 工单管理'
+    default: return '📋 通用'
+  }
+}
+
+// 计算节点数量
+function countNodes(definition?: string): number {
+  if (!definition) return 0
+  try {
+    const def = JSON.parse(definition)
+    return def.nodes?.length || 0
+  } catch {
+    return 0
   }
 }
 
@@ -335,5 +457,90 @@ onMounted(() => {
 
 :deep(.arco-table-tr:hover .arco-table-td) {
   background: var(--tf-bg-hover);
+}
+
+/* 下拉箭头 */
+.dropdown-arrow {
+  margin-left: 4px;
+  font-size: 12px;
+}
+
+/* 空状态操作按钮 */
+.empty-actions {
+  display: flex;
+  gap: 12px;
+}
+
+/* 模板弹窗 */
+.template-spin {
+  min-height: 200px;
+  width: 100%;
+}
+
+.template-empty {
+  text-align: center;
+  padding: 40px 0;
+  color: var(--tf-text-tertiary);
+}
+
+.template-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.template-card {
+  border: 1px solid var(--color-border-2);
+  border-radius: 8px;
+  padding: 16px;
+  cursor: pointer;
+  transition: border-color 150ms, box-shadow 150ms;
+  position: relative;
+}
+
+.template-card:hover {
+  border-color: var(--tf-accent);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.template-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.template-icon {
+  font-size: 20px;
+}
+
+.template-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--tf-text-primary);
+}
+
+.template-desc {
+  font-size: 13px;
+  color: var(--tf-text-secondary);
+  margin: 0 0 12px 0;
+  line-height: 1.5;
+}
+
+.template-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.template-nodes {
+  font-size: 12px;
+  color: var(--tf-text-tertiary);
+}
+
+.template-use-btn {
+  position: absolute;
+  top: 16px;
+  right: 16px;
 }
 </style>

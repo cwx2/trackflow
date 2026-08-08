@@ -188,6 +188,20 @@ export interface ExecutionDetailVO extends ExecutionVO {
   nodeExecutions: NodeExecutionVO[]
 }
 
+// ====== 模板 VO ======
+
+export interface WorkflowTemplateVO {
+  id: string
+  name: string
+  description?: string
+  category?: string
+  icon?: string
+  definition: string
+  sortOrder?: number
+  isBuiltin?: boolean
+  createdAt?: string
+}
+
 // ====== API 函数 ======
 
 export const automationApi = {
@@ -302,6 +316,23 @@ export const automationApi = {
   /** 取消正在运行或等待中的工作流 */
   cancelExecution(executionId: string) {
     return request.post<any, R<void>>(`/automation/executions/${executionId}/cancel`)
+  },
+
+  // ====== 模板相关 ======
+
+  /** 获取所有工作流模板 */
+  listTemplates() {
+    return request.get<any, R<WorkflowTemplateVO[]>>('/automation/templates')
+  },
+
+  /** 从模板克隆工作流 */
+  cloneFromTemplate(templateId: string) {
+    return request.post<any, R<WorkflowDetailVO>>(`/automation/templates/${templateId}/clone`)
+  },
+
+  /** 删除模板（内置模板返回 403） */
+  deleteTemplate(templateId: string) {
+    return request.delete<any, R<void>>(`/automation/templates/${templateId}`)
   }
 }
 
