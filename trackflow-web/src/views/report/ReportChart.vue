@@ -91,6 +91,7 @@ import { TooltipComponent, LegendComponent, GridComponent } from 'echarts/compon
 import VChart from 'vue-echarts'
 import { localizeStatusName, priorityLabelMap } from '@/utils/fieldLabels'
 import { getPriorityColor } from '@/composables/usePriorityOptions'
+import { useChartColors, STATUS_COLORS, CHART_PALETTE, SERIES_ACCENT, SERIES_SUCCESS, SERIES_DANGER, SERIES_TERTIARY, areaGradient } from '@/utils/chartColors'
 import type { ReportDataVO } from '@/api/report'
 
 // 注册 ECharts 组件（按需引入）
@@ -122,65 +123,16 @@ const isTimeSeriesChart = computed(() => {
 
 // ─── ECharts 主题色（动态读取 CSS 变量，适配亮色/暗色主题） ─────────
 
-const chartColors = ref({
-  textColor: '#9ca3af',
-  axisColor: '#30363d',
-  tooltipBg: '#22252a',
-  tooltipBorder: '#30363d',
-  tooltipText: '#e6edf3',
-  cardBorder: '#2a2d33'
-})
-
-function readThemeColors() {
-  const style = getComputedStyle(document.documentElement)
-  chartColors.value = {
-    textColor: style.getPropertyValue('--tf-text-secondary').trim() || '#9ca3af',
-    axisColor: style.getPropertyValue('--tf-border').trim() || '#30363d',
-    tooltipBg: style.getPropertyValue('--tf-bg-elevated').trim() || '#22252a',
-    tooltipBorder: style.getPropertyValue('--tf-border').trim() || '#30363d',
-    tooltipText: style.getPropertyValue('--tf-text-primary').trim() || '#e6edf3',
-    cardBorder: style.getPropertyValue('--tf-bg-elevated').trim() || '#2a2d33'
-  }
-}
-
-let themeObserver: MutationObserver | null = null
-
-onMounted(() => {
-  readThemeColors()
-  themeObserver = new MutationObserver(() => readThemeColors())
-  themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'class'] })
-})
-
-onBeforeUnmount(() => {
-  themeObserver?.disconnect()
-})
+const { chartColors } = useChartColors()
 
 // ─── 图表预设色板 ──────────────────────────────────────────
-
-/** 状态色（按分类） */
-const statusColors: Record<string, string> = {
-  'Open': '#58a6ff',
-  'In Progress': '#f0883e',
-  'Code Review': '#a371f7',
-  'Testing': '#d29922',
-  'Done': '#3fb950',
-  'Cancelled': '#6b7280',
-  'Reopened': '#f85149',
-  'Todo': '#58a6ff',
-  'Closed': '#3fb950',
-  'Solved': '#3fb950',
-  'Online': '#3fb950'
-}
-
-/** 通用色板（轮循） */
-const palette = ['#58a6ff', '#3fb950', '#f0883e', '#a371f7', '#d29922', '#f85149', '#79c0ff', '#56d364', '#ffa657', '#d2a8ff']
 
 // ─── 辅助函数 ─────────────────────────────────────────────
 
 function getItemColor(label: string, groupBy: string, idx: number): string {
-  if (groupBy === 'status') return statusColors[label] || palette[idx % palette.length]
-  if (groupBy === 'priority') return getPriorityColor(label) || palette[idx % palette.length]
-  return palette[idx % palette.length]
+  if (groupBy === 'status') return STATUS_COLORS[label] || CHART_PALETTE[idx % CHART_PALETTE.length]
+  if (groupBy === 'priority') return getPriorityColor(label) || CHART_PALETTE[idx % CHART_PALETTE.length]
+  return CHART_PALETTE[idx % CHART_PALETTE.length]
 }
 
 function localizeLabel(label: string, groupBy: string): string {
@@ -424,7 +376,7 @@ function buildCrossChartOption(data: ReportDataVO): Record<string, any> {
     barWidth: '55%',
     emphasis: { focus: 'series' },
     itemStyle: {
-      color: palette[secIdx % palette.length],
+      color: CHART_PALETTE[secIdx % CHART_PALETTE.length],
       borderRadius: secIdx === secondaryLabels.length - 1 ? [3, 3, 0, 0] : [0, 0, 0, 0]
     },
     data: data.matrix ? data.matrix.map(row => row[secIdx] || 0) : []

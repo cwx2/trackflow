@@ -49,6 +49,15 @@
   --tf-scrollbar: rgba(255, 255, 255, 0.1);
   --tf-scrollbar-hover: rgba(255, 255, 255, 0.18);
   --tf-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  --tf-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.2);
+  --tf-shadow-xl: 0 4px 16px rgba(0, 0, 0, 0.12);
+  --tf-overlay: rgba(0, 0, 0, 0.3);
+  --tf-text-on-accent: #ffffff;
+  --tf-danger-bg: rgba(248, 81, 73, 0.1);
+  --tf-accent-bg-light: rgba(88, 166, 255, 0.1);
+  --tf-success-bg: rgba(63, 185, 80, 0.1);
+  --tf-warning-bg: rgba(210, 153, 34, 0.1);
+  --tf-purple-bg: rgba(163, 113, 247, 0.1);
 
   /* 兼容旧变量名（全局映射） */
   --bg-primary: var(--tf-bg-body);
@@ -111,6 +120,15 @@
   --tf-scrollbar: rgba(0, 0, 0, 0.12);
   --tf-scrollbar-hover: rgba(0, 0, 0, 0.2);
   --tf-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+  --tf-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.1);
+  --tf-shadow-xl: 0 4px 16px rgba(0, 0, 0, 0.08);
+  --tf-overlay: rgba(0, 0, 0, 0.2);
+  --tf-text-on-accent: #ffffff;
+  --tf-danger-bg: rgba(207, 34, 46, 0.08);
+  --tf-accent-bg-light: rgba(9, 105, 218, 0.08);
+  --tf-success-bg: rgba(26, 127, 55, 0.08);
+  --tf-warning-bg: rgba(154, 103, 0, 0.08);
+  --tf-purple-bg: rgba(130, 80, 223, 0.08);
 
   /* 兼容旧变量 */
   --bg-primary: var(--tf-bg-body);
@@ -173,6 +191,15 @@
   --tf-scrollbar: rgba(167, 192, 128, 0.15);
   --tf-scrollbar-hover: rgba(167, 192, 128, 0.25);
   --tf-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  --tf-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.2);
+  --tf-shadow-xl: 0 4px 16px rgba(0, 0, 0, 0.12);
+  --tf-overlay: rgba(0, 0, 0, 0.3);
+  --tf-text-on-accent: #ffffff;
+  --tf-danger-bg: rgba(230, 126, 128, 0.1);
+  --tf-accent-bg-light: rgba(167, 192, 128, 0.12);
+  --tf-success-bg: rgba(131, 192, 146, 0.1);
+  --tf-warning-bg: rgba(219, 188, 127, 0.1);
+  --tf-purple-bg: rgba(214, 153, 182, 0.1);
 
   /* 兼容旧变量 */
   --bg-primary: var(--tf-bg-body);

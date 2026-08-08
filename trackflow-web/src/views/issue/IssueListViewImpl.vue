@@ -1009,6 +1009,7 @@ import type { TagPanelItemVO, AvailableTagVO } from '@/api/tag'
 import type { TableData } from '@arco-design/web-vue'
 import { useAuthStore } from '@/stores/auth'
 import { localizeStatusName, localizePriority, priorityLabelMap, priorityReverseLabelMap, queryFieldKeyToLabel, queryFieldLabelToKey } from '@/utils/fieldLabels'
+import { DEFAULT_PRIORITY_OPTIONS, DEFAULT_ISSUE_TYPE_OPTIONS, DEFAULT_PRIORITY_COLOR, DEFAULT_ISSUE_TYPE_COLOR } from '@/utils/issueColors'
 import { extractVersion, showActionFeedback } from '@/utils/transition'
 import { ERROR_CODES } from '@/api/error-codes'
 import { IssuePriorityBadge, UserAvatar } from '@/components/base'
@@ -2468,30 +2469,18 @@ function loadBadgeFieldsForIssues() {
   const projectIds = [...new Set(issues.value.map(i => i.projectId).filter(Boolean))]
   if (projectIds.length > 0) loadBadgeFields(projectIds)
 }
-const priorityOptions = ref([
-  { value: '阻塞', label: '阻塞', color: '#b91c1c' },
-  { value: '紧急', label: '紧急', color: '#ef4444' },
-  { value: '高', label: '高', color: '#f59e0b' },
-  { value: '普通', label: '普通', color: '#6366f1' },
-  { value: '低', label: '低', color: '#64748b' }
-])
+const priorityOptions = ref(DEFAULT_PRIORITY_OPTIONS.map(o => ({ ...o })))
 
 // 工单类型选项（从自定义字段系统动态加载）
-const issueTypeOptions = ref([
-  { value: '缺陷', label: '缺陷', color: '#ef4444' },
-  { value: '任务', label: '任务', color: '#6366f1' },
-  { value: '需求', label: '需求', color: '#22c55e' },
-  { value: '史诗', label: '史诗', color: '#a855f7' },
-  { value: '故事', label: '故事', color: '#3b82f6' },
-])
+const issueTypeOptions = ref(DEFAULT_ISSUE_TYPE_OPTIONS.map(o => ({ ...o })))
 
 // Load priority and issue type options from custom field system when project changes
 watch(activeProjectId, async (projectId) => {
   if (projectId) {
     const loaded = await loadPriorityOptions(projectId)
-    priorityOptions.value = loaded.map(o => ({ value: o.value, label: o.label, color: o.color || '#6366f1' }))
+    priorityOptions.value = loaded.map(o => ({ value: o.value, label: o.label, color: o.color || DEFAULT_PRIORITY_COLOR }))
     const loadedTypes = await loadIssueTypeOptions(projectId)
-    issueTypeOptions.value = loadedTypes.map(o => ({ value: o.value, label: o.label, color: o.color || '#6366f1' }))
+    issueTypeOptions.value = loadedTypes.map(o => ({ value: o.value, label: o.label, color: o.color || DEFAULT_ISSUE_TYPE_COLOR }))
   }
 }, { immediate: true })
 
@@ -2499,7 +2488,7 @@ watch(activeProjectId, async (projectId) => {
 function getIssueTypeColorForRecord(issueType: string | null | undefined): string {
   const t = issueType || '任务'
   const opt = issueTypeOptions.value.find(o => o.value === t || o.value.toLowerCase() === t.toLowerCase())
-  return opt?.color || '#6366f1'
+  return opt?.color || DEFAULT_ISSUE_TYPE_COLOR
 }
 
 /** 根据工单类型值从动态选项中获取中文标签 */
@@ -2900,7 +2889,7 @@ function getStatusName(id: string, inlineName?: string) {
 function getStatusColor(id: string, inlineColor?: string) {
   if (inlineColor) return inlineColor
   const s = statusCache.value.find(st => st.id === id)
-  return s?.color || '#666'
+  return s?.color || 'var(--tf-text-tertiary)'
 }
 function getSprintName(sprintId?: string, inlineName?: string) {
   if (inlineName) return inlineName
@@ -4368,7 +4357,7 @@ onBeforeRouteLeave((_to, _from, next) => {
 /* Query delete button */
 .query-delete-btn { font-size: 10px; color: var(--tf-text-quaternary); cursor: pointer; padding: 2px 4px; border-radius: 3px; opacity: 0; transition: opacity 0.15s, color 0.15s, background 0.15s; flex-shrink: 0; }
 .query-item:hover .query-delete-btn { opacity: 1; }
-.query-delete-btn:hover { color: var(--tf-danger); background: rgba(248, 81, 73, 0.1); }
+.query-delete-btn:hover { color: var(--tf-danger); background: var(--tf-danger-bg); }
 
 /* Query action button (⋯) */
 .query-action-btn { font-size: 14px; color: var(--tf-text-quaternary); cursor: pointer; padding: 2px 4px; border-radius: 3px; opacity: 0; transition: opacity 0.15s, color 0.15s, background 0.15s; flex-shrink: 0; line-height: 1; }
@@ -4377,7 +4366,7 @@ onBeforeRouteLeave((_to, _from, next) => {
 
 /* Context menu delete option */
 .query-ctx-delete { color: var(--tf-danger) !important; }
-.query-ctx-delete:hover { background: rgba(248, 81, 73, 0.08) !important; }
+.query-ctx-delete:hover { background: var(--tf-danger-bg) !important; }
 
 /* Create query modal */
 
@@ -4516,7 +4505,7 @@ onBeforeRouteLeave((_to, _from, next) => {
   display: inline-block;
   max-width: 72px;
   font-size: 11px;
-  color: #fff;
+  color: var(--tf-text-on-accent);
   padding: 1px 5px;
   border-radius: 3px;
   font-weight: 500;
@@ -4562,7 +4551,7 @@ onBeforeRouteLeave((_to, _from, next) => {
 .cell-spinner { font-size: 12px; color: var(--tf-text-tertiary); animation: spin 1s linear infinite; }
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
-.status-badge { padding: 2px 8px; border-radius: 3px; font-size: 11px; color: #fff; font-weight: 500; }
+.status-badge { padding: 2px 8px; border-radius: 3px; font-size: 11px; color: var(--tf-text-on-accent); font-weight: 500; }
 .time-ago { font-size: 11px; color: var(--tf-text-tertiary); }
 .time-over-budget { color: var(--tf-danger, #f85149); font-weight: 500; }
 .due-date-cell { font-size: 11px; color: var(--tf-text-tertiary); }

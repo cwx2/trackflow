@@ -579,7 +579,7 @@ onUnmounted(() => document.removeEventListener('click', handleClickOutside))
 }
 .sidebar-toggle:hover {
   background: var(--tf-accent);
-  color: #fff;
+  color: var(--tf-text-on-accent);
   border-color: var(--tf-accent);
 }
 
@@ -696,7 +696,7 @@ onUnmounted(() => document.removeEventListener('click', handleClickOutside))
   padding: 0 5px;
   border-radius: 9px;
   background: var(--tf-accent);
-  color: #fff;
+  color: var(--tf-text-on-accent);
   font-size: 10px;
   font-weight: 600;
   display: flex;
@@ -771,7 +771,7 @@ onUnmounted(() => document.removeEventListener('click', handleClickOutside))
   border-radius: 8px;
   padding: 8px;
   z-index: 100;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  box-shadow: var(--tf-shadow-xl);
 }
 
 .user-menu-header {
@@ -827,7 +827,7 @@ onUnmounted(() => document.removeEventListener('click', handleClickOutside))
   color: var(--tf-text-primary);
 }
 .user-menu-item.danger:hover {
-  background: rgba(248, 81, 73, 0.1);
+  background: var(--tf-danger-bg);
   color: var(--tf-danger);
 }
 
@@ -875,7 +875,7 @@ onUnmounted(() => document.removeEventListener('click', handleClickOutside))
   padding: 0 4px;
   border-radius: 8px;
   background: var(--tf-danger, #f85149);
-  color: #fff;
+  color: var(--tf-text-on-accent);
   font-size: 10px;
   font-weight: 600;
   display: flex;
@@ -949,7 +949,7 @@ onUnmounted(() => document.removeEventListener('click', handleClickOutside))
   border: 1px solid var(--tf-border, rgba(255,255,255,0.1));
   border-radius: 8px;
   padding: 12px;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+  box-shadow: var(--tf-shadow-lg);
   z-index: 100;
 }
 
@@ -1022,7 +1022,7 @@ onUnmounted(() => document.removeEventListener('click', handleClickOutside))
   border: none;
   border-radius: 6px;
   background: var(--tf-danger, #f85149);
-  color: #fff;
+  color: var(--tf-text-on-accent);
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;

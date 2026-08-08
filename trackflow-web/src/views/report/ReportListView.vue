@@ -1174,7 +1174,7 @@ onBeforeUnmount(() => {
   padding: 1px 6px;
   border-radius: 3px;
   font-weight: 500;
-  background: rgba(88, 166, 255, 0.1);
+  background: var(--tf-accent-bg-light);
   color: var(--tf-accent);
   letter-spacing: 0.5px;
   text-transform: uppercase;
@@ -1189,11 +1189,11 @@ onBeforeUnmount(() => {
   color: var(--tf-text-secondary);
 }
 
-.card-type-badge.type-by_status { color: var(--tf-accent); background: rgba(88, 166, 255, 0.1); }
-.card-type-badge.type-by_assignee { color: var(--tf-purple, #a371f7); background: rgba(163, 113, 247, 0.1); }
-.card-type-badge.type-by_priority { color: var(--tf-warning); background: rgba(210, 153, 34, 0.1); }
-.card-type-badge.type-by_type { color: var(--tf-success); background: rgba(63, 185, 80, 0.1); }
-.card-type-badge.type-issue_count { color: var(--tf-success); background: rgba(63, 185, 80, 0.1); }
+.card-type-badge.type-by_status { color: var(--tf-accent); background: var(--tf-accent-bg-light); }
+.card-type-badge.type-by_assignee { color: var(--tf-purple, #a371f7); background: var(--tf-purple-bg); }
+.card-type-badge.type-by_priority { color: var(--tf-warning); background: var(--tf-warning-bg); }
+.card-type-badge.type-by_type { color: var(--tf-success); background: var(--tf-success-bg); }
+.card-type-badge.type-issue_count { color: var(--tf-success); background: var(--tf-success-bg); }
 
 .card-menu-btn {
   font-size: 16px;

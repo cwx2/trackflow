@@ -45,6 +45,7 @@ import LogicFlow, { HtmlNode, HtmlNodeModel } from '@logicflow/core'
 import { issueApi } from '@/api'
 import type { IssueStatusVO } from '@/api/types'
 import { localizeStatusName } from '@/utils/fieldLabels'
+import { STATUS_CATEGORY_COLORS, SERIES_TERTIARY } from '@/utils/chartColors'
 
 import '@logicflow/core/dist/index.css'
 
@@ -77,12 +78,7 @@ let initialFitDone = false
 let resizeObserver: ResizeObserver | null = null
 
 // Category colors mapping
-const categoryColors: Record<string, string> = {
-  open: '#58a6ff',
-  in_progress: '#d29922',
-  done: '#3fb950',
-  cancelled: '#f85149'
-}
+const categoryColors: Record<string, string> = STATUS_CATEGORY_COLORS
 
 // ========== 自定义节点定义 ==========
 
@@ -91,7 +87,7 @@ class StatusNodeView extends HtmlNode {
     const { properties } = this.props.model
     const status = properties.statusData as IssueStatusVO
     const isInitial = properties.isInitial as boolean
-    const color = status?.color || categoryColors[status?.category] || '#6b7280'
+    const color = status?.color || categoryColors[status?.category] || SERIES_TERTIARY
     const name = localizeStatusName(status?.name || '')
     const categoryClass = `category-${status?.category || 'open'}`
 
@@ -555,13 +551,13 @@ onBeforeUnmount(() => {
   border-radius: 50%;
 }
 
-.legend-open { background: #58a6ff; }
-.legend-progress { background: #d29922; }
-.legend-done { background: #3fb950; }
-.legend-cancelled { background: #f85149; }
+.legend-open { background: var(--tf-accent); }
+.legend-progress { background: var(--tf-warning); }
+.legend-done { background: var(--tf-success); }
+.legend-cancelled { background: var(--tf-danger); }
 
 .legend-initial-star {
-  color: #d29922;
+  color: var(--tf-warning);
   font-size: 12px;
 }
 
@@ -642,14 +638,14 @@ onBeforeUnmount(() => {
 }
 
 .status-canvas-node .node-initial-star {
-  color: #d29922;
+  color: var(--tf-warning);
   font-size: 14px;
   flex-shrink: 0;
 }
 
 /* 分类高亮边框 */
-.status-canvas-node.category-open { border-color: #58a6ff; }
-.status-canvas-node.category-in_progress { border-color: #d29922; }
-.status-canvas-node.category-done { border-color: #3fb950; }
-.status-canvas-node.category-cancelled { border-color: #f85149; }
+.status-canvas-node.category-open { border-color: var(--tf-accent); }
+.status-canvas-node.category-in_progress { border-color: var(--tf-warning); }
+.status-canvas-node.category-done { border-color: var(--tf-success); }
+.status-canvas-node.category-cancelled { border-color: var(--tf-danger); }
 </style>

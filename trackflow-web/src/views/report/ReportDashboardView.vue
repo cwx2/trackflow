@@ -371,6 +371,7 @@ import { projectApi, sprintApi } from '@/api'
 import type { DashboardData, ProjectComparisonData, CumulativeFlowData, ResolutionTimeData } from '@/api/reportStatistics'
 import type { ProjectVO } from '@/api/types'
 import { localizeStatusName, priorityLabelMap } from '@/utils/fieldLabels'
+import { useChartColors, SERIES_ACCENT, SERIES_SUCCESS, SERIES_DANGER, SERIES_TERTIARY, areaGradient, getChartDownloadBgColor } from '@/utils/chartColors'
 
 // 注册 ECharts 组件
 use([CanvasRenderer, PieChart, BarChart, LineChart, TitleComponent, TooltipComponent, LegendComponent, GridComponent])
@@ -386,7 +387,6 @@ const selectedProjectId = ref<string>('__all__')
 const selectedSprintId = ref<string | undefined>(undefined)
 const dateRange = ref<string[] | undefined>(undefined)
 const dashboardData = ref<DashboardData | null>(null)
-let themeObserver: MutationObserver | null = null
 
 const dateShortcuts = [
   { label: '近 7 天', value: () => [daysAgo(6), today()] },
@@ -400,26 +400,7 @@ function daysAgo(n: number) { const d = new Date(); d.setDate(d.getDate() - n); 
 
 // ─── 主题色（动态读取 CSS 变量，适配亮色/暗色/护眼主题） ─────────
 
-const chartColors = ref({
-  textColor: '#9ca3af',
-  axisColor: '#30363d',
-  tooltipBg: '#22252a',
-  tooltipBorder: '#30363d',
-  tooltipText: '#e6edf3',
-  cardBorder: '#2a2d33'
-})
-
-function readThemeColors() {
-  const style = getComputedStyle(document.documentElement)
-  chartColors.value = {
-    textColor: style.getPropertyValue('--tf-text-secondary').trim() || '#9ca3af',
-    axisColor: style.getPropertyValue('--tf-border').trim() || '#30363d',
-    tooltipBg: style.getPropertyValue('--tf-bg-elevated').trim() || '#22252a',
-    tooltipBorder: style.getPropertyValue('--tf-border').trim() || '#30363d',
-    tooltipText: style.getPropertyValue('--tf-text-primary').trim() || '#e6edf3',
-    cardBorder: style.getPropertyValue('--tf-bg-elevated').trim() || '#2a2d33'
-  }
-}
+const { chartColors } = useChartColors()
 
 const chartBgColor = 'transparent'
 
@@ -446,7 +427,7 @@ function downloadChart(chartComp: InstanceType<typeof VChart> | null, title: str
   const url = chartComp.getDataURL({
     type: 'png',
     pixelRatio: 2,
-    backgroundColor: '#1b1d21'
+    backgroundColor: getChartDownloadBgColor()
   })
   const a = document.createElement('a')
   a.href = url
@@ -614,7 +595,7 @@ const workloadChartOption = computed(() => {
         stack: 'total',
         barWidth: '60%',
         data: items.map(i => i.done),
-        itemStyle: { color: '#3fb950', borderRadius: [0, 0, 0, 0] }
+        itemStyle: { color: SERIES_SUCCESS, borderRadius: [0, 0, 0, 0] }
       },
       {
         name: '进行中',
@@ -622,7 +603,7 @@ const workloadChartOption = computed(() => {
         stack: 'total',
         barWidth: '60%',
         data: items.map(i => i.inProgress),
-        itemStyle: { color: '#58a6ff', borderRadius: [0, 3, 3, 0] }
+        itemStyle: { color: SERIES_ACCENT, borderRadius: [0, 3, 3, 0] }
       }
     ]
   }
@@ -673,12 +654,9 @@ const trendChartOption = computed(() => {
         smooth: true,
         symbol: 'circle',
         symbolSize: 4,
-        lineStyle: { width: 2, color: '#58a6ff' },
-        itemStyle: { color: '#58a6ff' },
-        areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [
-          { offset: 0, color: 'rgba(88, 166, 255, 0.2)' },
-          { offset: 1, color: 'rgba(88, 166, 255, 0)' }
-        ]}}
+        lineStyle: { width: 2, color: SERIES_ACCENT },
+        itemStyle: { color: SERIES_ACCENT },
+        areaStyle: { color: areaGradient(SERIES_ACCENT, 0.2) }
       },
       {
         name: '关闭',
@@ -687,12 +665,9 @@ const trendChartOption = computed(() => {
         smooth: true,
         symbol: 'circle',
         symbolSize: 4,
-        lineStyle: { width: 2, color: '#3fb950' },
-        itemStyle: { color: '#3fb950' },
-        areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [
-          { offset: 0, color: 'rgba(63, 185, 80, 0.15)' },
-          { offset: 1, color: 'rgba(63, 185, 80, 0)' }
-        ]}}
+        lineStyle: { width: 2, color: SERIES_SUCCESS },
+        itemStyle: { color: SERIES_SUCCESS },
+        areaStyle: { color: areaGradient(SERIES_SUCCESS, 0.15) }
       }
     ]
   }
@@ -740,8 +715,8 @@ const burndownChartOption = computed(() => {
         name: '理想进度',
         type: 'line',
         data: ideal,
-        lineStyle: { width: 2, color: '#6b7280', type: 'dashed' },
-        itemStyle: { color: '#6b7280' },
+        lineStyle: { width: 2, color: SERIES_TERTIARY, type: 'dashed' },
+        itemStyle: { color: SERIES_TERTIARY },
         symbol: 'none'
       },
       {
@@ -751,12 +726,9 @@ const burndownChartOption = computed(() => {
         smooth: true,
         symbol: 'circle',
         symbolSize: 5,
-        lineStyle: { width: 2.5, color: '#f85149' },
-        itemStyle: { color: '#f85149' },
-        areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [
-          { offset: 0, color: 'rgba(248, 81, 73, 0.12)' },
-          { offset: 1, color: 'rgba(248, 81, 73, 0)' }
-        ]}}
+        lineStyle: { width: 2.5, color: SERIES_DANGER },
+        itemStyle: { color: SERIES_DANGER },
+        areaStyle: { color: areaGradient(SERIES_DANGER, 0.12) }
       }
     ]
   }
@@ -1143,19 +1115,13 @@ async function loadResolutionTimeGrouped() {
 }
 
 onMounted(async () => {
-  readThemeColors()
-  // 监听主题变化（MutationObserver on data-theme attribute）
-  themeObserver = new MutationObserver(() => readThemeColors())
-  themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
-
   await loadProjects()
   // 默认选择"全部项目"，直接加载聚合数据
   await loadDashboard()
 })
 
 onBeforeUnmount(() => {
-  themeObserver?.disconnect()
-  themeObserver = null
+  // cleanup handled by useChartColors composable
 })
 
 watch(selectedProjectId, async () => {
