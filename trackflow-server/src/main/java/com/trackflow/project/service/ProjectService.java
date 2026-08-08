@@ -1482,6 +1482,7 @@ public class ProjectService {
      *
      * @return 受影响的工单数量
      */
+    @AuditLog(action = "remove_project_member", targetType = "project", targetId = "#projectId")
     @Transactional(rollbackFor = Exception.class)
     public int removeMember(Long projectId, Long userId) {
         // 校验项目状态（归档项目不允许管理成员）
@@ -1880,6 +1881,7 @@ public class ProjectService {
      * @param projectId         项目 ID
      * @param confirmProjectKey 前端传入的项目 Key 用于二次确认
      */
+    @AuditLog(action = "delete_project", targetType = "project", targetId = "#projectId")
     @Transactional(rollbackFor = Exception.class)
     public void deleteProject(Long projectId, String confirmProjectKey) {
         Project project = getById(projectId);
@@ -1945,11 +1947,9 @@ public class ProjectService {
 
         // 5. 物理删除项目（FK CASCADE 自动删除所有关联数据）
         // 审计日志：记录项目删除（在实际删除前记录，因为 CASCADE 后无法查询项目信息）
-        Map<String, Object> deleteAuditDetails = new LinkedHashMap<>();
-        deleteAuditDetails.put("project_name", project.getName());
-        deleteAuditDetails.put("project_key", project.getKey());
-        deleteAuditDetails.put("member_count", memberUserIds.size());
-        systemAuditService.log("delete_project", "project", projectId, deleteAuditDetails);
+        AuditContext.put("project_name", project.getName());
+        AuditContext.put("project_key", project.getKey());
+        AuditContext.put("member_count", memberUserIds.size());
 
         projectMapper.deleteById(projectId);
     }
