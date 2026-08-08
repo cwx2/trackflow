@@ -3507,7 +3507,7 @@ watch(() => route.query, (newQuery, oldQuery) => {
     // Keyboard
     handleKeydown,
     // Load
-    loadBoard, loadIssuesWithLoading,
+    loadBoard, loadIssuesWithLoading, loadProjects,
   }
 }
 

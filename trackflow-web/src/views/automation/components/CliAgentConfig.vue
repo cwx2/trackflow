@@ -24,7 +24,7 @@
           placeholder="支持 {变量名} 占位符"
           :auto-size="{ minRows: 3, maxRows: 8 }"
         />
-        <template #extra>使用 {变量名} 引用变量，如 {workspace}、{req_file}</template>
+        <template #extra>支持 {变量名} 占位符，如 {workspace}、{req_file}；运行时自动替换为对应变量值</template>
       </a-form-item>
       
       <a-form-item label="模型">
@@ -44,7 +44,7 @@
       
       <a-form-item label="输出变量名">
         <a-input v-model="localData.output_var" placeholder="output" />
-        <template #extra>执行结果将存入此变量，供后续节点使用</template>
+        <template #extra>执行结果（stdout）存入该变量名，后续节点可通过 {变量名} 引用</template>
       </a-form-item>
     </a-form>
   </div>

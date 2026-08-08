@@ -12,7 +12,7 @@
           placeholder="通常来自上游「获取需求」节点的输出"
           disabled
         />
-        <template #extra>需要从上游 IssueGet 节点连线传入</template>
+        <template #extra>必须通过连线从上游"获取工单"节点传入，不支持手动填写 ID</template>
       </a-form-item>
 
       <a-form-item label="包含评论">
@@ -20,7 +20,7 @@
           :model-value="getInputLiteral('includeComments') !== false"
           @change="(val: any) => setInputLiteral('includeComments', val)"
         />
-        <template #extra>包含最近 10 条评论内容</template>
+        <template #extra>开启后附加最近 10 条评论内容，增加上下文但也会消耗更多 token</template>
       </a-form-item>
 
       <a-form-item label="包含自定义字段">
@@ -28,7 +28,7 @@
           :model-value="getInputLiteral('includeCustomFields') !== false"
           @change="(val: any) => setInputLiteral('includeCustomFields', val)"
         />
-        <template #extra>包含工单上配置的自定义字段值</template>
+        <template #extra>开启后附加该工单配置的自定义字段键值，适用于需要完整字段信息的 AI 分析场景</template>
       </a-form-item>
 
       <a-form-item label="最大字符数">
@@ -41,7 +41,7 @@
           placeholder="默认 4000"
           @change="(val: any) => setInputLiteral('maxLength', val)"
         />
-        <template #extra>限制输出长度，防止超出 AI 模型 token 上限</template>
+        <template #extra>限制输出总字符数防止超出模型 token 上限；GPT-4 建议 ≤8000，Claude 可适当放宽</template>
       </a-form-item>
 
       <a-alert type="info" style="margin-top: 8px">

@@ -29,7 +29,7 @@
       </div>
 
       <a-form-item label="任务描述">
-        <template #extra>支持 ${变量名} 引用全局变量和上游节点输出</template>
+        <template #extra>支持 ${变量名} 引用全局变量或上游节点输出，如 ${issue.title}、${file_content}</template>
         <a-textarea
           :model-value="String(getInputLiteral('task') ?? '')"
           placeholder="描述要让 AI 完成的任务，可用 ${issue.title} 等变量引用工单字段"
@@ -39,7 +39,7 @@
       </a-form-item>
 
       <a-form-item label="上下文（可选）">
-        <template #extra>JSON 对象，会作为上下文传递给 Agent</template>
+        <template #extra>可选；JSON 对象格式，会作为结构化上下文传给 Agent，补充任务描述中不便内联的大段数据</template>
         <div v-if="isReference('context')" class="reference-value">
           <code>{{ referenceLabel('context') }}</code>
           <a-button size="mini" type="text" @click="clearInput('context')">改为固定值</a-button>
@@ -54,7 +54,7 @@
       </a-form-item>
 
       <a-form-item label="工作目录">
-        <template #extra>角色配置中定义了允许的工作目录范围，此处可指定子路径</template>
+        <template #extra>在角色允许范围内指定子路径，如 {workspace}/src；留空则使用角色默认工作目录</template>
         <a-input
           :model-value="String(getInputLiteral('workDir') ?? '')"
           placeholder="{workspace}"

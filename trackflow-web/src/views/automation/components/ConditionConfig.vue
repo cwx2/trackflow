@@ -16,7 +16,7 @@
           <a-option value="{exit_code}">&#123;exit_code&#125; - 退出码</a-option>
           <a-option value="{status}">&#123;status&#125; - 执行状态</a-option>
         </a-select>
-        <template #extra>使用 {变量名} 格式引用变量</template>
+        <template #extra>使用 {变量名} 格式引用变量，如 {output}、{exit_code}；也可直接输入固定字符串</template>
       </a-form-item>
       
       <a-form-item label="运算符">
@@ -32,7 +32,7 @@
       
       <a-form-item v-if="showValueInput" label="比较值">
         <a-input v-model="localData.value" placeholder="输入比较值" />
-        <template #extra>支持 {变量名} 引用其他变量</template>
+        <template #extra>支持 {变量名} 引用其他变量，或直接输入固定字符串（如 "PASS"、"0"）</template>
       </a-form-item>
       
       <div class="output-info">

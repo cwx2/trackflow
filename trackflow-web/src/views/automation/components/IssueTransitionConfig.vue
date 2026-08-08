@@ -48,7 +48,7 @@
           style="width: 100%"
           @change="(val: any) => setInputLiteral('version', val || undefined)"
         />
-        <template #extra>传入工单当前版本号可防止并发覆盖</template>
+        <template #extra>可选；传入工单当前 version 字段值，防止并发场景下覆盖其他人的修改</template>
       </a-form-item>
 
       <a-alert type="info" style="margin-top: 8px">

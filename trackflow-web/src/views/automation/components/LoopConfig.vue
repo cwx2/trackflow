@@ -14,12 +14,12 @@
           placeholder="3"
           style="width: 100%"
         />
-        <template #extra>达到最大次数后自动退出循环（1-20）</template>
+        <template #extra>达到上限后强制退出循环，无论退出条件是否满足（防止无限循环），范围 1-20</template>
       </a-form-item>
 
       <a-form-item label="循环子工作流 ID">
         <a-input v-model="localData.workflowId" placeholder="选择一个已发布工作流的 ID" />
-        <template #extra>每轮执行该子工作流；循环本身不会在画布 DAG 中制造回边</template>
+        <template #extra>填入已发布工作流的数字 ID；每轮循环独立执行该工作流，循环体本身不在画布上形成回边</template>
       </a-form-item>
       
       <a-form-item label="重试间隔（秒）">
