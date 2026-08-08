@@ -286,13 +286,13 @@ public class UserGroupService {
         List<Long> projectIds = resolveProjectIds(dto);
         boolean isGlobalScope = Boolean.TRUE.equals(dto.getGlobalScope());
 
-        if ("global".equals(role.getRoleType())) {
+        if (RoleTypes.GLOBAL.equals(role.getRoleType())) {
             // 全局角色类型：只能以全局方式分配（projectId=null）
             if (!projectIds.isEmpty() || isGlobalScope) {
                 throw new BusinessException(ErrorCode.BAD_REQUEST, "全局角色不需要指定项目，直接分配即可");
             }
             insertGroupRoleIfNotExists(groupId, dto.getRoleId(), null);
-        } else if ("project".equals(role.getRoleType())) {
+        } else if (RoleTypes.PROJECT.equals(role.getRoleType())) {
             if (isGlobalScope) {
                 // 项目角色 + 全局作用域：project_id=null 表示对所有项目生效
                 insertGroupRoleIfNotExists(groupId, dto.getRoleId(), null);
@@ -488,18 +488,18 @@ public class UserGroupService {
             // 确定作用域
             if (gr.getProjectId() != null) {
                 assignment.setProjectId(String.valueOf(gr.getProjectId()));
-                assignment.setScope("project");
+                assignment.setScope(RoleTypes.PROJECT);
                 Project project = projectMap.get(gr.getProjectId());
                 if (project != null) {
                     assignment.setProjectName(project.getName());
                     assignment.setProjectKey(project.getKey());
                 }
-            } else if (role != null && "project".equals(role.getRoleType())) {
+            } else if (role != null && RoleTypes.PROJECT.equals(role.getRoleType())) {
                 // 项目角色但 project_id=null → 全局作用域（所有项目）
                 assignment.setScope("all_projects");
             } else {
                 // 全局角色类型
-                assignment.setScope("global");
+                assignment.setScope(RoleTypes.GLOBAL);
             }
 
             return assignment;

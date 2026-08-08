@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.trackflow.auth.service.PermissionService;
 import com.trackflow.common.constant.IssueStatusCategory;
+import com.trackflow.common.constant.RoleTypes;
 import com.trackflow.common.constant.SystemRoleIds;
 import com.trackflow.common.constant.UserStatus;
 import com.trackflow.common.exception.BusinessException;
@@ -1244,7 +1245,7 @@ public class ProjectService {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "存在无效的角色ID");
         }
         for (SysRole role : roles) {
-            if (!"project".equals(role.getRoleType())) {
+            if (!RoleTypes.PROJECT.equals(role.getRoleType())) {
                 throw new BusinessException(ErrorCode.BAD_REQUEST, "只能分配项目角色，角色「" + role.getName() + "」不是项目角色");
             }
         }
@@ -1323,7 +1324,7 @@ public class ProjectService {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "存在无效的角色ID");
         }
         for (SysRole role : newRoles) {
-            if (!"project".equals(role.getRoleType())) {
+            if (!RoleTypes.PROJECT.equals(role.getRoleType())) {
                 throw new BusinessException(ErrorCode.BAD_REQUEST, "只能分配项目角色");
             }
         }

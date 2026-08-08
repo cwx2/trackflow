@@ -3,6 +3,7 @@ package com.trackflow.system.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.trackflow.auth.service.PermissionService;
+import com.trackflow.common.constant.RoleTypes;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.util.SecurityUtils;
@@ -563,7 +564,7 @@ public class RoleService {
 
         Set<Long> allUserIds = new HashSet<>();
 
-        if ("global".equals(role.getRoleType())) {
+        if (RoleTypes.GLOBAL.equals(role.getRoleType())) {
             // 全局角色：从 user_role 表查询
             List<Long> userIds = userRoleMapper.selectUserIdsByRoleId(roleId);
             allUserIds.addAll(userIds);
