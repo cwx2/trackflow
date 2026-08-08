@@ -1,6 +1,6 @@
 package com.trackflow.integration.service;
 
-import com.trackflow.common.service.DistributedLockService;
+import com.trackflow.common.annotation.DistributedLock;
 import com.trackflow.integration.entity.NotificationOutbox;
 import com.trackflow.integration.entity.NotificationReason;
 import com.trackflow.integration.entity.NotificationType;
@@ -34,19 +34,15 @@ public class NotificationRetryScheduler {
     private final NotificationOutboxService outboxService;
     private final NotificationService notificationService;
     private final ObjectMapper objectMapper;
-    private final DistributedLockService distributedLockService;
 
     private static final int BATCH_SIZE = 20;
 
     /**
      * 每 2 分钟扫描一次待重试记录
      */
+    @DistributedLock(key = "notification_retry")
     @Scheduled(fixedDelay = 120_000, initialDelay = 60_000)
     public void retryPendingNotifications() {
-        distributedLockService.executeWithLock("notification_retry", this::doRetryPendingNotifications);
-    }
-
-    private void doRetryPendingNotifications() {
         List<NotificationOutbox> pending = outboxService.fetchPendingForRetry(BATCH_SIZE);
         if (pending.isEmpty()) {
             return;
@@ -73,12 +69,9 @@ public class NotificationRetryScheduler {
     /**
      * 每天凌晨 3:00 清理 7 天前已完成的 outbox 记录
      */
+    @DistributedLock(key = "notification_outbox_cleanup")
     @Scheduled(cron = "0 0 3 * * ?")
     public void cleanupCompletedRecords() {
-        distributedLockService.executeWithLock("notification_outbox_cleanup", this::doCleanupCompletedRecords);
-    }
-
-    private void doCleanupCompletedRecords() {
         int cleaned = outboxService.cleanupCompleted();
         if (cleaned > 0) {
             log.info("[NotificationRetry] 清理已完成的旧记录: {} 条", cleaned);

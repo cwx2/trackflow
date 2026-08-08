@@ -59,6 +59,7 @@ public enum ErrorCode {
     DESCRIPTION_EMPTY_WARNING(40915, 409, "工单描述为空，测试人员无法确认验收内容"),
     WORKFLOW_VERSION_CONFLICT(40911, 409, "工作流已被其他人修改，请刷新后重试"),
     BOARD_CONFIG_VERSION_CONFLICT(40912, 409, "看板配置已被其他人修改，请刷新后重试"),
+    CONCURRENT_OPERATION(40916, 409, "操作正在进行中，请稍后重试"),
 
     // Server (500xx)
     INTERNAL_ERROR(50000, 500, "服务器内部错误");

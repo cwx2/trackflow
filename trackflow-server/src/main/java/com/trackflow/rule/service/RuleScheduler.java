@@ -1,7 +1,7 @@
 package com.trackflow.rule.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.trackflow.common.service.DistributedLockService;
+import com.trackflow.common.annotation.DistributedLock;
 import com.trackflow.rule.entity.RuleDefinition;
 import com.trackflow.rule.mapper.RuleDefinitionMapper;
 import lombok.RequiredArgsConstructor;
@@ -25,17 +25,13 @@ public class RuleScheduler {
 
     private final RuleDefinitionMapper ruleMapper;
     private final RuleService ruleService;
-    private final DistributedLockService distributedLockService;
 
     /**
      * 每天 09:00 执行所有启用的定时规则
      */
+    @DistributedLock(key = "rule_scheduler")
     @Scheduled(cron = "0 0 9 * * ?")
     public void executeScheduledRules() {
-        distributedLockService.executeWithLock("rule_scheduler", this::doExecuteScheduledRules);
-    }
-
-    private void doExecuteScheduledRules() {
         log.info("[RuleScheduler] 开始执行定时规则扫描...");
 
         List<RuleDefinition> rules = ruleMapper.selectList(

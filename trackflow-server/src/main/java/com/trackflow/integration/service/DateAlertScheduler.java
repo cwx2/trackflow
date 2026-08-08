@@ -1,7 +1,7 @@
 package com.trackflow.integration.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.trackflow.common.service.DistributedLockService;
+import com.trackflow.common.annotation.DistributedLock;
 import com.trackflow.integration.entity.NotificationEventType;
 import com.trackflow.integration.entity.NotificationPreference;
 import com.trackflow.integration.entity.NotificationReason;
@@ -49,17 +49,13 @@ public class DateAlertScheduler {
     private final NotificationPreferenceMapper preferenceMapper;
     private final SysUserMapper sysUserMapper;
     private final SystemSettingService systemSettingService;
-    private final DistributedLockService distributedLockService;
 
     /**
      * 每日 08:00 执行日期告警扫描
      */
+    @DistributedLock(key = "date_alert_scan")
     @Scheduled(cron = "0 0 8 * * ?")
     public void scanDateAlerts() {
-        distributedLockService.executeWithLock("date_alert_scan", this::doScanDateAlerts);
-    }
-
-    private void doScanDateAlerts() {
         // 全局开关检查
         if (!isDateAlertEnabled()) {
             log.debug("[DateAlert] 全局日期告警已关闭，跳过扫描");

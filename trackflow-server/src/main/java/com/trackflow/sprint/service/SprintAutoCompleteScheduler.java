@@ -1,6 +1,7 @@
 package com.trackflow.sprint.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.trackflow.common.annotation.DistributedLock;
 import com.trackflow.common.event.ReportCacheInvalidationEvent;
 import com.trackflow.common.event.SprintNotificationEvent;
 import com.trackflow.issue.entity.Issue;
@@ -9,7 +10,6 @@ import com.trackflow.project.service.ProjectActivityService;
 import com.trackflow.sprint.entity.Sprint;
 import com.trackflow.sprint.entity.SprintStatus;
 import com.trackflow.sprint.mapper.SprintMapper;
-import com.trackflow.common.service.DistributedLockService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -44,7 +44,6 @@ public class SprintAutoCompleteScheduler {
     private final IssueMapper issueMapper;
     private final ProjectActivityService projectActivityService;
     private final ApplicationEventPublisher eventPublisher;
-    private final DistributedLockService distributedLockService;
 
     /**
      * 每日 23:59:00 检查并自动完成已过期的 active Sprint。
@@ -52,12 +51,9 @@ public class SprintAutoCompleteScheduler {
      * 选择 23:59 而非 23:59:59 是为了确保在当天日期结束前完成处理。
      * 判断条件：status = ACTIVE 且 endDate <= 当天。
      */
+    @DistributedLock(key = "sprint_auto_complete")
     @Scheduled(cron = "0 59 23 * * ?")
     public void autoCompleteExpiredSprints() {
-        distributedLockService.executeWithLock("sprint_auto_complete", this::doAutoCompleteExpiredSprints);
-    }
-
-    private void doAutoCompleteExpiredSprints() {
         log.info("[SprintAutoComplete] 开始检查到期 Sprint...");
 
         LocalDate today = LocalDate.now();

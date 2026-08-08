@@ -1,6 +1,6 @@
 package com.trackflow.integration.service;
 
-import com.trackflow.common.service.DistributedLockService;
+import com.trackflow.common.annotation.DistributedLock;
 import com.trackflow.integration.entity.Notification;
 import com.trackflow.integration.entity.NotificationEventType;
 import com.trackflow.integration.entity.NotificationPreference;
@@ -40,7 +40,6 @@ public class NotificationMailScheduler {
     private final NotificationPreferenceService preferenceService;
     private final SysUserMapper sysUserMapper;
     private final NotificationUrlBuilder urlBuilder;
-    private final DistributedLockService distributedLockService;
     private final EmailMuteTokenService emailMuteTokenService;
 
     /**
@@ -51,12 +50,9 @@ public class NotificationMailScheduler {
     /**
      * 每 60 秒执行一次，处理待发邮件的通知。
      */
+    @DistributedLock(key = "notification_mail")
     @Scheduled(fixedDelay = 60_000, initialDelay = 60_000)
     public void processDelayedMails() {
-        distributedLockService.executeWithLock("notification_mail", this::doProcessDelayedMails);
-    }
-
-    private void doProcessDelayedMails() {
         // Phase 1: 抑制已读通知（IAN 已读 → 不发邮件）
         int suppressed = notificationService.suppressReadNotificationMails();
         if (suppressed > 0) {
@@ -259,14 +255,6 @@ public class NotificationMailScheduler {
 
     /**
      * 构建邮件底部链接区域 HTML。
-     * <p>
-     * 参考 YouTrack 邮件底部设计：
-     * - 提供"静音此工单"链接（无需登录，仅对 issue 类型）
-     * - 提供"管理通知设置"链接（引导用户到通知设置页）
-     *
-     * @param muteTokenUrl     Token 化的静音链接（如果为 null 则不显示"静音此工单"）
-     * @param settingsUrl      通知设置页完整 URL
-     * @return 底部链接 HTML 片段
      */
     private String buildFooterLinks(String muteTokenUrl, String settingsUrl) {
         StringBuilder sb = new StringBuilder();
@@ -290,11 +278,6 @@ public class NotificationMailScheduler {
 
     /**
      * 根据通知原因构建用户友好的通知原因说明文字（用于邮件 footer）。
-     * <p>
-     * 参考 YouTrack 邮件底部的"You receive this email because..."说明。
-     *
-     * @param reason Notification.reason 字段值（NotificationReason 枚举名，如 "assigned"）
-     * @return 通知原因说明 HTML 文本片段，末尾带换行；若无法解析则返回通用说明
      */
     private String buildReasonText(String reason) {
         if (reason == null || reason.isBlank()) {
@@ -317,7 +300,7 @@ public class NotificationMailScheduler {
     }
 
     /**
-     * 检查用户当前是否处于静音时段内（复制自 NotificationService 的逻辑）。
+     * 检查用户当前是否处于静音时段内。
      */
     private boolean isInQuietHours(NotificationPreference pref) {
         if (pref == null) return false;
@@ -342,12 +325,7 @@ public class NotificationMailScheduler {
     }
 
     /**
-     * 将 Notification.type（NotificationType enum name）映射到 NotificationEventType。
-     * <p>
-     * NotificationType 是细粒度的（如 issue_assigned, issue_auto_assigned），
-     * NotificationEventType 是偏好粒度的（如 ISSUE_ASSIGNED 涵盖手动+自动分配）。
-     *
-     * @return 对应的 NotificationEventType，无法映射时返回 null（视为允许发邮件）
+     * 将 Notification.type 映射到 NotificationEventType。
      */
     private NotificationEventType mapToEventType(String notificationType) {
         if (notificationType == null) return null;
@@ -365,7 +343,7 @@ public class NotificationMailScheduler {
             case "overdue_alert" -> NotificationEventType.OVERDUE;
             case "issue_voted" -> NotificationEventType.ISSUE_VOTED;
             case "issue_spent_time" -> NotificationEventType.ISSUE_SPENT_TIME;
-            default -> null; // 新增的通知类型未映射时，默认允许发邮件
+            default -> null;
         };
     }
 

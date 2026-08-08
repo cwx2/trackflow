@@ -1,6 +1,6 @@
 package com.trackflow.integration.service;
 
-import com.trackflow.common.service.DistributedLockService;
+import com.trackflow.common.annotation.DistributedLock;
 import com.trackflow.system.service.SystemSettingService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,17 +24,13 @@ public class NotificationCleanupScheduler {
     private final NotificationService notificationService;
     private final MutedThreadService mutedThreadService;
     private final SystemSettingService systemSettingService;
-    private final DistributedLockService distributedLockService;
 
     /**
      * 每天凌晨 2:30 执行清理
      */
+    @DistributedLock(key = "notification_cleanup")
     @Scheduled(cron = "0 30 2 * * ?")
     public void cleanExpiredNotifications() {
-        distributedLockService.executeWithLock("notification_cleanup", this::doCleanExpiredNotifications);
-    }
-
-    private void doCleanExpiredNotifications() {
         // 从 system_setting 读取动态配置的保留天数
         int retentionDays;
         try {
