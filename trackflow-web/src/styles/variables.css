@@ -709,7 +709,8 @@ a:hover { text-decoration: underline; }
   --wf-glow-failed:      0 0 0 2px #ef4444, 0 0 16px rgba(239,68,68,0.3);
 
   /* 边 */
-  --wf-edge-color:       #3b82f6;
+  /* 默认连线是低对比度的蓝灰，只有选择和运行态才使用强调蓝。 */
+  --wf-edge-color:       #7890b2;
   --wf-edge-color-hover: #60a5fa;
   --wf-edge-width:       2;
 
@@ -752,7 +753,7 @@ a:hover { text-decoration: underline; }
   --wf-glow-success:     0 0 0 2px #1a7f37, 0 0 12px rgba(26,127,55,0.2);
   --wf-glow-failed:      0 0 0 2px #cf222e, 0 0 12px rgba(207,34,46,0.2);
 
-  --wf-edge-color:       #2563eb;
+  --wf-edge-color:       #7182a0;
   --wf-edge-color-hover: #1d4ed8;
   --wf-edge-width:       2;
 

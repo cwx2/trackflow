@@ -2,19 +2,19 @@
  * FlowEdge — 工作流边（现代简洁风格）
  *
  * 设计规范：
- * - idle：2px 细线 + 75% 透明度，紫色，低调不抢眼
- * - running：2.5px 加亮，蓝色 + 流动粒子动画
+ * - idle：轻量的圆角正交线，自动绕开其他节点
+ * - running：加亮，蓝色 + 流动粒子动画
  * - done：绿色
  * - warning：黄色虚线（类型宽松兼容）
  * - incompatible：红色虚线（类型不兼容）
  *
  * 实现说明：
- * - Model.getEdgeStyle() 只设定颜色供 LogicFlow 内部使用（选中框等）
- * - View.getEdge() 完全自绘路径，不依赖 Model 样式渲染
+ * - Model 使用正交路由，在其他节点外保留安全间距
+ * - View 将折线路径转成圆角 SVG Path，保留清晰的流向与可点击区域
  * - Model.getArrowStyle() offset=0 禁用默认箭头尺寸参数
  * - View.getEndArrow() 自绘小三角；View.getStartArrow() 返回 null（起点用圆点代替）
  */
-import { BezierEdge, BezierEdgeModel, h } from '@logicflow/core'
+import { PolylineEdge, PolylineEdgeModel, h } from '@logicflow/core'
 
 // ─── 类型定义 ─────────────────────────────────────────────────────────────────
 
@@ -42,15 +42,15 @@ export function checkTypeCompatibility(sourceType: string, targetType: string): 
 
 // ─── 常量 ─────────────────────────────────────────────────────────────────────
 
-const STROKE_WIDTH_NORMAL  = '1.75'
+const STROKE_WIDTH_NORMAL  = '1.5'
 const STROKE_WIDTH_RUNNING = '2.5'
-const OPACITY_NORMAL       = '0.58'
+const OPACITY_NORMAL       = '0.48'
 const OPACITY_RUNNING      = '1'
 const OPACITY_DOT_NORMAL   = '0.8'
 
 // ─── Model ───────────────────────────────────────────────────────────────────
 
-export class FlowEdgeModel extends BezierEdgeModel {
+export class FlowEdgeModel extends PolylineEdgeModel {
   /** 提供颜色给 LogicFlow 内部（选中框等），不负责实际线条渲染 */
   getEdgeStyle() {
     const style = super.getEdgeStyle()
@@ -73,11 +73,36 @@ export class FlowEdgeModel extends BezierEdgeModel {
     const typeCompat: TypeCompat = props?.typeCompat || 'compatible'
     return resolveEdgeColor(status, typeCompat)
   }
+
+  /**
+   * LogicFlow 默认折线只考虑起止节点。工作流画布中节点是自由摆放的，
+   * 所以这里使用可见性图路由，把中间节点当成带安全边距的障碍物。
+   */
+  updatePoints() {
+    const graphModel = (this as any).graphModel
+    const start = this.startPoint
+    const end = this.endPoint
+    const nodes = graphModel?.nodes || []
+    const obstacles = nodes
+      .filter((node: any) => node.id !== this.sourceNodeId && node.id !== this.targetNodeId)
+      .map((node: any) => toObstacle(node))
+      .filter(Boolean) as Obstacle[]
+
+    const route = findObstacleAvoidingRoute(start, end, obstacles)
+    if (route.length >= 2) {
+      this.pointsList = this.orthogonalizePath(route)
+      this.points = this.getPath(this.pointsList)
+      return
+    }
+
+    // 画布数据不完整或极端拥挤时退回 LogicFlow 内置路径，保证编辑不被阻断。
+    super.updatePoints()
+  }
 }
 
 // ─── View ─────────────────────────────────────────────────────────────────────
 
-export class FlowEdgeView extends BezierEdge {
+export class FlowEdgeView extends PolylineEdge {
   /** 主体：路径 + 起点圆点 + 可选粒子动画 */
   getEdge() {
     const { model }  = this.props as any
@@ -87,7 +112,7 @@ export class FlowEdgeView extends BezierEdge {
     const isRunning  = status === 'running'
     const isSelected = Boolean(model?.isSelected)
 
-    const pathD  = buildPathD(model)
+    const pathD  = buildRoundedPathD(model?.pointsList || [], 12)
     const color  = resolveEdgeColor(status, typeCompat, isSelected)
     const isDashed = typeCompat === 'warning' || typeCompat === 'incompatible'
     const { startPoint } = model
@@ -176,17 +201,201 @@ export function resolveEdgeColor(status: string, typeCompat: TypeCompat, selecte
   return 'var(--wf-edge-color, #6366f1)'
 }
 
-/** 从 LogicFlow model 构建贝塞尔路径 d 属性 */
-function buildPathD(model: any): string {
-  try {
-    const { startPoint, endPoint, pointsList } = model
-    if (!startPoint || !endPoint) return ''
-    if (pointsList?.length >= 2) {
-      const [cp1, cp2] = pointsList
-      return `M ${startPoint.x} ${startPoint.y} C ${cp1.x} ${cp1.y} ${cp2.x} ${cp2.y} ${endPoint.x} ${endPoint.y}`
+type Point = { x: number; y: number }
+type Obstacle = { left: number; right: number; top: number; bottom: number }
+
+const ROUTE_CLEARANCE = 26
+const ROUTE_LEAD = 24
+const TURN_PENALTY = 36
+
+/** 从节点模型取出带安全间距的障碍框。 */
+function toObstacle(node: any): Obstacle | null {
+  if (!Number.isFinite(node?.x) || !Number.isFinite(node?.y)) return null
+  const width = Number(node.width) || 0
+  const height = Number(node.height) || 0
+  if (!width || !height) return null
+  return {
+    left: node.x - width / 2 - ROUTE_CLEARANCE,
+    right: node.x + width / 2 + ROUTE_CLEARANCE,
+    top: node.y - height / 2 - ROUTE_CLEARANCE,
+    bottom: node.y + height / 2 + ROUTE_CLEARANCE,
+  }
+}
+
+/**
+ * 基于障碍框边缘生成稀疏可见性图，再以转弯数优先的 Dijkstra 寻路。
+ * 相比网格 A*，这里没有固定格子感，且路由会随卡片尺寸自然变化。
+ */
+export function findObstacleAvoidingRoute(start: Point, end: Point, obstacles: Obstacle[]): Point[] {
+  if (!isFinitePoint(start) || !isFinitePoint(end)) return []
+
+  const startLead = { x: start.x + ROUTE_LEAD, y: start.y }
+  const endLead = { x: end.x - ROUTE_LEAD, y: end.y }
+  const canUseLeads = isSegmentClear(start, startLead, obstacles)
+    && isSegmentClear(endLead, end, obstacles)
+  const routeStart = canUseLeads ? startLead : start
+  const routeEnd = canUseLeads ? endLead : end
+
+  const xValues = uniqueNumbers([routeStart.x, routeEnd.x, ...obstacles.flatMap(box => [box.left, box.right])])
+  const yValues = uniqueNumbers([routeStart.y, routeEnd.y, ...obstacles.flatMap(box => [box.top, box.bottom])])
+  const candidates: Point[] = []
+  for (const x of xValues) {
+    for (const y of yValues) {
+      const point = { x, y }
+      if (!isInsideObstacle(point, obstacles)) candidates.push(point)
     }
-    return `M ${startPoint.x} ${startPoint.y} L ${endPoint.x} ${endPoint.y}`
-  } catch { return '' }
+  }
+
+  const startKey = pointKey(routeStart)
+  const endKey = pointKey(routeEnd)
+  const pointMap = new Map(candidates.map(point => [pointKey(point), point]))
+  pointMap.set(startKey, routeStart)
+  pointMap.set(endKey, routeEnd)
+  const points = [...pointMap.values()]
+  const neighbors = buildVisibilityNeighbors(points, obstacles)
+  const coreRoute = findLeastTurnPath(startKey, endKey, pointMap, neighbors)
+  if (!coreRoute.length) return []
+
+  return simplifyPath([
+    start,
+    ...(canUseLeads ? [startLead] : []),
+    ...coreRoute.slice(1, -1),
+    ...(canUseLeads ? [endLead] : []),
+    end,
+  ])
+}
+
+function isFinitePoint(point: Point) {
+  return Number.isFinite(point.x) && Number.isFinite(point.y)
+}
+
+function uniqueNumbers(values: number[]) {
+  return [...new Set(values.map(value => Math.round(value * 100) / 100))]
+}
+
+function pointKey(point: Point) { return `${point.x}:${point.y}` }
+
+function isInsideObstacle(point: Point, obstacles: Obstacle[]) {
+  return obstacles.some(box => point.x > box.left && point.x < box.right && point.y > box.top && point.y < box.bottom)
+}
+
+/** 仅阻止穿过障碍框内部；沿安全边距边缘行走是允许的。 */
+function isSegmentClear(a: Point, b: Point, obstacles: Obstacle[]) {
+  if (a.x !== b.x && a.y !== b.y) return false
+  return !obstacles.some(box => {
+    if (a.y === b.y) {
+      if (a.y <= box.top || a.y >= box.bottom) return false
+      const left = Math.min(a.x, b.x)
+      const right = Math.max(a.x, b.x)
+      return left < box.right && right > box.left
+    }
+    if (a.x <= box.left || a.x >= box.right) return false
+    const top = Math.min(a.y, b.y)
+    const bottom = Math.max(a.y, b.y)
+    return top < box.bottom && bottom > box.top
+  })
+}
+
+function buildVisibilityNeighbors(points: Point[], obstacles: Obstacle[]) {
+  const neighbors = new Map<string, { key: string; direction: 'h' | 'v'; distance: number }[]>()
+  const connectSorted = (items: Point[], direction: 'h' | 'v') => {
+    items.sort((a, b) => direction === 'h' ? a.x - b.x : a.y - b.y)
+    for (let index = 1; index < items.length; index += 1) {
+      const a = items[index - 1]
+      const b = items[index]
+      if (!isSegmentClear(a, b, obstacles)) continue
+      const distance = Math.abs(a.x - b.x) + Math.abs(a.y - b.y)
+      addNeighbor(neighbors, a, b, direction, distance)
+      addNeighbor(neighbors, b, a, direction, distance)
+    }
+  }
+
+  const rows = new Map<number, Point[]>()
+  const columns = new Map<number, Point[]>()
+  points.forEach(point => {
+    rows.set(point.y, [...(rows.get(point.y) || []), point])
+    columns.set(point.x, [...(columns.get(point.x) || []), point])
+  })
+  rows.forEach(row => connectSorted(row, 'h'))
+  columns.forEach(column => connectSorted(column, 'v'))
+  return neighbors
+}
+
+function addNeighbor(
+  neighbors: Map<string, { key: string; direction: 'h' | 'v'; distance: number }[]>,
+  from: Point,
+  to: Point,
+  direction: 'h' | 'v',
+  distance: number,
+) {
+  const key = pointKey(from)
+  neighbors.set(key, [...(neighbors.get(key) || []), { key: pointKey(to), direction, distance }])
+}
+
+function findLeastTurnPath(
+  startKey: string,
+  endKey: string,
+  points: Map<string, Point>,
+  neighbors: Map<string, { key: string; direction: 'h' | 'v'; distance: number }[]>,
+) {
+  type QueueItem = { key: string; direction?: 'h' | 'v'; cost: number; path: string[] }
+  const queue: QueueItem[] = [{ key: startKey, direction: 'h', cost: 0, path: [startKey] }]
+  const best = new Map<string, number>()
+
+  while (queue.length) {
+    queue.sort((a, b) => a.cost - b.cost)
+    const current = queue.shift()!
+    const stateKey = `${current.key}:${current.direction || 'none'}`
+    if (current.cost > (best.get(stateKey) ?? Infinity)) continue
+    if (current.key === endKey) return current.path.map(key => points.get(key)!).filter(Boolean)
+
+    for (const next of neighbors.get(current.key) || []) {
+      const cost = current.cost + next.distance + (current.direction && current.direction !== next.direction ? TURN_PENALTY : 0)
+      const nextState = `${next.key}:${next.direction}`
+      if (cost >= (best.get(nextState) ?? Infinity)) continue
+      best.set(nextState, cost)
+      queue.push({ key: next.key, direction: next.direction, cost, path: [...current.path, next.key] })
+    }
+  }
+  return [] as Point[]
+}
+
+function simplifyPath(points: Point[]) {
+  const unique = points.filter((point, index) => index === 0 || point.x !== points[index - 1].x || point.y !== points[index - 1].y)
+  return unique.filter((point, index) => {
+    if (index === 0 || index === unique.length - 1) return true
+    const previous = unique[index - 1]
+    const next = unique[index + 1]
+    return !((previous.x === point.x && point.x === next.x) || (previous.y === point.y && point.y === next.y))
+  })
+}
+
+/** 将严格正交的点列表转为带圆角的 SVG Path。 */
+export function buildRoundedPathD(points: Point[], radius: number): string {
+  if (points.length < 2) return ''
+  let path = `M ${points[0].x} ${points[0].y}`
+  for (let index = 1; index < points.length - 1; index += 1) {
+    const previous = points[index - 1]
+    const current = points[index]
+    const next = points[index + 1]
+    const beforeDistance = Math.abs(previous.x - current.x) + Math.abs(previous.y - current.y)
+    const afterDistance = Math.abs(next.x - current.x) + Math.abs(next.y - current.y)
+    const corner = Math.min(radius, beforeDistance / 2, afterDistance / 2)
+    if (!corner || (previous.x === next.x || previous.y === next.y)) {
+      path += ` L ${current.x} ${current.y}`
+      continue
+    }
+    const before = moveTowards(current, previous, corner)
+    const after = moveTowards(current, next, corner)
+    path += ` L ${before.x} ${before.y} Q ${current.x} ${current.y} ${after.x} ${after.y}`
+  }
+  const end = points[points.length - 1]
+  return `${path} L ${end.x} ${end.y}`
+}
+
+function moveTowards(from: Point, to: Point, distance: number): Point {
+  if (from.x !== to.x) return { x: from.x + Math.sign(to.x - from.x) * distance, y: from.y }
+  return { x: from.x, y: from.y + Math.sign(to.y - from.y) * distance }
 }
 
 /** 在边中点上方渲染警告图标 */
