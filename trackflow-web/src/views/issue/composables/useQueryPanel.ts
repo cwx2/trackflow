@@ -177,8 +177,9 @@ export function useQueryPanel(options: QueryPanelOptions) {
       Message.success('查询已保存')
       showCreateQueryModal.value = false
       loadPanel()
-    } catch (e: any) {
-      Message.error(e.response?.data?.message || '保存查询失败')
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string } } }
+      Message.error(err.response?.data?.message || '保存查询失败')
     } finally {
       createQueryLoading.value = false
     }
@@ -199,8 +200,9 @@ export function useQueryPanel(options: QueryPanelOptions) {
             refreshList()
           }
           loadPanel()
-        } catch (e: any) {
-          Message.error(e.response?.data?.message || '删除失败')
+        } catch (e: unknown) {
+          const err = e as { response?: { data?: { message?: string } } }
+          Message.error(err.response?.data?.message || '删除失败')
         }
       }
     })
@@ -315,35 +317,37 @@ export function useQueryPanel(options: QueryPanelOptions) {
   }
 
   // Toggle shared/pinned
-  async function toggleQueryShared(q: any) {
+  async function toggleQueryShared(q: QueryPanelItemVO) {
     try {
       await queryApi.update(q.id, { shared: !q.shared })
       Message.success(q.shared ? '已设为私有' : '已设为共享')
       loadPanel()
-    } catch (e: any) {
-      Message.error(e.response?.data?.message || '操作失败')
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string } } }
+      Message.error(err.response?.data?.message || '操作失败')
     }
   }
 
-  async function toggleQueryPinned(q: any) {
+  async function toggleQueryPinned(q: QueryPanelItemVO) {
     try {
       await queryApi.update(q.id, { pinned: !q.pinned })
       Message.success(q.pinned ? '已取消置顶' : '已置顶')
       loadPanel()
-    } catch (e: any) {
-      Message.error(e.response?.data?.message || '操作失败')
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string } } }
+      Message.error(err.response?.data?.message || '操作失败')
     }
   }
 
   // Manage query favorites
   const showManageQueriesModal = ref(false)
   const manageQuerySearch = ref('')
-  const availableQueries = ref<any[]>([])
+  const availableQueries = ref<QueryPanelItemVO[]>([])
 
   const filteredManageQueries = computed(() => {
     if (!manageQuerySearch.value) return availableQueries.value
     const kw = manageQuerySearch.value.toLowerCase()
-    return availableQueries.value.filter((q: any) => q.name.toLowerCase().includes(kw))
+    return availableQueries.value.filter((q: QueryPanelItemVO) => q.name.toLowerCase().includes(kw))
   })
 
   async function openManageQueriesModal() {
@@ -358,7 +362,7 @@ export function useQueryPanel(options: QueryPanelOptions) {
     }
   }
 
-  async function toggleFavorite(q: any) {
+  async function toggleFavorite(q: QueryPanelItemVO) {
     try {
       if (q.favorited) {
         await queryApi.removeFavorite(q.id)
@@ -370,23 +374,25 @@ export function useQueryPanel(options: QueryPanelOptions) {
         Message.success(`已添加「${q.name}」到面板`)
       }
       loadPanel()
-    } catch (e: any) {
-      Message.error(e.response?.data?.message || '操作失败')
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string } } }
+      Message.error(err.response?.data?.message || '操作失败')
     }
   }
 
-  async function handleRemoveFavorite(q: any) {
+  async function handleRemoveFavorite(q: QueryPanelItemVO) {
     try {
       await queryApi.removeFavorite(q.id)
       Message.success(`已从面板移除「${q.name}」`)
       loadPanel()
-    } catch (e: any) {
-      Message.error(e.response?.data?.message || '操作失败')
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string } } }
+      Message.error(err.response?.data?.message || '操作失败')
     }
   }
 
   // Context menu trigger for ⋯ button
-  function triggerContextMenu(event: MouseEvent, _q: any) {
+  function triggerContextMenu(event: MouseEvent, _q: QueryPanelItemVO) {
     const target = (event.target as HTMLElement).closest('.query-item')
     if (target) {
       const contextMenuEvent = new MouseEvent('contextmenu', {
@@ -408,7 +414,7 @@ export function useQueryPanel(options: QueryPanelOptions) {
       const res = await projectApi.list({ pageSize: 100 })
       const projects = res.data?.list || []
       const favoriteIds = new Set(projectList.value.filter(p => p.favorited).map(p => p.id))
-      allProjectsForManage.value = projects.map((p: any) => ({
+      allProjectsForManage.value = projects.map((p) => ({
         ...p,
         favorited: favoriteIds.has(p.id)
       }))
@@ -419,7 +425,7 @@ export function useQueryPanel(options: QueryPanelOptions) {
     }
   }
 
-  async function toggleProjectFavorite(p: any) {
+  async function toggleProjectFavorite(p: { id: string; favorited?: boolean }) {
     try {
       const res = await projectApi.toggleFavorite(p.id)
       const newFavorited = res.data?.favorited ?? !p.favorited
@@ -428,8 +434,9 @@ export function useQueryPanel(options: QueryPanelOptions) {
       if (inList) {
         inList.favorited = newFavorited
       }
-    } catch (e: any) {
-      Message.error(e.response?.data?.message || '操作失败')
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string } } }
+      Message.error(err.response?.data?.message || '操作失败')
     }
   }
 
@@ -444,7 +451,7 @@ export function useQueryPanel(options: QueryPanelOptions) {
     }
   }
 
-  function selectTag(tag: TagPanelItemVO, globalFilterParams: Ref<Record<string, any>>, currentPage: Ref<number>) {
+  function selectTag(tag: TagPanelItemVO, globalFilterParams: Ref<Record<string, string>>, currentPage: Ref<number>) {
     if (activeTagId.value === tag.id) {
       activeTagId.value = null
       activeQueryId.value = null
@@ -512,7 +519,7 @@ export function useQueryPanel(options: QueryPanelOptions) {
 
   // ===== Query text ↔ Filters JSON conversion =====
 
-  function filtersToQueryText(filters: any[]): string {
+  function filtersToQueryText(filters: SavedQueryFilter[]): string {
     if (!filters || filters.length === 0) return ''
     const parts: string[] = []
     for (const f of filters) {
@@ -561,9 +568,9 @@ export function useQueryPanel(options: QueryPanelOptions) {
     return parts.join('  ')
   }
 
-  function queryTextToFilters(text: string): any[] {
+  function queryTextToFilters(text: string): SavedQueryFilter[] {
     if (!text || !text.trim()) return []
-    const filters: any[] = []
+    const filters: SavedQueryFilter[] = []
     const normalized = text.replace(/：/g, ':')
 
     const allFields = [...Object.keys(queryFieldLabelToKey)]
