@@ -191,10 +191,10 @@ task 输入框：
 ## 自动化状态
 
 fix_status: DONE
-fix_commit: b7bbd56b
-fix_round: 1
+fix_commit: a723cedd
+fix_round: 2
 test_status: PENDING
-test_round: 0
+test_round: 1
 review_status: PENDING
 review_round: 0
 
@@ -203,65 +203,49 @@ review_round: 0
 ## Agent 交接上下文
 
 > 由 fix-requirement-auto 会话写入，供 e2e-test 和 code-review 会话读取。
-> 最后更新：2026-08-08 13:55
+> 最后更新：2026-08-08 14:10
 
 ### 本次改动摘要
-本次实现了 REQ-368 的全部 4 个子功能，涵盖后端模型扩展和前端 UI 改造：
+第2轮修复，修复测试发现的3个问题：可选端口折叠不生效、模板表达式UI缺失、RoleAgent必填端口不显示。
 
-- 改动1：`InputPortDef.java` — 新增 `optional` 字段（boolean），标记可选折叠端口
-- 改动2：`TemplateValue.java` — 新增 sealed interface 实现，支持 `{{nodeId.portName}}` 模板表达式
-- 改动3：`InputValue.java` — 扩展 sealed interface 为 3 个实现（literal/ref/template），添加 Jackson 多态注解
-- 改动4：`ExecutionContext.java` — resolveInputs() 新增 TemplateValue 解析逻辑，用正则替换 `{{}}` 变量
-- 改动5：`VariablesNode.java` — 重写支持 per-variable 独立输出端口（新 varValues 配置），向后兼容旧 vars 模式
-- 改动6：`RoleAgentNode.java` / `IssueTransitionNode.java` / `IssueSearchNode.java` — 标记 optional=true 的端口
-- 改动7：`NodeCard.vue` — 可选端口折叠/展开 UI，动态增删端口弹窗，删除按钮
-- 改动8：`FlowEdge.ts` — 类型兼容矩阵 + 颜色反馈（绿/黄/红）+ 警告标识
-- 改动9：`VariablePicker.vue` — 新增"模板表达式"模式 tab，带 textarea + 插入变量下拉
-- 改动10：`automation.ts` — 新增 TemplateValue 类型、ValueType 增加 'any'
-- 改动11：`role-agent.ts` / `trackflow-nodes.ts` / `variables.ts` / `types.ts` — 前端定义同步 optional 字段
+根因：BaseNodeModel 计算节点高度和锚点位置时使用所有输入端口（包括optional），但 NodeCard.vue 只渲染非optional端口，导致锚点位置与视觉dot不匹配。同时 optionalExpanded 状态仅存在于Vue组件本地ref中，Model无法感知，高度不随展开/收起重算。
+
+- 改动1：`BaseNodeModel.ts` — 新增 `_getVisibleInputs()` 和 `_getHiddenOptionalCount()` 方法，在 `_calcHeight()` 和 `getDefaultAnchor()` 中只为可见端口计算高度和锚点；新增 `OPTIONAL_TOGGLE_H` 常量为折叠提示行预留空间；`setProperty` 监听 `optionalExpanded` 变化触发高度重算
+- 改动2：`BaseNodeView.ts` — 新增 `onSetProperty` 回调传给 NodeCard；`getInitialProps` 对 properties 做浅拷贝确保 Vue reactivity 检测到变化
+- 改动3：`NodeCard.vue` — `optionalExpanded` 从本地 ref 改为读取 `properties.optionalExpanded`（通过 computed）；展开/收起操作通过 `onSetProperty` 回调通知 Model 同步状态；在展开态输入参数列表中，为 string 类型端口添加 `{ }` 模板表达式按钮，点击后显示内联 textarea 编辑器
+- 改动4：`graph/nodes/index.ts` — DynModel.initNodeData 中确保 `properties.nodeType` 始终被设置（向后兼容旧存储的工作流）
+- 改动5：`WorkflowEditorView.vue` — migrateDefinition 中输出 inputs 时包含 `optional` 字段
 
 ### 本次变更文件清单
-- `trackflow-server/src/main/java/com/trackflow/automation/node/model/InputValue.java`
-- `trackflow-server/src/main/java/com/trackflow/automation/node/model/InputPortDef.java`
-- `trackflow-server/src/main/java/com/trackflow/automation/node/model/TemplateValue.java`
-- `trackflow-server/src/main/java/com/trackflow/automation/execution/ExecutionContext.java`
-- `trackflow-server/src/main/java/com/trackflow/automation/node/nodes/VariablesNode.java`
-- `trackflow-server/src/main/java/com/trackflow/automation/node/nodes/RoleAgentNode.java`
-- `trackflow-server/src/main/java/com/trackflow/automation/node/nodes/IssueTransitionNode.java`
-- `trackflow-server/src/main/java/com/trackflow/automation/node/nodes/IssueSearchNode.java`
-- `trackflow-web/src/api/automation.ts`
-- `trackflow-web/src/views/automation/node-definitions/types.ts`
-- `trackflow-web/src/views/automation/node-definitions/role-agent.ts`
-- `trackflow-web/src/views/automation/node-definitions/trackflow-nodes.ts`
-- `trackflow-web/src/views/automation/node-definitions/variables.ts`
+- `trackflow-web/src/views/automation/graph/nodes/base/BaseNodeModel.ts`
+- `trackflow-web/src/views/automation/graph/nodes/base/BaseNodeView.ts`
 - `trackflow-web/src/views/automation/graph/nodes/base/NodeCard.vue`
-- `trackflow-web/src/views/automation/graph/edges/FlowEdge.ts`
-- `trackflow-web/src/views/automation/components/VariablePicker.vue`
-- `trackflow-web/src/views/automation/components/VariablesConfig.vue`
+- `trackflow-web/src/views/automation/graph/nodes/index.ts`
+- `trackflow-web/src/views/automation/WorkflowEditorView.vue`
 
 ### 测试重点（给 e2e-test 会话）
 - **必须验证的核心路径**：
-  1. 以 testuser 登录 → 打开自动化编辑器 → 拖入 RoleAgent 节点 → 验证默认只显示 roleId/task 两个端口，下方有"+ 2 个可选参数"提示
-  2. 点击"+ 2 个可选参数" → 展开 context/workDir 端口 → 这些端口产生可连接的锚点
-  3. 拖入 Variables 节点 → 在展开态的输出参数区点击 [+] → 添加自定义输出端口（如 env/string）→ 端口出现在画布上
-  4. 尝试连接 string 类型输出到 number 类型输入 → 应有类型警告（黄色边）或不兼容提示
-  5. 在 RoleAgent 的 task 输入上选择"模板表达式"模式 → 输入 `处理需求：{{node1.context}}` → 点击"插入变量"按钮可浏览上游变量
+  1. 以 testuser 登录 → 打开自动化编辑器 → 从底部工具栏拖入 RoleAgent 节点 → 验证默认只显示 roleId/task 两个端口的dot和标签，下方有"+ 2 个可选参数"文字
+  2. 点击"+ 2 个可选参数" → context/workDir 端口出现并有可连接的锚点（左侧dot）→ 节点高度正确扩展
+  3. 点击"收起可选参数" → 可选端口隐藏，节点高度正确收缩
+  4. 展开节点（点击展开按钮）→ 在输入参数列表中，task 端口行右侧应有 `{ }` 模板表达式按钮 → 点击后出现内联 textarea 编辑器
+  5. 加载一个已保存的包含 RoleAgent 节点的工作流 → roleId 和 task 端口正常显示 → 锚点位置正确可连线
 - **边界场景**：
-  - 已保存的工作流 JSON 加载时向后兼容（旧格式 VariablesNode 仍正常工作）
-  - 删除自定义端口时，已连接的边应断开
+  - 旧格式工作流（不含 optional 字段的 inputs）加载后，RoleAgent 显示所有已保存的端口
+  - 新建 RoleAgent 后保存再重新加载，可选端口折叠状态正确
 - **建议测试账号**：testuser（超级管理员，有完整权限）
-- **注意事项**：需要后端运行才能验证工作流保存和执行；前端画布改动较大，注意 LogicFlow 锚点计算是否正常
+- **注意事项**：模板表达式编辑器是一个内联 textarea，不是 VariablePicker 组件；VariablePicker 在右侧面板的配置区使用
 
 ### 审核重点（给 code-review 会话）
-- **重点关注文件**：ExecutionContext.java（模板解析正则）、FlowEdge.ts（类型兼容矩阵）、NodeCard.vue（新增大量逻辑）
+- **重点关注文件**：BaseNodeModel.ts（新增的可见端口计算逻辑）、NodeCard.vue（optionalExpanded 状态管理变更）
 - **潜在风险点**：
-  - TemplateValue 的 Jackson 反序列化：sealed interface + @JsonTypeInfo 组合需确认序列化/反序列化双向正确
-  - NodeCard 的 `getNodeDefinition` 导入路径是否在所有构建环境正确解析
-  - `checkTypeCompatibility` 函数目前不被 FlowEdgeModel 直接调用（需要在 WorkflowEditorView 的 edge:add 事件中集成）
+  - BaseNodeModel 现在 import `getNodeDefinition`，确认无循环依赖（已验证：node-definitions 不 import graph/nodes）
+  - `Object.assign(this._vnode.component.props, newProps)` 依赖 Vue 3 的 props 响应式特性，浅拷贝确保引用变化
+  - `OPTIONAL_TOGGLE_H` 是硬编码 24px，需与 CSS `.optional-toggle` 的实际渲染高度保持一致
 - **已知遗留项**：
-  - 类型兼容检查的"拒绝连线"逻辑需要在 LogicFlow 的 edge validation hook 中集成（本次只实现了视觉反馈）
-  - 动态端口增删的 `emit('menu-action')` 需要在 BaseNodeView 中实际处理 `add-input-port` / `remove-output-port` 事件
-  - VariablesNode 展开态中自定义输出端口的 default value 编辑 UI 未完成
+  - VariablePicker 组件仍未集成到 NodeCard 展开态（当前方案用简化的内联 textarea 代替）
+  - 类型兼容检查的连线拒绝逻辑仍未在 LogicFlow 的 edge validation hook 中集成
+  - 动态端口增删的 `emit('menu-action')` 事件处理仍需在 WorkflowEditorView 中实现
 
 ======================
 
