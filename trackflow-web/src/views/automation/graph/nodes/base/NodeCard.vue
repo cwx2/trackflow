@@ -8,7 +8,13 @@
     <div class="node-header" :style="{ '--node-color': nodeMeta.color }">
       <div class="color-bar" />
       <div class="node-icon" :style="{ background: nodeMeta.color + '22' }">
-        <span>{{ nodeMeta.icon }}</span>
+        <component
+          v-if="ICON_MAP[nodeMeta.icon]"
+          :is="ICON_MAP[nodeMeta.icon]"
+          :size="16"
+          :style="{ color: nodeMeta.color }"
+        />
+        <span v-else>{{ nodeMeta.icon }}</span>
       </div>
       <div class="node-title-wrap">
         <span class="node-title">{{ nodeMeta.title }}</span>
@@ -193,9 +199,48 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import {
+  IconSearch, IconFile, IconCode, IconLink, IconSettings,
+  IconSync, IconSend, IconClockCircle, IconList, IconRobot,
+  IconBranch, IconLoop, IconStorage, IconApps, IconCheck,
+  IconEdit, IconMessage, IconPlayCircle, IconStopCircle,
+} from '@arco-design/web-vue/es/icon'
 import type { PortDef, NodeMeta, NodeRunStatus } from './BaseNodeModel'
 import type { ValueType } from '@/api/automation'
 import { getNodeDefinition } from '../../../node-definitions'
+
+/**
+ * icon 字段 → Arco 图标组件映射
+ * icon 字段仍可存 emoji 作为 fallback，不在此表的直接渲染文本
+ */
+const ICON_MAP: Record<string, any> = {
+  // TrackFlow 业务节点
+  '🔎': IconSearch,
+  '🔍': IconSearch,
+  '📋': IconList,
+  '📝': IconEdit,
+  '🔁': IconSync,
+  '💬': IconMessage,
+  '✏️': IconEdit,
+  // 控制流
+  '🔀': IconBranch,
+  '🔄': IconLoop,
+  '⏱': IconClockCircle,
+  // 通用节点
+  '📁': IconStorage,
+  '🌐': IconSend,
+  '🔗': IconLink,
+  '📦': IconApps,
+  '🛡️': IconCheck,
+  // Agent
+  '🤖': IconRobot,
+  '🧠': IconRobot,
+  // Start / End
+  '▶️': IconPlayCircle,
+  '⏹️': IconStopCircle,
+  // Code
+  '</>': IconCode,
+}
 
 const props = defineProps<{
   nodeId: string
