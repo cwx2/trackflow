@@ -1526,23 +1526,7 @@ const progressIndicatorAriaLabel = computed(() => {
   return `活跃工单分布：${activeCount} 个活跃工单` + (closedIssueCount.value > 0 ? `，${closedIssueCount.value} 个已完成` : '')
 })
 
-/**
- * 有效的看板列（考虑列合并）。
- * 合并后的列：id 取 merge_group_id，name 取 merge_title，包含多个 statusIds。
- * 未合并的列：保持原样，statusIds 只有自身一个。
- */
-interface EffectiveColumn {
-  /** 列标识：合并列用 mergeGroupId，普通列用 statusId */
-  id: string
-  name: string
-  color: string
-  category: string
-  /** 该列包含的所有状态 ID */
-  statusIds: string[]
-  /** 是否为合并列 */
-  isMerged: boolean
-  sortOrder: number
-}
+// EffectiveColumn interface is imported from ./types
 
 const effectiveColumns = computed<EffectiveColumn[]>(() => {
   const cols = visibleStatuses.value
