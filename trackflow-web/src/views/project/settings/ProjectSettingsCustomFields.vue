@@ -1504,7 +1504,7 @@ onMounted(() => {
   font-size: 11px;
   padding: 1px 6px;
   border-radius: 3px;
-  background: rgba(245, 63, 63, 0.08);
+  background: var(--tf-danger-bg);
   color: var(--tf-danger);
 }
 
@@ -1512,7 +1512,7 @@ onMounted(() => {
   font-size: 11px;
   padding: 1px 6px;
   border-radius: 3px;
-  background: rgba(88, 166, 255, 0.08);
+  background: var(--tf-accent-light);
   color: var(--tf-accent);
 }
 
@@ -1534,8 +1534,8 @@ onMounted(() => {
   font-size: 11px;
   padding: 1px 6px;
   border-radius: 3px;
-  background: rgba(130, 80, 223, 0.1);
-  color: var(--tf-info, #8250df);
+  background: var(--tf-purple-bg);
+  color: var(--tf-info);
 }
 
 .field-meta {
@@ -1767,7 +1767,7 @@ onMounted(() => {
   align-items: flex-start;
   gap: 8px;
   padding: 12px;
-  background: rgba(245, 63, 63, 0.06);
+  background: var(--tf-danger-subtle);
   border-radius: 6px;
   font-size: 13px;
   color: var(--tf-text-primary);
@@ -1812,7 +1812,7 @@ onMounted(() => {
 }
 
 .effective-value.is-required {
-  background: rgba(245, 63, 63, 0.08);
+  background: var(--tf-danger-bg);
   color: var(--tf-danger);
 }
 
