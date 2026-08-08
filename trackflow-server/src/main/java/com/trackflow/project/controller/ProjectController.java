@@ -22,6 +22,7 @@ import com.trackflow.project.service.ProjectActivityService;
 import com.trackflow.project.service.ProjectCopyService;
 import com.trackflow.project.service.ProjectModuleService;
 import com.trackflow.project.service.ProjectService;
+import com.trackflow.project.service.ProjectVOAssembler;
 import com.trackflow.project.vo.AssignedIssueCountVO;
 import com.trackflow.project.vo.FavoriteToggleVO;
 import com.trackflow.project.vo.MemberOperationResultVO;
@@ -53,6 +54,7 @@ public class ProjectController {
 
     private final ProjectService projectService;
     private final ProjectCopyService projectCopyService;
+    private final ProjectVOAssembler projectVOAssembler;
     private final ProjectConverter projectConverter;
     private final IssueTagService tagService;
     private final IssueConverter issueConverter;
@@ -110,7 +112,7 @@ public class ProjectController {
     public R<ProjectDetailVO> getDetail(@PathVariable("id") String id) {
         Long projectId = projectService.resolveProjectId(id);
         Long userId = SecurityUtils.getCurrentUserId();
-        return R.ok(projectService.getProjectDetail(projectId, userId));
+        return R.ok(projectVOAssembler.getProjectDetail(projectId, userId));
     }
 
     @PutMapping("/{id}")
@@ -132,7 +134,7 @@ public class ProjectController {
     @PreAuthorize("@perm.checkProject(#id, 'project:edit')")
     public R<ProjectTrashSettingsVO> getTrashSettings(@PathVariable("id") String id) {
         Long projectId = projectService.resolveProjectId(id);
-        return R.ok(projectService.getTrashSettings(projectId));
+        return R.ok(projectVOAssembler.getTrashSettings(projectId));
     }
 
     @PutMapping("/{id}/trash-settings")
@@ -155,7 +157,7 @@ public class ProjectController {
     @PreAuthorize("@perm.checkProject(#id, 'project:delete')")
     public R<ProjectDeletePreCheckVO> deletePreCheck(@PathVariable("id") String id) {
         Long projectId = projectService.resolveProjectId(id);
-        return R.ok(projectService.preCheckDelete(projectId));
+        return R.ok(projectVOAssembler.preCheckDelete(projectId));
     }
 
     @DeleteMapping("/{id}")
@@ -170,7 +172,7 @@ public class ProjectController {
     @PreAuthorize("@perm.checkProject(#id, 'project:view')")
     public R<List<ProjectMemberVO>> listMembers(@PathVariable("id") String id) {
         Long projectId = projectService.resolveProjectId(id);
-        return R.ok(projectService.listMembersVO(projectId));
+        return R.ok(projectVOAssembler.listMembers(projectId));
     }
 
     /**
@@ -184,7 +186,7 @@ public class ProjectController {
             @RequestParam(value = "keyword", required = false, defaultValue = "") String keyword,
             @RequestParam(value = "limit", required = false, defaultValue = "10") int limit) {
         Long projectId = projectService.resolveProjectId(id);
-        return R.ok(projectService.searchMembersVO(projectId, keyword, limit));
+        return R.ok(projectVOAssembler.searchMembers(projectId, keyword, limit));
     }
 
     /**
@@ -195,7 +197,7 @@ public class ProjectController {
     @PreAuthorize("@perm.checkProject(#id, 'project:view')")
     public R<List<ProjectMemberVO>> listAssignableMembers(@PathVariable("id") String id) {
         Long projectId = projectService.resolveProjectId(id);
-        return R.ok(projectService.listAssignableMembersVO(projectId));
+        return R.ok(projectVOAssembler.listAssignableMembers(projectId));
     }
 
     @PostMapping("/{id}/members")
@@ -249,7 +251,7 @@ public class ProjectController {
     @PreAuthorize("@perm.checkProject(#id, 'project:view')")
     public R<ProjectMembersViewVO> listMembersView(@PathVariable("id") String id) {
         Long projectId = projectService.resolveProjectId(id);
-        return R.ok(projectService.listMembersFullView(projectId));
+        return R.ok(projectVOAssembler.listMembersFullView(projectId));
     }
 
     /**
@@ -296,7 +298,7 @@ public class ProjectController {
     @PreAuthorize("@perm.checkProject(#id, 'project:view')")
     public R<ProjectStatisticsVO> getStatistics(@PathVariable("id") String id) {
         Long projectId = projectService.resolveProjectId(id);
-        return R.ok(projectService.getProjectStatistics(projectId));
+        return R.ok(projectVOAssembler.getProjectStatistics(projectId));
     }
 
     // ========== 标签 ==========
@@ -322,7 +324,7 @@ public class ProjectController {
     @PreAuthorize("@perm.checkProject(#id, 'project:view')")
     public R<ProjectTimeTrackingSettingsVO> getTimeTrackingSettings(@PathVariable("id") String id) {
         Long projectId = projectService.resolveProjectId(id);
-        return R.ok(projectService.getTimeTrackingSettingsVO(projectId));
+        return R.ok(projectVOAssembler.getTimeTrackingSettings(projectId));
     }
 
     @PutMapping("/{id}/time-tracking-settings")
@@ -331,7 +333,7 @@ public class ProjectController {
             @PathVariable("id") String id,
             @Valid @RequestBody UpdateTimeTrackingSettingsDTO dto) {
         Long projectId = projectService.resolveProjectId(id);
-        return R.ok(projectService.updateTimeTrackingSettingsVO(projectId, dto));
+        return R.ok(projectVOAssembler.updateTimeTrackingSettings(projectId, dto));
     }
 
     /**
@@ -342,7 +344,7 @@ public class ProjectController {
     public R<TimeTrackingDisableImpactVO> getTimeTrackingDisableImpact(
             @PathVariable("id") String id) {
         Long projectId = projectService.resolveProjectId(id);
-        return R.ok(projectService.getTimeTrackingDisableImpact(projectId));
+        return R.ok(projectVOAssembler.getTimeTrackingDisableImpact(projectId));
     }
 
     // ========== 项目模块管理 ==========

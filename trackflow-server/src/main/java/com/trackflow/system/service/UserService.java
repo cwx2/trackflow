@@ -192,7 +192,7 @@ public class UserService {
      *
      * @return 包含全局角色信息的用户分页结果
      */
-    public PageResult<UserVO> listUsersWithRoles(Page<SysUser> page, String keyword, String username,
+    PageResult<UserVO> assembleUsersWithRoles(Page<SysUser> page, String keyword, String username,
                                                   String displayName, String email, Long orgId,
                                                   String status, String banStatus, Long roleId) {
         Page<SysUser> result = list(page, keyword, username, displayName, email, orgId, status, banStatus, roleId);
@@ -611,7 +611,7 @@ public class UserService {
     /**
      * 获取用户完整档案（基本信息 + 全局角色 + 项目角色 + 最近活动）
      */
-    public UserProfileVO getUserProfile(Long userId) {
+    UserProfileVO assembleUserProfile(Long userId) {
         SysUser user = getById(userId);
 
         UserProfileVO profile = new UserProfileVO();
@@ -663,7 +663,7 @@ public class UserService {
      * @param requesterId  请求者用户 ID
      * @return 公开资料 VO
      */
-    public UserPublicProfileVO getUserPublicProfile(Long targetUserId, Long requesterId) {
+    UserPublicProfileVO assembleUserPublicProfile(Long targetUserId, Long requesterId) {
         SysUser targetUser = userMapper.selectById(targetUserId);
         if (targetUser == null) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "用户不存在: " + targetUserId);

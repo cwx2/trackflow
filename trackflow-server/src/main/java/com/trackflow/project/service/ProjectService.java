@@ -2183,7 +2183,7 @@ public class ProjectService {
     /**
      * 获取禁用时间追踪功能的影响评估。
      */
-    public com.trackflow.project.vo.TimeTrackingDisableImpactVO getTimeTrackingDisableImpact(Long projectId) {
+    com.trackflow.project.vo.TimeTrackingDisableImpactVO assembleTimeTrackingDisableImpact(Long projectId) {
         // 确保项目存在
         getById(projectId);
         var vo = new com.trackflow.project.vo.TimeTrackingDisableImpactVO();
