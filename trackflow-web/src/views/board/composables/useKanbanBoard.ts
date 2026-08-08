@@ -13,14 +13,14 @@
 import { ref, computed, watch, onMounted, onUnmounted, h, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { Message, Modal, Notification } from '@arco-design/web-vue'
-import { issueApi, sprintApi, boardApi, workflowApi, projectApi } from '@/api'
+import { issueApi, sprintApi, boardApi } from '@/api'
 import type { IssueVO, IssueStatusVO, SprintVO, BoardColumnVO, BoardCardConfigVO, BoardColumnMergeGroupVO, BoardCardVO, R, TransitStatusResultVO, DeletionPreviewVO } from '@/api/types'
 import { ERROR_CODES } from '@/api/error-codes'
 import { useProjectStore } from '@/stores/project'
 import { useAuthStore } from '@/stores/auth'
 import { usePermission } from '@/composables/usePermission'
 import { useNavBadge } from '@/composables/useNavBadge'
-import { useProjectList } from '@/composables/useProjectList'
+// useProjectList is now called inside useBoardData
 import { useSelection } from '@/composables/useSelection'
 import { useBatchOps } from '@/composables/useBatchOps'
 import { useBoardFullscreen } from './useBoardFullscreen'
@@ -28,6 +28,7 @@ import { useBoardKeyboard } from './useBoardKeyboard'
 import { useBoardFilter } from './useBoardFilter'
 import { useBoardDrag, UNDO_TIMEOUT } from './useBoardDrag'
 import type { UndoEntry } from './useBoardDrag'
+import { useBoardData } from './useBoardData'
 
 /** 看板中使用的工单类型 — 可以是精简卡片 VO（聚合 API）或完整 IssueVO（Legacy fallback） */
 export type BoardIssue = IssueVO | BoardCardVO
@@ -314,7 +315,7 @@ let userExplicitlySelectedAll = false
 const keyword = ref('')
 const loading = ref(false)
 const issues = ref<BoardIssue[]>([])
-const { projects, projectLoadState, loadProjects } = useProjectList()
+// projects/loadProjects/projectLoadState are now provided by useBoardData (see below)
 
 // ===== 负责人筛选 =====
 const authStore = useAuthStore()
@@ -359,22 +360,7 @@ function onAssigneeFilterChange(val: string | undefined) {
   loadIssuesWithLoading()
 }
 
-/** 加载项目成员列表（用于负责人筛选下拉） */
-async function loadProjectMembers() {
-  if (!selectedProject.value) {
-    projectMembers.value = []
-    return
-  }
-  try {
-    const res = await projectApi.listAssignableMembers(selectedProject.value)
-    projectMembers.value = (res.data || []).map(m => ({
-      userId: m.userId,
-      displayName: m.displayName
-    }))
-  } catch {
-    projectMembers.value = []
-  }
-}
+// loadProjectMembers is now provided by useBoardData (see below)
 
 const currentProjectName = computed(() => {
   if (!selectedProject.value) return ''
@@ -1366,12 +1352,15 @@ const effectiveDoneRetentionDays = computed(() => {
 
 // 搜索相关
 // ===== 搜索过滤逻辑（委托到 useBoardFilter composable） =====
+// loadIssues is provided by useBoardData (declared below after useBoardDrag);
+// we pass a late-binding wrapper since useBoardFilter only invokes it at runtime.
+let _loadIssuesFn: () => Promise<void> = async () => {}
 const {
   isSearchActive, showNoSearchResults,
   onSearchInput, onSearchClear, clearSearch,
   loadIssuesWithLoading, clearDebounceTimer
 } = useBoardFilter({
-  keyword, selectedProject, issues, loading, loadIssues
+  keyword, selectedProject, issues, loading, loadIssues: () => _loadIssuesFn()
 })
 
 /** 是否显示 Sprint 模式无活跃迭代的空状态 */
@@ -1497,6 +1486,10 @@ function onBoardCloned(newProjectId: string) {
 const showChart = ref(false)
 const boardChartType = ref<string>('burndown')
 const boardBurndownCalculation = ref<string>('issue_count')
+
+// Board truncation state (written by useBoardData)
+const boardTotalCount = ref(0)
+const boardTruncated = ref(false)
 
 // 看板卡片配置（字段显示 + 颜色方案）
 const cardConfig = ref<BoardCardConfigVO>({
@@ -3064,377 +3057,39 @@ async function onBatchDelete() {
   clearSelection()
 }
 
-// ===== 数据加载 =====
+// ===== 数据加载（委托到 useBoardData composable） =====
+const {
+  projects, projectLoadState, loadProjects,
+  loadStatuses, loadBoardColumns, loadCardConfig, loadSwimlaneConfig,
+  loadColumnMerges, loadTransitionableStatuses, loadSprints,
+  loadBoardBehavior, loadChartConfig, loadProjectMembers,
+  loadBoard, loadIssues, onSettingsSaved
+} = useBoardData({
+  selectedProject, selectedSprint, keyword, issues, statuses, sprints,
+  allColumnConfigs, cardConfig, columnMerges,
+  swimlaneGroupBy, swimlaneSelectedValues, swimlaneShowUncategorized,
+  swimlaneUncategorizedPosition, swimlaneIssueType,
+  boardFilterMode, boardFilterQuery, boardDoneRetentionDays, boardName, boardColumnField,
+  allowMultipleSprints, canEditBoard, boardLinkedProjectIds,
+  backlogViewMode, backlogSavedQueryId,
+  showAllColumns, boardTotalCount, boardTruncated,
+  boardChartType, boardBurndownCalculation,
+  loading, projectMembers,
+  effectiveAssigneeId, visibleStatuses, effectiveColumns, collapsedColumns,
+  expandedEmptyColumns, activeSprint,
+  transitionableSourceStatuses, canChangeStatus,
+  guidanceDismissed,
+  guidanceDismissedKey: GUIDANCE_DISMISSED_KEY,
+  syncUrlState,
+  loadCollapsedColumnsState,
+  loadSwimlaneOrder,
+  loadBoardManualOrder,
+  userExplicitlySelectedAll: () => userExplicitlySelectedAll
+})
+// Wire up the late-binding function reference for useBoardFilter
+_loadIssuesFn = loadIssues
 
-async function loadStatuses() {
-  try {
-    const res = await issueApi.listStatuses()
-    statuses.value = res.data || []
-  } catch {
-    statuses.value = []
-    Message.error('加载状态列表失败')
-  }
-}
 
-async function loadBoardColumns() {
-  if (!selectedProject.value) {
-    allColumnConfigs.value = []
-    return
-  }
-  try {
-    const res = await boardApi.getColumns(selectedProject.value)
-    allColumnConfigs.value = res.data || []
-  } catch {
-    allColumnConfigs.value = []
-  }
-}
-
-async function loadCardConfig() {
-  if (!selectedProject.value) {
-    cardConfig.value = { visibleFields: ['assignee', 'priority', 'type'], colorScheme: 'none' }
-    return
-  }
-  try {
-    const res = await boardApi.getCardConfig(selectedProject.value)
-    if (res.data) {
-      cardConfig.value = res.data
-    }
-  } catch {
-    cardConfig.value = { visibleFields: ['assignee', 'priority', 'type'], colorScheme: 'none' }
-  }
-}
-
-async function loadSwimlaneConfig() {
-  if (!selectedProject.value) {
-    swimlaneGroupBy.value = 'none'
-    swimlaneSelectedValues.value = null
-    swimlaneShowUncategorized.value = true
-    swimlaneUncategorizedPosition.value = 'bottom'
-    swimlaneIssueType.value = null
-    return
-  }
-  try {
-    const res = await boardApi.getSwimlaneConfig(selectedProject.value)
-    if (res.data && res.data.groupByField) {
-      swimlaneGroupBy.value = res.data.groupByField as SwimlaneGroupBy
-      // 同步到 localStorage（兼容本地快速切换）
-      localStorage.setItem(SWIMLANE_STORAGE_KEY, res.data.groupByField)
-      // 加载值选择配置
-      swimlaneSelectedValues.value = res.data.selectedValues || null
-      swimlaneShowUncategorized.value = res.data.showUncategorized !== false
-      swimlaneUncategorizedPosition.value = res.data.uncategorizedPosition || 'bottom'
-      swimlaneIssueType.value = res.data.swimlaneIssueType ?? null
-    }
-  } catch {
-    // 保持当前 localStorage 中的值
-  }
-}
-
-async function loadColumnMerges() {
-  if (!selectedProject.value) {
-    columnMerges.value = []
-    return
-  }
-  try {
-    const res = await boardApi.getColumnMerges(selectedProject.value)
-    columnMerges.value = res.data || []
-  } catch {
-    columnMerges.value = []
-  }
-}
-
-async function loadTransitionableStatuses() {
-  if (!selectedProject.value || !canChangeStatus.value) {
-    transitionableSourceStatuses.value = new Set()
-    return
-  }
-  try {
-    const res = await workflowApi.getTransitionableStatuses(selectedProject.value)
-    transitionableSourceStatuses.value = new Set(res.data || [])
-  } catch {
-    transitionableSourceStatuses.value = new Set()
-  }
-}
-
-function onSettingsSaved() {
-  loadBoardColumns()
-  loadCardConfig()
-  loadSwimlaneConfig()
-  loadColumnMerges()
-  // Reload behavior config and re-filter issues
-  loadBoardBehavior().then(() => loadIssues())
-}
-
-async function loadSprints() {
-  if (!selectedProject.value) { sprints.value = []; return }
-  try {
-    const res = await sprintApi.listByProject(selectedProject.value)
-    const rawSprints = res.data?.list || []
-
-    // Sort sprints: active first, then planned, then completed; within group by startDate desc
-    const statusOrder: Record<string, number> = { active: 0, planned: 1, completed: 2 }
-    rawSprints.sort((a, b) => {
-      const orderA = statusOrder[a.status] ?? 9
-      const orderB = statusOrder[b.status] ?? 9
-      if (orderA !== orderB) return orderA - orderB
-      // Within same status group: by startDate descending (most recent first)
-      const dateA = a.startDate || ''
-      const dateB = b.startDate || ''
-      return dateB.localeCompare(dateA)
-    })
-    sprints.value = rawSprints
-
-    // Auto-select active sprint if no explicit user/URL selection
-    // Logic (following YouTrack): active > (planned with earliest start date that hasn't ended)
-    if (!selectedSprint.value && !userExplicitlySelectedAll) {
-      const activeSprintItem = rawSprints.find(s => s.status === 'active')
-      if (activeSprintItem) {
-        selectedSprint.value = activeSprintItem.id
-        syncUrlState()
-      } else {
-        // Fallback: find a planned sprint whose date range contains today
-        const today = new Date().toISOString().split('T')[0]
-        const currentDateSprint = rawSprints.find(s =>
-          s.status === 'planned' && s.startDate && s.endDate &&
-          s.startDate <= today && s.endDate >= today
-        )
-        if (currentDateSprint) {
-          selectedSprint.value = currentDateSprint.id
-          syncUrlState()
-        }
-        // If no current sprint found, leave as "所有迭代" (sprint-no-active-hint will show)
-      }
-    }
-  } catch {
-    sprints.value = []
-    Message.error('加载迭代列表失败')
-  }
-}
-
-/** 加载 Board Behavior 配置（过滤模式 + 完成工单保留天数 + 看板名称） */
-async function loadBoardBehavior() {
-  if (!selectedProject.value) return
-  try {
-    const res = await boardApi.getGeneralConfig(selectedProject.value)
-    if (res.data) {
-      boardFilterMode.value = (res.data.filterMode as 'all' | 'active_sprint' | 'query') || 'all'
-      boardFilterQuery.value = res.data.filterQuery ?? null
-      boardDoneRetentionDays.value = res.data.doneRetentionDays ?? null
-      canEditBoard.value = res.data.currentUserCanEdit ?? false
-      boardName.value = res.data.name || ''
-      boardColumnField.value = (res.data.columnField as 'status' | 'priority') || 'status'
-      // 多 Sprint 配置
-      allowMultipleSprints.value = res.data.allowMultipleSprints ?? false
-      // Backlog 配置
-      backlogViewMode.value = (res.data.backlogViewMode as 'list' | 'tree') || 'list'
-      backlogSavedQueryId.value = res.data.backlogSavedQueryId ?? null
-      // 关联项目
-      boardLinkedProjectIds.value = res.data.linkedProjectIds || []
-    }
-  } catch {
-    boardFilterMode.value = 'all'
-    boardFilterQuery.value = null
-    boardDoneRetentionDays.value = null
-    canEditBoard.value = false
-    boardName.value = ''
-    allowMultipleSprints.value = false
-    backlogViewMode.value = 'list'
-    backlogSavedQueryId.value = null
-    boardLinkedProjectIds.value = []
-  }
-}
-
-/** 加载看板图表配置（类型 + 计算方式） */
-async function loadChartConfig() {
-  if (!selectedProject.value) return
-  try {
-    const res = await boardApi.getChartConfig(selectedProject.value)
-    if (res.data) {
-      boardChartType.value = res.data.chartType || 'burndown'
-      boardBurndownCalculation.value = res.data.burndownCalculation || 'issue_count'
-    }
-  } catch {
-    // 加载失败使用默认值
-    boardChartType.value = 'burndown'
-    boardBurndownCalculation.value = 'issue_count'
-  }
-}
-
-async function loadBoard() {
-  if (!selectedProject.value) { issues.value = []; return }
-  expandedEmptyColumns.value.clear()
-  loadCollapsedColumnsState()
-  // Restore guidance dismissed state from sessionStorage
-  guidanceDismissed.value = sessionStorage.getItem(`${GUIDANCE_DISMISSED_KEY}_${selectedProject.value}`) === 'true'
-  loading.value = true
-  try {
-    await Promise.all([loadSprints(), loadBoardColumns(), loadCardConfig(), loadSwimlaneConfig(), loadColumnMerges(), loadTransitionableStatuses(), loadBoardBehavior(), loadProjectMembers(), loadChartConfig()])
-    // 加载泳道自定义排序（需在 loadSwimlaneConfig 之后，确保 swimlaneGroupBy 已恢复）
-    loadSwimlaneOrder()
-    await loadIssues()
-    // Load manual order for board card sorting
-    if (selectedProject.value) {
-      await loadBoardManualOrder({ type: 'project', id: selectedProject.value })
-    }
-  } catch (e: any) {
-    // 会话过期时不显示"加载失败"——已有过期提示和跳转
-    const isSessionExpired = e?.message === '会话已过期' || e?.code === 'ERR_CANCELED'
-    if (isSessionExpired) return
-    issues.value = []
-    Message.error('加载看板数据失败')
-  } finally {
-    loading.value = false
-  }
-}
-
-/** 看板安全上限：超过此数量的工单将截断并提示用户 */
-const BOARD_MAX_ISSUES = 2000
-const boardTruncated = ref(false)
-const boardTotalCount = ref(0)
-
-/**
- * 加载看板工单数据（使用看板专用聚合 API，单次请求）。
- * 服务端按列分组返回数据，前端无需客户端分组计算。
- */
-async function loadIssues() {
-  if (!selectedProject.value) { issues.value = []; boardTruncated.value = false; return }
-
-  // Board Behavior 过滤逻辑现在由服务端统一执行（filterMode / filterQuery / doneRetentionDays）。
-  // 前端仅传递用户交互产生的显式筛选参数。
-
-  // 用户显式选择的 Sprint（通过 Sprint 下拉选择器）
-  const effectiveSprintId = selectedSprint.value || undefined
-
-  // 前端仍可显式传 excludeDoneBefore 覆盖服务端配置（当用户无活跃 Sprint 且无显式选择时保留前端 14 天默认值）
-  const DEFAULT_DONE_RETENTION_DAYS = 14
-  let excludeDoneBefore: string | undefined
-  // 仅当 filterMode 不是由服务端控制 doneRetentionDays（即 boardDoneRetentionDays 为 null）且无 Sprint 选择时，
-  // 前端使用默认 14 天保留（向后兼容）
-  if (boardDoneRetentionDays.value === null && !activeSprint.value && !selectedSprint.value) {
-    const cutoffDate = new Date(Date.now() - DEFAULT_DONE_RETENTION_DAYS * 24 * 60 * 60 * 1000)
-    excludeDoneBefore = cutoffDate.toISOString().split('T')[0]
-  }
-  // 如果 boardDoneRetentionDays 已配置（非 null），服务端会自动应用，前端不传
-
-  // 收集已折叠列的状态 ID（折叠列不需要返回具体工单）
-  // REQ-388 修复：合并列（mergeGroupId）需展开为其包含的所有 statusIds，
-  // 否则服务端 parseCollapsedStatusIds() 对非数字字符串执行 Long.parseLong() 时
-  // 会抛出 NumberFormatException 并静默忽略，导致合并列折叠优化完全失效。
-  const collapsedStatusIdSet = new Set<string>()
-  for (const colId of collapsedColumns.value) {
-    // 检查是否是合并列 ID（非纯数字 = mergeGroupId）
-    const mergedCol = effectiveColumns.value.find(c => c.isMerged && c.id === colId)
-    if (mergedCol) {
-      // 展开为合并组包含的所有 statusId
-      for (const sid of mergedCol.statusIds) {
-        collapsedStatusIdSet.add(sid)
-      }
-    } else {
-      collapsedStatusIdSet.add(colId)
-    }
-  }
-  const collapsedIds = [...collapsedStatusIdSet].join(',')
-
-  // REQ-386: 泳道服务端过滤
-  // 仅当：(1) 泳道分组已配置（非 none）(2) 有选中值 (3) showUncategorized=false 时才做服务端过滤
-  // showUncategorized=true 时不传（服务端需返回全量数据，前端要构建"未分类"泳道）
-  let swimlaneFieldParam: string | undefined
-  let swimlaneValuesParam: string | undefined
-  if (
-    swimlaneGroupBy.value !== 'none' &&
-    swimlaneSelectedValues.value && swimlaneSelectedValues.value.length > 0 &&
-    swimlaneShowUncategorized.value === false
-  ) {
-    swimlaneFieldParam = swimlaneGroupBy.value
-    swimlaneValuesParam = swimlaneSelectedValues.value.join(',')
-  }
-
-  try {
-    const res = await boardApi.getBoardData({
-      projectId: selectedProject.value,
-      sprintId: effectiveSprintId,
-      assigneeId: effectiveAssigneeId.value || undefined,
-      keyword: keyword.value || undefined,
-      excludeDoneBefore,
-      collapsedStatusIds: collapsedIds || undefined,
-      swimlaneField: swimlaneFieldParam,
-      swimlaneValues: swimlaneValuesParam,
-      showAllColumns: showAllColumns.value || undefined
-    })
-
-    const boardData = res.data
-    if (!boardData) {
-      issues.value = []
-      boardTotalCount.value = 0
-      boardTruncated.value = false
-      return
-    }
-
-    // 从聚合数据中同步列配置（消除 getColumns 竞态：列定义与工单数据来自同一响应）
-    if (boardData.columnConfigs && boardData.columnConfigs.length > 0) {
-      allColumnConfigs.value = boardData.columnConfigs
-    }
-
-    // 从聚合数据中提取所有工单（平铺，供 getColumnIssues/swimlanes 使用）
-    const allIssues: BoardCardVO[] = []
-    for (const col of boardData.columns) {
-      if (col.issues && col.issues.length > 0) {
-        allIssues.push(...col.issues)
-      }
-    }
-
-    boardTotalCount.value = boardData.totalIssueCount
-    boardTruncated.value = boardData.truncated
-    issues.value = allIssues
-  } catch (e: any) {
-    // 如果聚合 API 失败（如后端未部署），fallback 到旧方式
-    const status = e.response?.status
-    if (status === 404 || status === 405) {
-      await loadIssuesLegacy(effectiveSprintId, excludeDoneBefore)
-    } else {
-      throw e
-    }
-  }
-}
-
-/**
- * Legacy 加载方式（循环分页调用通用 Issue 列表 API）。
- * 仅作为聚合 API 不可用时的 fallback。
- */
-async function loadIssuesLegacy(effectiveSprintId: string | undefined, excludeDoneBefore: string | undefined) {
-  const PAGE_SIZE = 100
-  let page = 1
-  let allIssues: BoardIssue[] = []
-  let total = 0
-
-  // 优化：传入可见列的 statusId 过滤，减少不必要的数据传输
-  const visibleStatusIds = visibleStatuses.value.map(s => s.id).join(',')
-
-  while (true) {
-    const res = await issueApi.list({
-      projectId: selectedProject.value!,
-      statusId: visibleStatusIds || undefined,
-      sprintId: effectiveSprintId,
-      assigneeId: effectiveAssigneeId.value || undefined,
-      keyword: keyword.value || undefined,
-      excludeDoneBefore,
-      page,
-      pageSize: PAGE_SIZE
-    })
-    const list = res.data?.list || []
-    total = res.data?.pagination?.total || 0
-    allIssues = allIssues.concat(list)
-
-    if (allIssues.length >= total || allIssues.length >= BOARD_MAX_ISSUES || list.length < PAGE_SIZE) {
-      break
-    }
-    page++
-  }
-
-  boardTotalCount.value = total
-  boardTruncated.value = allIssues.length < total
-  issues.value = allIssues
-}
 
 // ===== 内联快速创建卡片 =====
 const addingCardColumnId = ref<string | null>(null)
