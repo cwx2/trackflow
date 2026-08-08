@@ -417,7 +417,7 @@ function exportImage() {
   Message.loading({ content: '正在生成图片...', duration: 2000 })
   snapshot.getSnapshot(`workflow-${workflowId.value || 'export'}`, {
     fileType: 'png',
-    backgroundColor: '#131623',
+    backgroundColor: getComputedStyle(document.documentElement).getPropertyValue('--tf-bg-body').trim() || '#131623',
     padding: 40,
   })
 }
@@ -509,11 +509,11 @@ function initLogicFlow() {
         fontSize: 12
       },
       bezier: {
-        stroke: '#3b82f6',
+        stroke: 'var(--wf-edge-color, var(--tf-accent))',
         strokeWidth: 2,
       },
       anchor: {
-        fill: '#3b82f6',
+        fill: 'var(--wf-edge-color, var(--tf-accent))',
         stroke: 'var(--tf-bg-surface)',
         strokeWidth: 2,
         r: 5
@@ -1047,9 +1047,9 @@ onUnmounted(() => {
   --wf-card-bg:             var(--wf-node-bg);
   --wf-card-border:         var(--wf-node-border);
   /* 试运行按钮（语义色，与主题无关） */
-  --wf-run-bg:              #16a34a;
-  --wf-run-hover:           #15803d;
-  --wf-run-running:         #2563eb;
+  --wf-run-bg:              var(--tf-success);
+  --wf-run-hover:           color-mix(in srgb, var(--tf-success) 85%, black);
+  --wf-run-running:         var(--tf-accent);
 }
 
 /* 执行日志浮层 */
@@ -1060,7 +1060,7 @@ onUnmounted(() => {
   transform: translateX(-50%);
   z-index: 25;
   width: min(640px, 90%);
-  background: #1a1d28;
+  background: var(--wf-canvas-bg, var(--tf-bg-body));
   border: 1px solid var(--wf-card-border);
   border-radius: 12px;
   box-shadow: 0 8px 32px rgba(0,0,0,0.5);

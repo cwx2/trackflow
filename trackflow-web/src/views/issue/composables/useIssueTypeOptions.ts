@@ -31,22 +31,16 @@ const FALLBACK_LABELS: Record<string, string> = {
   'Story': '故事',
 }
 
-/** 回退颜色映射（API 不可用时） */
-const FALLBACK_COLORS: Record<string, string> = {
-  'Bug': '#ef4444',
-  'Task': '#6366f1',
-  'Feature': '#22c55e',
-  'Epic': '#a855f7',
-  'Story': '#3b82f6',
-}
+/** 回退颜色映射（API 不可用时） — 引用 issueColors 单一来源 */
+import { ISSUE_TYPE_COLORS as FALLBACK_COLORS } from '@/utils/issueColors'
 
 /** 默认工单类型选项（API 不可用时的回退） */
 const FALLBACK_OPTIONS: IssueTypeOption[] = [
-  { value: 'Bug', label: '缺陷', color: '#ef4444', description: '软件缺陷，需要修复', isDefault: false },
-  { value: 'Task', label: '任务', color: '#6366f1', description: '常规任务', isDefault: true },
-  { value: 'Feature', label: '需求', color: '#22c55e', description: '新功能需求', isDefault: false },
-  { value: 'Epic', label: '史诗', color: '#a855f7', description: '大型功能集合', isDefault: false },
-  { value: 'Story', label: '故事', color: '#3b82f6', description: '用户故事', isDefault: false },
+  { value: 'Bug', label: '缺陷', color: FALLBACK_COLORS['Bug'], description: '软件缺陷，需要修复', isDefault: false },
+  { value: 'Task', label: '任务', color: FALLBACK_COLORS['Task'], description: '常规任务', isDefault: true },
+  { value: 'Feature', label: '需求', color: FALLBACK_COLORS['Feature'], description: '新功能需求', isDefault: false },
+  { value: 'Epic', label: '史诗', color: FALLBACK_COLORS['Epic'], description: '大型功能集合', isDefault: false },
+  { value: 'Story', label: '故事', color: FALLBACK_COLORS['Story'], description: '用户故事', isDefault: false },
 ]
 
 /**

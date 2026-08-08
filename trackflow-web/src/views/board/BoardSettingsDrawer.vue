@@ -327,6 +327,7 @@ import { Message } from '@arco-design/web-vue'
 import { boardApi, queryApi, projectApi } from '@/api'
 import type { BoardColumnVO, BoardColumnItem, SavedQueryVO, ProjectVO } from '@/api/types'
 import { localizeStatusName, localizePriority } from '@/utils/fieldLabels'
+import { PRIORITY_COLORS, getPriorityColor } from '@/utils/issueColors'
 import CardSettingsPanel from './CardSettingsPanel.vue'
 import ChartSettingsPanel from './ChartSettingsPanel.vue'
 import GeneralSettingsPanel from './GeneralSettingsPanel.vue'
@@ -398,20 +399,10 @@ const editableColumnField = ref('status')
 const editableAllowMultipleSprints = ref(false)
 
 // 优先级列 WIP 配置（columnField=priority 时使用）
-const PRIORITY_COLORS: Record<string, string> = {
-  Critical: '#ef4444',
-  High: '#f59e0b',
-  Normal: '#3b82f6',
-  Low: '#9ca3af'
-}
 const PRIORITY_VALUES = ['紧急', '高', '普通', '低']
 const editablePriorityWip = ref<PriorityWipLocal[]>(
   PRIORITY_VALUES.map(v => ({ fieldValue: v, wipMin: undefined, wipMax: undefined }))
 )
-
-function getPriorityColor(fieldValue: string): string {
-  return PRIORITY_COLORS[fieldValue] || '#9ca3af'
-}
 
 function getPriorityIssueCount(fieldValue: string): number {
   const col = props.columns.find(c => c.fieldValue === fieldValue)

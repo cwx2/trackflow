@@ -13,6 +13,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
 import { issueApi, projectApi, sprintApi, tagApi, customFieldApi, timeEntryApi } from '@/api'
 import { workItemAttributeApi } from '@/api/timeEntry'
+import { PRIORITY_COLORS, ISSUE_TYPE_COLORS, WORK_TYPE_OPTIONS } from '@/utils/issueColors'
 import type { WorkItemAttributeVO } from '@/api/timeEntry'
 import { usePermission, loadProjectPermissions } from '@/composables/usePermission'
 import { useIssueDetailSubscription } from '@/composables/useWebSocket'
@@ -57,19 +58,19 @@ export function useIssueDetailData() {
 
   // Options loaded dynamically
   const dynamicPriorityOptions = ref<Array<{ value: string; label: string; color: string }>>([
-    { value: '阻塞', label: '阻塞', color: '#b91c1c' },
-    { value: '紧急', label: '紧急', color: '#ef4444' },
-    { value: '高', label: '高', color: '#f59e0b' },
-    { value: '普通', label: '普通', color: '#6366f1' },
-    { value: '低', label: '低', color: '#64748b' },
+    { value: '阻塞', label: '阻塞', color: PRIORITY_COLORS['阻塞'] },
+    { value: '紧急', label: '紧急', color: PRIORITY_COLORS['紧急'] },
+    { value: '高', label: '高', color: PRIORITY_COLORS['高'] },
+    { value: '普通', label: '普通', color: PRIORITY_COLORS['普通'] },
+    { value: '低', label: '低', color: PRIORITY_COLORS['低'] },
   ])
 
   const dynamicIssueTypeOptions = ref<Array<{ value: string; label: string; color: string }>>([
-    { value: '缺陷', label: '缺陷', color: '#ef4444' },
-    { value: '任务', label: '任务', color: '#6366f1' },
-    { value: '需求', label: '需求', color: '#22c55e' },
-    { value: '史诗', label: '史诗', color: '#a855f7' },
-    { value: '故事', label: '故事', color: '#3b82f6' },
+    { value: '缺陷', label: '缺陷', color: ISSUE_TYPE_COLORS['缺陷'] },
+    { value: '任务', label: '任务', color: ISSUE_TYPE_COLORS['任务'] },
+    { value: '需求', label: '需求', color: ISSUE_TYPE_COLORS['需求'] },
+    { value: '史诗', label: '史诗', color: ISSUE_TYPE_COLORS['史诗'] },
+    { value: '故事', label: '故事', color: ISSUE_TYPE_COLORS['故事'] },
   ])
 
   // Time tracking
@@ -80,15 +81,7 @@ export function useIssueDetailData() {
 
   const issueWorkTypeValues = computed(() => {
     const wt = issueProjectAttributes.value.find(a => a.name === 'Work type' || a.isBuiltin)
-    return wt?.values || [
-      { id: 'Development', name: '开发', color: '#58a6ff' },
-      { id: 'Testing', name: '测试', color: '#3fb950' },
-      { id: 'Documentation', name: '文档', color: '#d29922' },
-      { id: 'Design', name: '设计', color: '#a371f7' },
-      { id: 'Review', name: '代码审查', color: '#f0883e' },
-      { id: 'Meeting', name: '会议', color: '#8b949e' },
-      { id: 'Other', name: '其他', color: '#6e7681' }
-    ]
+    return wt?.values || WORK_TYPE_OPTIONS
   })
 
   const issueExtraAttributes = computed(() => {

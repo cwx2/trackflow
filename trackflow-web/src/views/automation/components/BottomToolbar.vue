@@ -333,7 +333,7 @@ onUnmounted(() => {
   transition: background 150ms;
 }
 .zoom-menu-item:hover  { background: var(--wf-toolbar-hover); }
-.zoom-menu-item.active { color: #79b8ff; font-weight: 600; }
+.zoom-menu-item.active { color: var(--tf-accent-hover); font-weight: 600; }
 .zoom-menu-divider {
   height: 1px;
   background: var(--wf-card-border);
@@ -367,19 +367,19 @@ onUnmounted(() => {
   gap: 5px;
   padding: 5px 14px;
   border: none;
-  background: rgba(139, 92, 246, 0.18);
+  background: var(--tf-purple-bg);
   border-radius: 10px;
   cursor: pointer;
   font-size: 13px;
   font-weight: 600;
-  color: #a78bfa;
+  color: var(--tf-purple);
   transition: background 150ms, color 150ms;
   white-space: nowrap;
 }
 .toolbar-add-btn:hover,
 .toolbar-add-btn.active {
-  background: rgba(139, 92, 246, 0.32);
-  color: #c4b5fd;
+  background: rgba(var(--tf-purple-rgb, 163, 113, 247), 0.32);
+  color: var(--tf-purple);
 }
 
 /* 试运行按钮 */

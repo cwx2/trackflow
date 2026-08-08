@@ -223,11 +223,11 @@ watch(() => props.visible, (v) => {
   margin-top: 4px;
   flex-shrink: 0;
 }
-.node-status-dot.running  { background: #165dff; animation: pulse 1.2s infinite; }
-.node-status-dot.success  { background: #00b42a; }
-.node-status-dot.failed   { background: #f53f3f; }
-.node-status-dot.skipped  { background: #ff7d00; }
-.node-status-dot.pending  { background: #909399; }
+.node-status-dot.running  { background: var(--tf-accent); animation: pulse 1.2s infinite; }
+.node-status-dot.success  { background: var(--tf-success); }
+.node-status-dot.failed   { background: var(--tf-danger); }
+.node-status-dot.skipped  { background: var(--tf-warning); }
+.node-status-dot.pending  { background: var(--tf-text-tertiary); }
 
 @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.4} }
 
