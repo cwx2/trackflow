@@ -77,6 +77,13 @@
   --tf-streaming: #a3e635;
   --tf-warning-strong: rgba(210, 153, 34, 0.3);
 
+  /* Issue 类型颜色 */
+  --tf-type-bug: #f85149;
+  --tf-type-task: #58a6ff;
+  --tf-type-feature: #3fb950;
+  --tf-type-epic: #a371f7;
+  --tf-type-story: #d29922;
+
   /* 代码块颜色 */
   --tf-code-block-bg: #0d1117;
   --tf-code-block-text: #e6edf3;
@@ -175,6 +182,13 @@
   --tf-streaming: #65a30d;
   --tf-warning-strong: rgba(154, 103, 0, 0.3);
 
+  /* Issue 类型颜色 */
+  --tf-type-bug: #cf222e;
+  --tf-type-task: #0969da;
+  --tf-type-feature: #1a7f37;
+  --tf-type-epic: #8250df;
+  --tf-type-story: #9a6700;
+
   /* 代码块颜色 */
   --tf-code-block-bg: #f6f8fa;
   --tf-code-block-text: #1f2328;
@@ -272,6 +286,13 @@
   --tf-info: #D699B6;
   --tf-streaming: #A7C080;
   --tf-warning-strong: rgba(219, 188, 127, 0.3);
+
+  /* Issue 类型颜色 */
+  --tf-type-bug: #E67E80;
+  --tf-type-task: #7FBBB3;
+  --tf-type-feature: #83C092;
+  --tf-type-epic: #D699B6;
+  --tf-type-story: #DBBC7F;
 
   /* 代码块颜色 */
   --tf-code-block-bg: #232A2E;

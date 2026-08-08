@@ -404,11 +404,11 @@ function commitDesc(content: string) {
 .identity-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
 .iss-key { font-size: 12px; color: var(--tf-text-tertiary); }
 .type-badge { font-size: 11px; padding: 2px 6px; border-radius: 3px; font-weight: 600; }
-.t-bug { background: var(--tf-type-bug, #d32f2f); color: var(--tf-text-on-accent); }
-.t-task { background: var(--tf-type-task, #1976d2); color: var(--tf-text-on-accent); }
-.t-feature { background: var(--tf-type-feature, #388e3c); color: var(--tf-text-on-accent); }
-.t-epic { background: var(--tf-type-epic, #7b1fa2); color: var(--tf-text-on-accent); }
-.t-story { background: var(--tf-type-story, #f57c00); color: var(--tf-text-on-accent); }
+.t-bug { background: var(--tf-type-bug); color: var(--tf-text-on-accent); }
+.t-task { background: var(--tf-type-task); color: var(--tf-text-on-accent); }
+.t-feature { background: var(--tf-type-feature); color: var(--tf-text-on-accent); }
+.t-epic { background: var(--tf-type-epic); color: var(--tf-text-on-accent); }
+.t-story { background: var(--tf-type-story); color: var(--tf-text-on-accent); }
 
 /* Copy ID button */
 .copy-id-btn {
