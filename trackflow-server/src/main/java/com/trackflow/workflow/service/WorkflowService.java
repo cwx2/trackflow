@@ -1116,6 +1116,18 @@ public class WorkflowService {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "指定的状态不存在: " + statusId);
         }
 
+        // 校验状态语义：Reopened 状态不适合作为初始状态
+        if ("Reopened".equalsIgnoreCase(status.getName())) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST,
+                    "\"Reopened\" 状态不能设置为初始状态，该状态语义上是工单被关闭后再次打开，不适合新建工单");
+        }
+
+        // 校验状态不是已关闭状态
+        if (Boolean.TRUE.equals(status.getIsClosed())) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST,
+                    "已关闭状态不能设置为初始状态: " + status.getName());
+        }
+
         String effectiveIssueType = (issueType == null || issueType.isBlank()) ? "*" : issueType;
 
         // 删除已有配置
