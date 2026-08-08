@@ -295,7 +295,7 @@
             COALESCE(stats.total_issues, 0) AS total_issues,
             COALESCE(stats.done_issues, 0) AS done_issues
         FROM sprint s
-        LEFT JOIN (
+        INNER JOIN (
             SELECT
                 i.sprint_id,
                 COALESCE(SUM(i.estimated_hours) FILTER (WHERE ist.is_closed = true), 0) AS completed_hours,

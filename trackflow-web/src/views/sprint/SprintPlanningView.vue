@@ -262,8 +262,9 @@
                 v-for="item in velocityData.sprints.slice(-3)"
                 :key="item.id"
                 class="velocity-history-chip"
-                :title="item.name + ': ' + formatHours(item.completedHours)"
-              >{{ formatHours(item.completedHours) }}</span>
+                :class="{ 'no-data': item.completedHours === 0 && item.plannedHours === 0 }"
+                :title="item.name + ': ' + (item.completedHours === 0 && item.plannedHours === 0 ? '无数据' : formatHours(item.completedHours))"
+              >{{ item.completedHours === 0 && item.plannedHours === 0 ? '无数据' : formatHours(item.completedHours) }}</span>
             </div>
           </div>
 
@@ -1706,6 +1707,11 @@ onMounted(async () => {
   color: var(--color-text-2);
   cursor: default;
   border: 1px solid var(--color-border);
+
+  &.no-data {
+    color: var(--color-text-4);
+    font-style: italic;
+  }
 }
 
 /* ===== Empty States ===== */

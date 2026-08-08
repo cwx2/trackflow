@@ -189,17 +189,23 @@ public class SprintStatsService {
         vo.setSprintCount(ordered.size());
         vo.setSprints(ordered);
 
-        if (ordered.isEmpty()) {
+        // 只用有工时数据（plannedHours > 0）的 Sprint 计算平均速率
+        List<SprintVelocityVO.SprintVelocityItem> withEstimation = ordered.stream()
+                .filter(item -> item.getPlannedHours() > 0)
+                .toList();
+
+        if (withEstimation.isEmpty()) {
             vo.setAverageVelocity(0.0);
             vo.setLastVelocity(0.0);
         } else {
-            double totalCompleted = ordered.stream()
+            double totalCompleted = withEstimation.stream()
                     .mapToDouble(SprintVelocityVO.SprintVelocityItem::getCompletedHours)
                     .sum();
-            double avg = totalCompleted / ordered.size();
+            double avg = totalCompleted / withEstimation.size();
             vo.setAverageVelocity(Math.round(avg * 10.0) / 10.0);
 
-            double last = ordered.get(ordered.size() - 1).getCompletedHours();
+            // lastVelocity 取最近一个有工时数据的 Sprint
+            double last = withEstimation.get(withEstimation.size() - 1).getCompletedHours();
             vo.setLastVelocity(Math.round(last * 10.0) / 10.0);
         }
 
