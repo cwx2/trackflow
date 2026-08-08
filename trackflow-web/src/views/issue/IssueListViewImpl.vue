@@ -4625,7 +4625,7 @@ onBeforeRouteLeave((_to, _from, next) => {
   justify-content: center;
   gap: 8px;
   padding: 8px 16px;
-  background: var(--tf-accent-subtle));
+  background: var(--tf-accent-subtle);
   border: 1px solid var(--tf-accent);
   border-radius: 4px;
   margin: 0 0 8px;
@@ -4633,7 +4633,7 @@ onBeforeRouteLeave((_to, _from, next) => {
   transition: background 0.15s;
 }
 .realtime-update-bar:hover {
-  background: var(--tf-accent));
+  background: var(--tf-accent);
 }
 .realtime-update-text {
   font-size: 13px;
