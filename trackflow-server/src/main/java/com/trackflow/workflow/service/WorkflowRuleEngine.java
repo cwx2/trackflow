@@ -289,17 +289,20 @@ public class WorkflowRuleEngine {
     private void evaluateAndExecute(List<WorkflowRule> rules, Issue issue, String changedField, String oldValue) {
         for (WorkflowRule rule : rules) {
             long startTime = System.currentTimeMillis();
+            boolean success = false;
+            String errorMessage = null;
             try {
                 if (evaluateConditions(rule, issue, changedField, oldValue)) {
                     executeActions(rule, issue);
-                    recordExecutionLog(rule, issue, (int)(System.currentTimeMillis() - startTime), true, null);
-                } else {
-                    recordExecutionLog(rule, issue, (int)(System.currentTimeMillis() - startTime), false, null);
+                    success = true;
                 }
             } catch (Exception e) {
                 log.warn("[RuleEngine] Rule '{}' (id={}) failed for issue {}: {}",
                         rule.getName(), rule.getId(), issue.getId(), e.getMessage());
-                recordExecutionLog(rule, issue, (int)(System.currentTimeMillis() - startTime), false, e.getMessage());
+                errorMessage = e.getMessage();
+            } finally {
+                int duration = (int) (System.currentTimeMillis() - startTime);
+                recordExecutionLog(rule, issue, duration, success, errorMessage);
             }
         }
     }

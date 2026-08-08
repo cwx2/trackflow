@@ -105,13 +105,8 @@ public class ScheduledRuleService {
 
         try {
             // 1. 查询匹配工单
-            long queryStart = System.currentTimeMillis();
             List<Issue> matchedIssues = findMatchingIssues(rule);
-            long queryDuration = System.currentTimeMillis() - queryStart;
             matched = matchedIssues.size();
-
-            log.debug("[ScheduledRule] 规则 '{}' 查询匹配工单: 匹配={}, 查询耗时={}ms",
-                    rule.getName(), matched, queryDuration);
 
             // 2. 对每个匹配工单执行动作
             for (Issue issue : matchedIssues) {
