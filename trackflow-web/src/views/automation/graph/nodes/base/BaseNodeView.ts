@@ -24,26 +24,17 @@ export abstract class BaseNodeView extends HtmlNode {
 
   /** 提取传给 Vue 组件的初始 props */
   getInitialProps(model: any): Record<string, any> {
-    // Shallow-clone properties so Vue reactivity detects the change
     const rawProps = model.getProperties?.() ?? model.properties ?? {}
-    const properties = { ...rawProps }
     return {
       nodeId:     model.id,
-      properties,
-      // 通过 onXxx 传回调，让 Vue 组件内的操作能通知 LogicFlow
-      onToggleExpand: () => {
-        const cur = model.getProperties?.()?.expanded ?? false
-        model.setProperty('expanded', !cur)
-      },
+      properties: { ...rawProps },
       onSetProperty: (key: string, val: any) => {
         model.setProperty(key, val)
       },
       onNodeClick: () => {
-        // 点击时将节点置顶（toFront）
         model.graphModel?.toFront(model.id)
-        // 触发外部点击事件（打开右侧配置面板）
         model.graphModel?.eventCenter?.emit('node:click', {
-          data: { ...model.getData(), _openPanel: true }
+          data: { ...model.getData(), _openPanel: true },
         })
       },
     }
@@ -51,11 +42,8 @@ export abstract class BaseNodeView extends HtmlNode {
 
   constructor(props: any) {
     super(props)
-
     const model = props?.model
     const initProps = this.getInitialProps(model)
-
-    // 用 h() 持有 vnode 引用，后续直接改 component.props
     this._vnode = h(this.getVueComponent(), initProps)
     this._app   = createApp({ render: () => this._vnode! })
   }
@@ -66,18 +54,13 @@ export abstract class BaseNodeView extends HtmlNode {
 
   setHtml(rootEl: SVGForeignObjectElement) {
     if (!this._mounted) {
-      // 首次：挂载
       this._mounted = true
-
-      // 让 foreignObject 不裁切内容（圆角/阴影可见）
       rootEl.style.overflow = 'visible'
-
       const container = document.createElement('div')
       container.style.cssText = 'width:100%;height:fit-content;overflow:visible;'
       rootEl.appendChild(container)
       this._app!.mount(container)
     } else {
-      // 后续：直接更新 props，不重建 app
       const model = (this.props as any)?.model
       if (model && this._vnode?.component) {
         const newProps = this.getInitialProps(model)
@@ -86,7 +69,6 @@ export abstract class BaseNodeView extends HtmlNode {
     }
   }
 
-  /** 组件卸载时清理 */
   destroy?() {
     this._app?.unmount()
     this._app   = null
