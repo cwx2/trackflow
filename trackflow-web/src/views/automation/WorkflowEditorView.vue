@@ -529,6 +529,7 @@ function initLogicFlow() {
   pauseTracking()
   lf = new LogicFlow({
     container: containerRef.value,
+    edgeType: 'flow-edge',
     grid: {
       size: 20,
       visible: true,
@@ -657,7 +658,7 @@ async function loadWorkflow() {
         })),
         edges: (def.edges || []).map(e => ({
           id: e.id,
-          type: 'bezier',
+          type: 'flow-edge',
           sourceNodeId: e.sourceNodeId,
           targetNodeId: e.targetNodeId,
           properties: { sourcePortName: e.sourcePortName, targetPortName: e.targetPortName }

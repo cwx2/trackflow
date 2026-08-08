@@ -93,9 +93,6 @@ function handleMoreAction(value: string | number | Record<string, any> | undefin
   }
 }
 
-const editing = ref(false)
-const inputRef = ref<InstanceType<typeof import('@arco-design/web-vue').Input> | null>(null)
-
 function startEdit() {
   if (props.runtimeEnabled) return
   editing.value = true
