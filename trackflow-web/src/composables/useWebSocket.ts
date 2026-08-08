@@ -27,8 +27,10 @@ let globalClient: Client | null = null
 let globalStatus = ref<WsStatus>('disconnected')
 let connectionRefCount = 0
 let reconnectAttempts = 0
+let isReconnecting = false // 标记是否处于"未成功重连"状态
 const MAX_RECONNECT_ATTEMPTS = 5
 const RECONNECT_DELAY_BASE = 5000 // 5s base
+const RECONNECT_DELAY_MAX = 60000 // 60s cap
 
 // Token 监听的 detached effect scope（不受任何组件卸载影响）
 let tokenWatchScope: ReturnType<typeof effectScope> | null = null
@@ -79,6 +81,11 @@ export function useWebSocket() {
       onConnect: () => {
         globalStatus.value = 'connected'
         reconnectAttempts = 0
+        isReconnecting = false
+        // Reset delay to base for next potential reconnection cycle
+        if (globalClient) {
+          globalClient.reconnectDelay = RECONNECT_DELAY_BASE
+        }
         console.debug('[WebSocket] Connected')
       },
       onStompError: (frame) => {
@@ -95,18 +102,35 @@ export function useWebSocket() {
       },
       onWebSocketClose: () => {
         if (connectionRefCount > 0) {
-          // 意外断开，尝试重连
-          reconnectAttempts++
-          if (reconnectAttempts <= MAX_RECONNECT_ATTEMPTS) {
-            globalStatus.value = 'connecting'
-            // 指数退避重连（由 @stomp/stompjs 内置重连机制处理）
-          } else {
+          // Only count as a consecutive failure if we were already trying to reconnect
+          // (i.e., onConnect hasn't fired since the last close)
+          if (isReconnecting) {
+            reconnectAttempts++
+          }
+          isReconnecting = true
+
+          if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
             globalStatus.value = 'error'
-            console.warn('[WebSocket] Max reconnect attempts reached, giving up')
-            // 停止 STOMP 客户端的自动重连
+            console.warn('[WebSocket] Max consecutive reconnect failures reached, giving up')
+            // Stop STOMP client auto-reconnect
             if (globalClient) {
               globalClient.deactivate()
             }
+            reconnectAttempts = 0
+            isReconnecting = false
+          } else {
+            globalStatus.value = 'connecting'
+            // Exponential backoff: 5s, 10s, 20s, 40s, 60s (capped)
+            if (globalClient) {
+              globalClient.reconnectDelay = Math.min(
+                RECONNECT_DELAY_BASE * Math.pow(2, reconnectAttempts),
+                RECONNECT_DELAY_MAX
+              )
+            }
+            console.debug(
+              `[WebSocket] Reconnecting (attempt ${reconnectAttempts + 1}/${MAX_RECONNECT_ATTEMPTS}, ` +
+              `delay ${globalClient?.reconnectDelay ?? RECONNECT_DELAY_BASE}ms)`
+            )
           }
         }
       }
@@ -127,6 +151,8 @@ export function useWebSocket() {
               // 如果连接已断开且仍有使用者，用新 token 重连
               if (!globalClient.connected && !globalClient.active && connectionRefCount > 0) {
                 reconnectAttempts = 0 // 重置重连计数（新 token 应能成功）
+                isReconnecting = false
+                globalClient.reconnectDelay = RECONNECT_DELAY_BASE
                 globalClient.activate()
               }
             }
@@ -148,6 +174,7 @@ export function useWebSocket() {
       globalClient = null
       globalStatus.value = 'disconnected'
       reconnectAttempts = 0
+      isReconnecting = false
       // 清理 token 监听 scope
       if (tokenWatchScope) {
         tokenWatchScope.stop()
