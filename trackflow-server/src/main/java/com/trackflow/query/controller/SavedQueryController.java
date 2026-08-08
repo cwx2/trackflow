@@ -143,7 +143,7 @@ public class SavedQueryController {
      * 查询结果会自动按用户所属项目过滤
      */
     @PostMapping("/execute")
-    public R<PageResult<IssueVO>> executeAdhoc(@RequestBody ExecuteQueryDTO dto) {
+    public R<PageResult<IssueVO>> executeAdhoc(@Valid @RequestBody ExecuteQueryDTO dto) {
         Long userId = SecurityUtils.getCurrentUserId();
         Page<Issue> result = savedQueryService.executeAdhocWithAccessCheck(dto, userId);
         List<IssueVO> voList = issueConverter.toVOList(result.getRecords());

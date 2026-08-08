@@ -8,6 +8,7 @@ import com.trackflow.system.converter.RoleConverter;
 import com.trackflow.system.dto.CloneRoleDTO;
 import com.trackflow.system.dto.CreateRoleDTO;
 import com.trackflow.system.dto.MergeRolesDTO;
+import com.trackflow.system.dto.ReplacePermissionsDTO;
 import com.trackflow.system.dto.UpdateRoleDTO;
 import com.trackflow.system.entity.SysRole;
 import com.trackflow.system.entity.PermissionImplication;
@@ -116,8 +117,8 @@ public class RoleController {
 
     @PutMapping("/{id}/permissions")
     @PreAuthorize("@perm.checkGlobal('system:manage_roles')")
-    public R<Void> replacePermissions(@PathVariable("id") Long id, @RequestBody List<String> permissions) {
-        roleService.replacePermissions(id, permissions);
+    public R<Void> replacePermissions(@PathVariable("id") Long id, @Valid @RequestBody ReplacePermissionsDTO dto) {
+        roleService.replacePermissions(id, dto.getPermissions());
         return R.ok();
     }
 

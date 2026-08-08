@@ -187,7 +187,7 @@ public class WorkflowRuleController {
     @PreAuthorize("T(com.trackflow.workflow.WorkflowScope).isGlobal(#projectId) ? @perm.checkGlobal('system:admin') : @perm.check(#projectId, 'project:manage_workflow')")
     public R<WorkflowRuleImportResultVO> importRules(
             @PathVariable("projectId") Long projectId,
-            @RequestBody WorkflowRuleImportDTO importDTO) {
+            @Valid @RequestBody WorkflowRuleImportDTO importDTO) {
         Long effectiveProjectId = com.trackflow.workflow.WorkflowScope.fromApi(projectId);
         return R.ok(ruleService.importRules(effectiveProjectId, importDTO));
     }

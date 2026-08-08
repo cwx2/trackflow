@@ -49,7 +49,7 @@ public class NotificationAdminController {
      */
     @PutMapping("/settings")
     @PreAuthorize("@perm.checkGlobal('system:manage_roles')")
-    public R<NotificationSettingsVO> updateSettings(@RequestBody UpdateNotificationSettingsDTO dto) {
+    public R<NotificationSettingsVO> updateSettings(@Valid @RequestBody UpdateNotificationSettingsDTO dto) {
         return R.ok(notificationAdminService.updateSettings(dto));
     }
 

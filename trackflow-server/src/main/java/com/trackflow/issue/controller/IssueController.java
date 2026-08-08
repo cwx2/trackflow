@@ -112,7 +112,7 @@ public class IssueController {
     public R<IssueDetailVO> updateCustomFieldValue(
             @PathVariable("id") Long id,
             @PathVariable("fieldId") Long fieldId,
-            @RequestBody com.trackflow.customfield.dto.UpdateCustomFieldValueDTO dto) {
+            @Valid @RequestBody com.trackflow.customfield.dto.UpdateCustomFieldValueDTO dto) {
         Issue issue = issueService.getById(id);
 
         // Check field-level editability (role-based)
@@ -403,7 +403,7 @@ public class IssueController {
     public R<IssueAttachmentVO> updateAttachmentVisibility(
             @PathVariable("id") Long id,
             @PathVariable("attachmentId") Long attachmentId,
-            @RequestBody com.trackflow.issue.dto.UpdateAttachmentVisibilityDTO dto) {
+            @Valid @RequestBody com.trackflow.issue.dto.UpdateAttachmentVisibilityDTO dto) {
         IssueAttachment attachment = attachmentService.updateAttachmentVisibility(id, attachmentId, dto.getVisibleToGroupIds());
         return R.ok(attachmentService.buildAttachmentVO(attachment));
     }
@@ -489,7 +489,7 @@ public class IssueController {
     @PatchMapping("/statuses/{statusId}/position")
     @PreAuthorize("@perm.checkGlobal('system:admin')")
     public R<Void> updateStatusPosition(@PathVariable("statusId") Long statusId,
-                                        @RequestBody com.trackflow.issue.dto.UpdateStatusPositionDTO dto) {
+                                        @Valid @RequestBody com.trackflow.issue.dto.UpdateStatusPositionDTO dto) {
         issueService.updateStatusPosition(statusId, dto.getCanvasX(), dto.getCanvasY());
         return R.ok();
     }

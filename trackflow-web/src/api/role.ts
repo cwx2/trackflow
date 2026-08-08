@@ -81,7 +81,7 @@ export const roleApi = {
 
   /** 更新角色的权限列表 */
   updatePermissions(id: string, permissions: string[]) {
-    return request.put<any, R<void>>(`/roles/${id}/permissions`, permissions)
+    return request.put<any, R<void>>(`/roles/${id}/permissions`, { permissions })
   },
 
   /** 获取角色下的用户（全局+项目分组） */
