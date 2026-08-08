@@ -84,8 +84,11 @@ public class AutomationWorkflowService {
         workflow.setConcurrencyMode("queue");
         workflow.setMaxConcurrent(1);
         workflow.setRuntimeEnabled(false);
-        // 初始化空的 definition
-        workflow.setDefinition("{\"variables\":{},\"nodes\":[],\"edges\":[]}");
+        // 使用传入的 definition（从模板克隆时），否则初始化空画布
+        String definition = (dto.getDefinition() != null && !dto.getDefinition().isBlank())
+                ? dto.getDefinition()
+                : "{\"globalVariables\":{},\"nodes\":[],\"edges\":[]}";
+        workflow.setDefinition(definition);
         workflowMapper.insert(workflow);
         log.info("创建工作流: id={}, name={}", workflow.getId(), workflow.getName());
         return workflow;

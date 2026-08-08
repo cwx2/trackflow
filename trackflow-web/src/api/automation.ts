@@ -33,6 +33,7 @@ export interface CreateWorkflowDTO {
   name: string
   description?: string
   projectId?: string
+  definition?: string // 从模板克隆时传入初始画布数据
 }
 
 export interface UpdateAutomationDTO {

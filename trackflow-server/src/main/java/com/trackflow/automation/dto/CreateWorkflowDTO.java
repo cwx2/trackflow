@@ -18,4 +18,7 @@ public class CreateWorkflowDTO {
     private String description;
 
     private Long projectId;
+
+    /** 从模板克隆时传入初始画布数据（JSON 字符串），留空则使用空画布 */
+    private String definition;
 }
