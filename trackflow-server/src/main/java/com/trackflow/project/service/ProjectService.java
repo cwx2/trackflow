@@ -10,6 +10,8 @@ import com.trackflow.common.constant.SystemRoleIds;
 import com.trackflow.common.constant.UserStatus;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
+import com.trackflow.common.annotation.AuditLog;
+import com.trackflow.common.audit.AuditContext;
 import com.trackflow.common.util.SecurityUtils;
 import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.entity.IssueActivity;
@@ -108,11 +110,11 @@ public class ProjectService {
     private final com.trackflow.system.mapper.UserGroupRoleMapper userGroupRoleMapper;
     private final com.trackflow.system.mapper.UserGroupMapper userGroupMapper;
     private final com.trackflow.system.mapper.UserGroupMemberMapper userGroupMemberMapper;
-    private final com.trackflow.system.service.SystemAuditService systemAuditService;
 
     /**
      * 创建项目
      */
+    @AuditLog(action = "create_project", targetType = "project", targetId = "#result.id")
     @Transactional(rollbackFor = Exception.class)
     public Project create(CreateProjectDTO dto) {
         // Key 唯一性检查（不区分大小写）
@@ -189,13 +191,11 @@ public class ProjectService {
         autoAttachCustomFieldsToProject(project.getId());
 
         // 审计日志：记录项目创建
-        Map<String, Object> auditDetails = new LinkedHashMap<>();
-        auditDetails.put("name", project.getName());
-        auditDetails.put("key", project.getKey());
+        AuditContext.put("name", project.getName());
+        AuditContext.put("key", project.getKey());
         if (project.getDescription() != null && !project.getDescription().isBlank()) {
-            auditDetails.put("description", project.getDescription());
+            AuditContext.put("description", project.getDescription());
         }
-        systemAuditService.log("create_project", "project", project.getId(), auditDetails);
 
         return project;
     }

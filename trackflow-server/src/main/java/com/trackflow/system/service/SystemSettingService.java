@@ -2,6 +2,8 @@ package com.trackflow.system.service;
 
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
+import com.trackflow.common.annotation.AuditLog;
+import com.trackflow.common.audit.AuditContext;
 import com.trackflow.common.util.SecurityUtils;
 import com.trackflow.system.dto.UpdateTimeTrackingSettingsDTO;
 import com.trackflow.system.dto.UpdateTimeTrackingSettingsDTO.RecalculationStrategy;
@@ -31,7 +33,6 @@ public class SystemSettingService {
     private final SystemSettingMapper settingMapper;
     private final ObjectMapper objectMapper;
     private final JdbcTemplate jdbcTemplate;
-    private final SystemAuditService auditService;
 
     private static final String KEY_HOURS_PER_DAY = "time_tracking.hours_per_day";
     private static final String KEY_WORKING_DAYS = "time_tracking.working_days";
@@ -65,6 +66,7 @@ public class SystemSettingService {
     /**
      * 更新时间追踪设置（带工时重新计算支持）
      */
+    @AuditLog(action = "time_tracking_settings_update", targetType = "system_setting")
     @Transactional(rollbackFor = Exception.class)
     public TimeTrackingRecalculationResultVO updateTimeTrackingSettings(UpdateTimeTrackingSettingsDTO dto) {
         // 校验 workingDays 中的值在 1-7 范围内
@@ -134,14 +136,11 @@ public class SystemSettingService {
         result.setSettings(getTimeTrackingSettings());
 
         // 审计日志
-        auditService.log("time_tracking_settings_update", "system_setting", null,
-                Map.of(
-                        "oldHoursPerDay", oldHoursPerDay,
-                        "newHoursPerDay", newHoursPerDay,
-                        "strategy", dto.getRecalculationStrategy() != null ? dto.getRecalculationStrategy().name() : "NONE",
-                        "affectedTimeEntries", affectedTimeEntries,
-                        "affectedEstimations", affectedEstimations
-                ));
+        AuditContext.put("oldHoursPerDay", oldHoursPerDay);
+        AuditContext.put("newHoursPerDay", newHoursPerDay);
+        AuditContext.put("strategy", dto.getRecalculationStrategy() != null ? dto.getRecalculationStrategy().name() : "NONE");
+        AuditContext.put("affectedTimeEntries", affectedTimeEntries);
+        AuditContext.put("affectedEstimations", affectedEstimations);
 
         return result;
     }
