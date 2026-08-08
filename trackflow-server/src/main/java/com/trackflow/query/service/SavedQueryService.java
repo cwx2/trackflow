@@ -11,6 +11,7 @@ import com.trackflow.issue.entity.Issue;
 import com.trackflow.project.service.ProjectService;
 import com.trackflow.query.dto.CreateQueryDTO;
 import com.trackflow.query.dto.ExecuteQueryDTO;
+import com.trackflow.query.dto.ReorderQueryItemDTO;
 import com.trackflow.query.dto.UpdateQueryDTO;
 import com.trackflow.query.engine.QueryExecutor;
 import com.trackflow.query.entity.SavedQuery;
@@ -421,11 +422,11 @@ public class SavedQueryService {
      * 排序查询面板
      */
     @Transactional
-    public void reorder(List<Map<String, Object>> orders) {
-        for (Map<String, Object> order : orders) {
-            Long id = Long.valueOf(order.get("id").toString());
-            Integer sortOrder = (Integer) order.get("sortOrder");
-            Boolean pinned = (Boolean) order.get("pinned");
+    public void reorder(List<ReorderQueryItemDTO> orders) {
+        for (ReorderQueryItemDTO order : orders) {
+            Long id = order.getId();
+            Integer sortOrder = order.getSortOrder();
+            Boolean pinned = order.getPinned();
 
             SavedQuery query = queryMapper.selectById(id);
             if (query != null) {

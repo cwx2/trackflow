@@ -10,8 +10,10 @@ import com.trackflow.issue.service.IssueVOAssembler;
 import com.trackflow.issue.vo.IssueVO;
 import com.trackflow.project.service.ProjectService;
 import com.trackflow.query.converter.SavedQueryConverter;
+import com.trackflow.query.dto.BatchCountDTO;
 import com.trackflow.query.dto.CreateQueryDTO;
 import com.trackflow.query.dto.ExecuteQueryDTO;
+import com.trackflow.query.dto.ReorderQueryItemDTO;
 import com.trackflow.query.dto.UpdateQueryDTO;
 import com.trackflow.query.service.SavedQueryService;
 import com.trackflow.query.vo.QueryPanelItemVO;
@@ -155,23 +157,20 @@ public class SavedQueryController {
      */
     @PostMapping("/counts")
     public R<Map<String, Long>> batchCount(
-            @RequestBody Map<String, Object> body,
+            @Valid @RequestBody BatchCountDTO dto,
             @RequestParam(value = "projectId", required = false) Long projectId) {
         Long userId = SecurityUtils.getCurrentUserId();
         if (projectId != null) {
             projectService.assertProjectAccessible(userId, projectId);
         }
-        @SuppressWarnings("unchecked")
-        List<Number> rawIds = (List<Number>) body.get("queryIds");
-        List<Long> queryIds = rawIds.stream().map(Number::longValue).toList();
-        return R.ok(savedQueryService.batchCountWithAccessCheck(queryIds, userId, projectId));
+        return R.ok(savedQueryService.batchCountWithAccessCheck(dto.getQueryIds(), userId, projectId));
     }
 
     /**
      * 查询面板排序
      */
     @PutMapping("/reorder")
-    public R<Void> reorder(@RequestBody List<Map<String, Object>> orders) {
+    public R<Void> reorder(@Valid @RequestBody List<ReorderQueryItemDTO> orders) {
         savedQueryService.reorder(orders);
         return R.ok();
     }

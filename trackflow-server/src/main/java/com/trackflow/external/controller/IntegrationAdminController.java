@@ -1,11 +1,10 @@
 package com.trackflow.external.controller;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.trackflow.common.exception.BusinessException;
-import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.model.PageResult;
 import com.trackflow.common.model.R;
 import com.trackflow.external.dto.IntegrationLogQuery;
+import com.trackflow.external.dto.ToggleAdapterDTO;
 import com.trackflow.external.dto.UpdateIntegrationConfigDTO;
 import com.trackflow.external.service.IntegrationAdminService;
 import com.trackflow.external.vo.IntegrationAdapterVO;
@@ -17,7 +16,6 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.Map;
 
 /**
  * 第三方集成管理 Controller。
@@ -47,12 +45,8 @@ public class IntegrationAdminController {
     @PreAuthorize("@perm.checkGlobal('system:manage_roles')")
     public R<Void> toggleAdapter(
             @PathVariable("adapterType") String adapterType,
-            @RequestBody Map<String, Boolean> body) {
-        Boolean enabled = body.get("enabled");
-        if (enabled == null) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST, "enabled 参数必须提供");
-        }
-        integrationAdminService.toggleAdapter(adapterType, enabled);
+            @Valid @RequestBody ToggleAdapterDTO dto) {
+        integrationAdminService.toggleAdapter(adapterType, dto.getEnabled());
         return R.ok();
     }
 
