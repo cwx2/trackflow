@@ -75,6 +75,16 @@
   --tf-purple-medium: rgba(163, 113, 247, 0.15);
   --tf-info: #a371f7;
   --tf-streaming: #a3e635;
+  --tf-warning-strong: rgba(210, 153, 34, 0.3);
+
+  /* 代码块颜色 */
+  --tf-code-block-bg: #0d1117;
+  --tf-code-block-text: #e6edf3;
+
+  /* 看板列指示色 */
+  --tf-indicator-warning: #f59e0b;
+  --tf-indicator-indigo: #6366f1;
+  --tf-indicator-sky: #0ea5e9;
 
   /* 兼容旧变量名（全局映射） */
   --bg-primary: var(--tf-bg-body);
@@ -163,6 +173,16 @@
   --tf-purple-medium: rgba(130, 80, 223, 0.15);
   --tf-info: #8250df;
   --tf-streaming: #65a30d;
+  --tf-warning-strong: rgba(154, 103, 0, 0.3);
+
+  /* 代码块颜色 */
+  --tf-code-block-bg: #f6f8fa;
+  --tf-code-block-text: #1f2328;
+
+  /* 看板列指示色 */
+  --tf-indicator-warning: #d97706;
+  --tf-indicator-indigo: #4f46e5;
+  --tf-indicator-sky: #0284c7;
 
   /* 兼容旧变量 */
   --bg-primary: var(--tf-bg-body);
@@ -251,6 +271,16 @@
   --tf-purple-medium: rgba(214, 153, 182, 0.15);
   --tf-info: #D699B6;
   --tf-streaming: #A7C080;
+  --tf-warning-strong: rgba(219, 188, 127, 0.3);
+
+  /* 代码块颜色 */
+  --tf-code-block-bg: #232A2E;
+  --tf-code-block-text: #D3C6AA;
+
+  /* 看板列指示色 */
+  --tf-indicator-warning: #DBBC7F;
+  --tf-indicator-indigo: #D699B6;
+  --tf-indicator-sky: #7FBBB3;
 
   /* 兼容旧变量 */
   --bg-primary: var(--tf-bg-body);
