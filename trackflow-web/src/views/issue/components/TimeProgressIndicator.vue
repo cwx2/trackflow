@@ -1,5 +1,6 @@
 <template>
   <a-tooltip :content="tooltipText" position="top" mini>
+    <!-- 保留 SVG：自绘圆弧进度指示器，Arco 无等效组件可替代 -->
     <svg
       class="time-progress-indicator"
       :width="size"

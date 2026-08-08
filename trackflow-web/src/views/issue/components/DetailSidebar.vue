@@ -209,11 +209,9 @@
             />
             <span v-if="field.dot" class="val-dot" :style="{ background: field.dot }"></span>
             <span class="val-text" :class="[field.class, { 'val-text--linked': field.userId }]">{{ field.value }}</span>
-            <!-- 设计上只读（累计/汇总）：显示计算器图标 —— 保留 SVG：Arco 无 icon-calculator 等效图标 -->
+            <!-- 设计上只读（累计/汇总）：显示公式图标 -->
             <span v-if="field.readonlyReason === 'computed' || field.readonlyReason === 'derived'" class="readonly-info-icon" aria-hidden="true">
-              <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor">
-                <path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V2zm2-.5a.5.5 0 0 0-.5.5v2.5h9V2a.5.5 0 0 0-.5-.5H4zm8.5 4h-9v2h9v-2zm0 3h-4v5.5H12a.5.5 0 0 0 .5-.5v-5zm-5 5.5v-5.5h-4V14a.5.5 0 0 0 .5.5h3.5z"/>
-              </svg>
+              <icon-formula :size="12" />
             </span>
             <!-- 权限不足：显示锁图标 -->
             <span v-else-if="!field.userId" class="readonly-lock-icon" aria-hidden="true">
