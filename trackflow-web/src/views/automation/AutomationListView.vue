@@ -110,28 +110,67 @@
       @cancel="showTemplateModal = false"
     >
       <a-spin :loading="templateLoading" class="template-spin">
-        <div v-if="templates.length === 0 && !templateLoading" class="template-empty">
+        <div v-if="builtinTemplates.length === 0 && customTemplates.length === 0 && !templateLoading" class="template-empty">
           <p>暂无可用模板</p>
         </div>
-        <div v-else class="template-grid">
-          <div
-            v-for="tpl in templates"
-            :key="tpl.id"
-            class="template-card"
-            @click="handleCloneTemplate(tpl)"
-          >
-            <div class="template-card-header">
-              <span class="template-icon">{{ tpl.icon || '📋' }}</span>
-              <span class="template-name">{{ tpl.name }}</span>
+        <div v-else class="template-sections">
+          <!-- 我的模板 -->
+          <div v-if="customTemplates.length > 0" class="template-section">
+            <h4 class="template-section-title">我的模板</h4>
+            <div class="template-grid">
+              <div
+                v-for="tpl in customTemplates"
+                :key="tpl.id"
+                class="template-card"
+                @click="handleCloneTemplate(tpl)"
+              >
+                <div class="template-card-header">
+                  <span class="template-icon">{{ tpl.icon || '📋' }}</span>
+                  <span class="template-name">{{ tpl.name }}</span>
+                  <a-button
+                    type="text"
+                    size="mini"
+                    status="danger"
+                    class="template-delete-btn"
+                    @click.stop="handleDeleteTemplate(tpl)"
+                  >删除</a-button>
+                </div>
+                <p class="template-desc">{{ tpl.description || '无描述' }}</p>
+                <div class="template-meta">
+                  <a-tag size="small" color="arcoblue">{{ getCategoryLabel(tpl.category) }}</a-tag>
+                  <span class="template-nodes">{{ countNodes(tpl.definition) }} 个节点</span>
+                </div>
+                <a-button type="primary" size="small" class="template-use-btn" :loading="cloneLoadingId === tpl.id">
+                  使用此模板
+                </a-button>
+              </div>
             </div>
-            <p class="template-desc">{{ tpl.description || '无描述' }}</p>
-            <div class="template-meta">
-              <a-tag size="small" color="arcoblue">{{ getCategoryLabel(tpl.category) }}</a-tag>
-              <span class="template-nodes">{{ countNodes(tpl.definition) }} 个节点</span>
+          </div>
+
+          <!-- 内置模板 -->
+          <div v-if="builtinTemplates.length > 0" class="template-section">
+            <h4 class="template-section-title">内置模板</h4>
+            <div class="template-grid">
+              <div
+                v-for="tpl in builtinTemplates"
+                :key="tpl.id"
+                class="template-card"
+                @click="handleCloneTemplate(tpl)"
+              >
+                <div class="template-card-header">
+                  <span class="template-icon">{{ tpl.icon || '📋' }}</span>
+                  <span class="template-name">{{ tpl.name }}</span>
+                </div>
+                <p class="template-desc">{{ tpl.description || '无描述' }}</p>
+                <div class="template-meta">
+                  <a-tag size="small" color="arcoblue">{{ getCategoryLabel(tpl.category) }}</a-tag>
+                  <span class="template-nodes">{{ countNodes(tpl.definition) }} 个节点</span>
+                </div>
+                <a-button type="primary" size="small" class="template-use-btn" :loading="cloneLoadingId === tpl.id">
+                  使用此模板
+                </a-button>
+              </div>
             </div>
-            <a-button type="primary" size="small" class="template-use-btn" :loading="cloneLoadingId === tpl.id">
-              使用此模板
-            </a-button>
           </div>
         </div>
       </a-spin>
@@ -140,9 +179,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { Message } from '@arco-design/web-vue'
+import { Message, Modal } from '@arco-design/web-vue'
 import { useConfirmDelete } from '@/composables/useConfirmDelete'
 import { automationApi, type WorkflowVO, type CreateWorkflowDTO, type WorkflowTemplateVO } from '@/api'
 import { BUILTIN_WORKFLOW_TEMPLATES } from './workflow-templates'
@@ -161,6 +200,10 @@ const showTemplateModal = ref(false)
 const templateLoading = ref(false)
 const templates = ref<WorkflowTemplateVO[]>([])
 const cloneLoadingId = ref<string | null>(null)
+
+// 分组：内置模板 vs 自定义模板
+const builtinTemplates = computed(() => templates.value.filter(t => t.isBuiltin))
+const customTemplates = computed(() => templates.value.filter(t => !t.isBuiltin))
 
 // 表格列配置
 const columns = [
@@ -246,6 +289,31 @@ async function handleCloneTemplate(tpl: WorkflowTemplateVO) {
   } finally {
     cloneLoadingId.value = null
   }
+}
+
+// 删除自定义模板
+function handleDeleteTemplate(tpl: WorkflowTemplateVO) {
+  Modal.warning({
+    title: '确认删除',
+    content: `确定要删除模板「${tpl.name}」吗？此操作不可恢复。`,
+    okText: '删除',
+    cancelText: '取消',
+    hideCancel: false,
+    onOk: async () => {
+      try {
+        const res = await automationApi.deleteTemplate(tpl.id)
+        if (res.code === 0) {
+          Message.success('模板已删除')
+          // 从列表中移除
+          templates.value = templates.value.filter(t => t.id !== tpl.id)
+        } else {
+          Message.error(res.message || '删除失败')
+        }
+      } catch (e: any) {
+        Message.error(e.response?.data?.message || '删除失败')
+      }
+    }
+  })
 }
 
 // 获取分类标签
@@ -559,5 +627,28 @@ onMounted(() => {
   position: absolute;
   top: 16px;
   right: 16px;
+}
+
+.template-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.template-section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--tf-text-secondary);
+  margin: 0 0 12px 0;
+}
+
+.template-delete-btn {
+  margin-left: auto;
+  opacity: 0;
+  transition: opacity 150ms;
+}
+
+.template-card:hover .template-delete-btn {
+  opacity: 1;
 }
 </style>

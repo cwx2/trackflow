@@ -14,6 +14,7 @@
       @publish="handlePublish"
       @start="handleStartRuntime"
       @stop="handleStopRuntime"
+      @save-as-template="openSaveAsTemplateModal"
     />
 
     <!-- 编辑器主体：画布 + 悬浮面板 -->
@@ -167,6 +168,36 @@
         </a-form-item>
       </a-form>
     </a-modal>
+
+    <!-- 另存为模板弹窗 -->
+    <a-modal
+      v-model:visible="showSaveAsTemplateModal"
+      title="另存为模板"
+      :ok-loading="saveAsTemplateLoading"
+      ok-text="保存为模板"
+      @ok="handleSaveAsTemplate"
+      @cancel="resetSaveAsTemplateForm"
+    >
+      <a-form :model="saveAsTemplateForm" layout="vertical">
+        <a-form-item label="模板名称" field="name" :rules="[{ required: true, message: '请输入模板名称' }]">
+          <a-input v-model="saveAsTemplateForm.name" placeholder="模板名称" :max-length="100" />
+        </a-form-item>
+        <a-form-item label="描述" field="description">
+          <a-textarea v-model="saveAsTemplateForm.description" placeholder="模板的用途说明" :max-length="2000" :auto-size="{ minRows: 2, maxRows: 4 }" />
+        </a-form-item>
+        <a-form-item label="分类" field="category">
+          <a-select v-model="saveAsTemplateForm.category" placeholder="选择分类">
+            <a-option value="ai_task">🤖 AI 任务</a-option>
+            <a-option value="notification">🔔 通知</a-option>
+            <a-option value="issue_management">📋 工单管理</a-option>
+            <a-option value="custom">📦 自定义</a-option>
+          </a-select>
+        </a-form-item>
+        <a-form-item label="图标" field="icon">
+          <a-input v-model="saveAsTemplateForm.icon" placeholder="Emoji 图标，如 🔧" :max-length="20" style="width: 120px" />
+        </a-form-item>
+      </a-form>
+    </a-modal>
   </div>
 </template>
 
@@ -240,6 +271,14 @@ const triggerFields = ref('')
 const allowAutomationEvents = ref(false)
 const triggerWebhookTokenSha256 = ref('')
 const settingsOpen = ref(false)
+const showSaveAsTemplateModal = ref(false)
+const saveAsTemplateLoading = ref(false)
+const saveAsTemplateForm = ref({
+  name: '',
+  description: '',
+  category: 'custom',
+  icon: '📋',
+})
 const settingsModel = computed(() => ({
   projectId: workflowProjectId.value,
   actorUserId: workflowActorUserId.value,
@@ -766,6 +805,49 @@ function buildTriggerConfig() {
 async function saveSettings() {
   settingsOpen.value = false
   await handleSave()
+}
+
+// 另存为模板
+function openSaveAsTemplateModal() {
+  saveAsTemplateForm.value.name = workflowName.value
+  showSaveAsTemplateModal.value = true
+}
+
+async function handleSaveAsTemplate() {
+  if (!saveAsTemplateForm.value.name.trim()) {
+    Message.warning('请输入模板名称')
+    return
+  }
+  saveAsTemplateLoading.value = true
+  try {
+    const res = await automationApi.saveAsTemplate({
+      workflowId: workflowId.value,
+      name: saveAsTemplateForm.value.name,
+      description: saveAsTemplateForm.value.description || undefined,
+      category: saveAsTemplateForm.value.category || undefined,
+      icon: saveAsTemplateForm.value.icon || undefined,
+    })
+    if (res.code === 0) {
+      Message.success('已保存为模板')
+      showSaveAsTemplateModal.value = false
+      resetSaveAsTemplateForm()
+    } else {
+      Message.error(res.message || '保存失败')
+    }
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '保存为模板失败')
+  } finally {
+    saveAsTemplateLoading.value = false
+  }
+}
+
+function resetSaveAsTemplateForm() {
+  saveAsTemplateForm.value = {
+    name: workflowName.value,
+    description: '',
+    category: 'custom',
+    icon: '📋',
+  }
 }
 
 async function handlePublish() {

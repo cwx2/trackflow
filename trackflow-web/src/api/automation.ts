@@ -206,7 +206,16 @@ export interface WorkflowTemplateVO {
   definition: string
   sortOrder?: number
   isBuiltin?: boolean
+  createdBy?: string
   createdAt?: string
+}
+
+export interface CreateTemplateFromWorkflowDTO {
+  workflowId: string
+  name: string
+  description?: string
+  category?: string
+  icon?: string
 }
 
 // ====== API 函数 ======
@@ -327,9 +336,14 @@ export const automationApi = {
 
   // ====== 模板相关 ======
 
-  /** 获取所有工作流模板 */
+  /** 获取所有工作流模板（内置 + 当前用户自定义） */
   listTemplates() {
     return request.get<any, R<WorkflowTemplateVO[]>>('/automation/templates')
+  },
+
+  /** 将已有工作流保存为自定义模板 */
+  saveAsTemplate(data: CreateTemplateFromWorkflowDTO) {
+    return request.post<any, R<WorkflowTemplateVO>>('/automation/templates', data)
   },
 
   /** 从模板克隆工作流 */

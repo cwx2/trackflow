@@ -15,6 +15,7 @@ import java.util.List;
 public interface AutomationWorkflowTemplateConverter extends BaseConverter {
 
     @Mapping(target = "id", expression = "java(longToString(entity.getId()))")
+    @Mapping(target = "createdBy", expression = "java(longToString(entity.getCreatedBy()))")
     WorkflowTemplateVO toVO(AutomationWorkflowTemplate entity);
 
     List<WorkflowTemplateVO> toVOList(List<AutomationWorkflowTemplate> entities);

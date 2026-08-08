@@ -37,5 +37,8 @@ public class AutomationWorkflowTemplate implements Serializable {
     /** 是否为内置模板（内置模板不允许删除） */
     private Boolean isBuiltin;
 
+    /** 创建者用户ID（内置模板为 null） */
+    private Long createdBy;
+
     private LocalDateTime createdAt;
 }

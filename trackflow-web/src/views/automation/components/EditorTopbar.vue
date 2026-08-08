@@ -46,7 +46,15 @@
         :loading="runtimeChanging"
         @click="emit('start')"
       >启动</a-button>
-      <a-button type="primary" :loading="saving" :disabled="runtimeEnabled" @click="emit('save')">保存</a-button>
+      <a-dropdown trigger="hover" @select="handleMoreAction">
+        <a-button type="primary" :loading="saving" :disabled="runtimeEnabled">
+          保存 <span class="dropdown-arrow">▾</span>
+        </a-button>
+        <template #content>
+          <a-doption value="save">保存</a-doption>
+          <a-doption value="saveAsTemplate">另存为模板</a-doption>
+        </template>
+      </a-dropdown>
     </div>
   </div>
 </template>
@@ -71,7 +79,19 @@ const emit = defineEmits<{
   'publish': []
   'start': []
   'stop': []
+  'saveAsTemplate': []
 }>()
+
+const editing = ref(false)
+const inputRef = ref<InstanceType<typeof import('@arco-design/web-vue').Input> | null>(null)
+
+function handleMoreAction(value: string | number | Record<string, any> | undefined) {
+  if (value === 'save') {
+    emit('save')
+  } else if (value === 'saveAsTemplate') {
+    emit('saveAsTemplate')
+  }
+}
 
 const editing = ref(false)
 const inputRef = ref<InstanceType<typeof import('@arco-design/web-vue').Input> | null>(null)
@@ -145,5 +165,10 @@ function finishEdit() {
 .name-input {
   width: 240px;
   text-align: center;
+}
+
+.dropdown-arrow {
+  margin-left: 4px;
+  font-size: 12px;
 }
 </style>

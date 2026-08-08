@@ -18,5 +18,6 @@ public class WorkflowTemplateVO {
     private String definition;
     private Integer sortOrder;
     private Boolean isBuiltin;
+    private String createdBy;
     private LocalDateTime createdAt;
 }
