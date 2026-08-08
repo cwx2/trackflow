@@ -280,6 +280,16 @@ public class UserService {
     }
 
     /**
+     * 根据 ID 查询用户，不存在时返回 null（不抛异常）
+     */
+    public SysUser getByIdOrNull(Long id) {
+        if (id == null) {
+            return null;
+        }
+        return userMapper.selectById(id);
+    }
+
+    /**
      * 获取用户的全局角色 ID 列表
      */
     public List<Long> getUserGlobalRoleIds(Long userId) {

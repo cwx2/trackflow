@@ -12,7 +12,6 @@ import com.trackflow.common.util.WebUtils;
 import com.trackflow.project.service.ProjectService;
 import com.trackflow.system.dto.UpdateMyProfileDTO;
 import com.trackflow.system.entity.SysUser;
-import com.trackflow.system.mapper.SysUserMapper;
 import com.trackflow.system.service.SystemAuditService;
 import com.trackflow.system.service.UserService;
 import com.trackflow.system.service.UserVOAssembler;
@@ -39,7 +38,6 @@ public class AuthController {
 
     private final PermissionService permissionService;
     private final ProjectService projectService;
-    private final SysUserMapper sysUserMapper;
     private final SystemAuditService systemAuditService;
     private final UserService userService;
     private final UserVOAssembler userVOAssembler;
@@ -55,7 +53,7 @@ public class AuthController {
             if (dbUserId == null) {
                 throw new BusinessException(ErrorCode.AUTH_MISSING);
             }
-            SysUser user = sysUserMapper.selectById(dbUserId);
+            SysUser user = userService.getByIdOrNull(dbUserId);
             if (user == null) {
                 throw new BusinessException(ErrorCode.AUTH_MISSING);
             }
@@ -168,7 +166,7 @@ public class AuthController {
             return R.ok();
         }
 
-        SysUser user = sysUserMapper.selectById(userId);
+        SysUser user = userService.getByIdOrNull(userId);
         String username = user != null ? user.getUsername() : "unknown";
 
         systemAuditService.logAuthEvent(
