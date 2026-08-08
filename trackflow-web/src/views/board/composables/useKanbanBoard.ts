@@ -3444,9 +3444,9 @@ const addCardType = ref<string>('Task')
 const addCardSubmitting = ref(false)
 
 /** 存储 input refs，用于自动聚焦 */
-function setAddCardInputRef(el: any, _statusId: string, _laneKey: string) {
+function setAddCardInputRef(el: HTMLElement | null, _statusId: string, _laneKey: string) {
   if (el) {
-    nextTick(() => el.focus())
+    nextTick(() => (el as HTMLInputElement).focus())
   }
 }
 
@@ -3503,15 +3503,15 @@ async function submitAddCard(statusId: string, swimlaneKey?: string) {
       assigneeId = swimlaneKey
     }
 
-    const createData: Record<string, any> = {
-      projectId: selectedProject.value,
+    const createData = {
+      projectId: selectedProject.value!,
       title,
       issueType: addCardType.value,
       sprintId: sprintId || undefined,
       assigneeId: assigneeId || undefined
     }
 
-    const res = await issueApi.create(createData as any)
+    const res = await issueApi.create(createData)
     const newIssue = res.data
 
     if (newIssue) {
@@ -3583,7 +3583,7 @@ const newSprintForm = ref({
 })
 
 /** "新建..."按钮下拉菜单选择处理 */
-function onNewMenuSelect(value: string | number | Record<string, any> | undefined) {
+function onNewMenuSelect(value: string | number | Record<string, unknown> | undefined) {
   if (value === 'card') {
     // 打开完整创建面板，预填当前 Sprint
     newCardPrefilledSprintId.value = selectedSprint.value || getActiveSprintId() || null
@@ -3602,7 +3602,7 @@ async function onNewCardCreated() {
 }
 
 /** IssueCreatePanel 全屏展开：跳转到创建页面 */
-function onNewCardExpandFullscreen(formData: any) {
+function onNewCardExpandFullscreen(formData: { projectId?: string } | undefined) {
   newCardModalVisible.value = false
   router.push({ name: 'IssueCreate', query: formData?.projectId ? { projectId: formData.projectId } : undefined })
 }
