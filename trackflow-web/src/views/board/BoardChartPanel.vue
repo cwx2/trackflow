@@ -236,7 +236,7 @@ function buildBurndownOption(data: BurndownData) {
           color: {
             type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
             colorStops: [
-              { offset: 0, color: isDark ? 'rgba(88, 166, 255, 0.1)' : 'rgba(9, 105, 218, 0.08)' },
+              { offset: 0, color: 'rgba(88, 166, 255, 0.1)' },
               { offset: 1, color: 'rgba(88, 166, 255, 0)' }
             ]
           }
@@ -244,11 +244,11 @@ function buildBurndownOption(data: BurndownData) {
         markLine: todayIndex >= 0 ? {
           silent: true,
           symbol: 'none',
-          lineStyle: { color: isDark ? '#3fb950' : '#1a7f37', width: 1.5, type: 'solid' },
+          lineStyle: { color: '#3fb950', width: 1.5, type: 'solid' },
           label: {
             show: true,
             formatter: '今天',
-            color: isDark ? '#3fb950' : '#1a7f37',
+            color: '#3fb950',
             fontSize: 10,
             position: 'start'
           },

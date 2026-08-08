@@ -160,7 +160,7 @@ const chartOption = computed(() => {
         color: {
           type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
           colorStops: [
-            { offset: 0, color: isDark ? 'rgba(248, 81, 73, 0.15)' : 'rgba(207, 34, 46, 0.1)' },
+            { offset: 0, color: 'rgba(248, 81, 73, 0.15)' },
             { offset: 1, color: 'rgba(248, 81, 73, 0)' }
           ]
         }
