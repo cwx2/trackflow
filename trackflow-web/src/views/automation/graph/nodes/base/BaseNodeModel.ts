@@ -43,32 +43,40 @@ export abstract class BaseNodeModel extends HtmlNodeModel {
   /** 子类需覆盖：提供节点类型名（用于从 node-definitions 读取默认值） */
   abstract get nodeType(): string
 
+  /** 初始化完成标志，防止 initNodeData 期间触发 y 轴补偿 */
+  private _initialized = false
+
   initNodeData(data: any) {
     super.initNodeData(data)
     this.width = NODE_WIDTH
     this.height = this._calcHeight(data.properties)
     // 禁用默认文本渲染
     this.text = { value: '', x: 0, y: 0, draggable: false, editable: false }
+    this._initialized = true
   }
 
   /** 属性变化时重新计算高度（展开/收起切换）
    *
+   * 使用 setAttributes 而非 setProperty，确保在 properties 已同步后才执行高度计算。
+   * LogicFlow 在 updateProperties 最后会调用 setAttributes，此时 this.properties 已是新值。
+   *
    * 关键：节点 y 是中心点，高度变化会上下均等撑开导致头部移位。
-   * 解决方案：记录旧高度，展开时把 y 往下移 delta/2，
-   * 使顶部边缘位置不变（头部固定）。
+   * 解决方案：记录旧高度，高度变化时把 y 往下/上移 delta/2，使顶部边缘位置不变。
    */
+  setAttributes() {
+    if (!this._initialized) return
+    const newHeight = this._calcHeight(this.properties)
+    if (newHeight !== this.height) {
+      const delta = newHeight - this.height
+      this.height = newHeight
+      // 展开时 delta > 0，y 下移 delta/2，顶部不动
+      // 收起时 delta < 0，y 上移 |delta|/2，顶部不动
+      this.y = this.y + delta / 2
+    }
+  }
+
   setProperty(key: string, val: any) {
     super.setProperty(key, val)
-    if (key === 'expanded' || key === 'inputs' || key === 'outputs' || key === 'optionalExpanded') {
-      const oldHeight = this.height
-      const newHeight = this._calcHeight(this.properties)
-      if (newHeight !== oldHeight) {
-        const delta = newHeight - oldHeight
-        this.height = newHeight
-        // 向下偏移，保持顶部不动
-        this.y = this.y + delta / 2
-      }
-    }
   }
 
   /**
