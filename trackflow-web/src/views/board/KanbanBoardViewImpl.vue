@@ -1147,7 +1147,7 @@
 <script setup lang="ts">
 import { useKanbanBoard } from './composables'
 import { localizeStatusName, localizePriority } from '@/utils/fieldLabels'
-import { IssueStatusTag } from '@/components/base'
+import { IssueStatusTag, UserAvatar } from '@/components/base'
 import BoardSettingsDrawer from './BoardSettingsDrawer.vue'
 import BoardSelector from './BoardSelector.vue'
 import BacklogPanel from './BacklogPanel.vue'
@@ -1269,7 +1269,7 @@ const {
   // Board truncated
   boardTruncated, boardTotalCount, boardTotalEstimation,
   // Helper functions
-  getInitials, getSprintName,
+  getSprintName,
   priorityIcon, typeLabel, typeInitial, getActiveSprintId,
   // onBatch handlers
   onBatchTransit, onBatchAssign, onBatchSprint, onBatchPriority,

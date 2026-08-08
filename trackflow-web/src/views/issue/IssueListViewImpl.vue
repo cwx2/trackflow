@@ -4563,11 +4563,6 @@ onBeforeRouteLeave((_to, _from, next) => {
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
 .status-badge { padding: 2px 8px; border-radius: 3px; font-size: 11px; color: #fff; font-weight: 500; }
-.priority-dot { display: inline-block; width: 8px; height: 8px; min-width: 8px; min-height: 8px; flex-shrink: 0; border-radius: 50%; }
-.priority-critical { background: var(--tf-danger); }
-.priority-high { background: var(--tf-warning); }
-.priority-normal { background: var(--tf-accent); }
-.priority-low { background: var(--tf-text-tertiary); }
 .time-ago { font-size: 11px; color: var(--tf-text-tertiary); }
 .time-over-budget { color: var(--tf-danger, #f85149); font-weight: 500; }
 .due-date-cell { font-size: 11px; color: var(--tf-text-tertiary); }

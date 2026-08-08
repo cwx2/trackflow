@@ -955,18 +955,6 @@ function confirmBatchDelete() {
   color: var(--tf-text-tertiary);
 }
 
-.priority-dot {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-.priority-critical { background: var(--tf-danger); }
-.priority-high { background: var(--tf-warning); }
-.priority-normal { background: var(--tf-accent); }
-.priority-low { background: var(--tf-text-tertiary); }
-
 /* 状态下拉 - 可达性提示 */
 .status-dropdown .dropdown-item {
   justify-content: flex-start;

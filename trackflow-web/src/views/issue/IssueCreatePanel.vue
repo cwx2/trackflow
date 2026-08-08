@@ -2235,12 +2235,6 @@ onMounted(() => {
 .prop-row { margin-bottom: 14px; }
 .prop-label { display: block; font-size: 12px; color: var(--color-text-3); margin-bottom: 4px; }
 
-.priority-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
-.priority-dot.critical { background: #ef4444; }
-.priority-dot.high { background: #f59e0b; }
-.priority-dot.normal { background: #6366f1; }
-.priority-dot.low { background: #64748b; }
-
 .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; flex-shrink: 0; }
 
 .prop-section-divider { height: 1px; background: var(--color-border); margin: 8px 0 12px; }
