@@ -1,6 +1,7 @@
 package com.trackflow.common.aspect;
 
 import com.trackflow.common.annotation.AuditLog;
+import com.trackflow.common.audit.AuditContext;
 import com.trackflow.common.util.SecurityUtils;
 import com.trackflow.common.util.SpELUtils;
 import com.trackflow.common.util.WebUtils;
@@ -13,7 +14,6 @@ import org.aopalliance.intercept.MethodInvocation;
 import org.springframework.aop.Pointcut;
 import org.springframework.aop.support.AbstractPointcutAdvisor;
 import org.springframework.aop.support.annotation.AnnotationMatchingPointcut;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.core.Ordered;
 import org.springframework.stereotype.Component;
@@ -25,28 +25,24 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
-import java.util.concurrent.ForkJoinPool;
 
 /**
  * 审计日志 AOP 切面——拦截 {@code @AuditLog} 注解的方法，自动记录审计日志。
  * <p>
  * 使用 Spring 原生 Advisor API（无需 aspectjweaver 依赖），适配 Spring Boot 4.x。
  * <p>
- * ⚠️ 当前项目未引入 aspectjweaver / spring-boot-starter-aop，
- * Spring 原生 {@code DefaultAdvisorAutoProxyCreator} 与现有 Security/Transaction
- * 代理冲突。此 Advisor 暂时保留代码但<b>不注册为 Bean</b>（移除了 @Component）。
- * <p>
- * 激活方式（二选一）：
+ * 支持两种详情传递方式：
  * <ul>
- *   <li>在 pom.xml 中添加 spring-boot-starter-aop 并加 @EnableAspectJAutoProxy</li>
- *   <li>在需要审计的方法中直接调用 systemAuditService.log()（当前推荐方式）</li>
+ *   <li>注解 SpEL：通过 {@code @AuditLog(details = "...")} 表达式获取</li>
+ *   <li>ThreadLocal：通过 {@link AuditContext#put(String, Object)} 在方法体内补充</li>
  * </ul>
+ * 两者会合并，AuditContext 中的条目优先级更高（覆盖同名 key）。
  *
  * @author TrackFlow
  * @since 1.0
  */
 @Slf4j
-// @Component — 暂未激活，需要 spring-boot-starter-aop 或 @EnableAspectJAutoProxy
+@Component
 public class AuditLogAdvisor extends AbstractPointcutAdvisor implements Ordered {
 
     private final Pointcut pointcut = AnnotationMatchingPointcut.forMethodAnnotation(AuditLog.class);
@@ -108,18 +104,23 @@ public class AuditLogAdvisor extends AbstractPointcutAdvisor implements Ordered 
                 errorMsg = e.getMessage();
                 throw e;
             } finally {
+                // 捕获 AuditContext（在主线程中，方法执行后）
+                Map<String, Object> contextDetails = AuditContext.get();
+                AuditContext.clear(); // 必须清理，防止 ThreadLocal 泄漏
+
                 // 异步写日志，不阻塞主业务
                 Object finalResult = result;
                 String finalError = errorMsg;
                 CompletableFuture.runAsync(() ->
-                        writeAuditLog(method, args, auditLog, userId, ipAddress, finalResult, finalError),
+                        writeAuditLog(method, args, auditLog, userId, ipAddress, finalResult, finalError, contextDetails),
                         asyncExecutor
                 );
             }
         }
 
         private void writeAuditLog(Method method, Object[] args, AuditLog auditLog,
-                                   Long userId, String ipAddress, Object result, String errorMsg) {
+                                   Long userId, String ipAddress, Object result, String errorMsg,
+                                   Map<String, Object> contextDetails) {
             try {
                 // 解析 targetId（SpEL）
                 String targetIdStr = SpELUtils.parseToString(auditLog.targetId(), method, args, result);
@@ -132,8 +133,14 @@ public class AuditLogAdvisor extends AbstractPointcutAdvisor implements Ordered 
                     }
                 }
 
-                // 构建 details
+                // 构建 details（SpEL 表达式 + 参数 + AuditContext 合并）
                 Map<String, Object> details = buildDetails(method, args, auditLog, result);
+
+                // 合并 AuditContext 中的额外详情（优先级高于 SpEL/params）
+                if (contextDetails != null && !contextDetails.isEmpty()) {
+                    details.putAll(contextDetails);
+                }
+
                 if (errorMsg != null) {
                     details.put("_error", errorMsg);
                     details.put("_success", false);

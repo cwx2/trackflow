@@ -8,6 +8,8 @@ import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.project.entity.Project;
 import com.trackflow.project.mapper.ProjectMapper;
+import com.trackflow.common.annotation.AuditLog;
+import com.trackflow.common.audit.AuditContext;
 import com.trackflow.system.dto.CreateGroupDTO;
 import com.trackflow.system.dto.GroupRoleDTO;
 import com.trackflow.system.dto.UpdateGroupDTO;
@@ -43,7 +45,6 @@ public class UserGroupService {
     private final SysRoleMapper roleMapper;
     private final ProjectMapper projectMapper;
     private final PermissionService permissionService;
-    private final SystemAuditService systemAuditService;
     private final StringRedisTemplate redisTemplate;
 
     /**
@@ -117,6 +118,8 @@ public class UserGroupService {
     /**
      * 创建用户组
      */
+    @AuditLog(action = "create_group", targetType = "user_group", targetId = "#result.id",
+            details = "{'name': #dto.name}")
     @Transactional(rollbackFor = Exception.class)
     public UserGroup create(CreateGroupDTO dto) {
         // 校验名称唯一
@@ -132,9 +135,6 @@ public class UserGroupService {
         group.setDescription(dto.getDescription());
         groupMapper.insert(group);
 
-        systemAuditService.log("create_group", "user_group", group.getId(),
-                Map.of("name", dto.getName()));
-
         log.info("用户组已创建: id={}, name={}", group.getId(), dto.getName());
         return group;
     }
@@ -142,6 +142,7 @@ public class UserGroupService {
     /**
      * 更新用户组
      */
+    @AuditLog(action = "update_group", targetType = "user_group", targetId = "#groupId")
     @Transactional(rollbackFor = Exception.class)
     public UserGroup update(Long groupId, UpdateGroupDTO dto) {
         UserGroup group = groupMapper.selectById(groupId);
@@ -160,12 +161,11 @@ public class UserGroupService {
         }
 
         String oldName = group.getName();
+        AuditContext.put("oldName", oldName);
+        AuditContext.put("newName", dto.getName());
         group.setName(dto.getName());
         group.setDescription(dto.getDescription());
         groupMapper.updateById(group);
-
-        systemAuditService.log("update_group", "user_group", groupId,
-                Map.of("oldName", oldName, "newName", dto.getName()));
 
         return group;
     }
@@ -173,6 +173,7 @@ public class UserGroupService {
     /**
      * 删除用户组
      */
+    @AuditLog(action = "delete_group", targetType = "user_group", targetId = "#groupId")
     @Transactional(rollbackFor = Exception.class)
     public void delete(Long groupId) {
         UserGroup group = groupMapper.selectById(groupId);
@@ -186,11 +187,11 @@ public class UserGroupService {
         // 失效所有组成员的可访问项目缓存
         memberUserIds.forEach(uid -> redisTemplate.delete(ACCESSIBLE_PROJECTS_CACHE_PREFIX + uid));
 
+        AuditContext.put("name", group.getName());
+        AuditContext.put("memberCount", memberUserIds.size());
+
         // 级联删除（数据库外键 ON DELETE CASCADE 会清理关联表）
         groupMapper.deleteById(groupId);
-
-        systemAuditService.log("delete_group", "user_group", groupId,
-                Map.of("name", group.getName(), "memberCount", memberUserIds.size()));
 
         log.info("用户组已删除: id={}, name={}, memberCount={}", groupId, group.getName(), memberUserIds.size());
     }
@@ -198,6 +199,7 @@ public class UserGroupService {
     /**
      * 添加成员到组
      */
+    @AuditLog(action = "add_group_members", targetType = "user_group", targetId = "#groupId")
     @Transactional(rollbackFor = Exception.class)
     public void addMembers(Long groupId, List<Long> userIds) {
         UserGroup group = groupMapper.selectById(groupId);
@@ -234,8 +236,8 @@ public class UserGroupService {
         addedUserIds.forEach(uid -> redisTemplate.delete(ACCESSIBLE_PROJECTS_CACHE_PREFIX + uid));
 
         if (!addedUserIds.isEmpty()) {
-            systemAuditService.log("add_group_members", "user_group", groupId,
-                    Map.of("groupName", group.getName(), "addedCount", addedUserIds.size()));
+            AuditContext.put("groupName", group.getName());
+            AuditContext.put("addedCount", addedUserIds.size());
             log.info("向用户组 {}({}) 添加了 {} 名成员", group.getName(), groupId, addedUserIds.size());
         }
     }
@@ -243,6 +245,7 @@ public class UserGroupService {
     /**
      * 从组中移除成员
      */
+    @AuditLog(action = "remove_group_members", targetType = "user_group", targetId = "#groupId")
     @Transactional(rollbackFor = Exception.class)
     public void removeMembers(Long groupId, List<Long> userIds) {
         UserGroup group = groupMapper.selectById(groupId);
@@ -261,14 +264,15 @@ public class UserGroupService {
         // 失效被移除成员的可访问项目缓存
         userIds.forEach(uid -> redisTemplate.delete(ACCESSIBLE_PROJECTS_CACHE_PREFIX + uid));
 
-        systemAuditService.log("remove_group_members", "user_group", groupId,
-                Map.of("groupName", group.getName(), "removedCount", userIds.size()));
+        AuditContext.put("groupName", group.getName());
+        AuditContext.put("removedCount", userIds.size());
         log.info("从用户组 {}({}) 移除了 {} 名成员", group.getName(), groupId, userIds.size());
     }
 
     /**
      * 为组分配角色（支持全局作用域、多项目批量分配）
      */
+    @AuditLog(action = "assign_group_role", targetType = "user_group", targetId = "#groupId")
     @Transactional(rollbackFor = Exception.class)
     public void assignRole(Long groupId, GroupRoleDTO dto) {
         UserGroup group = groupMapper.selectById(groupId);
@@ -320,8 +324,9 @@ public class UserGroupService {
 
         String scopeDesc = isGlobalScope ? "全局(所有项目)" :
                 projectIds.isEmpty() ? "全局" : "项目:" + projectIds;
-        systemAuditService.log("assign_group_role", "user_group", groupId,
-                Map.of("groupName", group.getName(), "roleName", role.getName(), "scope", scopeDesc));
+        AuditContext.put("groupName", group.getName());
+        AuditContext.put("roleName", role.getName());
+        AuditContext.put("scope", scopeDesc);
 
         log.info("为用户组 {}({}) 分配角色 {}({}), scope={}",
                 group.getName(), groupId, role.getName(), dto.getRoleId(), scopeDesc);
@@ -368,6 +373,7 @@ public class UserGroupService {
     /**
      * 移除组的角色分配
      */
+    @AuditLog(action = "remove_group_role", targetType = "user_group", targetId = "#groupId")
     @Transactional(rollbackFor = Exception.class)
     public void removeRole(Long groupId, Long groupRoleId) {
         UserGroup group = groupMapper.selectById(groupId);
@@ -388,8 +394,8 @@ public class UserGroupService {
         // 失效所有组成员的可访问项目缓存
         memberUserIds.forEach(uid -> redisTemplate.delete(ACCESSIBLE_PROJECTS_CACHE_PREFIX + uid));
 
-        systemAuditService.log("remove_group_role", "user_group", groupId,
-                Map.of("groupName", group.getName(), "roleId", groupRole.getRoleId()));
+        AuditContext.put("groupName", group.getName());
+        AuditContext.put("roleId", groupRole.getRoleId());
 
         log.info("从用户组 {}({}) 移除角色分配 id={}", group.getName(), groupId, groupRoleId);
     }

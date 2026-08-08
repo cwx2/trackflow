@@ -6,6 +6,8 @@ import com.trackflow.auth.service.PermissionService;
 import com.trackflow.common.constant.RoleTypes;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
+import com.trackflow.common.annotation.AuditLog;
+import com.trackflow.common.audit.AuditContext;
 import com.trackflow.common.util.SecurityUtils;
 import com.trackflow.project.entity.Project;
 import com.trackflow.project.entity.ProjectMember;
@@ -55,7 +57,6 @@ public class RoleService {
     private final SysPermissionMapper permissionMapper;
     private final SysUserMapper userMapper;
     private final PermissionService permissionService;
-    private final SystemAuditService systemAuditService;
     private final ProjectMemberMapper projectMemberMapper;
     private final ProjectMapper projectMapper;
     private final UserConverter userConverter;
@@ -176,6 +177,7 @@ public class RoleService {
     /**
      * 克隆角色（复制角色定义 + 权限）
      */
+    @AuditLog(action = "clone_role", targetType = "role", targetId = "#result.id")
     @Transactional(rollbackFor = Exception.class)
     public SysRole clone(Long sourceId, String newName, String newCode) {
         SysRole source = getById(sourceId);
@@ -209,13 +211,11 @@ public class RoleService {
             rolePermissionMapper.insert(rp);
         }
 
-        // 审计日志
-        systemAuditService.log("clone_role", "role", newRole.getId(),
-                Map.of("sourceName", source.getName(),
-                        "sourceId", source.getId(),
-                        "newName", newName,
-                        "newCode", newCode,
-                        "permissionCount", sourcePerms.size()));
+        AuditContext.put("sourceName", source.getName());
+        AuditContext.put("sourceId", source.getId());
+        AuditContext.put("newName", newName);
+        AuditContext.put("newCode", newCode);
+        AuditContext.put("permissionCount", sourcePerms.size());
 
         return newRole;
     }
@@ -234,6 +234,7 @@ public class RoleService {
      * @param targetRoleId  目标角色 ID（保留）
      * @return 合并后的目标角色
      */
+    @AuditLog(action = "merge_roles", targetType = "role", targetId = "#targetRoleId")
     @Transactional(rollbackFor = Exception.class)
     public SysRole mergeRoles(List<Long> sourceRoleIds, Long targetRoleId) {
         // 1. 校验：目标角色不能在源角色列表中
@@ -347,12 +348,11 @@ public class RoleService {
         List<String> sourceNames = sourceRoles.stream()
                 .map(SysRole::getName)
                 .collect(Collectors.toList());
-        systemAuditService.log("merge_roles", "role", targetRoleId,
-                Map.of("targetName", targetRole.getName(),
-                        "sourceNames", String.join(", ", sourceNames),
-                        "sourceRoleIds", sourceRoleIds.toString(),
-                        "mergedPermissionCount", newPermissions.size(),
-                        "migratedUserCount", affectedUserIds.size()));
+        AuditContext.put("targetName", targetRole.getName());
+        AuditContext.put("sourceNames", String.join(", ", sourceNames));
+        AuditContext.put("sourceRoleIds", sourceRoleIds.toString());
+        AuditContext.put("mergedPermissionCount", newPermissions.size());
+        AuditContext.put("migratedUserCount", affectedUserIds.size());
 
         return getById(targetRoleId);
     }
@@ -365,6 +365,7 @@ public class RoleService {
      * - 移除权限不受此限制（只要有 manage_roles 权限即可移除任何权限）
      * - system_admin 用户不受此限制（拥有所有权限）
      */
+    @AuditLog(action = "update_role_permissions", targetType = "role", targetId = "#id")
     @Transactional(rollbackFor = Exception.class)
     public void replacePermissions(Long id, List<String> permissions) {
         SysRole role = getById(id); // 确保存在
@@ -420,10 +421,9 @@ public class RoleService {
         permissionService.invalidateCacheForRole(id);
 
         // 审计日志：记录旧权限和新权限
-        systemAuditService.log("update_role_permissions", "role", id,
-                Map.of("roleName", role.getName(),
-                        "oldPermissions", oldPermissions,
-                        "newPermissions", resolvedPermissions));
+        AuditContext.put("roleName", role.getName());
+        AuditContext.put("oldPermissions", oldPermissions);
+        AuditContext.put("newPermissions", resolvedPermissions);
     }
 
     /**

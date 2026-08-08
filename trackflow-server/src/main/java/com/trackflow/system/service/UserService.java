@@ -6,6 +6,8 @@ import com.trackflow.auth.service.KeycloakAdminService;
 import com.trackflow.auth.service.PermissionService;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
+import com.trackflow.common.annotation.AuditLog;
+import com.trackflow.common.audit.AuditContext;
 import com.trackflow.common.constant.UserStatus;
 import com.trackflow.common.constant.RoleTypes;
 import com.trackflow.common.model.PageResult;
@@ -78,7 +80,6 @@ public class UserService {
     private final UserRoleMapper userRoleMapper;
     private final SysRoleMapper roleMapper;
     private final PermissionService permissionService;
-    private final SystemAuditService systemAuditService;
     private final ProjectMemberMapper projectMemberMapper;
     private final ProjectMapper projectMapper;
     private final IssueActivityMapper issueActivityMapper;
@@ -103,6 +104,8 @@ public class UserService {
      *
      * @return 新创建的用户实体
      */
+    @AuditLog(action = "create_user", targetType = "user", targetId = "#result.id",
+            details = "{'username': #dto.username, 'displayName': #dto.displayName, 'email': #dto.email}")
     @Transactional(rollbackFor = Exception.class)
     public SysUser createUser(CreateUserDTO dto) {
         // 1. 本地重复性校验
@@ -138,12 +141,6 @@ public class UserService {
         user.setEmail(dto.getEmail());
         user.setStatus(UserStatus.ACTIVE);
         userMapper.insert(user);
-
-        // 5. 审计日志
-        systemAuditService.log("create_user", "user", user.getId(),
-                Map.of("username", dto.getUsername(),
-                        "displayName", dto.getDisplayName(),
-                        "email", dto.getEmail()));
 
         log.info("User created: username={}, keycloakId={}, localId={}",
                 dto.getUsername(), keycloakId, user.getId());
@@ -336,6 +333,7 @@ public class UserService {
     /**
      * 禁用用户
      */
+    @AuditLog(action = "disable_user", targetType = "user", targetId = "#id")
     @Transactional(rollbackFor = Exception.class)
     public void disable(Long id, DisableUserDTO dto) {
         SysUser user = getById(id);
@@ -386,12 +384,11 @@ public class UserService {
         }
 
         // 审计日志
-        systemAuditService.log("disable_user", "user", id,
-                Map.of("username", user.getUsername(),
-                        "displayName", user.getDisplayName() != null ? user.getDisplayName() : "",
-                        "banStatus", dto.getBanStatus(),
-                        "banReason", dto.getBanReason() != null ? dto.getBanReason() : "",
-                        "revoked_api_keys", revokedKeys));
+        AuditContext.put("username", user.getUsername());
+        AuditContext.put("displayName", user.getDisplayName() != null ? user.getDisplayName() : "");
+        AuditContext.put("banStatus", dto.getBanStatus());
+        AuditContext.put("banReason", dto.getBanReason() != null ? dto.getBanReason() : "");
+        AuditContext.put("revoked_api_keys", revokedKeys);
 
         log.info("用户 {} 已禁用(状态:{}，原因:{})：Keycloak session 已终止, Redis 黑名单已写入(TTL={}min), API Key 已吊销({}个)",
                 user.getUsername(), dto.getBanStatus(), dto.getBanReason(),
@@ -401,6 +398,7 @@ public class UserService {
     /**
      * 启用用户
      */
+    @AuditLog(action = "enable_user", targetType = "user", targetId = "#id")
     @Transactional(rollbackFor = Exception.class)
     public void enable(Long id) {
         SysUser user = getById(id);
@@ -420,9 +418,8 @@ public class UserService {
         redisTemplate.delete(DISABLED_USER_KEY_PREFIX + id);
 
         // 审计日志
-        systemAuditService.log("enable_user", "user", id,
-                Map.of("username", user.getUsername(),
-                        "displayName", user.getDisplayName() != null ? user.getDisplayName() : ""));
+        AuditContext.put("username", user.getUsername());
+        AuditContext.put("displayName", user.getDisplayName() != null ? user.getDisplayName() : "");
 
         log.info("用户 {} 已启用：Redis 黑名单已清除", user.getUsername());
     }
@@ -431,6 +428,7 @@ public class UserService {
      * 分配全局角色
      * 仅允许 role_type='global' 的角色被分配为全局角色（防御性校验）
      */
+    @AuditLog(action = "assign_global_role", targetType = "user", targetId = "#userId")
     @Transactional(rollbackFor = Exception.class)
     public void assignGlobalRole(Long userId, Long roleId) {
         // 校验角色存在且为 global 类型（防御性校验，Controller 已有前置校验）
@@ -462,13 +460,15 @@ public class UserService {
         String roleName = role.getName();
         SysUser user = userMapper.selectById(userId);
         String username = user != null ? user.getUsername() : String.valueOf(userId);
-        systemAuditService.log("assign_global_role", "user", userId,
-                Map.of("roleId", roleId, "roleName", roleName, "username", username));
+        AuditContext.put("roleId", roleId);
+        AuditContext.put("roleName", roleName);
+        AuditContext.put("username", username);
     }
 
     /**
      * 移除全局角色
      */
+    @AuditLog(action = "remove_global_role", targetType = "user", targetId = "#userId")
     @Transactional(rollbackFor = Exception.class)
     public void removeGlobalRole(Long userId, Long roleId) {
         // 禁止移除自己的系统管理员角色
@@ -494,8 +494,9 @@ public class UserService {
         String roleName = role != null ? role.getName() : String.valueOf(roleId);
         SysUser user = userMapper.selectById(userId);
         String username = user != null ? user.getUsername() : String.valueOf(userId);
-        systemAuditService.log("remove_global_role", "user", userId,
-                Map.of("roleId", roleId, "roleName", roleName, "username", username));
+        AuditContext.put("roleId", roleId);
+        AuditContext.put("roleName", roleName);
+        AuditContext.put("username", username);
     }
 
     /**
@@ -509,6 +510,7 @@ public class UserService {
      * @param userId 用户 ID
      * @param targetRoleIds 期望的角色 ID 列表
      */
+    @AuditLog(action = "replace_global_roles", targetType = "user", targetId = "#userId")
     @Transactional(rollbackFor = Exception.class)
     public void replaceGlobalRoles(Long userId, List<Long> targetRoleIds) {
         // 校验用户存在
@@ -591,13 +593,10 @@ public class UserService {
                         return r != null ? r.getName() : String.valueOf(id);
                     }).toList();
 
-            systemAuditService.log("replace_global_roles", "user", userId,
-                    Map.of(
-                            "username", user.getUsername(),
-                            "addedRoles", addedNames,
-                            "removedRoles", removedNames,
-                            "finalRoleIds", distinctTargetIds
-                    ));
+            AuditContext.put("username", user.getUsername());
+            AuditContext.put("addedRoles", addedNames);
+            AuditContext.put("removedRoles", removedNames);
+            AuditContext.put("finalRoleIds", distinctTargetIds);
         }
     }
 
