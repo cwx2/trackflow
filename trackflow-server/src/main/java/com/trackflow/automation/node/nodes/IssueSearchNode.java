@@ -1,12 +1,12 @@
 package com.trackflow.automation.node.nodes;
 
 import com.trackflow.automation.execution.ExecutionContext;
+import com.trackflow.automation.node.InputPortDef;
 import com.trackflow.automation.node.NodeDefinition;
-import com.trackflow.automation.node.NodeExecutionException;
 import com.trackflow.automation.node.NodeExecutor;
-import com.trackflow.automation.node.model.InputPortDef;
-import com.trackflow.automation.node.model.OutputPortDef;
-import com.trackflow.automation.node.model.WorkflowNodeModel;
+import com.trackflow.automation.node.OutputPortDef;
+import com.trackflow.automation.node.NodeExecutionException;
+import com.trackflow.automation.node.WorkflowNodeModel;
 import com.trackflow.automation.service.AutomationIssueFacade;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -14,6 +14,9 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 工单搜索节点：支持按项目、状态、优先级、工单类型、标签、关键词等多维度筛选。
+ */
 @Component
 @RequiredArgsConstructor
 public class IssueSearchNode implements NodeDefinition, NodeExecutor {
@@ -23,18 +26,26 @@ public class IssueSearchNode implements NodeDefinition, NodeExecutor {
     @Override public String getTitle() { return "查找待办需求"; }
     @Override public String getIcon() { return "🔎"; }
     @Override public String getColor() { return "#0ea5e9"; }
-    @Override public String getDescription() { return "按项目、状态、关键词和负责人筛选需求"; }
+    @Override public String getDescription() { return "按项目、状态、优先级、类型和关键词筛选需求"; }
     @Override public String getCategory() { return "TrackFlow"; }
-    @Override public List<InputPortDef> getInputPorts() {
+
+    @Override
+    public List<InputPortDef> getInputPorts() {
         return List.of(
                 new InputPortDef("projectId", "number", false, "项目 ID；留空时查询有权访问的项目"),
                 new InputPortDef("statusIds", "string", false, "状态 ID，多个用逗号分隔"),
+                new InputPortDef("priority", "string", false, "优先级，多个用逗号分隔（critical,high,medium,low）"),
+                new InputPortDef("issueType", "string", false, "工单类型，多个用逗号分隔（Bug,Feature,Task 等）"),
+                new InputPortDef("tagIds", "string", false, "标签 ID，多个用逗号分隔"),
                 new InputPortDef("keyword", "string", false, "标题、描述或编号关键词"),
                 new InputPortDef("assignedToMe", "boolean", false, "只查分配给执行身份的工单"),
+                new InputPortDef("sort", "string", false, "排序：-priority（默认），created_at，-updated_at"),
                 new InputPortDef("limit", "number", false, "最多返回 100 条")
         );
     }
-    @Override public List<OutputPortDef> getOutputPorts() {
+
+    @Override
+    public List<OutputPortDef> getOutputPorts() {
         return List.of(
                 new OutputPortDef("issues", "array", "工单列表"),
                 new OutputPortDef("count", "number", "返回数量"),
@@ -48,11 +59,17 @@ public class IssueSearchNode implements NodeDefinition, NodeExecutor {
         try {
             Long projectId = longValue(inputs.get("projectId"));
             String statusIds = stringValue(inputs.get("statusIds"));
+            String priority = stringValue(inputs.get("priority"));
+            String issueType = stringValue(inputs.get("issueType"));
+            String tagIds = stringValue(inputs.get("tagIds"));
             String keyword = stringValue(inputs.get("keyword"));
             boolean assignedToMe = booleanValue(inputs.get("assignedToMe"));
+            String sort = stringValue(inputs.get("sort"));
             int limit = intValue(inputs.get("limit"), 20);
+
             List<Map<String, Object>> issues = issueFacade.search(
-                    context.getActorUserId(), projectId, statusIds, keyword, assignedToMe, limit);
+                    context.getActorUserId(), projectId, statusIds, keyword, assignedToMe,
+                    limit, priority, issueType, tagIds, sort);
             return Map.of("issues", issues, "count", issues.size(), "hasWork", !issues.isEmpty());
         } catch (RuntimeException exception) {
             throw new NodeExecutionException(node.id(), exception.getMessage(), exception);
@@ -63,12 +80,18 @@ public class IssueSearchNode implements NodeDefinition, NodeExecutor {
         if (value == null || value.toString().isBlank()) return null;
         return value instanceof Number number ? number.longValue() : Long.valueOf(value.toString());
     }
+
     private int intValue(Object value, int fallback) {
         if (value == null || value.toString().isBlank()) return fallback;
         return value instanceof Number number ? number.intValue() : Integer.parseInt(value.toString());
     }
+
     private boolean booleanValue(Object value) {
         return value instanceof Boolean bool ? bool : value != null && Boolean.parseBoolean(value.toString());
     }
-    private String stringValue(Object value) { return value != null ? value.toString() : null; }
+
+    private String stringValue(Object value) {
+        if (value == null || value.toString().isBlank()) return null;
+        return value.toString();
+    }
 }

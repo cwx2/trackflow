@@ -12,7 +12,7 @@ import { httpRequestDefinition } from './http-request'
 import { subWorkflowDefinition } from './sub-workflow'
 import { roleAgentDefinition } from './role-agent'
 import { approvalDefinition } from './approval'
-import { issueGetDefinition, issueSearchDefinition, issueTransitionDefinition, issueCommentDefinition } from './trackflow-nodes'
+import { issueGetDefinition, issueSearchDefinition, issueContextDefinition, issueTransitionDefinition, issueCommentDefinition, issueUpdateDefinition } from './trackflow-nodes'
 
 export type { NodeDefinition, InputPortDef, OutputPortDef, ConfigFieldDef, NodeMetaDef } from './types'
 
@@ -33,8 +33,10 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
   'approval': approvalDefinition,
   'trackflow-issue-get': issueGetDefinition,
   'trackflow-issue-search': issueSearchDefinition,
+  'trackflow-issue-context': issueContextDefinition,
   'trackflow-issue-transition': issueTransitionDefinition,
   'trackflow-issue-comment': issueCommentDefinition,
+  'trackflow-issue-update': issueUpdateDefinition,
 }
 
 /** 根据节点类型获取定义，不存在时返回 undefined */
@@ -46,8 +48,10 @@ export function getNodeDefinition(type: string): NodeDefinition | undefined {
 export const DRAGGABLE_NODES: NodeDefinition[] = [
   issueSearchDefinition,
   issueGetDefinition,
+  issueContextDefinition,
   issueTransitionDefinition,
   issueCommentDefinition,
+  issueUpdateDefinition,
   roleAgentDefinition,
   cliAgentDefinition,
   codeDefinition,
