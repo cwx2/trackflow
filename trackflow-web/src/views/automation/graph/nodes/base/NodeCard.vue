@@ -28,11 +28,11 @@
         <span v-else-if="runStatus === 'cancelled'" class="status-icon cancelled">■</span>
         <div class="hover-actions">
           <button class="hover-btn" title="运行此节点" @click.stop="emit('run-node')">
-            <icon-play-arrow-fill :size="12" />
+            <IconPlayArrowFill :size="12" />
           </button>
           <div class="hover-more-wrap" ref="moreMenuRef">
             <button class="hover-btn" title="更多操作" @click.stop="moreMenuOpen = !moreMenuOpen">
-              <icon-more :size="14" />
+              <IconMore :size="14" />
             </button>
             <div v-if="moreMenuOpen" class="more-menu" @click.stop>
               <button class="more-menu-item" @click="onMenuAction('rename')">重命名</button>
@@ -44,8 +44,8 @@
           </div>
         </div>
         <button class="expand-btn" :title="expanded ? '收起' : '展开'" @click.stop="onToggleExpand">
-          <icon-up v-if="expanded" :size="14" />
-          <icon-down v-else :size="14" />
+          <IconUp v-if="expanded" :size="14" />
+          <IconDown v-else :size="14" />
         </button>
       </div>
     </div>
@@ -204,6 +204,7 @@ import {
   IconSync, IconSend, IconClockCircle, IconList, IconRobot,
   IconBranch, IconLoop, IconStorage, IconApps, IconCheck,
   IconEdit, IconMessage, IconPlayCircle, IconRecordStop,
+  IconPlayArrowFill, IconMore, IconUp, IconDown,
 } from '@arco-design/web-vue/es/icon'
 import type { PortDef, NodeMeta, NodeRunStatus } from './BaseNodeModel'
 import type { ValueType } from '@/api/automation'
