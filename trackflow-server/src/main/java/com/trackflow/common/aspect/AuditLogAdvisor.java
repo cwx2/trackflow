@@ -14,9 +14,7 @@ import org.aopalliance.intercept.MethodInvocation;
 import org.springframework.aop.Pointcut;
 import org.springframework.aop.support.AbstractPointcutAdvisor;
 import org.springframework.aop.support.annotation.AnnotationMatchingPointcut;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.core.Ordered;
-import org.springframework.stereotype.Component;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
@@ -42,14 +40,12 @@ import java.util.concurrent.Executor;
  * @since 1.0
  */
 @Slf4j
-@Component
 public class AuditLogAdvisor extends AbstractPointcutAdvisor implements Ordered {
 
     private final Pointcut pointcut = AnnotationMatchingPointcut.forMethodAnnotation(AuditLog.class);
     private final AuditLogInterceptor interceptor;
 
-    public AuditLogAdvisor(@Lazy SystemAuditService auditService,
-                           @Lazy @org.springframework.beans.factory.annotation.Qualifier("notificationExecutor") Executor executor) {
+    public AuditLogAdvisor(SystemAuditService auditService, Executor executor) {
         this.interceptor = new AuditLogInterceptor(auditService, executor);
     }
 
@@ -154,7 +150,7 @@ public class AuditLogAdvisor extends AbstractPointcutAdvisor implements Ordered 
                     details.put("_description", description);
                 }
 
-                auditService.log(auditLog.action(), auditLog.targetType(), targetId, details);
+                auditService.log(userId, auditLog.action(), auditLog.targetType(), targetId, details);
             } catch (Exception e) {
                 log.warn("[AuditLog] 审计日志写入失败: action={}, error={}", auditLog.action(), e.getMessage());
             }

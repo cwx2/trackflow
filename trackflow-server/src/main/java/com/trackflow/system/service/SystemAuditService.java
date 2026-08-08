@@ -56,6 +56,27 @@ public class SystemAuditService {
                     action, targetType, targetId);
             return;
         }
+        log(operatorId, action, targetType, targetId, details);
+    }
+
+    /**
+     * 记录审计日志（由调用方显式提供 operatorId）。
+     * <p>
+     * 用于异步场景（如 AOP 切面在异步线程中写审计日志）——此时 SecurityContext 不可用，
+     * 需由主线程提前捕获 userId 后传入。
+     *
+     * @param operatorId 操作者用户 ID
+     * @param action     操作类型
+     * @param targetType 目标类型
+     * @param targetId   目标 ID
+     * @param details    变更详情 Map
+     */
+    public void log(Long operatorId, String action, String targetType, Long targetId, Map<String, Object> details) {
+        if (operatorId == null) {
+            log.warn("审计日志记录失败：operatorId 为空，action={}, targetType={}, targetId={}",
+                    action, targetType, targetId);
+            return;
+        }
 
         SysAuditLog auditLog = new SysAuditLog();
         auditLog.setOperatorId(operatorId);

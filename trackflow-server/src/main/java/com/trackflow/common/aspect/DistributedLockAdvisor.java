@@ -19,7 +19,6 @@ import org.springframework.expression.EvaluationContext;
 import org.springframework.expression.ExpressionParser;
 import org.springframework.expression.spel.standard.SpelExpressionParser;
 import org.springframework.expression.spel.support.StandardEvaluationContext;
-import org.springframework.stereotype.Component;
 
 import java.lang.reflect.Method;
 
@@ -37,7 +36,6 @@ import java.lang.reflect.Method;
  * @since 1.0
  */
 @Slf4j
-@Component
 public class DistributedLockAdvisor extends AbstractPointcutAdvisor {
 
     private final Pointcut pointcut = AnnotationMatchingPointcut.forMethodAnnotation(DistributedLock.class);
