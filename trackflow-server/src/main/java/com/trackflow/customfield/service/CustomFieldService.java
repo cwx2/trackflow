@@ -345,6 +345,7 @@ public class CustomFieldService {
         return usage;
     }
 
+    @com.trackflow.common.annotation.AuditLog(action = "delete_custom_field", targetType = "custom_field", targetId = "#id")
     @Transactional(rollbackFor = Exception.class)
     public void delete(Long id, boolean confirm) {
         if (definitionMapper.selectById(id) == null) {

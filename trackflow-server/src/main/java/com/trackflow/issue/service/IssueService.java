@@ -797,6 +797,7 @@ public class IssueService {
      * @return 包含更新后版本号和动作执行结果
      * @throws BusinessException 当校验不通过时
      */
+    @com.trackflow.common.annotation.AuditLog(action = "issue_status_change", targetType = "issue", targetId = "#id", logParams = true)
     public TransitStatusResult performTransition(Long id, TransitStatusDTO dto) {
         Issue issue = getByIdWithAccessCheck(id);
         Long userId = SecurityUtils.getCurrentUserId();
@@ -1414,6 +1415,7 @@ public class IssueService {
     /**
      * 软删除 Issue
      */
+    @com.trackflow.common.annotation.AuditLog(action = "delete_issue", targetType = "issue", targetId = "#id")
     @Transactional(rollbackFor = Exception.class)
     public void delete(Long id) {
         Issue issue = getById(id);
@@ -2394,6 +2396,7 @@ public class IssueService {
     /**
      * 永久删除 Issue（物理删除），同时清理关联数据
      */
+    @com.trackflow.common.annotation.AuditLog(action = "permanent_delete_issue", targetType = "issue", targetId = "#id")
     @Transactional(rollbackFor = Exception.class)
     public void permanentDelete(Long id) {
         DeletedIssueRow row = issueMapper.selectByIdIgnoreDeleted(id);
