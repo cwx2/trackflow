@@ -18,6 +18,7 @@ import VChart from 'vue-echarts'
 import { IconBarChart } from '@arco-design/web-vue/es/icon'
 import { reportApi } from '@/api/report'
 import { getPriorityColor } from '@/composables/usePriorityOptions'
+import { CHART_PALETTE, STATUS_COLORS, getChartItemColor } from '@/utils/chartColors'
 import type { ReportDataVO } from '@/api/report'
 
 use([CanvasRenderer, PieChart, BarChart, LineChart, TooltipComponent, LegendComponent, GridComponent])
@@ -42,21 +43,10 @@ const hintText = computed(() => {
   return '点击「编辑配置」关联报表定义'
 })
 
-// ─── Color Palettes ────────────────────────────────────
-
-const palette = ['#58a6ff', '#3fb950', '#f0883e', '#a371f7', '#d29922', '#f85149', '#79c0ff', '#56d364', '#ffa657', '#d2a8ff']
-
-const statusColors: Record<string, string> = {
-  'Open': '#58a6ff', 'In Progress': '#f0883e', 'Code Review': '#a371f7',
-  'Testing': '#d29922', 'Done': '#3fb950', 'Cancelled': '#6b7280',
-  'Reopened': '#f85149', 'Todo': '#58a6ff', 'Closed': '#3fb950',
-  'Solved': '#3fb950', 'Online': '#3fb950'
-}
-
 function getItemColor(label: string, groupBy: string, idx: number): string {
-  if (groupBy === 'status') return statusColors[label] || palette[idx % palette.length]
-  if (groupBy === 'priority') return getPriorityColor(label) || palette[idx % palette.length]
-  return palette[idx % palette.length]
+  if (groupBy === 'status') return STATUS_COLORS[label] || CHART_PALETTE[idx % CHART_PALETTE.length]
+  if (groupBy === 'priority') return getPriorityColor(label) || CHART_PALETTE[idx % CHART_PALETTE.length]
+  return CHART_PALETTE[idx % CHART_PALETTE.length]
 }
 
 // ─── Chart Option Building ────────────────────────────
@@ -199,7 +189,7 @@ function buildStackedBarOption(data: ReportDataVO): Record<string, any> {
     type: 'bar',
     stack: 'total',
     barMaxWidth: 24,
-    itemStyle: { color: palette[colIdx % palette.length] },
+    itemStyle: { color: CHART_PALETTE[colIdx % CHART_PALETTE.length] },
     data: primaryLabels.map((_, rowIdx) => matrix[rowIdx]?.[colIdx] || 0)
   }))
 

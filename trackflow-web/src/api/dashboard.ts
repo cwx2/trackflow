@@ -1,5 +1,5 @@
 import request from './request'
-import type { R } from './types'
+import type { R, IssueVO } from './types'
 
 export interface DashboardSummaryVO {
   assignedOpen: number
@@ -56,12 +56,12 @@ export const dashboardApi = {
 
   /** 分配给我的工单 */
   assignedToMe(limit = 10) {
-    return request.get<any, R<any[]>>('/dashboard/assigned-to-me', { params: { limit } })
+    return request.get<any, R<IssueVO[]>>('/dashboard/assigned-to-me', { params: { limit } })
   },
 
   /** 即将到期 / 逾期工单 */
   overdue(days = 7, limit = 10) {
-    return request.get<any, R<any[]>>('/dashboard/overdue', { params: { days, limit } })
+    return request.get<any, R<IssueVO[]>>('/dashboard/overdue', { params: { days, limit } })
   },
 
   /** 最近活动流 */

@@ -18,6 +18,7 @@ import VChart from 'vue-echarts'
 import { IconBarChart } from '@arco-design/web-vue/es/icon'
 import { sprintApi } from '@/api/sprint'
 import { reportStatisticsApi } from '@/api/reportStatistics'
+import { SERIES_ACCENT, SERIES_TERTIARY, SERIES_WARNING, SERIES_PURPLE, SERIES_MARKER } from '@/utils/chartColors'
 import type { SprintBurndownVO } from '@/api/types'
 
 use([CanvasRenderer, LineChart, TooltipComponent, LegendComponent, GridComponent, MarkLineComponent])
@@ -84,23 +85,23 @@ function buildBurndownOption(data: SprintBurndownVO): Record<string, any> {
         name: '理想线',
         type: 'line',
         data: data.idealLine,
-        lineStyle: { type: 'dashed', color: '#6b7280', width: 1.5 },
+        lineStyle: { type: 'dashed', color: SERIES_TERTIARY, width: 1.5 },
         symbol: 'none',
-        itemStyle: { color: '#6b7280' }
+        itemStyle: { color: SERIES_TERTIARY }
       },
       {
         name: '实际线',
         type: 'line',
         data: data.actualLine,
-        lineStyle: { color: '#58a6ff', width: 2 },
+        lineStyle: { color: SERIES_ACCENT, width: 2 },
         symbol: 'circle',
         symbolSize: 4,
-        itemStyle: { color: '#58a6ff' },
+        itemStyle: { color: SERIES_ACCENT },
         ...(todayIdx !== undefined ? {
           markLine: {
             silent: true,
             data: [{ xAxis: todayIdx }],
-            lineStyle: { type: 'solid', color: '#f0883e', width: 1 },
+            lineStyle: { type: 'solid', color: SERIES_MARKER, width: 1 },
             label: { show: false }
           }
         } : {})
@@ -109,9 +110,9 @@ function buildBurndownOption(data: SprintBurndownVO): Record<string, any> {
         name: '范围线',
         type: 'line',
         data: data.scopeLine,
-        lineStyle: { color: '#a371f7', width: 1.5, type: 'dotted' },
+        lineStyle: { color: SERIES_PURPLE, width: 1.5, type: 'dotted' },
         symbol: 'none',
-        itemStyle: { color: '#a371f7' }
+        itemStyle: { color: SERIES_PURPLE }
       }
     ]
   }

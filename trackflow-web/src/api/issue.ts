@@ -2,9 +2,10 @@ import request from './request'
 import type {
   R, PageResult, IssueVO, IssueDetailVO, IssueCommentVO,
   IssueActivityVO, IssueStatusVO, IssueAttachmentVO,
-  IssueTagVO, IssueLinkVO, IssueTrashVO, BatchAvailableStatusVO,
-  TransitStatusResultVO, ManualOrderVO
+  IssueTagVO, IssueLinkVO, IssueLinkTypeVO, IssueTrashVO, BatchAvailableStatusVO,
+  TransitStatusResultVO, ManualOrderVO, UpdateIssueData, UpdateCommentData
 } from './types'
+import type { AxiosProgressEvent } from 'axios'
 import { validateFile } from '@/utils/attachment'
 
 /**
@@ -56,7 +57,7 @@ export const issueApi = {
   },
 
   /** 更新 Issue（部分更新） */
-  update(id: string, data: Record<string, any>) {
+  update(id: string, data: UpdateIssueData) {
     return request.put<any, R<IssueDetailVO>>(`/issues/${id}`, data)
   },
 
@@ -159,7 +160,7 @@ export const issueApi = {
 
   /** 编辑评论 */
   updateComment(issueId: string, commentId: string, content: string, visibleToGroupIds?: string[] | null) {
-    const body: Record<string, any> = { content }
+    const body: UpdateCommentData = { content }
     if (visibleToGroupIds !== undefined) {
       body.visibleToGroupIds = visibleToGroupIds
     }
@@ -210,7 +211,7 @@ export const issueApi = {
     }
     return request.post<any, R<IssueAttachmentVO>>(`/issues/${issueId}/attachments`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
-      onUploadProgress: (e: any) => {
+      onUploadProgress: (e: AxiosProgressEvent) => {
         if (onProgress && e.total) {
           onProgress(Math.round((e.loaded * 100) / e.total))
         }
@@ -256,7 +257,7 @@ export const issueApi = {
 
   /** 获取所有关联类型（普通用户可用） */
   listLinkTypes() {
-    return request.get<any, R<any[]>>('/issues/link-types')
+    return request.get<any, R<IssueLinkTypeVO[]>>('/issues/link-types')
   },
 
   /** 获取关联列表 */

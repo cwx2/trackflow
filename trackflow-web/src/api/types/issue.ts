@@ -249,3 +249,36 @@ export interface IssueLinkTypeVO {
   direction: string
   isSystem: boolean
 }
+
+/**
+ * Issue 部分更新请求数据（对应后端 UpdateIssueDTO）
+ * 所有字段均可选，仅传递需要更新的字段
+ */
+export interface UpdateIssueData {
+  title?: string
+  description?: string
+  issueType?: string
+  priority?: string
+  assigneeId?: string | null
+  sprintId?: string | null
+  parentId?: string | null
+  dueDate?: string | null
+  estimatedHours?: number | null
+  customFields?: Record<string, string>
+  clearDueDate?: boolean
+  clearEstimatedHours?: boolean
+  version?: number
+  forceWip?: boolean
+  addToSprintId?: string
+  removeFromSprintId?: string
+  visibility?: string
+  visibilityUserIds?: string[]
+}
+
+/**
+ * 更新评论请求体
+ */
+export interface UpdateCommentData {
+  content: string
+  visibleToGroupIds?: string[] | null
+}

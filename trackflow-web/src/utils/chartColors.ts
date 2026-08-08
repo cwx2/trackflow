@@ -179,6 +179,10 @@ export const SERIES_DANGER = '#f85149'
 export const SERIES_TERTIARY = '#6b7280'
 /** 进行中/警告色：warning 橙 */
 export const SERIES_WARNING = '#d29922'
+/** 范围线/紫色系列 */
+export const SERIES_PURPLE = '#a371f7'
+/** 标记线/今日标识色：橘色 */
+export const SERIES_MARKER = '#f0883e'
 
 // ─── 图表下载背景色（透明不适合下载，用暗色兜底） ──────────────────────
 

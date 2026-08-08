@@ -371,7 +371,7 @@ import { projectApi, sprintApi } from '@/api'
 import type { DashboardData, ProjectComparisonData, CumulativeFlowData, ResolutionTimeData } from '@/api/reportStatistics'
 import type { ProjectVO } from '@/api/types'
 import { localizeStatusName, priorityLabelMap } from '@/utils/fieldLabels'
-import { useChartColors, SERIES_ACCENT, SERIES_SUCCESS, SERIES_DANGER, SERIES_TERTIARY, areaGradient, getChartDownloadBgColor } from '@/utils/chartColors'
+import { useChartColors, SERIES_ACCENT, SERIES_SUCCESS, SERIES_DANGER, SERIES_TERTIARY, SERIES_PURPLE, SERIES_MARKER, areaGradient, getChartDownloadBgColor } from '@/utils/chartColors'
 
 // 注册 ECharts 组件
 use([CanvasRenderer, PieChart, BarChart, LineChart, TitleComponent, TooltipComponent, LegendComponent, GridComponent])
@@ -788,7 +788,7 @@ const projectComparisonChartOption = computed(() => {
         stack: 'total',
         barWidth: '55%',
         data: items.map(i => i.closed),
-        itemStyle: { color: '#3fb950', borderRadius: [0, 0, 0, 0] }
+        itemStyle: { color: SERIES_SUCCESS, borderRadius: [0, 0, 0, 0] }
       },
       {
         name: '进行中',
@@ -796,7 +796,7 @@ const projectComparisonChartOption = computed(() => {
         stack: 'total',
         barWidth: '55%',
         data: items.map(i => i.open - i.overdue),
-        itemStyle: { color: '#58a6ff' }
+        itemStyle: { color: SERIES_ACCENT }
       },
       {
         name: '已逾期',
@@ -804,7 +804,7 @@ const projectComparisonChartOption = computed(() => {
         stack: 'total',
         barWidth: '55%',
         data: items.map(i => i.overdue),
-        itemStyle: { color: '#f85149', borderRadius: [0, 3, 3, 0] }
+        itemStyle: { color: SERIES_DANGER, borderRadius: [0, 3, 3, 0] }
       }
     ]
   }
@@ -1043,8 +1043,8 @@ const resolutionTimeChartOption = computed(() => {
         symbol: 'circle',
         symbolSize: 4,
         connectNulls: true,
-        lineStyle: { width: 2, color: '#58a6ff' },
-        itemStyle: { color: '#58a6ff' }
+        lineStyle: { width: 2, color: SERIES_ACCENT },
+        itemStyle: { color: SERIES_ACCENT }
       },
       {
         name: '中位',
@@ -1055,8 +1055,8 @@ const resolutionTimeChartOption = computed(() => {
         symbol: 'circle',
         symbolSize: 4,
         connectNulls: true,
-        lineStyle: { width: 2, color: '#3fb950' },
-        itemStyle: { color: '#3fb950' }
+        lineStyle: { width: 2, color: SERIES_SUCCESS },
+        itemStyle: { color: SERIES_SUCCESS }
       },
       {
         name: 'P90',
@@ -1067,8 +1067,8 @@ const resolutionTimeChartOption = computed(() => {
         symbol: 'circle',
         symbolSize: 4,
         connectNulls: true,
-        lineStyle: { width: 2, color: '#f85149', type: 'dashed' },
-        itemStyle: { color: '#f85149' }
+        lineStyle: { width: 2, color: SERIES_DANGER, type: 'dashed' },
+        itemStyle: { color: SERIES_DANGER }
       },
       {
         name: '解决工单数',
@@ -1076,7 +1076,7 @@ const resolutionTimeChartOption = computed(() => {
         yAxisIndex: 1,
         data: resolvedCount,
         barWidth: '40%',
-        itemStyle: { color: 'rgba(88, 166, 255, 0.2)', borderRadius: [3, 3, 0, 0] }
+        itemStyle: { color: `rgba(88, 166, 255, 0.2)`, borderRadius: [3, 3, 0, 0] }
       }
     ]
   }

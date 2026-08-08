@@ -2,7 +2,7 @@ import { ref, reactive, computed, type Ref } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { useConfirmDelete } from '@/composables/useConfirmDelete'
 import { queryApi, tagApi, projectApi } from '@/api'
-import type { IssueStatusVO } from '@/api/types'
+import type { IssueStatusVO, QueryPanelItemVO, SavedQueryFilter, UpdateSavedQueryDTO } from '@/api/types'
 import type { TagPanelItemVO, AvailableTagVO } from '@/api/tag'
 import { useAuthStore } from '@/stores/auth'
 import {
@@ -13,7 +13,7 @@ import axios from 'axios'
 
 export interface QueryPanelOptions {
   statusCache: Ref<IssueStatusVO[]>
-  projectList: Ref<any[]>
+  projectList: Ref<Array<{ id: string; name: string; key: string; favorited?: boolean }>>
   issueTypeOptions: Ref<{ value: string; label: string; color: string }[]>
   priorityOptions: Ref<{ value: string; label: string; color: string }[]>
   activeProjectId: Ref<string | null>
@@ -31,10 +31,10 @@ export function useQueryPanel(options: QueryPanelOptions) {
   const authStore = useAuthStore()
 
   // Panel state
-  const savedQueries = ref<any[]>([])
+  const savedQueries = ref<QueryPanelItemVO[]>([])
   const activeQueryId = ref<string | null>(null)
   const activeQueryName = ref('所有工单')
-  const activeQueryObj = ref<any>(null)
+  const activeQueryObj = ref<QueryPanelItemVO | null>(null)
   const expandedGroups = reactive(new Set<string>(['saved', 'projects', 'drafts', 'tags']))
   const panelSearch = ref('')
   const panelLoadFailed = ref(false)
@@ -50,13 +50,13 @@ export function useQueryPanel(options: QueryPanelOptions) {
   const showManageProjectsModal = ref(false)
   const manageProjectSearch = ref('')
   const manageProjectsLoading = ref(false)
-  const allProjectsForManage = ref<any[]>([])
+  const allProjectsForManage = ref<Array<{ id: string; name: string; key: string; favorited?: boolean }>>([])
 
   const filteredManageProjects = computed(() => {
     const list = allProjectsForManage.value
     if (!manageProjectSearch.value) return list
     const kw = manageProjectSearch.value.toLowerCase()
-    return list.filter((p: any) => p.name.toLowerCase().includes(kw) || p.key.toLowerCase().includes(kw))
+    return list.filter((p) => p.name.toLowerCase().includes(kw) || p.key.toLowerCase().includes(kw))
   })
 
   // Panel width
@@ -108,7 +108,7 @@ export function useQueryPanel(options: QueryPanelOptions) {
   const filteredQueries = computed(() => {
     if (!panelSearch.value) return savedQueries.value
     const kw = panelSearch.value.toLowerCase()
-    return savedQueries.value.filter((q: any) => q.name.toLowerCase().includes(kw))
+    return savedQueries.value.filter((q: QueryPanelItemVO) => q.name.toLowerCase().includes(kw))
   })
 
   function toggleGroup(group: string) {
@@ -117,7 +117,7 @@ export function useQueryPanel(options: QueryPanelOptions) {
   }
 
   // Query ownership check
-  function isOwnQuery(q: any): boolean {
+  function isOwnQuery(q: QueryPanelItemVO | null): boolean {
     if (!q) return false
     const currentUserId = authStore.user?.userId || authStore.user?.id || ''
     return q.userId === String(currentUserId) && !q.shared
@@ -139,12 +139,12 @@ export function useQueryPanel(options: QueryPanelOptions) {
     queryText: ''
   })
 
-  function openCreateQueryModal(buildCurrentFilters: () => any[]) {
+  function openCreateQueryModal(buildCurrentFilters: () => SavedQueryFilter[]) {
     createQueryForm.name = ''
     createQueryForm.pinned = true
     createQueryForm.shared = false
     createQueryForm.icon = ''
-    let preFilters: any[] = []
+    let preFilters: SavedQueryFilter[] = []
     if (activeQueryObj.value && activeQueryObj.value.filters) {
       try {
         const raw = activeQueryObj.value.filters
@@ -184,7 +184,7 @@ export function useQueryPanel(options: QueryPanelOptions) {
     }
   }
 
-  async function confirmDeleteQuery(q: any) {
+  async function confirmDeleteQuery(q: QueryPanelItemVO) {
     const { confirmDelete } = useConfirmDelete()
     confirmDelete({
       itemName: `查询「${q.name}」`,
@@ -215,11 +215,11 @@ export function useQueryPanel(options: QueryPanelOptions) {
     icon: '',
     pinned: false,
     shared: false,
-    filters: [] as any[],
+    filters: [] as SavedQueryFilter[],
     queryText: ''
   })
 
-  function openEditQueryModal(q: any) {
+  function openEditQueryModal(q: QueryPanelItemVO) {
     editQueryForm.id = q.id
     editQueryForm.name = q.name || ''
     editQueryForm.icon = q.icon || ''
@@ -245,7 +245,7 @@ export function useQueryPanel(options: QueryPanelOptions) {
       const originalQueryText = filtersToQueryText(editQueryForm.filters)
       const filtersChanged = editQueryForm.queryText.trim() !== originalQueryText.trim()
 
-      const updateData: Record<string, any> = {
+      const updateData: UpdateSavedQueryDTO = {
         name: editQueryForm.name.trim(),
         icon: editQueryForm.icon || '',
         pinned: editQueryForm.pinned,
@@ -287,7 +287,7 @@ export function useQueryPanel(options: QueryPanelOptions) {
   const renameQueryLoading = ref(false)
   const renameQueryForm = reactive({ id: '', name: '' })
 
-  function openRenameQueryModal(q: any) {
+  function openRenameQueryModal(q: QueryPanelItemVO) {
     renameQueryForm.id = q.id
     renameQueryForm.name = q.name || ''
     showRenameQueryModal.value = true

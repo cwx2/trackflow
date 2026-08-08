@@ -1,5 +1,5 @@
 import request from './request'
-import type { R, PageResult, IssueVO, SavedQueryVO } from './types'
+import type { R, PageResult, IssueVO, SavedQueryVO, QueryPanelVO, QueryPanelItemVO, SavedQueryFilter, CreateSavedQueryDTO, UpdateSavedQueryDTO } from './types'
 
 /**
  * 保存查询模块 API
@@ -10,14 +10,14 @@ export const queryApi = {
     const params: Record<string, string> = {}
     if (projectId) params.projectId = projectId
     if (hideResolved) params.hideResolved = 'true'
-    return request.get<any, R<{ pinned: any[]; queries: any[] }>>('/queries/panel', {
+    return request.get<any, R<QueryPanelVO>>('/queries/panel', {
       params: Object.keys(params).length > 0 ? params : undefined
     })
   },
 
   /** 获取所有可用的共享查询（供管理面板使用） */
   getAvailableQueries(projectId?: string) {
-    return request.get<any, R<any[]>>('/queries/available', {
+    return request.get<any, R<QueryPanelItemVO[]>>('/queries/available', {
       params: projectId ? { projectId } : undefined
     })
   },
@@ -33,12 +33,12 @@ export const queryApi = {
   },
 
   /** 创建保存查询 */
-  create(data: { name: string; filters: any[]; pinned?: boolean; folder?: string; shared?: boolean; icon?: string }) {
+  create(data: CreateSavedQueryDTO) {
     return request.post<any, R<SavedQueryVO>>('/queries', data)
   },
 
   /** 更新保存查询 */
-  update(id: string, data: Record<string, any>) {
+  update(id: string, data: UpdateSavedQueryDTO) {
     return request.put<any, R<SavedQueryVO>>(`/queries/${id}`, data)
   },
 
@@ -53,7 +53,7 @@ export const queryApi = {
   },
 
   /** 即时执行查询 */
-  executeAdhoc(data: { filters: any[]; page?: number; pageSize?: number }) {
+  executeAdhoc(data: { filters: SavedQueryFilter[]; page?: number; pageSize?: number }) {
     return request.post<any, R<PageResult<IssueVO>>>('/queries/execute', data)
   },
 
