@@ -143,12 +143,16 @@ export abstract class BaseNodeModel extends HtmlNodeModel {
 
     const anchors: any[] = []
 
-    // 输入端口锚点：左侧
+    // 锚点 x 偏移：port-row padding(10px) + port-dot 半径(4px) = 14px
+    // 使线条精准连接到卡片内 port-dot 圆心，而非节点边框
+    const DOT_OFFSET = 14
+
+    // 输入端口锚点：左侧（向内偏移 14px，对准 port-dot 圆心）
     const startY = y - height / 2 + HEADER_H + PADDING_V + PORT_ROW_H / 2
     inputsForAnchors.forEach((p, i) => {
       anchors.push({
         id:          `${id}-in-${p.name}`,
-        x:           x - width / 2,
+        x:           x - width / 2 + DOT_OFFSET,
         y:           startY + i * PORT_ROW_H,
         type:        'input',
         edgeAddable: true,
@@ -157,7 +161,7 @@ export abstract class BaseNodeModel extends HtmlNodeModel {
       })
     })
 
-    // 输出端口锚点：右侧（在 visible inputs + optional toggle 之后）
+    // 输出端口锚点：右侧（向内偏移 14px，对准 port-dot 圆心）
     const hiddenOptionalCount = this._getHiddenOptionalCount(properties as any)
     const toggleHeight = (hiddenOptionalCount > 0 && !optionalExpanded) || optionalExpanded
       ? OPTIONAL_TOGGLE_H : 0
@@ -165,7 +169,7 @@ export abstract class BaseNodeModel extends HtmlNodeModel {
     outputs.forEach((p, i) => {
       anchors.push({
         id:          `${id}-out-${p.name}`,
-        x:           x + width / 2,
+        x:           x + width / 2 - DOT_OFFSET,
         y:           outStartY + i * PORT_ROW_H,
         type:        'output',
         edgeAddable: true,
