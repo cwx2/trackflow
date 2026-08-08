@@ -6,7 +6,7 @@
  */
 import { BaseNodeView } from './base/BaseNodeView'
 import { BaseNodeModel } from './base/BaseNodeModel'
-import { HtmlNodeModel } from '@logicflow/core'
+import { HtmlNode, HtmlNodeModel } from '@logicflow/core'
 import TerminalNode from './base/TerminalNode.vue'
 
 // ─── 通用工作流节点（使用 NodeCard.vue）─────────────────────────────────────
