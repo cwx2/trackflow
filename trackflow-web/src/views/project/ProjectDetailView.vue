@@ -146,6 +146,7 @@ import {
   IconEyeInvisible
 } from '@arco-design/web-vue/es/icon'
 import { projectApi } from '@/api'
+import { getProjectColor as getProjectColorFromPool } from '@/utils/uiColors'
 import { useAuthStore } from '@/stores/auth'
 import { loadProjectPermissions } from '@/composables/usePermission'
 import type { ProjectDetailVO, ProjectStatisticsVO } from '@/api/types'
@@ -194,15 +195,8 @@ const visibilityLabel = computed(() => {
   return map[project.value?.visibility || 'private'] || '私有项目'
 })
 
-const colorPool = [
-  '#e91e63', '#9c27b0', '#673ab7', '#3f51b5', '#2196f3',
-  '#00bcd4', '#009688', '#4caf50', '#ff9800', '#ff5722',
-  '#795548', '#607d8b'
-]
-
 function getProjectColor() {
-  const id = parseInt(project.value?.id || '0', 10)
-  return colorPool[id % colorPool.length]
+  return getProjectColorFromPool(project.value?.id || '0')
 }
 
 async function loadProject() {

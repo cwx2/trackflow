@@ -28,7 +28,7 @@
           <span class="issue-title">{{ issue.title }}</span>
           <IssueStatusTag
             :name="localizeStatusName(issue.statusName)"
-            :color="issue.statusColor || '#6b7280'"
+            :color="issue.statusColor || DEFAULT_STATUS_COLOR"
           />
           <span class="issue-assignee" v-if="issue.assigneeName">{{ issue.assigneeName }}</span>
         </div>
@@ -59,7 +59,7 @@
               {{ target.name }}
               <IssueStatusTag
                 :name="target.status === 'active' ? '进行中' : '计划中'"
-                :color="target.status === 'active' ? '#3b82f6' : '#6b7280'"
+                :color="getSprintStatusColor(target.status)"
                 size="small"
                 :show-dot="false"
                 variant="plain"
@@ -84,6 +84,7 @@ import { Message } from '@arco-design/web-vue'
 import { sprintApi } from '@/api'
 import { localizeStatusName } from '@/utils/fieldLabels'
 import { IssueStatusTag } from '@/components/base'
+import { DEFAULT_STATUS_COLOR, getSprintStatusColor } from '@/utils/uiColors'
 import type { SprintVO, CompletionPreviewVO } from '@/api/types'
 
 const props = defineProps<{

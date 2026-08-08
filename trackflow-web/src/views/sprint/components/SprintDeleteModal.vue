@@ -61,7 +61,7 @@
               {{ target.name }}
               <IssueStatusTag
                 :name="target.status === 'active' ? '进行中' : '计划中'"
-                :color="target.status === 'active' ? '#3b82f6' : '#6b7280'"
+                :color="getSprintStatusColor(target.status)"
                 size="small"
                 :show-dot="false"
                 variant="plain"
@@ -85,6 +85,7 @@ import { ref, computed, watch } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { sprintApi } from '@/api'
 import { IssueStatusTag } from '@/components/base'
+import { getSprintStatusColor } from '@/utils/uiColors'
 import type { SprintVO, DeletionPreviewVO } from '@/api/types'
 
 const props = defineProps<{

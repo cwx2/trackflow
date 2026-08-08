@@ -582,6 +582,7 @@ import {
   IconStarFill
 } from '@arco-design/web-vue/es/icon'
 import { projectApi, userApi, workflowApi } from '@/api'
+import { getProjectColor as getProjectColorFromPool } from '@/utils/uiColors'
 import type { ProjectActivityVO, ProjectCopySummaryVO } from '@/api/types'
 import { useAuthStore } from '@/stores/auth'
 import { loadProjectPermissions } from '@/composables/usePermission'
@@ -698,15 +699,8 @@ const activityPage = ref(1)
 const activityHasMore = ref(false)
 
 // 项目颜色池
-const colorPool = [
-  '#e91e63', '#9c27b0', '#673ab7', '#3f51b5', '#2196f3',
-  '#00bcd4', '#009688', '#4caf50', '#ff9800', '#ff5722',
-  '#795548', '#607d8b'
-]
-
 function getProjectColor(project: any) {
-  const idx = (project.id || 0) % colorPool.length
-  return colorPool[idx]
+  return getProjectColorFromPool(project.id || '0')
 }
 
 function getProjectAbbr(project: any) {

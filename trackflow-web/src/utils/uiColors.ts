@@ -86,6 +86,27 @@ export const DEFAULT_NODE_COLOR = '#6366f1'
 /** 字段值缺省颜色 */
 export const DEFAULT_FIELD_VALUE_COLOR = '#6e7681'
 
+// ─── Sprint 状态指示色 ──────────────────────────────────────────
+
+/** Sprint 活跃状态指示色（蓝色） */
+export const SPRINT_ACTIVE_COLOR = '#3b82f6'
+
+/** Sprint 计划/非活跃状态指示色（灰色） */
+export const SPRINT_PLANNED_COLOR = '#6b7280'
+
+/** 获取 Sprint 状态指示色 */
+export function getSprintStatusColor(status: string): string {
+  return status === 'active' ? SPRINT_ACTIVE_COLOR : SPRINT_PLANNED_COLOR
+}
+
+// ─── 语义色常量（用于 JS 逻辑中无法直接使用 CSS var 的场景） ─────────
+
+/** 警告色常量（用于 badge 等 JS 逻辑） */
+export const WARNING_COLOR = '#d29922'
+
+/** Issue 类型默认色（indigo，当类型未定义时回退） */
+export const DEFAULT_ISSUE_TYPE_COLOR = '#6366f1'
+
 // ─── 语义色 JS 常量（用于 JS 逻辑中无法使用 CSS var 的场景） ─────────
 
 /**
