@@ -175,6 +175,7 @@ public class ApiKeyService {
      * @param userId 用户 ID
      * @return 被删除的 Key 数量
      */
+    @AuditLog(action = "revoke_all_api_keys", targetType = "api_key", targetId = "#userId")
     @Transactional(rollbackFor = Exception.class)
     public int revokeAllByUser(Long userId) {
         List<ApiKey> keys = listByUser(userId);

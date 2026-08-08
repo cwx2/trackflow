@@ -9,6 +9,8 @@ import com.trackflow.common.constant.IssueStatusCategory;
 import com.trackflow.common.context.NotificationContext;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
+import com.trackflow.common.annotation.AuditLog;
+import com.trackflow.common.audit.AuditContext;
 import com.trackflow.common.model.PageResult;
 import com.trackflow.common.service.MinioService;
 import com.trackflow.issue.service.StatusCacheHelper;
@@ -109,7 +111,6 @@ public class IssueService {
     private final IssueCommentService commentService;
     private final IssueAttachmentService attachmentService;
     private final IssueVOAssembler issueVOAssembler;
-    private final com.trackflow.system.service.SystemAuditService systemAuditService;
 
     /**
      * 创建 Issue
@@ -1415,6 +1416,7 @@ public class IssueService {
     /**
      * 软删除 Issue
      */
+    @AuditLog(action = "delete_issue", targetType = "issue", targetId = "#id")
     @Transactional(rollbackFor = Exception.class)
     public void delete(Long id) {
         Issue issue = getById(id);
@@ -1437,9 +1439,9 @@ public class IssueService {
         issueMapper.deleteById(id);
 
         // 审计日志
-        systemAuditService.log("delete_issue", "issue", id,
-                Map.of("issueKey", issue.getIssueKey(), "title", issue.getTitle(),
-                        "projectId", issue.getProjectId()));
+        AuditContext.put("issueKey", issue.getIssueKey());
+        AuditContext.put("title", issue.getTitle());
+        AuditContext.put("projectId", issue.getProjectId());
 
         // 实时推送删除事件 — 通知正在查看列表/详情的用户
         eventPublisher.publishEvent(new IssueNotificationEvent.Deleted(issue, currentUserId));
@@ -2400,6 +2402,7 @@ public class IssueService {
     /**
      * 永久删除 Issue（物理删除），同时清理关联数据
      */
+    @AuditLog(action = "permanent_delete_issue", targetType = "issue", targetId = "#id")
     @Transactional(rollbackFor = Exception.class)
     public void permanentDelete(Long id) {
         DeletedIssueRow row = issueMapper.selectByIdIgnoreDeleted(id);
@@ -2434,8 +2437,7 @@ public class IssueService {
         issueMapper.permanentDeleteById(id);
 
         // 审计日志
-        systemAuditService.log("permanent_delete_issue", "issue", id,
-                Map.of("issueKey", row.getIssueKey() != null ? row.getIssueKey() : ""));
+        AuditContext.put("issueKey", row.getIssueKey() != null ? row.getIssueKey() : "");
     }
 
     /**
