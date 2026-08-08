@@ -5,6 +5,7 @@ import com.trackflow.board.dto.UpdateBoardGeneralConfigDTO;
 import com.trackflow.board.entity.BoardGeneralConfig;
 import com.trackflow.board.mapper.BoardGeneralConfigMapper;
 import com.trackflow.board.vo.BoardGeneralConfigVO;
+import com.trackflow.common.constant.ProjectRoleCodes;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.project.entity.Project;
@@ -32,19 +33,13 @@ import java.util.stream.Collectors;
 public class BoardGeneralConfigService {
 
     /** 系统支持的角色代码集合 */
-    private static final Set<String> VALID_ROLE_CODES = Set.of(
-            "project_admin", "tech_lead", "developer", "product_manager", "tester", "observer"
-    );
+    private static final Set<String> VALID_ROLE_CODES = ProjectRoleCodes.ALL_PROJECT_ROLES_SET;
 
     /** 默认可查看角色：所有项目角色 */
-    private static final List<String> DEFAULT_CAN_VIEW_ROLES = List.of(
-            "project_admin", "tech_lead", "developer", "product_manager", "tester", "observer"
-    );
+    private static final List<String> DEFAULT_CAN_VIEW_ROLES = ProjectRoleCodes.ALL_PROJECT_ROLES;
 
     /** 默认可编辑角色：项目管理员 + 技术负责人 */
-    private static final List<String> DEFAULT_CAN_EDIT_ROLES = List.of(
-            "project_admin", "tech_lead"
-    );
+    private static final List<String> DEFAULT_CAN_EDIT_ROLES = ProjectRoleCodes.DEFAULT_EDIT_ROLES;
 
     /** 允许在 filter_query 中使用的字段名白名单 */
     private static final Set<String> ALLOWED_FILTER_FIELDS = Set.of(

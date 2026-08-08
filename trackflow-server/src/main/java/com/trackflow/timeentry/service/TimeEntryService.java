@@ -2,6 +2,7 @@ package com.trackflow.timeentry.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.trackflow.auth.service.PermissionService;
+import com.trackflow.common.constant.UserStatus;
 import com.trackflow.common.event.IssueNotificationEvent;
 import com.trackflow.common.event.ReportCacheInvalidationEvent;
 import com.trackflow.common.event.WorkflowRuleEvent;
@@ -703,7 +704,7 @@ public class TimeEntryService {
 
         // 管理员查看所有活跃用户
         QueryWrapper<SysUser> wrapper = new QueryWrapper<>();
-        wrapper.eq("status", "active");
+        wrapper.eq("status", UserStatus.ACTIVE);
         if (keyword != null && !keyword.isBlank()) {
             String kw = "%" + keyword.trim() + "%";
             wrapper.and(w -> w.like("display_name", kw).or().like("username", kw));

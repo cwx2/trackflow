@@ -7,6 +7,7 @@ import com.trackflow.board.entity.BoardGeneralConfig;
 import com.trackflow.board.mapper.BoardFavoriteMapper;
 import com.trackflow.board.mapper.BoardGeneralConfigMapper;
 import com.trackflow.board.vo.BoardListItemVO;
+import com.trackflow.common.constant.ProjectRoleCodes;
 import com.trackflow.common.util.SecurityUtils;
 import com.trackflow.project.entity.Project;
 import com.trackflow.project.mapper.ProjectMapper;
@@ -43,9 +44,7 @@ public class BoardFavoriteService {
     private final ObjectMapper objectMapper;
 
     /** 默认可查看角色：所有项目角色 */
-    private static final List<String> DEFAULT_CAN_VIEW_ROLES = List.of(
-            "project_admin", "tech_lead", "developer", "product_manager", "tester", "observer"
-    );
+    private static final List<String> DEFAULT_CAN_VIEW_ROLES = ProjectRoleCodes.ALL_PROJECT_ROLES;
 
     /**
      * 获取当前用户可访问的所有看板列表。
@@ -195,7 +194,7 @@ public class BoardFavoriteService {
         }
 
         // project_admin 始终放行
-        if (userRoleCodes.contains("project_admin")) {
+        if (userRoleCodes.contains(ProjectRoleCodes.PROJECT_ADMIN)) {
             return true;
         }
 

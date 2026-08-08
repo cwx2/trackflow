@@ -1,5 +1,6 @@
 package com.trackflow.workflow.strategy;
 
+import com.trackflow.common.constant.UserStatus;
 import com.trackflow.issue.entity.Issue;
 import com.trackflow.project.entity.Project;
 import com.trackflow.project.mapper.ProjectMapper;
@@ -44,7 +45,7 @@ public class ProjectLeadStrategy implements AssignmentStrategy {
 
         // 校验 lead 用户是否仍为活跃状态
         SysUser leadUser = userMapper.selectById(leadId);
-        if (leadUser == null || !"active".equals(leadUser.getStatus())) {
+        if (leadUser == null || !UserStatus.ACTIVE.equals(leadUser.getStatus())) {
             log.warn("[ProjectLeadStrategy] 项目 {} 的 lead(userId={}) 状态非 active，跳过分配",
                     projectId, leadId);
             return null;

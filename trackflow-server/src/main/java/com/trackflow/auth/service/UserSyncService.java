@@ -1,6 +1,7 @@
 package com.trackflow.auth.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.trackflow.common.constant.UserStatus;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.system.entity.SysUser;
@@ -109,7 +110,7 @@ public class UserSyncService {
             user.setUsername(username != null ? username : keycloakId);
             user.setDisplayName(displayName != null ? displayName : username);
             user.setEmail(email);
-            user.setStatus("active");
+            user.setStatus(UserStatus.ACTIVE);
             user.setLastLoginAt(LocalDateTime.now());
             userMapper.insert(user);
 

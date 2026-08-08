@@ -215,6 +215,7 @@ import { IconFilter, IconSearch, IconPlus } from '@arco-design/web-vue/es/icon'
 import { projectApi, sprintApi, tagApi } from '@/api'
 import type { IssueStatusVO, IssueTagVO, ProjectVO, SprintVO } from '@/api/types'
 import { localizeStatusName, issueTypeLabelMap, priorityLabelMap } from '@/utils/fieldLabels'
+import { PRIORITY_COLORS } from '@/utils/issueColors'
 import { loadIssueTypeOptions } from '../composables/useIssueTypeOptions'
 import QueryInput from './QueryInput.vue'
 
@@ -645,11 +646,11 @@ async function loadValueOptions(fieldKey: string) {
 
       case 'priority':
         valueOptions.value = [
-          { id: '阻塞', label: '阻塞', color: '#b91c1c' },
-          { id: '紧急', label: '紧急', color: '#ef4444' },
-          { id: '高', label: '高', color: '#f59e0b' },
-          { id: '普通', label: '普通', color: '#6366f1' },
-          { id: '低', label: '低', color: '#64748b' },
+          { id: '阻塞', label: '阻塞', color: PRIORITY_COLORS['阻塞'] },
+          { id: '紧急', label: '紧急', color: PRIORITY_COLORS['紧急'] },
+          { id: '高', label: '高', color: PRIORITY_COLORS['高'] },
+          { id: '普通', label: '普通', color: PRIORITY_COLORS['普通'] },
+          { id: '低', label: '低', color: PRIORITY_COLORS['低'] },
         ]
         break
 

@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.trackflow.auth.service.PermissionService;
 import com.trackflow.common.constant.IssueStatusCategory;
 import com.trackflow.common.constant.SystemRoleIds;
+import com.trackflow.common.constant.UserStatus;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.util.SecurityUtils;
@@ -135,7 +136,7 @@ public class ProjectService {
         Long leadId = dto.getLeadId();
         if (leadId != null) {
             SysUser leadUser = userMapper.selectById(leadId);
-            if (leadUser == null || !"active".equals(leadUser.getStatus())) {
+            if (leadUser == null || !UserStatus.ACTIVE.equals(leadUser.getStatus())) {
                 throw new BusinessException(ErrorCode.BAD_REQUEST, "指定的项目负责人用户不存在或已禁用");
             }
         } else {
@@ -511,7 +512,7 @@ public class ProjectService {
                 // 计算权限影响范围（非成员用户数）
                 long totalUsers = userMapper.selectCount(
                         new LambdaQueryWrapper<SysUser>()
-                                .eq(SysUser::getStatus, "active"));
+                                .eq(SysUser::getStatus, UserStatus.ACTIVE));
                 long memberCount = memberMapper.selectCount(
                         new LambdaQueryWrapper<ProjectMember>()
                                 .eq(ProjectMember::getProjectId, id));
@@ -599,7 +600,7 @@ public class ProjectService {
 
         // 1. 校验新负责人用户存在且状态为 active
         SysUser newLead = userMapper.selectById(newLeadId);
-        if (newLead == null || !"active".equals(newLead.getStatus())) {
+        if (newLead == null || !UserStatus.ACTIVE.equals(newLead.getStatus())) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "新负责人用户不存在或已禁用");
         }
 
@@ -1227,7 +1228,7 @@ public class ProjectService {
 
         // 2. 校验用户存在且状态为 active
         SysUser user = userMapper.selectById(dto.getUserId());
-        if (user == null || !"active".equals(user.getStatus())) {
+        if (user == null || !UserStatus.ACTIVE.equals(user.getStatus())) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "用户不存在或已禁用");
         }
 

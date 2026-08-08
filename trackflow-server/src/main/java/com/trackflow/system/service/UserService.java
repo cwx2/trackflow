@@ -6,6 +6,8 @@ import com.trackflow.auth.service.KeycloakAdminService;
 import com.trackflow.auth.service.PermissionService;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
+import com.trackflow.common.constant.UserStatus;
+import com.trackflow.common.constant.RoleTypes;
 import com.trackflow.common.model.PageResult;
 import com.trackflow.common.util.SecurityUtils;
 import com.trackflow.issue.entity.Issue;
@@ -134,7 +136,7 @@ public class UserService {
         user.setUsername(dto.getUsername());
         user.setDisplayName(dto.getDisplayName());
         user.setEmail(dto.getEmail());
-        user.setStatus("active");
+        user.setStatus(UserStatus.ACTIVE);
         userMapper.insert(user);
 
         // 5. 审计日志
@@ -407,7 +409,7 @@ public class UserService {
         com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<SysUser> updateWrapper =
                 new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<>();
         updateWrapper.eq(SysUser::getId, id)
-                .set(SysUser::getStatus, "active")
+                .set(SysUser::getStatus, UserStatus.ACTIVE)
                 .set(SysUser::getBanStatus, null)
                 .set(SysUser::getBanReason, null)
                 .set(SysUser::getBannedAt, null)
@@ -436,7 +438,7 @@ public class UserService {
         if (role == null) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "角色不存在: " + roleId);
         }
-        if (!"global".equals(role.getRoleType())) {
+        if (!RoleTypes.GLOBAL.equals(role.getRoleType())) {
             throw new BusinessException(ErrorCode.BAD_REQUEST,
                     "只有全局角色可以通过此路径分配，「" + role.getName() + "」是项目角色");
         }
@@ -525,7 +527,7 @@ public class UserService {
             if (role == null) {
                 throw new BusinessException(ErrorCode.BAD_REQUEST, "角色不存在: " + roleId);
             }
-            if (!"global".equals(role.getRoleType())) {
+            if (!RoleTypes.GLOBAL.equals(role.getRoleType())) {
                 throw new BusinessException(ErrorCode.BAD_REQUEST,
                         "只有全局角色可以通过此路径分配，「" + role.getName() + "」是项目角色");
             }

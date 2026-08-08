@@ -3,6 +3,8 @@ package com.trackflow.workflow.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.trackflow.common.constant.RoleTypes;
+import com.trackflow.common.constant.UserStatus;
 import com.trackflow.project.entity.ProjectMember;
 import com.trackflow.project.mapper.ProjectMemberMapper;
 import com.trackflow.system.entity.SysRole;
@@ -237,7 +239,7 @@ public class ActionConfigValidator {
             errors.add(fieldName + " 对应的用户不存在（ID: " + userId + "）");
             return;
         }
-        if (!"active".equals(user.getStatus())) {
+        if (!UserStatus.ACTIVE.equals(user.getStatus())) {
             errors.add(fieldName + " 对应的用户已禁用（用户: " + user.getUsername() + "）");
             return;
         }
@@ -279,7 +281,7 @@ public class ActionConfigValidator {
             errors.add(fieldName + " 对应的角色不存在（ID: " + roleId + "）");
             return;
         }
-        if (!"project".equals(role.getRoleType())) {
+        if (!RoleTypes.PROJECT.equals(role.getRoleType())) {
             errors.add(fieldName + " 必须引用项目级角色（role_type='project'），当前角色 '"
                     + role.getName() + "' 为 " + role.getRoleType() + " 类型");
         }

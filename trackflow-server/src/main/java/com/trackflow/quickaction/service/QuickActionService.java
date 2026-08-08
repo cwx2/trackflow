@@ -1,6 +1,8 @@
 package com.trackflow.quickaction.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.trackflow.common.constant.ProjectRoleCodes;
+import com.trackflow.common.constant.RoleTypes;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.util.SecurityUtils;
@@ -358,7 +360,7 @@ public class QuickActionService {
             Map<String, Object> rule = objectMapper.readValue(tpl.getRecipientsRule(), new TypeReference<Map<String, Object>>() {});
             String type = rule.containsKey("type") ? String.valueOf(rule.get("type")) : "";
             if ("project_coordinators".equals(type)) {
-                var rw = new LambdaQueryWrapper<SysRole>(); rw.eq(SysRole::getCode, "project_admin").eq(SysRole::getRoleType, "project");
+                var rw = new LambdaQueryWrapper<SysRole>(); rw.eq(SysRole::getCode, ProjectRoleCodes.PROJECT_ADMIN).eq(SysRole::getRoleType, RoleTypes.PROJECT);
                 SysRole ar = sysRoleMapper.selectOne(rw);
                 if (ar != null) {
                     var mw = new LambdaQueryWrapper<ProjectMember>(); mw.eq(ProjectMember::getProjectId, projectId).eq(ProjectMember::getRoleId, ar.getId());

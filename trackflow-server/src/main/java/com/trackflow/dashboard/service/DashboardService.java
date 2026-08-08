@@ -3,6 +3,7 @@ package com.trackflow.dashboard.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.trackflow.common.constant.IssueStatusCategory;
+import com.trackflow.common.constant.ProjectRoleCodes;
 import com.trackflow.common.constant.SystemRoleIds;
 import com.trackflow.dashboard.vo.DashboardActivityVO;
 import com.trackflow.dashboard.vo.DashboardSummaryVO;
@@ -21,6 +22,7 @@ import com.trackflow.project.mapper.ProjectMapper;
 import com.trackflow.project.mapper.ProjectMemberMapper;
 import com.trackflow.project.entity.Project;
 import com.trackflow.project.entity.ProjectMember;
+import com.trackflow.project.entity.ProjectStatus;
 import com.trackflow.issue.util.IssuePriorityHelper;
 import com.trackflow.report.service.ReportStatisticsService;
 import com.trackflow.report.vo.OverviewVO;
@@ -157,8 +159,8 @@ public class DashboardService {
         }
 
         // 活跃项目数
-        vo.setActiveProjects(projectMapper.selectCount(new QueryWrapper<Project>()
-                .eq("status", "Active")));
+        vo.setActiveProjects(projectMapper.selectCount(new LambdaQueryWrapper<Project>()
+                .eq(Project::getStatus, ProjectStatus.ACTIVE)));
 
         // ─── 周对比数据（基于上周同一天的快照逻辑近似） ─────
         LocalDateTime lastWeekStart = weekStart.minusWeeks(1);
@@ -358,13 +360,13 @@ public class DashboardService {
 
         // 角色优先级映射（role_id → code based on sys_role table）
         // 4=tester, 3=developer, 7=tech_lead, 6=product_manager, 2=project_admin, 5=observer, 1=system_admin
-        if (roleIds.contains(SystemRoleIds.TESTER)) return "tester";
-        if (roleIds.contains(SystemRoleIds.DEVELOPER)) return "developer";
-        if (roleIds.contains(SystemRoleIds.TECH_LEAD)) return "tech_lead";
-        if (roleIds.contains(SystemRoleIds.PRODUCT_MANAGER)) return "product_manager";
-        if (roleIds.contains(SystemRoleIds.PROJECT_ADMIN)) return "project_admin";
-        if (roleIds.contains(SystemRoleIds.SYSTEM_ADMIN)) return "system_admin";
-        if (roleIds.contains(SystemRoleIds.OBSERVER)) return "observer";
+        if (roleIds.contains(SystemRoleIds.TESTER)) return ProjectRoleCodes.TESTER;
+        if (roleIds.contains(SystemRoleIds.DEVELOPER)) return ProjectRoleCodes.DEVELOPER;
+        if (roleIds.contains(SystemRoleIds.TECH_LEAD)) return ProjectRoleCodes.TECH_LEAD;
+        if (roleIds.contains(SystemRoleIds.PRODUCT_MANAGER)) return ProjectRoleCodes.PRODUCT_MANAGER;
+        if (roleIds.contains(SystemRoleIds.PROJECT_ADMIN)) return ProjectRoleCodes.PROJECT_ADMIN;
+        if (roleIds.contains(SystemRoleIds.SYSTEM_ADMIN)) return ProjectRoleCodes.SYSTEM_ADMIN;
+        if (roleIds.contains(SystemRoleIds.OBSERVER)) return ProjectRoleCodes.OBSERVER;
         return null;
     }
 

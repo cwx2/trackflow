@@ -1,6 +1,7 @@
 package com.trackflow.system.controller;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.trackflow.common.constant.RoleTypes;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.model.PageResult;
@@ -113,7 +114,7 @@ public class UserController {
 
         // 检查角色类型必须是 global
         SysRole role = roleService.getById(roleId);
-        if (!"global".equals(role.getRoleType())) {
+        if (!RoleTypes.GLOBAL.equals(role.getRoleType())) {
             throw new BusinessException(ErrorCode.BAD_REQUEST,
                     "此处只能分配全局角色，项目角色请通过项目成员管理进行分配");
         }

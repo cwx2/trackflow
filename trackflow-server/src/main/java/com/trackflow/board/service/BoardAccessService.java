@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.trackflow.auth.service.PermissionService;
 import com.trackflow.board.entity.BoardGeneralConfig;
 import com.trackflow.board.mapper.BoardGeneralConfigMapper;
+import com.trackflow.common.constant.ProjectRoleCodes;
 import com.trackflow.common.exception.BusinessException;
 import static com.trackflow.common.exception.ErrorCode.ACCESS_DENIED;
 import com.trackflow.common.util.SecurityUtils;
@@ -44,14 +45,10 @@ public class BoardAccessService {
 
 
     /** 默认可查看角色：所有项目角色 */
-    private static final List<String> DEFAULT_CAN_VIEW_ROLES = List.of(
-            "project_admin", "tech_lead", "developer", "product_manager", "tester", "observer"
-    );
+    private static final List<String> DEFAULT_CAN_VIEW_ROLES = ProjectRoleCodes.ALL_PROJECT_ROLES;
 
     /** 默认可编辑角色：项目管理员 + 技术负责人 */
-    private static final List<String> DEFAULT_CAN_EDIT_ROLES = List.of(
-            "project_admin", "tech_lead"
-    );
+    private static final List<String> DEFAULT_CAN_EDIT_ROLES = ProjectRoleCodes.DEFAULT_EDIT_ROLES;
 
     private final BoardGeneralConfigMapper boardGeneralConfigMapper;
     private final ProjectMemberMapper projectMemberMapper;
@@ -92,7 +89,7 @@ public class BoardAccessService {
         if (userRoleCodes.isEmpty()) return false;
 
         // project_admin 始终放行
-        if (userRoleCodes.contains("project_admin")) return true;
+        if (userRoleCodes.contains(ProjectRoleCodes.PROJECT_ADMIN)) return true;
 
         // 获取看板配置的 canViewRoles
         List<String> canViewRoles = getCanViewRoles(projectId);
@@ -116,7 +113,7 @@ public class BoardAccessService {
         if (userRoleCodes.isEmpty()) return false;
 
         // project_admin 始终放行
-        if (userRoleCodes.contains("project_admin")) return true;
+        if (userRoleCodes.contains(ProjectRoleCodes.PROJECT_ADMIN)) return true;
 
         // 获取看板配置的 canEditRoles
         List<String> canEditRoles = getCanEditRoles(projectId);
@@ -153,7 +150,7 @@ public class BoardAccessService {
         }
 
         // project_admin 始终放行
-        if (userRoleCodes.contains("project_admin")) {
+        if (userRoleCodes.contains(ProjectRoleCodes.PROJECT_ADMIN)) {
             return new BoardPermissions(true, true);
         }
 

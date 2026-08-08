@@ -357,6 +357,7 @@ import { IssuePriorityBadge, UserAvatar } from '@/components/base'
 import type { IssueVO, IssueTagVO, ProjectMemberVO, SprintVO, BatchAvailableStatusVO } from '@/api/types'
 import { localizeStatusName, linkTypeLabelMap } from '@/utils/fieldLabels'
 import { loadPriorityOptions } from '../composables/usePriorityOptions'
+import { PRIORITY_COLORS, DEFAULT_BADGE_COLOR } from '@/utils/issueColors'
 
 const props = defineProps<{
   selectedCount: number
@@ -648,18 +649,18 @@ onMounted(async () => {
 // ========== 优先级下拉 ==========
 const showPriorityDropdown = ref(false)
 const priorityOptions = ref([
-  { value: '阻塞', label: '阻塞', color: '#b91c1c' },
-  { value: '紧急', label: '紧急', color: '#ef4444' },
-  { value: '高', label: '高', color: '#f59e0b' },
-  { value: '普通', label: '普通', color: '#6366f1' },
-  { value: '低', label: '低', color: '#64748b' },
+  { value: '阻塞', label: '阻塞', color: PRIORITY_COLORS['阻塞'] },
+  { value: '紧急', label: '紧急', color: PRIORITY_COLORS['紧急'] },
+  { value: '高', label: '高', color: PRIORITY_COLORS['高'] },
+  { value: '普通', label: '普通', color: PRIORITY_COLORS['普通'] },
+  { value: '低', label: '低', color: PRIORITY_COLORS['低'] },
 ])
 
 // Load dynamic priority options when project changes
 watch(() => props.activeProjectId, async (projectId) => {
   if (projectId) {
     const opts = await loadPriorityOptions(projectId)
-    priorityOptions.value = opts.map(o => ({ value: o.value, label: o.label, color: o.color || '#6366f1' }))
+    priorityOptions.value = opts.map(o => ({ value: o.value, label: o.label, color: o.color || DEFAULT_BADGE_COLOR }))
   }
 }, { immediate: true })
 

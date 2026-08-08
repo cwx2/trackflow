@@ -2,6 +2,8 @@ package com.trackflow.system.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.trackflow.auth.service.PermissionService;
+import com.trackflow.common.constant.RoleTypes;
+import com.trackflow.common.constant.UserStatus;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.util.SecurityUtils;
@@ -62,7 +64,7 @@ public class GlobalMemberService {
 
         // 1. 校验用户存在
         SysUser user = userMapper.selectById(userId);
-        if (user == null || !"active".equals(user.getStatus())) {
+        if (user == null || !UserStatus.ACTIVE.equals(user.getStatus())) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "用户不存在或已禁用");
         }
 
@@ -71,7 +73,7 @@ public class GlobalMemberService {
         if (role == null) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "角色不存在");
         }
-        if (!"project".equals(role.getRoleType())) {
+        if (!RoleTypes.PROJECT.equals(role.getRoleType())) {
             throw new BusinessException(ErrorCode.BAD_REQUEST,
                     "只有项目角色可以全局分配，「" + role.getName() + "」是全局角色（请使用全局角色分配功能）");
         }

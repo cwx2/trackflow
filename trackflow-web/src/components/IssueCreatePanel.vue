@@ -219,7 +219,7 @@
                 </div>
               </template>
               <a-option v-for="p in projects" :key="p.id" :value="p.id">
-                <span v-if="p.favorited" style="color: #d29922; margin-right: 4px; font-size: 10px">★</span>{{ p.key }} - {{ p.name }}
+                <span v-if="p.favorited" style="color: var(--tf-warning); margin-right: 4px; font-size: 10px">★</span>{{ p.key }} - {{ p.name }}
               </a-option>
             </a-select>
           </div>
@@ -241,7 +241,7 @@
             <span class="prop-label">状态</span>
             <a-select v-model="form.statusId" size="small" allow-clear placeholder="默认初始状态">
               <a-option v-for="s in statuses" :key="s.id" :value="s.id">
-                <span class="status-dot" :style="{ backgroundColor: s.color || '#6b7280' }"></span>{{ s.displayName || localizeStatusName(s.name) }}
+                <span class="status-dot" :style="{ backgroundColor: s.color || DEFAULT_STATUS_COLOR }"></span>{{ s.displayName || localizeStatusName(s.name) }}
               </a-option>
             </a-select>
           </div>
@@ -269,7 +269,7 @@
               :disabled="!form.projectId"
             >
               <a-option v-for="tag in projectTags" :key="tag.id" :value="tag.id">
-                <span class="tag-color-dot" :style="{ backgroundColor: tag.color || '#808080' }"></span>{{ tag.name }}
+                <span class="tag-color-dot" :style="{ backgroundColor: tag.color || DEFAULT_TAG_COLOR }"></span>{{ tag.name }}
               </a-option>
             </a-select>
           </div>
@@ -708,6 +708,7 @@ import { Message, Modal } from '@arco-design/web-vue'
 import { useConfirmDelete } from '@/composables/useConfirmDelete'
 import { IconDown, IconAttachment, IconClose, IconPlus, IconUp, IconLink, IconSearch, IconCheck, IconFullscreen, IconFile } from '@arco-design/web-vue/es/icon'
 import { projectApi, issueApi, sprintApi, customFieldApi, issueTemplateApi, tagApi } from '@/api'
+import { PRIORITY_COLORS, ISSUE_TYPE_COLORS, DEFAULT_BADGE_COLOR, DEFAULT_TAG_COLOR, DEFAULT_STATUS_COLOR } from '@/utils/issueColors'
 import { IssuePriorityBadge } from '@/components/base'
 import { useProjectList } from '@/composables/useProjectList'
 import { usePermission } from '@/composables/usePermission'
@@ -998,20 +999,20 @@ const projectTags = ref<any[]>([])
 
 // 优先级选项（从自定义字段系统动态加载）
 const prioritySelectOptions = ref([
-  { value: '阻塞', label: '阻塞', color: '#b91c1c' },
-  { value: '紧急', label: '紧急', color: '#ef4444' },
-  { value: '高', label: '高', color: '#f59e0b' },
-  { value: '普通', label: '普通', color: '#6366f1' },
-  { value: '低', label: '低', color: '#64748b' },
+  { value: '阻塞', label: '阻塞', color: PRIORITY_COLORS['阻塞'] },
+  { value: '紧急', label: '紧急', color: PRIORITY_COLORS['紧急'] },
+  { value: '高', label: '高', color: PRIORITY_COLORS['高'] },
+  { value: '普通', label: '普通', color: PRIORITY_COLORS['普通'] },
+  { value: '低', label: '低', color: PRIORITY_COLORS['低'] },
 ])
 
 // 工单类型选项（从自定义字段系统动态加载）
 const issueTypeSelectOptions = ref([
-  { value: '缺陷', label: '缺陷', color: '#ef4444' },
-  { value: '任务', label: '任务', color: '#6366f1' },
-  { value: '需求', label: '需求', color: '#22c55e' },
-  { value: '史诗', label: '史诗', color: '#a855f7' },
-  { value: '故事', label: '故事', color: '#3b82f6' },
+  { value: '缺陷', label: '缺陷', color: ISSUE_TYPE_COLORS['Bug'] },
+  { value: '任务', label: '任务', color: ISSUE_TYPE_COLORS['Task'] },
+  { value: '需求', label: '需求', color: ISSUE_TYPE_COLORS['Feature'] },
+  { value: '史诗', label: '史诗', color: ISSUE_TYPE_COLORS['Epic'] },
+  { value: '故事', label: '故事', color: ISSUE_TYPE_COLORS['Story'] },
 ])
 
 // 工单模板
@@ -1518,11 +1519,11 @@ async function onProjectChange(val: any) {
   try { const res = await issueTemplateApi.list(pid); templates.value = res.data || [] } catch { templates.value = [] }
   // 加载优先级选项（从自定义字段系统）
   loadPriorityOptions(pid).then(opts => {
-    prioritySelectOptions.value = opts.map(o => ({ value: o.value, label: o.label, color: o.color || '#6366f1' }))
+    prioritySelectOptions.value = opts.map(o => ({ value: o.value, label: o.label, color: o.color || DEFAULT_BADGE_COLOR }))
   })
   // 加载工单类型选项（从自定义字段系统）
   loadIssueTypeOptions(pid).then(opts => {
-    issueTypeSelectOptions.value = opts.map(o => ({ value: o.value, label: o.label, color: o.color || '#6366f1' }))
+    issueTypeSelectOptions.value = opts.map(o => ({ value: o.value, label: o.label, color: o.color || DEFAULT_BADGE_COLOR }))
   })
   selectedTemplateId.value = null
   // Apply sprintId prop after sprints are loaded (ensures select shows correct label)
@@ -2037,7 +2038,7 @@ onMounted(() => {
   max-height: 360px;
   background: var(--color-bg-popup, var(--color-bg-2));
   border-radius: 8px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  box-shadow: var(--tf-shadow-xl);
   overflow: hidden;
   border: 1px solid var(--color-border-2, var(--tf-border-light));
 }
@@ -2085,16 +2086,16 @@ onMounted(() => {
 .title-input { font-size: 18px; font-weight: 500; }
 .title-input :deep(.arco-input) { font-size: 18px; font-weight: 500; }
 .title-input.title-error :deep(.arco-input) { 
-  color: #f85149;
+  color: var(--tf-danger);
 }
 .title-input.title-error :deep(.arco-input)::placeholder { 
-  color: #f85149;
+  color: var(--tf-danger);
   opacity: 0.7;
 }
 .title-error-msg {
   display: block;
   font-size: 11px;
-  color: #f85149;
+  color: var(--tf-danger);
   margin-top: 2px;
   line-height: 1.3;
   padding-left: 2px;
@@ -2236,10 +2237,10 @@ onMounted(() => {
 .prop-label { display: block; font-size: 12px; color: var(--color-text-3); margin-bottom: 4px; }
 
 .priority-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
-.priority-dot.critical { background: #ef4444; }
-.priority-dot.high { background: #f59e0b; }
-.priority-dot.normal { background: #6366f1; }
-.priority-dot.low { background: #64748b; }
+.priority-dot.critical { background: var(--tf-danger); }
+.priority-dot.high { background: var(--tf-warning); }
+.priority-dot.normal { background: var(--tf-purple); }
+.priority-dot.low { background: var(--tf-text-tertiary); }
 
 .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; flex-shrink: 0; }
 
@@ -2278,7 +2279,7 @@ onMounted(() => {
 }
 
 .required-mark { 
-  color: #f85149; 
+  color: var(--tf-danger); 
   margin-left: 2px; 
   font-weight: 600; 
   font-size: 14px;
@@ -2308,8 +2309,8 @@ onMounted(() => {
 .tag-color-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; flex-shrink: 0; vertical-align: middle; }
 .field-error :deep(.arco-input-wrapper),
 .field-error :deep(.arco-select-view),
-.field-error :deep(.arco-picker) { border-color: #f85149 !important; }
-.field-error-msg { display: block; font-size: 11px; color: #f85149; margin-top: 2px; line-height: 1.3; }
+.field-error :deep(.arco-picker) { border-color: var(--tf-danger) !important; }
+.field-error-msg { display: block; font-size: 11px; color: var(--tf-danger); margin-top: 2px; line-height: 1.3; }
 
 .panel-footer { display: flex; align-items: center; padding: 10px 0; border-top: 1px solid var(--color-border); flex-shrink: 0; }
 
@@ -2333,9 +2334,9 @@ onMounted(() => {
   border-bottom-right-radius: var(--border-radius-small, 4px);
   border-top-left-radius: 0;
   border-bottom-left-radius: 0;
-  border-left: 1px solid rgba(255, 255, 255, 0.3);
+  border-left: 1px solid var(--tf-fill-heavy);
   background: rgb(var(--primary-6, 22, 93, 255));
-  color: #fff;
+  color: var(--tf-text-on-accent);
   cursor: pointer;
   transition: background-color 100ms;
   font-size: 12px;
@@ -2346,9 +2347,9 @@ onMounted(() => {
 .split-arrow-trigger :deep(.arco-icon) { font-size: 12px; }
 
 .split-menu {
-  background: var(--color-bg-popup, #fff);
+  background: var(--color-bg-popup, var(--tf-popup-bg));
   border-radius: 4px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--tf-shadow);
   padding: 4px 0;
   min-width: 120px;
 }

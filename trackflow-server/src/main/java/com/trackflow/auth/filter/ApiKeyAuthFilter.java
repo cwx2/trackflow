@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.trackflow.auth.security.ApiKeyAuthenticationToken;
+import com.trackflow.common.constant.UserStatus;
 import com.trackflow.common.util.WebUtils;
 import com.trackflow.system.entity.ApiKey;
 import com.trackflow.system.entity.SysUser;
@@ -150,7 +151,7 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
 
         // 验证用户状态
         SysUser user = sysUserMapper.selectById(apiKey.getUserId());
-        if (user == null || !"active".equals(user.getStatus())) return false;
+        if (user == null || !UserStatus.ACTIVE.equals(user.getStatus())) return false;
 
         // 解析 API Key 的 scope（permissions 字段）
         Set<String> scope = parseScope(apiKey.getPermissions());
