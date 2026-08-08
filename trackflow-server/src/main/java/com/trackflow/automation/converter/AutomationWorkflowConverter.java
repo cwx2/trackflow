@@ -16,6 +16,7 @@ import java.util.List;
 public interface AutomationWorkflowConverter extends BaseConverter {
 
     @Mapping(target = "id", expression = "java(longToString(entity.getId()))")
+    @Mapping(target = "projectId", expression = "java(longToString(entity.getProjectId()))")
     @Mapping(target = "createdBy", expression = "java(longToString(entity.getCreatedBy()))")
     @Mapping(target = "activatedBy", expression = "java(longToString(entity.getActivatedBy()))")
     WorkflowVO toVO(AutomationWorkflow entity);
@@ -23,6 +24,8 @@ public interface AutomationWorkflowConverter extends BaseConverter {
     List<WorkflowVO> toVOList(List<AutomationWorkflow> entities);
 
     @Mapping(target = "id", expression = "java(longToString(entity.getId()))")
+    @Mapping(target = "projectId", expression = "java(longToString(entity.getProjectId()))")
+    @Mapping(target = "actorUserId", expression = "java(longToString(entity.getActorUserId()))")
     @Mapping(target = "createdBy", expression = "java(longToString(entity.getCreatedBy()))")
     @Mapping(target = "activatedBy", expression = "java(longToString(entity.getActivatedBy()))")
     WorkflowDetailVO toDetailVO(AutomationWorkflow entity);

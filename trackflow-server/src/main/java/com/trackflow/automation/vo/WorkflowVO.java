@@ -13,7 +13,7 @@ public class WorkflowVO {
     private String id;
     private String name;
     private String description;
-    private Long projectId;
+    private String projectId;
     private String status;
     private Integer version;
     private String triggerType;

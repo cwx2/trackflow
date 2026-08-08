@@ -15,7 +15,7 @@ public class WorkflowDetailVO {
     private String description;
     /** 工作流画布定义（JSON 字符串） */
     private String definition;
-    private Long projectId;
+    private String projectId;
     private String status;
     private Integer version;
     private String publishedDefinition;
@@ -23,7 +23,7 @@ public class WorkflowDetailVO {
     private String triggerConfig;
     private String concurrencyMode;
     private Integer maxConcurrent;
-    private Long actorUserId;
+    private String actorUserId;
     private LocalDateTime publishedAt;
     private Boolean runtimeEnabled;
     private LocalDateTime activatedAt;

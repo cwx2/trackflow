@@ -20,19 +20,19 @@ export interface WorkflowVO {
 
 export interface WorkflowDetailVO extends WorkflowVO {
   definition: string // JSON string of WorkflowDefinition
-  projectId?: number
+  projectId?: string
   publishedDefinition?: string
   triggerConfig?: string
   concurrencyMode?: 'queue' | 'skip' | 'parallel'
   maxConcurrent?: number
-  actorUserId?: number
+  actorUserId?: string
   publishedAt?: string
 }
 
 export interface CreateWorkflowDTO {
   name: string
   description?: string
-  projectId?: number
+  projectId?: string
 }
 
 export interface UpdateAutomationDTO {
@@ -40,12 +40,12 @@ export interface UpdateAutomationDTO {
   description?: string
   definition?: string // JSON string of WorkflowDefinition
   version?: number
-  projectId?: number
+  projectId?: string
   triggerType?: string
   triggerConfig?: string
   concurrencyMode?: string
   maxConcurrent?: number
-  actorUserId?: number
+  actorUserId?: string
 }
 
 // ====== 新 Schema：变量类型系统 ======
