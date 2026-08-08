@@ -24,13 +24,19 @@ export abstract class BaseNodeView extends HtmlNode {
 
   /** 提取传给 Vue 组件的初始 props */
   getInitialProps(model: any): Record<string, any> {
+    // Shallow-clone properties so Vue reactivity detects the change
+    const rawProps = model.getProperties?.() ?? model.properties ?? {}
+    const properties = { ...rawProps }
     return {
       nodeId:     model.id,
-      properties: model.getProperties?.() ?? model.properties ?? {},
+      properties,
       // 通过 onXxx 传回调，让 Vue 组件内的操作能通知 LogicFlow
       onToggleExpand: () => {
         const cur = model.getProperties?.()?.expanded ?? false
         model.setProperty('expanded', !cur)
+      },
+      onSetProperty: (key: string, val: any) => {
+        model.setProperty(key, val)
       },
       onNodeClick: () => {
         // 触发外部点击事件（打开右侧配置面板）

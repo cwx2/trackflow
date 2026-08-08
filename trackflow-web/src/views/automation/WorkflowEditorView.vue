@@ -666,6 +666,7 @@ function migrateDefinition(raw: any): WorkflowDefinition {
           name: p.name,
           valueType: p.valueType,
           required: p.required,
+          optional: p.optional,
           description: p.description,
           value: n.data?.[p.name] != null
             ? { type: 'literal' as const, value: n.data[p.name] }
@@ -1054,7 +1055,7 @@ onUnmounted(() => {
   --wf-toolbar-text:        var(--wf-node-title);
   --wf-toolbar-muted:       var(--wf-node-subtitle);
   --wf-toolbar-hover:       var(--wf-node-bg-hover);
-  --wf-toolbar-active:      rgba(56, 139, 253, 0.15);
+  --wf-toolbar-active:      var(--tf-accent-medium);
   --wf-toolbar-active-text: var(--wf-edge-color);
   --wf-card-bg:             var(--wf-node-bg);
   --wf-card-border:         var(--wf-node-border);

@@ -4,9 +4,11 @@
  * 职责：
  * - 统一管理节点尺寸（紧凑/展开两种高度）
  * - 根据输入/输出端口列表动态计算具名锚点坐标
+ * - 支持可选端口折叠（optional ports only shown when optionalExpanded=true）
  * - 提供 runStatus 状态管理
  */
 import { HtmlNodeModel } from '@logicflow/core'
+import { getNodeDefinition } from '../../../node-definitions'
 
 /** 端口定义（与 node-definitions 保持一致） */
 export interface PortDef {
@@ -14,6 +16,7 @@ export interface PortDef {
   label?: string
   valueType?: string
   required?: boolean
+  optional?: boolean
   description?: string
 }
 
@@ -34,6 +37,7 @@ export const PORT_ROW_H      = 28    // 每个端口行高
 export const HEADER_H        = 48    // 标题区高度
 export const COMPACT_H       = 80    // 紧凑态最小高度（无端口时）
 export const PADDING_V       = 8     // 端口区上下 padding
+export const OPTIONAL_TOGGLE_H = 24  // "可选参数"提示行高
 
 export abstract class BaseNodeModel extends HtmlNodeModel {
   /** 子类需覆盖：提供节点类型名（用于从 node-definitions 读取默认值） */
@@ -55,7 +59,7 @@ export abstract class BaseNodeModel extends HtmlNodeModel {
    */
   setProperty(key: string, val: any) {
     super.setProperty(key, val)
-    if (key === 'expanded' || key === 'inputs' || key === 'outputs') {
+    if (key === 'expanded' || key === 'inputs' || key === 'outputs' || key === 'optionalExpanded') {
       const oldHeight = this.height
       const newHeight = this._calcHeight(this.properties)
       if (newHeight !== oldHeight) {
@@ -67,35 +71,99 @@ export abstract class BaseNodeModel extends HtmlNodeModel {
     }
   }
 
+  /**
+   * 获取当前可见的输入端口（考虑可选折叠状态）
+   * - 如果节点定义中没有 optional 端口，返回全部
+   * - 如果有 optional 端口且 optionalExpanded=false，只返回非 optional 的
+   * - 如果 optionalExpanded=true，返回全部
+   */
+  _getVisibleInputs(props: any): PortDef[] {
+    const inputs: PortDef[] = props?.inputs || []
+    const optionalExpanded = props?.optionalExpanded ?? false
+    const nodeType = props?.nodeType
+
+    if (optionalExpanded || !nodeType) return inputs
+
+    const def = getNodeDefinition(nodeType)
+    if (!def) return inputs
+
+    const optionalNames = new Set(
+      def.inputPorts.filter(p => p.optional).map(p => p.name)
+    )
+
+    // No optional ports defined → show all
+    if (optionalNames.size === 0) return inputs
+
+    return inputs.filter(p => !optionalNames.has(p.name))
+  }
+
+  /** 获取隐藏的可选端口数量 */
+  _getHiddenOptionalCount(props: any): number {
+    const inputs: PortDef[] = props?.inputs || []
+    const optionalExpanded = props?.optionalExpanded ?? false
+    const nodeType = props?.nodeType
+
+    if (optionalExpanded || !nodeType) return 0
+
+    const def = getNodeDefinition(nodeType)
+    if (!def) return 0
+
+    const optionalNames = new Set(
+      def.inputPorts.filter(p => p.optional).map(p => p.name)
+    )
+
+    return inputs.filter(p => optionalNames.has(p.name)).length
+  }
+
   /** 根据端口数量和展开状态计算节点高度 */
   _calcHeight(props: any): number {
     const expanded = props?.expanded ?? false
-    const inputs: PortDef[]  = props?.inputs  || []
+    const visibleInputs = this._getVisibleInputs(props)
     const outputs: PortDef[] = props?.outputs || []
+    const hiddenOptionalCount = this._getHiddenOptionalCount(props)
+    const optionalExpanded = props?.optionalExpanded ?? false
 
-    // 基础高度 = 标题区 + 输入端口行 + 输出端口行（永远显示）
-    const portRows = inputs.length + outputs.length
-    const baseHeight = HEADER_H + Math.max(portRows, 1) * PORT_ROW_H + PADDING_V * 2
+    // 基础高度 = 标题区 + visible输入端口行 + 输出端口行 + 可选折叠提示行
+    let portRows = visibleInputs.length + outputs.length
+    let extraHeight = 0
+
+    // If optional ports are expanded, count them too
+    if (optionalExpanded) {
+      const allInputs: PortDef[] = props?.inputs || []
+      portRows = allInputs.length + outputs.length
+      extraHeight += OPTIONAL_TOGGLE_H // "收起可选参数" toggle
+    } else if (hiddenOptionalCount > 0) {
+      extraHeight += OPTIONAL_TOGGLE_H // "+ N 个可选参数" toggle
+    }
+
+    const baseHeight = HEADER_H + Math.max(portRows, 1) * PORT_ROW_H + PADDING_V * 2 + extraHeight
 
     if (!expanded) return baseHeight
 
-    // 展开时：基础高度 + 配置区（每个参数一行 + section header）
-    const configRows = (inputs.length + outputs.length) * 2 + 6  // 粗估
+    // 展开时：基础高度 + 配置区（所有参数 + section headers）
+    const allInputs: PortDef[] = props?.inputs || []
+    const configRows = (allInputs.length + outputs.length) * 2 + 6
     const configHeight = Math.min(configRows * PORT_ROW_H + 60, 400)
     return baseHeight + configHeight
   }
 
-  /** 动态生成具名锚点（输入端口左侧，输出端口右侧） */
+  /** 动态生成具名锚点（只为可见端口生成） */
   getDefaultAnchor() {
     const { x, y, width, height, id, properties } = this
-    const inputs:  PortDef[] = (properties as any)?.inputs  || []
+    const visibleInputs = this._getVisibleInputs(properties as any)
+    const optionalExpanded = (properties as any)?.optionalExpanded ?? false
     const outputs: PortDef[] = (properties as any)?.outputs || []
+
+    // If optional expanded, anchors for ALL inputs
+    const inputsForAnchors = optionalExpanded
+      ? ((properties as any)?.inputs || []) as PortDef[]
+      : visibleInputs
 
     const anchors: any[] = []
 
     // 输入端口锚点：左侧，从 HEADER_H + PADDING 起，每行 PORT_ROW_H
     const startY = y - height / 2 + HEADER_H + PADDING_V + PORT_ROW_H / 2
-    inputs.forEach((p, i) => {
+    inputsForAnchors.forEach((p, i) => {
       anchors.push({
         id:           `${id}-in-${p.name}`,
         x:            x - width / 2,
@@ -107,8 +175,11 @@ export abstract class BaseNodeModel extends HtmlNodeModel {
       })
     })
 
-    // 输出端口锚点：右侧
-    const outStartY = startY + inputs.length * PORT_ROW_H
+    // 输出端口锚点：右侧，positioned after visible inputs + optional toggle
+    const hiddenOptionalCount = this._getHiddenOptionalCount(properties as any)
+    const toggleHeight = (hiddenOptionalCount > 0 && !optionalExpanded) || optionalExpanded
+      ? OPTIONAL_TOGGLE_H : 0
+    const outStartY = startY + inputsForAnchors.length * PORT_ROW_H + toggleHeight
     outputs.forEach((p, i) => {
       anchors.push({
         id:           `${id}-out-${p.name}`,

@@ -188,6 +188,8 @@ export function registerAllNodes(lf: LogicFlow) {
 
         initNodeData(data: any) {
           if (!data.properties) data.properties = {}
+          // Ensure nodeType is always set (for backward-compat with older saved workflows)
+          if (!data.properties.nodeType) data.properties.nodeType = nodeType
           const def = getNodeDefinition(nodeType)
           if (!data.properties.inputs)   data.properties.inputs   = def?.inputPorts  || []
           if (!data.properties.outputs)  data.properties.outputs  = def?.outputPorts || []

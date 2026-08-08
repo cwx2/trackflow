@@ -55,7 +55,7 @@
         </div>
       </div>
       <!-- 可选端口折叠提示 -->
-      <div v-if="hiddenOptionalCount > 0 && !optionalExpanded" class="optional-toggle" @click.stop="optionalExpanded = true">
+      <div v-if="hiddenOptionalCount > 0 && !optionalExpanded" class="optional-toggle" @click.stop="setOptionalExpanded(true)">
         <span>+ {{ hiddenOptionalCount }} 个可选参数</span>
       </div>
       <!-- 展开的可选输入端口 -->
@@ -66,7 +66,7 @@
           <span class="port-type">{{ typeLabel(port.valueType) }}</span>
           <button class="port-collapse-btn" title="收起此参数" @click.stop="removeOptionalPort(port.name)">×</button>
         </div>
-        <div class="optional-toggle collapse" @click.stop="optionalExpanded = false">
+        <div class="optional-toggle collapse" @click.stop="setOptionalExpanded(false)">
           <span>收起可选参数</span>
         </div>
       </div>
@@ -103,8 +103,33 @@
               </div>
               <div class="param-value">
                 <span class="param-type-tag">{{ typeLabel(port.valueType) }}</span>
+                <!-- Template expression toggle for string ports -->
+                <button
+                  v-if="port.valueType === 'string'"
+                  class="param-template-btn"
+                  title="模板表达式"
+                  @click.stop="toggleTemplateInput(port.name)"
+                  v-text="'{ }'"
+                />
                 <button v-if="!port.required && isCustomPort(port.name)" class="param-delete" title="删除端口" @click.stop="removePort('input', port.name)">×</button>
                 <button v-else class="param-more">···</button>
+              </div>
+            </div>
+            <!-- Template expression inline editor (shown for the active port) -->
+            <div v-if="templateEditPort" class="template-inline-editor">
+              <div class="template-edit-header">
+                <span class="template-edit-label">{{ templateEditPort }} 模板表达式</span>
+                <button class="template-edit-close" @click.stop="templateEditPort = null">×</button>
+              </div>
+              <textarea
+                class="template-textarea"
+                :value="getTemplateValue(templateEditPort)"
+                :placeholder="'混合文本和变量引用，如：\n审核需求：{{node_id.port_name}}'"
+                rows="3"
+                @input="onTemplateEdit($event)"
+              />
+              <div class="template-help">
+                使用 <code v-text="'{{nodeId.portName}}'" /> 引用上游变量
               </div>
             </div>
           </section>
@@ -177,6 +202,7 @@ const props = defineProps<{
   properties: Record<string, any>
   onToggleExpand?: () => void
   onNodeClick?: () => void
+  onSetProperty?: (key: string, val: any) => void
 }>()
 
 const emit = defineEmits<{
@@ -193,7 +219,13 @@ const nodeMeta    = computed<NodeMeta>(() => props.properties?.nodeMeta ?? {
 })
 
 // ── 可选端口折叠逻辑 ──
-const optionalExpanded = ref(false)
+// Read from properties so BaseNodeModel can use the same state for height/anchor calc
+const optionalExpanded = computed(() => props.properties?.optionalExpanded ?? false)
+
+function setOptionalExpanded(val: boolean) {
+  // Update via model property so anchors/height recalculate
+  props.onSetProperty?.('optionalExpanded', val)
+}
 
 /** 获取节点定义中的 optional 标记 */
 const nodeDefinition = computed(() => {
@@ -208,6 +240,8 @@ const visibleInputs = computed<PortDef[]>(() => {
   const optionalNames = new Set(
     def.inputPorts.filter(p => p.optional).map(p => p.name)
   )
+  // If no optional ports in definition, show all
+  if (optionalNames.size === 0) return inputs.value
   return inputs.value.filter(p => !optionalNames.has(p.name))
 })
 
@@ -236,10 +270,9 @@ function isCustomPort(portName: string): boolean {
   return !builtinInputs.includes(portName) && !builtinOutputs.includes(portName)
 }
 
-/** 移除可选端口（从视图隐藏） */
+/** 收起可选端口区 */
 function removeOptionalPort(_portName: string) {
-  // 如果所有可选端口都被单独收起，则关闭可选区
-  optionalExpanded.value = false
+  setOptionalExpanded(false)
 }
 
 // ── 动态端口增删 ──
@@ -270,6 +303,30 @@ function confirmAddPort() {
 
 function removePort(type: 'input' | 'output', portName: string) {
   emit('menu-action', `remove-${type}-port`, portName)
+}
+
+// ── 模板表达式内联编辑 ──
+const templateEditPort = ref<string | null>(null)
+
+function toggleTemplateInput(portName: string) {
+  templateEditPort.value = templateEditPort.value === portName ? null : portName
+}
+
+function getTemplateValue(portName: string): string {
+  const input = (props.properties?.inputs || []).find((p: any) => p.name === portName)
+  if (input?.value?.type === 'template') return (input.value as any).template || ''
+  if (input?.value?.type === 'literal') return String(input.value.value ?? '')
+  return ''
+}
+
+function onTemplateEdit(event: Event) {
+  if (!templateEditPort.value) return
+  const val = (event.target as HTMLTextAreaElement).value
+  // Emit template value change via menu-action
+  emit('menu-action', 'set-input-template', JSON.stringify({
+    portName: templateEditPort.value,
+    template: val,
+  }))
 }
 
 // ── 更多菜单 ──
@@ -479,7 +536,7 @@ function onNodeClick() {
 }
 .more-menu-item:hover      { background: var(--wf-node-border); }
 .more-menu-item.danger     { color: var(--wf-status-failed); }
-.more-menu-item.danger:hover { background: rgba(239,68,68,0.1); }
+.more-menu-item.danger:hover { background: var(--tf-danger-bg); }
 
 .more-menu-divider {
   height: 1px;
@@ -877,5 +934,100 @@ function onNodeClick() {
   transition: opacity 150ms, background 150ms;
 }
 .param-row:hover .param-delete { opacity: 1; }
-.param-delete:hover { background: rgba(239,68,68,0.1); }
+.param-delete:hover { background: var(--tf-danger-bg); }
+
+/* ── 模板表达式按钮 ── */
+.param-template-btn {
+  width: 28px;
+  height: 18px;
+  border: 1px solid var(--wf-node-border);
+  background: none;
+  color: var(--wf-port-label);
+  cursor: pointer;
+  border-radius: 3px;
+  font-size: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 150ms, background 150ms, border-color 150ms;
+  flex-shrink: 0;
+}
+.param-row:hover .param-template-btn { opacity: 1; }
+.param-template-btn:hover {
+  background: var(--wf-node-border);
+  border-color: var(--wf-node-border-hover);
+  color: var(--wf-node-title);
+}
+
+/* ── 模板表达式内联编辑器 ── */
+.template-inline-editor {
+  margin: 6px 4px;
+  padding: 8px;
+  background: var(--wf-node-border);
+  border-radius: 6px;
+  border: 1px solid var(--wf-node-border-hover);
+}
+
+.template-edit-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.template-edit-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--wf-node-title);
+}
+
+.template-edit-close {
+  width: 16px;
+  height: 16px;
+  border: none;
+  background: none;
+  color: var(--wf-port-label);
+  cursor: pointer;
+  font-size: 12px;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.template-edit-close:hover { background: var(--wf-node-border-hover); color: var(--wf-node-title); }
+
+.template-textarea {
+  width: 100%;
+  min-height: 48px;
+  border: 1px solid var(--wf-node-border-hover);
+  border-radius: 4px;
+  background: var(--wf-node-bg);
+  color: var(--wf-node-title);
+  padding: 6px 8px;
+  font-size: 11px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  line-height: 1.5;
+  resize: vertical;
+  box-sizing: border-box;
+}
+.template-textarea:focus {
+  outline: none;
+  border-color: var(--wf-port-label);
+}
+.template-textarea::placeholder {
+  color: var(--wf-port-type);
+}
+
+.template-help {
+  margin-top: 4px;
+  font-size: 10px;
+  color: var(--wf-port-type);
+}
+.template-help code {
+  background: var(--wf-node-bg);
+  padding: 1px 3px;
+  border-radius: 2px;
+  font-size: 9px;
+}
 </style>
