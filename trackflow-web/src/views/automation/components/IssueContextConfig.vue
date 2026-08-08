@@ -9,7 +9,7 @@
         <a-input
           v-else
           :model-value="String(getInputLiteral('issue') ?? '')"
-          placeholder="通常来自上游"获取需求"节点的输出"
+          placeholder="通常来自上游「获取需求」节点的输出"
           disabled
         />
         <div class="form-hint">需要从上游 IssueGet 节点连线传入</div>
