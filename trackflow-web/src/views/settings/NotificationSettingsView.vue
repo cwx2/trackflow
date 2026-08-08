@@ -48,8 +48,8 @@ import type { NotificationPreferenceVO, EmailAvailabilityVO } from '@/api/notifi
 import { useRequest } from '@/composables/useRequest'
 import ProjectNotificationPreferences from './ProjectNotificationPreferences.vue'
 import NotificationSubscriptions from './NotificationSubscriptions.vue'
-import EventSubscriptionSettings from './EventSubscriptionSettings.vue'
-import NotificationChannelSettings from './NotificationChannelSettings.vue'
+import EventSubscriptionSettings from './components/EventSubscriptionSettings.vue'
+import NotificationChannelSettings from './components/NotificationChannelSettings.vue'
 import MutedThreadsList from './MutedThreadsList.vue'
 
 // --- Email status (useRequest) ---
