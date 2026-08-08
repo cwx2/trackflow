@@ -6,16 +6,7 @@
  *
  * 注意：修改此文件后同步更新后端 BuiltinWorkflowTemplates.java
  */
-
-export interface WorkflowTemplateVO {
-  id: string
-  name: string
-  description?: string
-  category?: string
-  icon?: string
-  isBuiltin: boolean
-  definition: string
-}
+import type { WorkflowTemplateVO } from '@/api/automation'
 
 // ─── 模板1：定时巡检并 AI 处理待办工单 ───────────────────────────────────────
 
