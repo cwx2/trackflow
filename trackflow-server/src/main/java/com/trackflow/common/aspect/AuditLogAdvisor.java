@@ -13,6 +13,9 @@ import org.aopalliance.intercept.MethodInvocation;
 import org.springframework.aop.Pointcut;
 import org.springframework.aop.support.AbstractPointcutAdvisor;
 import org.springframework.aop.support.annotation.AnnotationMatchingPointcut;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.context.annotation.Lazy;
+import org.springframework.core.Ordered;
 import org.springframework.stereotype.Component;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
@@ -22,33 +25,41 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
+import java.util.concurrent.ForkJoinPool;
 
 /**
  * 审计日志 AOP 切面——拦截 {@code @AuditLog} 注解的方法，自动记录审计日志。
  * <p>
  * 使用 Spring 原生 Advisor API（无需 aspectjweaver 依赖），适配 Spring Boot 4.x。
  * <p>
- * 特性：
+ * ⚠️ 当前项目未引入 aspectjweaver / spring-boot-starter-aop，
+ * Spring 原生 {@code DefaultAdvisorAutoProxyCreator} 与现有 Security/Transaction
+ * 代理冲突。此 Advisor 暂时保留代码但<b>不注册为 Bean</b>（移除了 @Component）。
+ * <p>
+ * 激活方式（二选一）：
  * <ul>
- *   <li>异步写入审计日志，不阻塞主业务</li>
- *   <li>主业务抛异常时仍记录（记录 error 信息）</li>
- *   <li>切面执行失败只打 WARN 日志，不影响主业务</li>
- *   <li>支持 SpEL 解析 targetId 和 details</li>
+ *   <li>在 pom.xml 中添加 spring-boot-starter-aop 并加 @EnableAspectJAutoProxy</li>
+ *   <li>在需要审计的方法中直接调用 systemAuditService.log()（当前推荐方式）</li>
  * </ul>
  *
  * @author TrackFlow
  * @since 1.0
  */
 @Slf4j
-@Component
-public class AuditLogAdvisor extends AbstractPointcutAdvisor {
+// @Component — 暂未激活，需要 spring-boot-starter-aop 或 @EnableAspectJAutoProxy
+public class AuditLogAdvisor extends AbstractPointcutAdvisor implements Ordered {
 
     private final Pointcut pointcut = AnnotationMatchingPointcut.forMethodAnnotation(AuditLog.class);
     private final AuditLogInterceptor interceptor;
 
-    public AuditLogAdvisor(SystemAuditService auditService,
-                           @org.springframework.beans.factory.annotation.Qualifier("notificationExecutor") Executor notificationExecutor) {
-        this.interceptor = new AuditLogInterceptor(auditService, notificationExecutor);
+    public AuditLogAdvisor(@Lazy SystemAuditService auditService,
+                           @Lazy @org.springframework.beans.factory.annotation.Qualifier("notificationExecutor") Executor executor) {
+        this.interceptor = new AuditLogInterceptor(auditService, executor);
+    }
+
+    @Override
+    public int getOrder() {
+        return Ordered.LOWEST_PRECEDENCE;  // Run after @Transactional and @PreAuthorize
     }
 
     @Override
@@ -144,12 +155,9 @@ public class AuditLogAdvisor extends AbstractPointcutAdvisor {
 
         /**
          * 构建审计详情 Map。
-         * <p>
-         * 优先级：details SpEL > logParams > 空 Map。
          */
         @SuppressWarnings("unchecked")
         private Map<String, Object> buildDetails(Method method, Object[] args, AuditLog auditLog, Object result) {
-            // 1. 尝试 details SpEL 表达式
             if (!auditLog.details().isBlank()) {
                 Object parsed = SpELUtils.parse(auditLog.details(), method, args, result);
                 if (parsed instanceof Map) {
@@ -157,7 +165,6 @@ public class AuditLogAdvisor extends AbstractPointcutAdvisor {
                 }
             }
 
-            // 2. logParams=true 时，记录参数名=值
             if (auditLog.logParams()) {
                 return buildParamMap(method, args);
             }
@@ -165,10 +172,6 @@ public class AuditLogAdvisor extends AbstractPointcutAdvisor {
             return new HashMap<>();
         }
 
-        /**
-         * 将方法参数构建为 name->value Map。
-         * 跳过 HttpServletRequest 等框架对象。
-         */
         private Map<String, Object> buildParamMap(Method method, Object[] args) {
             Map<String, Object> params = new HashMap<>();
             var paramNames = new org.springframework.core.DefaultParameterNameDiscoverer()
@@ -178,7 +181,6 @@ public class AuditLogAdvisor extends AbstractPointcutAdvisor {
             }
             for (int i = 0; i < paramNames.length && i < args.length; i++) {
                 Object arg = args[i];
-                // 跳过框架对象
                 if (arg instanceof HttpServletRequest || arg instanceof jakarta.servlet.http.HttpServletResponse) {
                     continue;
                 }
@@ -187,9 +189,6 @@ public class AuditLogAdvisor extends AbstractPointcutAdvisor {
             return params;
         }
 
-        /**
-         * 从当前 HTTP 请求中提取客户端 IP。
-         */
         private String extractIpAddress() {
             try {
                 ServletRequestAttributes attrs =

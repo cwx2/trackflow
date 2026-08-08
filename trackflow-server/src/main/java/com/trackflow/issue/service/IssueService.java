@@ -109,6 +109,7 @@ public class IssueService {
     private final IssueCommentService commentService;
     private final IssueAttachmentService attachmentService;
     private final IssueVOAssembler issueVOAssembler;
+    private final com.trackflow.system.service.SystemAuditService systemAuditService;
 
     /**
      * 创建 Issue
@@ -797,7 +798,6 @@ public class IssueService {
      * @return 包含更新后版本号和动作执行结果
      * @throws BusinessException 当校验不通过时
      */
-    @com.trackflow.common.annotation.AuditLog(action = "issue_status_change", targetType = "issue", targetId = "#id", logParams = true)
     public TransitStatusResult performTransition(Long id, TransitStatusDTO dto) {
         Issue issue = getByIdWithAccessCheck(id);
         Long userId = SecurityUtils.getCurrentUserId();
@@ -1415,7 +1415,6 @@ public class IssueService {
     /**
      * 软删除 Issue
      */
-    @com.trackflow.common.annotation.AuditLog(action = "delete_issue", targetType = "issue", targetId = "#id")
     @Transactional(rollbackFor = Exception.class)
     public void delete(Long id) {
         Issue issue = getById(id);
@@ -1436,6 +1435,11 @@ public class IssueService {
         recordActivity(id, currentUserId, "deleted", null, null, null);
         // 使用 MyBatis-Plus 逻辑删除（自动设置 deleted_at = NOW()）
         issueMapper.deleteById(id);
+
+        // 审计日志
+        systemAuditService.log("delete_issue", "issue", id,
+                Map.of("issueKey", issue.getIssueKey(), "title", issue.getTitle(),
+                        "projectId", issue.getProjectId()));
 
         // 实时推送删除事件 — 通知正在查看列表/详情的用户
         eventPublisher.publishEvent(new IssueNotificationEvent.Deleted(issue, currentUserId));
@@ -2396,7 +2400,6 @@ public class IssueService {
     /**
      * 永久删除 Issue（物理删除），同时清理关联数据
      */
-    @com.trackflow.common.annotation.AuditLog(action = "permanent_delete_issue", targetType = "issue", targetId = "#id")
     @Transactional(rollbackFor = Exception.class)
     public void permanentDelete(Long id) {
         DeletedIssueRow row = issueMapper.selectByIdIgnoreDeleted(id);
@@ -2429,6 +2432,10 @@ public class IssueService {
 
         // 物理删除工单
         issueMapper.permanentDeleteById(id);
+
+        // 审计日志
+        systemAuditService.log("permanent_delete_issue", "issue", id,
+                Map.of("issueKey", row.getIssueKey() != null ? row.getIssueKey() : ""));
     }
 
     /**

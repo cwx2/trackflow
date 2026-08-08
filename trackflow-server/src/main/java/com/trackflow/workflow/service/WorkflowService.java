@@ -542,7 +542,6 @@ public class WorkflowService {
     /**
      * 从 DTO 批量更新工作流转换矩阵（含乐观锁版本校验）
      */
-    @com.trackflow.common.annotation.AuditLog(action = "update_workflow", targetType = "project", targetId = "#projectId")
     @Transactional(rollbackFor = Exception.class)
     public void updateTransitionMatrix(Long projectId, UpdateWorkflowDTO dto) {
         boolean effectiveAuthor = Boolean.TRUE.equals(dto.getAuthor());
