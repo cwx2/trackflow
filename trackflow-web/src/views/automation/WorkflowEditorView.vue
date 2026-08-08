@@ -661,6 +661,9 @@ async function loadWorkflow() {
           type: 'flow-edge',
           sourceNodeId: e.sourceNodeId,
           targetNodeId: e.targetNodeId,
+          // 使用具名锚点 ID，让边精准连接到对应端口
+          sourceAnchorId: e.sourcePortName ? `${e.sourceNodeId}-out-${e.sourcePortName}` : undefined,
+          targetAnchorId: e.targetPortName ? `${e.targetNodeId}-in-${e.targetPortName}` : undefined,
           properties: { sourcePortName: e.sourcePortName, targetPortName: e.targetPortName }
         }))
       }

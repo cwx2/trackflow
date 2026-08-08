@@ -1,13 +1,15 @@
 /**
- * FlowEdge — 管道风格边（pipe-style edge）
+ * FlowEdge — 现代简洁风格边
  *
- * 外层彩色粗线 + 内层白色细线叠加，产生管道感。
- * 起点实心圆点，末端实心三角箭头（通过 getEndArrow 重写）。
- *
- * 类型兼容规则：
- * - 相同类型或 any → 允许（默认蓝色）
- * - string↔number/object↔string → 警告（黄色边）
- * - string→boolean 等不兼容 → 拒绝（红色虚线）
+ * 设计参考 Linear / n8n：
+ * - 细线（2px）+ 轻微透明度，默认状态低调不抢眼
+ * - 悬停/选中时高亮
+ * - 起点：小实心圆（6px），贴合端口
+ * - 终点：圆润箭头（实心，不过大）
+ * - running：蓝色加亮 + 流动粒子
+ * - done：绿色
+ * - warning：黄色虚线
+ * - incompatible：红色虚线
  */
 import { BezierEdge, BezierEdgeModel, h } from '@logicflow/core'
 
@@ -15,9 +17,6 @@ import { BezierEdge, BezierEdgeModel, h } from '@logicflow/core'
 
 export type TypeCompat = 'compatible' | 'warning' | 'incompatible'
 
-/**
- * 检查源端口类型到目标端口类型的兼容性
- */
 export function checkTypeCompatibility(sourceType: string, targetType: string): TypeCompat {
   if (!sourceType || !targetType) return 'compatible'
   if (sourceType === targetType) return 'compatible'
@@ -44,28 +43,27 @@ export class FlowEdgeModel extends BezierEdgeModel {
     const status = props?.flowStatus || 'idle'
     const typeCompat: TypeCompat = props?.typeCompat || 'compatible'
 
-    // 外层线宽（管道外层）
-    style.strokeWidth = 8
+    // 细线，LogicFlow 用这个控制主路径，View 里会覆盖
+    style.strokeWidth = 2
 
     if (status === 'running') {
-      style.stroke = 'var(--wf-status-running)'
+      style.stroke = 'var(--wf-status-running, #3b82f6)'
     } else if (status === 'done') {
-      style.stroke = 'var(--wf-status-success)'
+      style.stroke = 'var(--wf-status-success, #22c55e)'
     } else if (typeCompat === 'warning') {
-      style.stroke = 'var(--wf-status-warning, #d29922)'
+      style.stroke = 'var(--wf-status-warning, #f59e0b)'
+      style.strokeDasharray = '6 4'
     } else if (typeCompat === 'incompatible') {
-      style.stroke = 'var(--wf-status-failed)'
-      style.strokeDasharray = '8 5'
+      style.stroke = 'var(--wf-status-failed, #ef4444)'
+      style.strokeDasharray = '6 4'
     } else {
-      style.stroke = 'var(--wf-edge-color, var(--tf-accent))'
+      style.stroke = 'var(--wf-edge-color, #6366f1)'
     }
     return style
   }
 
   getArrowStyle() {
     const style = super.getArrowStyle()
-    // 我们通过 getEndArrow() 自绘箭头，禁用默认箭头参数
-    // offset 必须保留，供 getLastTwoPoints 计算切线用
     style.offset = 0
     style.verticalLength = 0
     return style
@@ -75,11 +73,6 @@ export class FlowEdgeModel extends BezierEdgeModel {
 // ─── View ─────────────────────────────────────────────────────────────────────
 
 export class FlowEdgeView extends BezierEdge {
-  /**
-   * 重写 getEdge：管道风格（外层彩色 + 内层白色）+ 起点圆点 + 数据流粒子
-   *
-   * getShape() 会调用 getEdge()，所以这里是正确的切入点。
-   */
   getEdge() {
     const { model } = this.props as any
     const props = model?.properties as any
@@ -89,65 +82,54 @@ export class FlowEdgeView extends BezierEdge {
 
     const pathD = this._getPathD(model)
     const color = this._getColor(status, typeCompat)
-    const isDashed = typeCompat === 'incompatible'
-
+    const isDashed = typeCompat === 'warning' || typeCompat === 'incompatible'
     const { startPoint } = model
 
-    // ── 管道外层（彩色粗线）──────────────────────────────────────────────────
-    const outerPath = h('path', {
+    const pathId = `flow-path-${model.id}`
+
+    // ── 主路径（细线，带透明度）──────────────────────────────────────────────
+    const mainPath = h('path', {
       d: pathD,
       fill: 'none',
       stroke: color,
-      'stroke-width': '8',
+      'stroke-width': isRunning ? '2.5' : '2',
       'stroke-linecap': 'round',
-      ...(isDashed ? { 'stroke-dasharray': '8 5' } : {}),
+      'stroke-linejoin': 'round',
+      opacity: isRunning ? '1' : '0.75',
+      ...(isDashed ? { 'stroke-dasharray': '6 4' } : {}),
     })
 
-    // ── 管道内层（白色细线）──────────────────────────────────────────────────
-    const innerPath = h('path', {
-      d: pathD,
-      fill: 'none',
-      stroke: 'white',
-      'stroke-width': '4',
-      'stroke-linecap': 'round',
-      ...(isDashed ? { 'stroke-dasharray': '8 5' } : {}),
-    })
-
-    // ── 起点实心圆 ──────────────────────────────────────────────────────────
+    // ── 起点圆点（小，精致）──────────────────────────────────────────────────
     const startDot = startPoint
       ? h('circle', {
           cx: startPoint.x,
           cy: startPoint.y,
-          r: '5',
+          r: '3.5',
           fill: color,
-          stroke: 'white',
-          'stroke-width': '1.5',
+          opacity: isRunning ? '1' : '0.8',
         })
       : null
 
-    // ── 类型警告图标 ──────────────────────────────────────────────────────────
+    // ── 类型警告标识 ──────────────────────────────────────────────────────────
     const warningIcon = typeCompat === 'warning'
       ? this._warningBadge(model)
       : null
 
     // ── 动画粒子（running 状态） ──────────────────────────────────────────────
-    const pathId = `flow-path-${model.id}`
     const particles: any[] = []
-
     if (isRunning) {
       particles.push(
         h('defs', {}, [
           h('path', { id: pathId, d: pathD, fill: 'none', stroke: 'none' }),
         ]),
         this._particle(pathId, 0),
-        this._particle(pathId, 0.6),
-        this._particle(pathId, 1.2),
+        this._particle(pathId, 0.7),
+        this._particle(pathId, 1.4),
       )
     }
 
     return h('g', {}, [
-      outerPath,
-      innerPath,
+      mainPath,
       startDot,
       warningIcon,
       ...particles,
@@ -155,7 +137,7 @@ export class FlowEdgeView extends BezierEdge {
   }
 
   /**
-   * 重写 getEndArrow：绘制实心三角箭头（管道末端）
+   * 末端箭头：小巧的实心三角，不喧宾夺主
    */
   getEndArrow() {
     const { model } = this.props as any
@@ -163,38 +145,31 @@ export class FlowEdgeView extends BezierEdge {
     const status = props?.flowStatus || 'idle'
     const typeCompat: TypeCompat = props?.typeCompat || 'compatible'
     const color = this._getColor(status, typeCompat)
+    const isRunning = status === 'running'
 
-    // 箭头尺寸
-    const arrowLen = 14
-    const arrowWidth = 8
-
-    // solid 实心三角，尖端在右（marker orient 会自动旋转）
+    // 7×10 的小三角（比之前 8×14 小很多）
     return h('polygon', {
-      points: `${arrowLen / 2},0 ${-arrowLen / 2},${arrowWidth / 2} ${-arrowLen / 2},${-arrowWidth / 2}`,
+      points: '5,0 -4,4 -4,-4',
       fill: color,
       stroke: 'none',
+      opacity: isRunning ? '1' : '0.8',
     })
   }
 
-  /**
-   * 重写 getStartArrow：不显示起点箭头（我们用圆点代替）
-   */
   getStartArrow() {
     return null as any
   }
 
   // ─── 私有辅助方法 ─────────────────────────────────────────────────────────
 
-  /** 获取当前边颜色 */
   private _getColor(status: string, typeCompat: TypeCompat): string {
-    if (status === 'running') return 'var(--wf-status-running, #4a90d9)'
-    if (status === 'done') return 'var(--wf-status-success, #3fb950)'
-    if (typeCompat === 'warning') return 'var(--wf-status-warning, #d29922)'
-    if (typeCompat === 'incompatible') return 'var(--wf-status-failed, #f85149)'
-    return 'var(--wf-edge-color, var(--tf-accent, #4a90d9))'
+    if (status === 'running') return 'var(--wf-status-running, #3b82f6)'
+    if (status === 'done')    return 'var(--wf-status-success, #22c55e)'
+    if (typeCompat === 'warning')      return 'var(--wf-status-warning, #f59e0b)'
+    if (typeCompat === 'incompatible') return 'var(--wf-status-failed, #ef4444)'
+    return 'var(--wf-edge-color, #6366f1)'
   }
 
-  /** 类型警告标识 */
   private _warningBadge(model: any) {
     try {
       const { startPoint, endPoint } = model
@@ -203,19 +178,16 @@ export class FlowEdgeView extends BezierEdge {
       const my = (startPoint.y + endPoint.y) / 2
       return h('text', {
         x: mx, y: my - 6,
-        'font-size': '12',
+        'font-size': '11',
         'text-anchor': 'middle',
-        fill: 'var(--wf-status-warning, #d29922)',
+        fill: 'var(--wf-status-warning, #f59e0b)',
       }, '⚠')
-    } catch {
-      return null
-    }
+    } catch { return null }
   }
 
-  /** 生成单个数据流粒子 */
   private _particle(pathId: string, delayS: number) {
     const motionProps = {
-      dur: '1.8s',
+      dur: '1.6s',
       begin: `${delayS}s`,
       repeatCount: 'indefinite',
       rotate: 'auto',
@@ -223,36 +195,34 @@ export class FlowEdgeView extends BezierEdge {
       keySplines: '0.4 0 0.6 1',
       keyTimes: '0;1',
     }
+    const mpath = () => h('mpath', { 'xlink:href': `#${pathId}` })
 
-    const mpath = h('mpath', { 'xlink:href': `#${pathId}` })
+    // 发光外圈
+    const glow = h('circle', {
+      r: 4,
+      fill: 'var(--wf-flow-particle-glow, rgba(99,102,241,0.3))',
+      opacity: '0.5',
+    }, [h('animateMotion', motionProps, [mpath()])])
 
-    const glow = h('circle', { r: 5, fill: 'var(--wf-flow-particle-glow)', opacity: '0.6' }, [
-      h('animateMotion', motionProps, [mpath]),
-    ])
-
-    const core = h('circle', { r: 3, fill: 'var(--wf-flow-particle)' }, [
-      h('animateMotion', motionProps, [
-        h('mpath', { 'xlink:href': `#${pathId}` }),
-      ]),
-    ])
+    // 实心核心
+    const core = h('circle', {
+      r: 2.5,
+      fill: 'var(--wf-flow-particle, #fff)',
+    }, [h('animateMotion', motionProps, [mpath()])])
 
     return h('g', {}, [glow, core])
   }
 
-  /** 从 model 生成贝塞尔路径 d 属性 */
   private _getPathD(model: any): string {
     try {
       const { startPoint, endPoint, pointsList } = model
       if (!startPoint || !endPoint) return ''
-
       if (pointsList && pointsList.length >= 2) {
         const [cp1, cp2] = pointsList
         return `M ${startPoint.x} ${startPoint.y} C ${cp1.x} ${cp1.y} ${cp2.x} ${cp2.y} ${endPoint.x} ${endPoint.y}`
       }
       return `M ${startPoint.x} ${startPoint.y} L ${endPoint.x} ${endPoint.y}`
-    } catch {
-      return ''
-    }
+    } catch { return '' }
   }
 }
 
