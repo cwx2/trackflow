@@ -3,6 +3,7 @@
     <a-form v-if="definition" :model="local" layout="vertical" size="small">
       <div v-if="definition.inputPorts.length" class="section-title">输入参数</div>
       <a-form-item v-for="port in definition.inputPorts" :key="port.name" :label="port.label || port.name">
+        <template v-if="port.description" #extra>{{ port.description }}</template>
         <div v-if="isReference(port.name)" class="reference-value">
           <code>{{ referenceLabel(port.name) }}</code>
           <a-button size="mini" type="text" @click="clearValue(port.name)">改为固定值</a-button>
@@ -31,13 +32,13 @@
           :placeholder="port.description"
           @input="value => setLiteral(port.name, value)"
         />
-        <div v-if="port.description" class="form-hint">{{ port.description }}</div>
       </a-form-item>
 
       <template v-if="definition.configFields.length">
         <a-divider />
         <div class="section-title">运行配置</div>
         <a-form-item v-for="field in definition.configFields" :key="field.key" :label="field.label">
+          <template v-if="field.description" #extra>{{ field.description }}</template>
           <a-select
             v-if="field.type === 'select'"
             :model-value="local.config?.[field.key]"
@@ -69,7 +70,6 @@
             :placeholder="field.placeholder"
             @input="value => setConfig(field.key, value)"
           />
-          <div v-if="field.description" class="form-hint">{{ field.description }}</div>
         </a-form-item>
       </template>
     </a-form>

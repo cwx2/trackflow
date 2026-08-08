@@ -7,7 +7,7 @@
       
       <a-form-item label="文件路径">
         <a-input v-model="localData.filePath" placeholder="{workspace}/requirements/develop/{req_file}" />
-        <div class="form-hint">支持 {变量名} 占位符引用全局变量</div>
+        <template #extra>支持 {变量名} 占位符引用全局变量</template>
       </a-form-item>
       
       <a-form-item label="读取模式">
@@ -39,7 +39,7 @@
       
       <a-form-item label="输出变量名">
         <a-input v-model="localData.outputVar" placeholder="file_content" />
-        <div class="form-hint">文件内容将存入指定变量，可在后续节点 prompt 中用 {变量名} 引用</div>
+        <template #extra>文件内容将存入指定变量，可在后续节点 prompt 中用 {变量名} 引用</template>
       </a-form-item>
     </a-form>
   </div>

@@ -13,7 +13,7 @@
           style="width: 100%"
           @change="(val: any) => setInputLiteral('issueId', val)"
         />
-        <div class="form-hint">通常来自上游"查找工单"节点的输出</div>
+        <template #extra>通常来自上游"查找工单"节点的输出</template>
       </a-form-item>
 
       <a-form-item label="目标状态">
@@ -29,7 +29,7 @@
             {{ s.name }}
           </a-option>
         </a-select>
-        <div class="form-hint">若 issueId 来自上游变量，此处展示所有状态供选择</div>
+        <template #extra>若 issueId 来自上游变量，此处展示所有状态供选择</template>
       </a-form-item>
 
       <a-form-item label="流转说明">
@@ -48,7 +48,7 @@
           style="width: 100%"
           @change="(val: any) => setInputLiteral('version', val || undefined)"
         />
-        <div class="form-hint">传入工单当前版本号可防止并发覆盖</div>
+        <template #extra>传入工单当前版本号可防止并发覆盖</template>
       </a-form-item>
 
       <a-alert type="info" style="margin-top: 8px">

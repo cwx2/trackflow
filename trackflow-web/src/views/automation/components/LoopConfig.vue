@@ -14,12 +14,12 @@
           placeholder="3"
           style="width: 100%"
         />
-        <div class="form-hint">达到最大次数后自动退出循环（1-20）</div>
+        <template #extra>达到最大次数后自动退出循环（1-20）</template>
       </a-form-item>
 
       <a-form-item label="循环子工作流 ID">
         <a-input v-model="localData.workflowId" placeholder="选择一个已发布工作流的 ID" />
-        <div class="form-hint">每轮执行该子工作流；循环本身不会在画布 DAG 中制造回边</div>
+        <template #extra>每轮执行该子工作流；循环本身不会在画布 DAG 中制造回边</template>
       </a-form-item>
       
       <a-form-item label="重试间隔（秒）">
@@ -31,7 +31,7 @@
           placeholder="5"
           style="width: 100%"
         />
-        <div class="form-hint">每次重试之间的等待时间（0-300秒）</div>
+        <template #extra>每次重试之间的等待时间（0-300秒）</template>
       </a-form-item>
       
       <a-divider style="margin: 16px 0 12px" />
@@ -50,7 +50,7 @@
           <a-option value="{status}">&#123;status&#125; - 执行状态</a-option>
           <a-option value="{test_result}">&#123;test_result&#125; - 测试结果</a-option>
         </a-select>
-        <div class="form-hint">使用 {变量名} 格式引用变量</div>
+        <template #extra>使用 {变量名} 格式引用变量</template>
       </a-form-item>
       
       <a-form-item label="运算符">
@@ -66,7 +66,7 @@
       
       <a-form-item v-if="showValueInput" label="比较值">
         <a-input v-model="localData.exitValue" placeholder="输入比较值" />
-        <div class="form-hint">支持 {变量名} 引用其他变量</div>
+        <template #extra>支持 {变量名} 引用其他变量</template>
       </a-form-item>
       
       <a-alert type="info" style="margin-top: 12px">

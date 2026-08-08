@@ -12,7 +12,7 @@
           placeholder="通常来自上游「获取需求」节点的输出"
           disabled
         />
-        <div class="form-hint">需要从上游 IssueGet 节点连线传入</div>
+        <template #extra>需要从上游 IssueGet 节点连线传入</template>
       </a-form-item>
 
       <a-form-item label="包含评论">
@@ -20,7 +20,7 @@
           :model-value="getInputLiteral('includeComments') !== false"
           @change="(val: any) => setInputLiteral('includeComments', val)"
         />
-        <div class="form-hint">包含最近 10 条评论内容</div>
+        <template #extra>包含最近 10 条评论内容</template>
       </a-form-item>
 
       <a-form-item label="包含自定义字段">
@@ -28,7 +28,7 @@
           :model-value="getInputLiteral('includeCustomFields') !== false"
           @change="(val: any) => setInputLiteral('includeCustomFields', val)"
         />
-        <div class="form-hint">包含工单上配置的自定义字段值</div>
+        <template #extra>包含工单上配置的自定义字段值</template>
       </a-form-item>
 
       <a-form-item label="最大字符数">
@@ -41,7 +41,7 @@
           placeholder="默认 4000"
           @change="(val: any) => setInputLiteral('maxLength', val)"
         />
-        <div class="form-hint">限制输出长度，防止超出 AI 模型 token 上限</div>
+        <template #extra>限制输出长度，防止超出 AI 模型 token 上限</template>
       </a-form-item>
 
       <a-alert type="info" style="margin-top: 8px">

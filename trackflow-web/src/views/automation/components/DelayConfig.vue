@@ -25,7 +25,7 @@
           >
             <template #suffix>秒</template>
           </a-input-number>
-          <div class="form-hint">范围 1-3600 秒（1小时）</div>
+          <template #extra>范围 1-3600 秒（1小时）</template>
         </a-form-item>
       </template>
       
@@ -42,7 +42,7 @@
             <a-option value="{delay}">&#123;delay&#125;</a-option>
             <a-option value="{timeout}">&#123;timeout&#125;</a-option>
           </a-select>
-          <div class="form-hint">运行时从变量读取等待秒数，使用 &#123;变量名&#125; 格式</div>
+          <template #extra>运行时从变量读取等待秒数，使用 &#123;变量名&#125; 格式</template>
         </a-form-item>
       </template>
       
