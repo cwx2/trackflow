@@ -948,7 +948,7 @@ function groupByTag(allIssues: BoardIssue[]): SwimlaneRow[] {
     .sort((a, b) => b[1].length - a[1].length)
     .map(([tagKey, issues]) => {
       const sampleIssue = issues[0]
-      const tags = (sampleIssue as any).tags as Array<{ id: string; name: string }> | undefined
+      const tags = sampleIssue.tags
       const tagName = tags?.find(t => (t.id || t.name) === tagKey)?.name || tagKey
       return { key: tagKey, label: `🏷️ ${tagName}`, issues }
     })
@@ -988,7 +988,7 @@ function groupByParent(allIssues: BoardIssue[]): SwimlaneRow[] {
     // 跳过父工单本身（它们成为泳道行，不作为子工单出现）
     if (parentMap.has(issue.id)) continue
 
-    const parentId = (issue as any).parentId as string | undefined
+    const parentId = ('parentId' in issue ? issue.parentId : undefined) as string | undefined
     if (parentId && parentMap.has(parentId)) {
       if (!childrenMap.has(parentId)) childrenMap.set(parentId, [])
       childrenMap.get(parentId)!.push(issue)
@@ -1467,7 +1467,7 @@ const isManualSortDisabled = computed(() => {
   // Check if filterQuery contains sort-related fields (simplified check)
   try {
     const filters = JSON.parse(boardFilterQuery.value)
-    return Array.isArray(filters) && filters.some((f: any) => f.field === 'sort' || f.field === 'orderBy')
+    return Array.isArray(filters) && filters.some((f: { field?: string }) => f.field === 'sort' || f.field === 'orderBy')
   } catch {
     // string-based query: check for 'sort by' keyword
     return boardFilterQuery.value.toLowerCase().includes('sort by')
@@ -2177,7 +2177,7 @@ async function onDrop(event: DragEvent, targetStatusId: string) {
         case 'type': currentLaneKey = issue.issueType; break
         case 'sprint': currentLaneKey = issue.sprintId || '__no_sprint__'; break
         case 'tag': currentLaneKey = null; break
-        case 'parent': currentLaneKey = (issue as any).parentId || '__uncategorized__'; break
+        case 'parent': currentLaneKey = ('parentId' in issue ? issue.parentId : undefined) || '__uncategorized__'; break
       }
       if (currentLaneKey !== targetLaneKey) {
         // Cross-swimlane, same column → update swimlane field only
@@ -2506,7 +2506,7 @@ async function handleCrossSwimlaneUpdate(issue: BoardIssue, targetLaneKey: strin
       // Tag swimlane uses tag id as key; complex to handle — skip for now
       return false
     case 'parent':
-      currentLaneKey = (issue as any).parentId || '__uncategorized__'
+      currentLaneKey = ('parentId' in issue ? issue.parentId : undefined) || '__uncategorized__'
       break
     case 'dueDate':
       // 日期泳道为只读：拖拽不更新截止日期（日期按相对范围分组，不是可选泳道值）
@@ -2517,12 +2517,12 @@ async function handleCrossSwimlaneUpdate(issue: BoardIssue, targetLaneKey: strin
   if (currentLaneKey === targetLaneKey) return false
 
   // Build the update payload based on swimlaneGroupBy
-  const updateData: Record<string, any> = {}
+  const updateData: Partial<Pick<IssueVO, 'assigneeId' | 'priority' | 'issueType' | 'sprintId'> & { parentId: string | null; addToSprintId: string }> = {}
   switch (swimlaneGroupBy.value) {
     case 'assignee':
       // Special keys like '__unassigned__' mean set to null
       if (targetLaneKey === '__unassigned__' || targetLaneKey === '__uncategorized__') {
-        updateData.assigneeId = null
+        updateData.assigneeId = undefined
       } else {
         updateData.assigneeId = targetLaneKey
       }
@@ -2535,7 +2535,7 @@ async function handleCrossSwimlaneUpdate(issue: BoardIssue, targetLaneKey: strin
       break
     case 'sprint':
       if (targetLaneKey === '__no_sprint__' || targetLaneKey === '__uncategorized__') {
-        updateData.sprintId = null
+        updateData.sprintId = undefined
       } else if (allowMultipleSprints.value) {
         // 多 Sprint 模式：追加而非覆盖
         updateData.addToSprintId = targetLaneKey
@@ -2557,7 +2557,7 @@ async function handleCrossSwimlaneUpdate(issue: BoardIssue, targetLaneKey: strin
 
   // Perform the update (optimistic + API call)
   // Optimistic update - apply changes locally first
-  const rollbackData: Record<string, any> = {}
+  const rollbackData: Record<string, string | undefined> = {}
   if ('assigneeId' in updateData) {
     rollbackData.assigneeId = issue.assigneeId
     rollbackData.assigneeName = issue.assigneeName
@@ -2573,11 +2573,11 @@ async function handleCrossSwimlaneUpdate(issue: BoardIssue, targetLaneKey: strin
   }
   if ('priority' in updateData) {
     rollbackData.priority = issue.priority
-    issue.priority = updateData.priority
+    issue.priority = updateData.priority!
   }
   if ('issueType' in updateData) {
     rollbackData.issueType = issue.issueType
-    issue.issueType = updateData.issueType
+    issue.issueType = updateData.issueType!
   }
   if ('sprintId' in updateData) {
     rollbackData.sprintId = issue.sprintId
@@ -2589,12 +2589,14 @@ async function handleCrossSwimlaneUpdate(issue: BoardIssue, targetLaneKey: strin
     issue.sprintId = updateData.addToSprintId || undefined
   }
   if ('parentId' in updateData) {
-    rollbackData.parentId = (issue as any).parentId
-    ;(issue as any).parentId = updateData.parentId || undefined
+    rollbackData.parentId = 'parentId' in issue ? (issue as BoardCardVO).parentId : undefined
+    if ('parentId' in issue) {
+      (issue as BoardCardVO).parentId = updateData.parentId || undefined
+    }
   }
 
   try {
-    const updateRes = await issueApi.update(issue.id, updateData)
+    const updateRes = await issueApi.update(issue.id, updateData as any)
     if (updateRes.warnings?.length) {
       updateRes.warnings.forEach((w: string) => Message.warning({ content: w, duration: 5000 }))
       // Rollback optimistic update for skipped fields
@@ -2614,25 +2616,26 @@ async function handleCrossSwimlaneUpdate(issue: BoardIssue, targetLaneKey: strin
       Message.success(`${issue.issueKey} ${fieldLabel}已更新`)
     }
     return true
-  } catch (e: any) {
+  } catch (e: unknown) {
     // Rollback optimistic update
     if ('assigneeId' in rollbackData) {
       issue.assigneeId = rollbackData.assigneeId
       issue.assigneeName = rollbackData.assigneeName
     }
     if ('priority' in rollbackData) {
-      issue.priority = rollbackData.priority
+      issue.priority = rollbackData.priority!
     }
     if ('issueType' in rollbackData) {
-      issue.issueType = rollbackData.issueType
+      issue.issueType = rollbackData.issueType!
     }
     if ('sprintId' in rollbackData) {
       issue.sprintId = rollbackData.sprintId
     }
-    if ('parentId' in rollbackData) {
-      ;(issue as any).parentId = rollbackData.parentId
+    if ('parentId' in rollbackData && 'parentId' in issue) {
+      (issue as BoardCardVO).parentId = rollbackData.parentId
     }
-    const errMsg = e.response?.data?.message || '字段更新失败'
+    const err = e as { response?: { data?: { message?: string } } }
+    const errMsg = err.response?.data?.message || '字段更新失败'
     Message.error(`${issue.issueKey} 跨泳道更新失败：${errMsg}`)
     return false
   }
