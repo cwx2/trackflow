@@ -95,3 +95,17 @@ export const DEFAULT_BADGE_COLOR = '#3b82f6'
 export const DEFAULT_STATUS_COLOR = '#6b7280'
 export const DEFAULT_TAG_COLOR = '#6b7280'
 export const DEFAULT_NODE_COLOR = '#6366f1'
+export const DEFAULT_ISSUE_TYPE_COLOR = '#6366f1'
+export const DEFAULT_PRIORITY_COLOR = '#6366f1'
+
+/** 默认优先级选项（后端不可用时的回退，与 PRIORITY_OPTIONS 格式一致） */
+export const DEFAULT_PRIORITY_OPTIONS = PRIORITY_OPTIONS
+
+/** 默认工单类型选项（后端不可用时的回退） */
+export const DEFAULT_ISSUE_TYPE_OPTIONS = [
+  { id: 'Bug', label: 'Bug', value: 'Bug', color: ISSUE_TYPE_COLORS['Bug'] },
+  { id: 'Task', label: '任务', value: 'Task', color: ISSUE_TYPE_COLORS['Task'] },
+  { id: 'Feature', label: '需求', value: 'Feature', color: ISSUE_TYPE_COLORS['Feature'] },
+  { id: 'Epic', label: '史诗', value: 'Epic', color: ISSUE_TYPE_COLORS['Epic'] },
+  { id: 'Story', label: '故事', value: 'Story', color: ISSUE_TYPE_COLORS['Story'] },
+]
