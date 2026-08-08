@@ -421,7 +421,7 @@ onBeforeUnmount(() => {
 }
 
 .error-icon {
-  color: var(--tf-danger, #f85149);
+  color: var(--tf-danger);
   opacity: 0.7;
 }
 

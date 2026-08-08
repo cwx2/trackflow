@@ -1,71 +1,62 @@
 /**
- * Issue 颜色常量管理
+ * 优先级颜色常量
  *
- * 集中管理优先级、工单类型的默认颜色映射，供 fallback 使用。
- * 实际运行时颜色从后端自定义字段系统动态加载，此处仅为初始默认值。
- *
- * @module issueColors
+ * 集中管理 Issue 优先级对应的颜色，保证全系统一致。
+ * 这些颜色由业务定义（对应后端 priority 字段值），不随主题变化。
  */
 
-// ─── 优先级默认颜色 ──────────────────────────────────────────────
-
-export interface ColorOption {
-  value: string
-  label: string
-  color: string
-}
-
-/** 优先级默认选项（API 加载前的初始值） */
-export const DEFAULT_PRIORITY_OPTIONS: ColorOption[] = [
-  { value: '阻塞', label: '阻塞', color: '#b91c1c' },
-  { value: '紧急', label: '紧急', color: '#ef4444' },
-  { value: '高', label: '高', color: '#f59e0b' },
-  { value: '普通', label: '普通', color: '#6366f1' },
-  { value: '低', label: '低', color: '#64748b' }
-]
-
-/** 优先级颜色映射（快速查找用） */
 export const PRIORITY_COLORS: Record<string, string> = {
   '阻塞': '#b91c1c',
   '紧急': '#ef4444',
   '高': '#f59e0b',
   '普通': '#6366f1',
   '低': '#64748b',
-  'Show-stopper': '#b91c1c',
+  // English names (for backward compatibility)
   'Critical': '#ef4444',
   'High': '#f59e0b',
-  'Medium': '#6366f1',
-  'Normal': '#6366f1',
-  'Low': '#64748b'
+  'Normal': '#3b82f6',
+  'Low': '#9ca3af'
 }
 
-/** 默认优先级颜色（找不到匹配时） */
-export const DEFAULT_PRIORITY_COLOR = '#6366f1'
+/**
+ * 获取优先级颜色，支持中英文名称
+ */
+export function getPriorityColor(priority: string): string {
+  return PRIORITY_COLORS[priority] || '#6366f1'
+}
 
-// ─── 工单类型默认颜色 ────────────────────────────────────────────
-
-/** 工单类型默认选项（API 加载前的初始值） */
-export const DEFAULT_ISSUE_TYPE_OPTIONS: ColorOption[] = [
-  { value: '缺陷', label: '缺陷', color: '#ef4444' },
-  { value: '任务', label: '任务', color: '#6366f1' },
-  { value: '需求', label: '需求', color: '#22c55e' },
-  { value: '史诗', label: '史诗', color: '#a855f7' },
-  { value: '故事', label: '故事', color: '#3b82f6' }
+/**
+ * 优先级选项列表（用于过滤器和批量操作下拉）
+ */
+export const PRIORITY_OPTIONS = [
+  { id: '阻塞', label: '阻塞', value: '阻塞', color: PRIORITY_COLORS['阻塞'] },
+  { id: '紧急', label: '紧急', value: '紧急', color: PRIORITY_COLORS['紧急'] },
+  { id: '高', label: '高', value: '高', color: PRIORITY_COLORS['高'] },
+  { id: '普通', label: '普通', value: '普通', color: PRIORITY_COLORS['普通'] },
+  { id: '低', label: '低', value: '低', color: PRIORITY_COLORS['低'] }
 ]
 
-/** 工单类型颜色映射（快速查找用） */
+/**
+ * Issue 类型对应颜色
+ */
 export const ISSUE_TYPE_COLORS: Record<string, string> = {
-  '缺陷': '#ef4444',
-  '任务': '#6366f1',
-  '需求': '#22c55e',
-  '史诗': '#a855f7',
-  '故事': '#3b82f6',
-  'Bug': '#ef4444',
-  'Task': '#6366f1',
-  'Feature': '#22c55e',
-  'Epic': '#a855f7',
-  'Story': '#3b82f6'
+  'Bug': '#d32f2f',
+  'Task': '#1976d2',
+  'Feature': '#388e3c',
+  'Epic': '#7b1fa2',
+  'Story': '#f57c00'
 }
 
-/** 默认工单类型颜色（找不到匹配时） */
-export const DEFAULT_ISSUE_TYPE_COLOR = '#6366f1'
+/**
+ * 获取 Issue 类型颜色
+ */
+export function getIssueTypeColor(type: string): string {
+  return ISSUE_TYPE_COLORS[type] || '#6366f1'
+}
+
+/**
+ * 默认 badge 颜色（当后端数据没有指定颜色时的回退色）
+ */
+export const DEFAULT_BADGE_COLOR = '#3b82f6'
+export const DEFAULT_STATUS_COLOR = '#6b7280'
+export const DEFAULT_TAG_COLOR = '#6b7280'

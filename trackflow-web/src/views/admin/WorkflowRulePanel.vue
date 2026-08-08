@@ -1630,7 +1630,7 @@ watch(() => props.projectId, () => {
 }
 
 .condition-row.condition-negated {
-  border-left: 2px solid rgb(var(--red-6));
+  border-left: 2px solid var(--tf-danger);
   padding-left: 8px;
   border-radius: 2px;
 }

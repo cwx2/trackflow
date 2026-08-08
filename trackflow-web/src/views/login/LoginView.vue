@@ -83,7 +83,7 @@ function handleLogin() {
   gap: 8px;
   padding: 12px 16px;
   margin-bottom: 24px;
-  background: rgba(var(--warning-6), 0.08);
+  background: var(--tf-warning-bg);
   border: 1px solid rgba(var(--warning-6), 0.3);
   border-radius: 6px;
   color: var(--tf-text-secondary);

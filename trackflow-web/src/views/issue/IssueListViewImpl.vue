@@ -813,13 +813,13 @@
                 v-for="(dv, idx) in getCustomFieldDetail(record, column.dataIndex)!.displayValues"
                 :key="idx"
                 class="cf-tag"
-                :style="getCustomFieldDetail(record, column.dataIndex)!.colors?.[idx] ? { background: getCustomFieldDetail(record, column.dataIndex)!.colors![idx]!, color: '#fff' } : {}"
+                :style="getCustomFieldDetail(record, column.dataIndex)!.colors?.[idx] ? { background: getCustomFieldDetail(record, column.dataIndex)!.colors![idx]!, color: 'var(--tf-text-on-accent)' } : {}"
               >{{ dv }}</span>
             </span>
             <span
               v-else-if="getCustomFieldDetail(record, column.dataIndex)!.color"
               class="cf-cell cf-badge"
-              :style="{ background: getCustomFieldDetail(record, column.dataIndex)!.color!, color: '#fff' }"
+              :style="{ background: getCustomFieldDetail(record, column.dataIndex)!.color!, color: 'var(--tf-text-on-accent)' }"
             >{{ getCustomFieldDetail(record, column.dataIndex)!.displayValue || '\u2014' }}</span>
             <span v-else class="cf-cell">{{ getCustomFieldDetail(record, column.dataIndex)!.displayValue || '\u2014' }}</span>
           </template>
@@ -2927,7 +2927,7 @@ function selectStatus(issue: IssueVO, status: IssueStatusVO) {
       content: () => h('div', { style: 'display:flex;flex-direction:column;gap:8px' }, [
         h('div', { style: 'display:flex;align-items:center;gap:6px' }, [
           h('span', { style: 'color:var(--color-text-3);font-size:13px' }, '目标状态：'),
-          h('span', { style: `background:${status.color};color:#fff;padding:2px 8px;border-radius:3px;font-size:12px` }, localizeStatusName(status.name))
+          h('span', { style: `background:${status.color};color: var(--tf-text-on-accent);padding:2px 8px;border-radius:3px;font-size:12px` }, localizeStatusName(status.name))
         ]),
         h('textarea', {
           placeholder: '请说明退回/变更的原因（必填）',
@@ -4275,7 +4275,7 @@ onBeforeRouteLeave((_to, _from, next) => {
 /* Left panel */
 .query-panel { background: var(--tf-bg-surface); overflow-y: auto; overflow-x: hidden; flex-shrink: 0; display: flex; flex-direction: column; transition: width 0.2s ease; }
 .panel-resizer { width: 4px; flex-shrink: 0; cursor: col-resize; background: transparent; position: relative; z-index: 2; transition: background 0.15s; }
-.panel-resizer:hover, .panel-resizer:active { background: var(--tf-accent, #58a6ff); }
+.panel-resizer:hover, .panel-resizer:active { background: var(--tf-accent); }
 .panel-resizer::after { content: ''; position: absolute; top: 0; bottom: 0; left: -2px; right: -2px; }
 .panel-top { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px 8px; }
 .panel-top-title { display: flex; align-items: center; gap: 8px; }
@@ -4546,14 +4546,14 @@ onBeforeRouteLeave((_to, _from, next) => {
 .sprint-completed { color: var(--tf-text-tertiary); text-decoration: line-through; opacity: 0.7; }
 /* 未分配工单视觉高亮 */
 .unassigned-cell { color: rgb(var(--warning-6)); }
-.unassigned-cell:hover { background: rgba(var(--warning-6), 0.08); }
+.unassigned-cell:hover { background: var(--tf-warning-bg); }
 .unassigned-label { font-style: italic; color: rgb(var(--warning-6)); opacity: 0.9; }
 .cell-spinner { font-size: 12px; color: var(--tf-text-tertiary); animation: spin 1s linear infinite; }
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
 .status-badge { padding: 2px 8px; border-radius: 3px; font-size: 11px; color: var(--tf-text-on-accent); font-weight: 500; }
 .time-ago { font-size: 11px; color: var(--tf-text-tertiary); }
-.time-over-budget { color: var(--tf-danger, #f85149); font-weight: 500; }
+.time-over-budget { color: var(--tf-danger); font-weight: 500; }
 .due-date-cell { font-size: 11px; color: var(--tf-text-tertiary); }
 .due-date-cell.due-overdue { color: var(--tf-danger); font-weight: 500; }
 .due-date-cell.due-due-soon { color: var(--tf-warning); font-weight: 500; }
@@ -4586,7 +4586,7 @@ onBeforeRouteLeave((_to, _from, next) => {
 .empty-icon { font-size: 36px; color: var(--tf-text-quaternary); }
 .empty-title { font-size: 14px; font-weight: 500; color: var(--tf-text-primary); margin: 0; }
 .empty-desc { font-size: 12px; color: var(--tf-text-tertiary); margin: 0 0 8px; }
-.error-state .error-icon { color: var(--color-danger-6, #f53f3f); }
+.error-state .error-icon { color: var(--tf-danger); }
 
 /* Pagination */
 .pagination-bar { display: flex; justify-content: center; padding: 12px 16px; border-top: 1px solid var(--tf-border); flex-shrink: 0; }
@@ -4610,7 +4610,7 @@ onBeforeRouteLeave((_to, _from, next) => {
   background: var(--tf-bg-hover, var(--color-fill-1));
 }
 .issue-table :deep(.issue-keyboard-focused) {
-  outline: 2px solid var(--tf-accent, #58a6ff);
+  outline: 2px solid var(--tf-accent);
   outline-offset: -2px;
 }
 
@@ -4625,23 +4625,23 @@ onBeforeRouteLeave((_to, _from, next) => {
   justify-content: center;
   gap: 8px;
   padding: 8px 16px;
-  background: var(--color-primary-light-1, rgba(88, 166, 255, 0.1));
-  border: 1px solid var(--tf-accent, #58a6ff);
+  background: var(--tf-accent-subtle));
+  border: 1px solid var(--tf-accent);
   border-radius: 4px;
   margin: 0 0 8px;
   cursor: pointer;
   transition: background 0.15s;
 }
 .realtime-update-bar:hover {
-  background: var(--color-primary-light-2, rgba(88, 166, 255, 0.15));
+  background: var(--tf-accent));
 }
 .realtime-update-text {
   font-size: 13px;
-  color: var(--tf-accent, #58a6ff);
+  color: var(--tf-accent);
   font-weight: 500;
 }
 .realtime-update-icon {
-  color: var(--tf-accent, #58a6ff);
+  color: var(--tf-accent);
 }
 
 /* Context menu */
@@ -4655,10 +4655,10 @@ onBeforeRouteLeave((_to, _from, next) => {
   position: fixed;
   z-index: 1000;
   min-width: 220px;
-  background: var(--tf-bg-elevated, #2a2d33);
+  background: var(--tf-bg-elevated);
   border: 1px solid var(--tf-border, rgba(255,255,255,0.1));
   border-radius: 6px;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+  box-shadow: var(--tf-shadow-lg);
   padding: 4px 0;
   user-select: none;
 }
@@ -4738,10 +4738,10 @@ onBeforeRouteLeave((_to, _from, next) => {
   left: 100%;
   top: 0;
   min-width: 200px;
-  background: var(--tf-bg-elevated, #2a2d33);
+  background: var(--tf-bg-elevated);
   border: 1px solid var(--tf-border, rgba(255,255,255,0.1));
   border-radius: 6px;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+  box-shadow: var(--tf-shadow-lg);
   padding: 4px 0;
   z-index: 1001;
 }

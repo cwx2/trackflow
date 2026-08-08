@@ -783,7 +783,7 @@ onMounted(() => {
 }
 .role-tag {
   padding: 4px 10px;
-  background: rgba(88,166,255,0.12);
+  background: var(--tf-accent-bg-light);
   color: var(--accent-blue);
   border-radius: var(--radius-sm);
   font-size: var(--font-size-xs);
@@ -840,8 +840,8 @@ onMounted(() => {
   font-size: 10px;
   padding: 1px 5px;
   border-radius: var(--radius-sm);
-  background: rgba(210,153,34,0.12);
-  color: var(--accent-orange, #d29922);
+  background: var(--tf-warning-bg);
+  color: var(--tf-warning);
   white-space: nowrap;
 }
 .btn-revoke {

@@ -107,7 +107,7 @@ defineProps<{
 
 .progress-fill {
   height: 100%;
-  background: var(--tf-accent, #58a6ff);
+  background: var(--tf-accent);
   border-radius: 2px;
   transition: width 300ms ease;
 }

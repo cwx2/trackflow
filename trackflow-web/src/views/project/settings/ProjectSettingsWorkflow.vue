@@ -992,8 +992,8 @@ onMounted(loadData)
   gap: 8px;
   padding: 12px 16px;
   border-radius: 6px;
-  background: var(--color-warning-light-1, rgba(255, 125, 0, 0.1));
-  color: var(--color-warning-6, #ff7d00);
+  background: var(--tf-warning-bg);
+  color: var(--tf-warning);
   font-size: 13px;
   margin-bottom: 24px;
 }
@@ -1195,7 +1195,7 @@ onMounted(loadData)
 }
 
 .rule-card.is-global {
-  border-left: 3px solid var(--color-warning-6, #ff7d00);
+  border-left: 3px solid var(--tf-warning);
 }
 
 .rule-main {

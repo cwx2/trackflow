@@ -317,7 +317,7 @@ onUnmounted(() => {
   border-radius: 10px;
   padding: 4px 0;
   min-width: 130px;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  box-shadow: var(--tf-shadow-lg);
   z-index: 50;
 }
 .zoom-menu-item {
@@ -389,7 +389,7 @@ onUnmounted(() => {
   gap: 6px;
   padding: 6px 16px;
   background: var(--wf-run-bg);
-  color: #fff;
+  color: var(--tf-text-on-accent);
   border: none;
   border-radius: 16px;
   cursor: pointer;

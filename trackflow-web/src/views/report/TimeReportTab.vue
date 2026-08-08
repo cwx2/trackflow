@@ -318,6 +318,7 @@ import {
   IconClockCircle
 } from '@arco-design/web-vue/es/icon'
 import { reportStatisticsApi } from '@/api/reportStatistics'
+import { readChartThemeColors, CHART_PALETTE } from '@/utils/chartColors'
 import type { TimeReportData, TimeReportGroupedData } from '@/api/reportStatistics'
 import type { ProjectVO } from '@/api/types'
 
@@ -389,19 +390,9 @@ const workItemColumns = [
 
 // ─── 主题色 ─────────────────────────────────────
 
-const chartColors = computed(() => {
-  const style = getComputedStyle(document.documentElement)
-  return {
-    textColor: style.getPropertyValue('--tf-text-secondary').trim() || '#9ca3af',
-    axisColor: style.getPropertyValue('--tf-border').trim() || '#30363d',
-    tooltipBg: style.getPropertyValue('--tf-bg-elevated').trim() || '#22252a',
-    tooltipBorder: style.getPropertyValue('--tf-border').trim() || '#30363d',
-    tooltipText: style.getPropertyValue('--tf-text-primary').trim() || '#e6edf3',
-    cardBorder: style.getPropertyValue('--tf-bg-elevated').trim() || '#2a2d33'
-  }
-})
+const chartColors = computed(() => readChartThemeColors())
 
-const palette = ['#58a6ff', '#3fb950', '#d29922', '#f85149', '#a371f7', '#79c0ff', '#56d364', '#e3b341', '#ff7b72', '#bc8cff']
+const palette = CHART_PALETTE
 
 // ─── 图表 Options ─────────────────────────────
 

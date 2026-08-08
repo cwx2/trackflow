@@ -154,11 +154,11 @@ function formatHours(hours: number): string {
 }
 
 .progress-segment.done {
-  background: rgb(var(--green-6));
+  background: var(--tf-success);
 }
 
 .progress-segment.in-progress {
-  background: rgb(var(--primary-6));
+  background: var(--tf-accent);
 }
 
 .progress-segment.todo {
@@ -206,11 +206,11 @@ function formatHours(hours: number): string {
 }
 
 .stat-item.done .stat-dot {
-  background: rgb(var(--green-6));
+  background: var(--tf-success);
 }
 
 .stat-item.in-progress .stat-dot {
-  background: rgb(var(--primary-6));
+  background: var(--tf-accent);
 }
 
 .stat-item.todo .stat-dot {

@@ -224,7 +224,7 @@ const visibleMenuItems = computed(() => {
   height: 36px;
   padding: 0 16px;
   background: var(--tf-accent);
-  color: #fff;
+  color: var(--tf-text-on-accent);
   border-radius: 6px;
   text-decoration: none;
   font-size: 13px;

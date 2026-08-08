@@ -47,7 +47,7 @@
         >
           <span
             class="preview-status-badge preview-status-badge--editable"
-            :style="{ backgroundColor: statusColor, color: '#fff' }"
+            :style="{ backgroundColor: statusColor, color: 'var(--tf-text-on-accent)' }"
             title="点击切换状态"
           >{{ localizeStatusName(detail.status?.name) }} <span class="edit-chevron">▾</span></span>
           <template #content>
@@ -350,7 +350,7 @@ async function selectStatus(target: IssueStatusVO) {
       content: () => h('div', { style: 'display:flex;flex-direction:column;gap:8px' }, [
         h('div', { style: 'display:flex;align-items:center;gap:6px' }, [
           h('span', { style: 'color:var(--color-text-3);font-size:13px' }, '目标状态：'),
-          h('span', { style: `background:${target.color};color:#fff;padding:2px 8px;border-radius:3px;font-size:12px` }, localizeStatusName(target.name))
+          h('span', { style: `background:${target.color};color: var(--tf-text-on-accent);padding:2px 8px;border-radius:3px;font-size:12px` }, localizeStatusName(target.name))
         ]),
         h('textarea', {
           placeholder: '请说明退回/变更的原因（必填）',
@@ -658,7 +658,7 @@ function renderCommentContent(content: string): string {
 .preview-issue-key {
   font-size: 13px;
   font-weight: 600;
-  color: rgb(var(--primary-6));
+  color: var(--tf-accent);
   cursor: pointer;
   transition: opacity 0.15s;
 }
@@ -809,17 +809,17 @@ function renderCommentContent(content: string): string {
 }
 
 .field-value--overdue {
-  color: var(--tf-danger, #f85149);
+  color: var(--tf-danger);
   font-weight: 500;
 }
 
 .field-value--due-soon {
-  color: var(--tf-warning, #d29922);
+  color: var(--tf-warning);
   font-weight: 500;
 }
 
 .field-value--over-budget {
-  color: var(--tf-danger, #f85149);
+  color: var(--tf-danger);
   font-weight: 500;
 }
 
@@ -831,13 +831,13 @@ function renderCommentContent(content: string): string {
 }
 
 .due-date-hint--overdue {
-  color: var(--tf-danger, #f85149);
-  background: rgba(248, 81, 73, 0.1);
+  color: var(--tf-danger);
+  background: var(--tf-danger-bg);
 }
 
 .due-date-hint--due-soon {
-  color: var(--tf-warning, #d29922);
-  background: rgba(210, 153, 34, 0.1);
+  color: var(--tf-warning);
+  background: var(--tf-warning-bg);
 }
 
 /* Tags */
@@ -982,7 +982,7 @@ function renderCommentContent(content: string): string {
 .view-all-comments {
   align-self: flex-start;
   font-size: 12px;
-  color: rgb(var(--primary-6));
+  color: var(--tf-accent);
 }
 
 /* ===== Inline Edit Panel ===== */
@@ -990,7 +990,7 @@ function renderCommentContent(content: string): string {
   background: var(--color-bg-2);
   border: 1px solid var(--color-border);
   border-radius: 6px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--tf-shadow);
   min-width: 180px;
   max-width: 240px;
   overflow: hidden;
@@ -1026,7 +1026,7 @@ function renderCommentContent(content: string): string {
   transition: border-color 0.15s;
 }
 .inline-search-input:focus {
-  border-color: rgb(var(--primary-6));
+  border-color: var(--tf-accent);
 }
 .inline-search-input::placeholder {
   color: var(--color-text-4);
@@ -1052,14 +1052,14 @@ function renderCommentContent(content: string): string {
   background: var(--color-fill-2);
 }
 .inline-edit-item--selected {
-  background: rgba(var(--primary-6), 0.08);
+  background: var(--tf-accent-light);
   font-weight: 500;
 }
 .inline-edit-item--selected::after {
   content: '✓';
   margin-left: auto;
   font-size: 12px;
-  color: rgb(var(--primary-6));
+  color: var(--tf-accent);
 }
 
 .status-dot {

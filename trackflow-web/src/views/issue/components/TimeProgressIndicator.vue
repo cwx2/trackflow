@@ -63,9 +63,9 @@ const ratio = computed(() => {
 const isOverdue = computed(() => ratio.value >= 1)
 
 // Colors following the design system
-const progressColor = computed(() => isOverdue.value ? 'var(--tf-error, #f85149)' : 'var(--tf-success, #3fb950)')
-const overdueColor = 'var(--tf-error, #f85149)'
-const overdueStroke = 'var(--tf-error, #f85149)'
+const progressColor = computed(() => isOverdue.value ? 'var(--tf-danger)' : 'var(--tf-success)')
+const overdueColor = 'var(--tf-danger)'
+const overdueStroke = 'var(--tf-danger)'
 const bgColor = computed(() => isOverdue.value ? overdueColor : 'var(--tf-bg-hover, rgba(255,255,255,0.06))')
 const strokeColor = computed(() => isOverdue.value ? overdueStroke : 'var(--tf-border-light, rgba(255,255,255,0.1))')
 

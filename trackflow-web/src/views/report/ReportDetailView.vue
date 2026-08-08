@@ -601,11 +601,11 @@ function formatRelativeTime(time?: string) {
   color: var(--tf-text-secondary);
 }
 
-.type-badge.type-by_status { color: var(--tf-accent); background: rgba(88, 166, 255, 0.1); }
-.type-badge.type-by_assignee { color: var(--tf-purple, #a371f7); background: rgba(163, 113, 247, 0.1); }
-.type-badge.type-by_priority { color: var(--tf-warning); background: rgba(210, 153, 34, 0.1); }
-.type-badge.type-by_type { color: var(--tf-success); background: rgba(63, 185, 80, 0.1); }
-.type-badge.type-issue_count { color: var(--tf-success); background: rgba(63, 185, 80, 0.1); }
+.type-badge.type-by_status { color: var(--tf-accent); background: var(--tf-accent-bg-light); }
+.type-badge.type-by_assignee { color: var(--tf-purple); background: rgba(163, 113, 247, 0.1); }
+.type-badge.type-by_priority { color: var(--tf-warning); background: var(--tf-warning-bg); }
+.type-badge.type-by_type { color: var(--tf-success); background: var(--tf-success-bg); }
+.type-badge.type-issue_count { color: var(--tf-success); background: var(--tf-success-bg); }
 
 .favorite-btn {
   display: inline-flex;
@@ -623,12 +623,12 @@ function formatRelativeTime(time?: string) {
 }
 
 .favorite-btn:hover {
-  color: var(--tf-warning, #d29922);
+  color: var(--tf-warning);
   transform: scale(1.15);
 }
 
 .favorite-btn.is-favorited {
-  color: var(--tf-warning, #d29922);
+  color: var(--tf-warning);
 }
 
 .title-meta {
@@ -823,7 +823,7 @@ function formatRelativeTime(time?: string) {
   .detail-chart-area {
     border: none;
     padding: 0;
-    background: #fff !important;
+    background: var(--tf-bg-body) !important;
   }
 
   .report-title {
@@ -840,8 +840,8 @@ function formatRelativeTime(time?: string) {
 
   .matrix-table th,
   .matrix-table td {
-    border: 1px solid #ddd !important;
-    background: #fff !important;
+    border: 1px solid var(--tf-border) !important;
+    background: var(--tf-bg-body) !important;
     color: #000 !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;

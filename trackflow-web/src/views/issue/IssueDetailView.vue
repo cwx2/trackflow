@@ -775,7 +775,7 @@ onBeforeRouteLeave((_to, _from, next) => {
 <style scoped>
 .attr-value-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
 .time-author-option { display: flex; align-items: center; gap: 6px; }
-.time-author-avatar { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 50%; background: var(--tf-accent); color: #fff; font-size: 11px; font-weight: 600; flex-shrink: 0; }
+.time-author-avatar { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 50%; background: var(--tf-accent); color: var(--tf-text-on-accent); font-size: 11px; font-weight: 600; flex-shrink: 0; }
 .time-author-name { flex: 1; font-size: 13px; }
 .time-author-self { font-size: 11px; color: var(--tf-text-tertiary); }
 
@@ -789,11 +789,11 @@ onBeforeRouteLeave((_to, _from, next) => {
   gap: 8px;
   padding: 8px 16px;
   background: var(--tf-accent, #0969da);
-  color: #fff;
+  color: var(--tf-text-on-accent);
   font-size: 13px;
   cursor: pointer;
   flex-shrink: 0;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  box-shadow: var(--tf-shadow);
 }
 
 .realtime-update-icon {
@@ -822,7 +822,7 @@ onBeforeRouteLeave((_to, _from, next) => {
 .realtime-update-close {
   background: none;
   border: none;
-  color: #fff;
+  color: var(--tf-text-on-accent);
   cursor: pointer;
   padding: 2px 6px;
   font-size: 14px;
@@ -868,14 +868,14 @@ onBeforeRouteLeave((_to, _from, next) => {
   align-items: center;
   gap: 12px;
   padding: 10px 16px;
-  background: rgba(210, 153, 34, 0.08);
+  background: var(--tf-warning-bg);
   border-bottom: 1px solid rgba(210, 153, 34, 0.25);
   flex-shrink: 0;
 }
 
 .archived-icon {
   font-size: 18px;
-  color: #d29922;
+  color: var(--tf-warning);
   flex-shrink: 0;
 }
 
@@ -888,7 +888,7 @@ onBeforeRouteLeave((_to, _from, next) => {
 .archived-title {
   font-size: 12px;
   font-weight: 600;
-  color: #d29922;
+  color: var(--tf-warning);
 }
 
 .archived-desc {

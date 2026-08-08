@@ -344,8 +344,8 @@
         勾选单元格表示仅当用户是工单<b>负责人</b>时，额外允许此转换（不影响基础规则）。
       </template>
       <span style="color: rgb(var(--arcoblue-6))">■</span> 蓝点=已配置动作（左键）；
-      <span style="color: #d29922">■</span> 橙点=已配置守卫条件（右键）。
-      <span style="color: #d29922">★</span> 星标=初始状态（新建工单默认进入的状态）。
+      <span style="color: var(--tf-warning)">■</span> 橙点=已配置守卫条件（右键）。
+      <span style="color: var(--tf-warning)">★</span> 星标=初始状态（新建工单默认进入的状态）。
       hover 单元格高亮对应行列。
     </div>
     </div>
@@ -1208,7 +1208,7 @@ async function saveMatrix() {
     if (added.length > 0) {
       const addedItems = added.slice(0, 5).map(item =>
         h('div', { style: 'padding: 2px 0; color: var(--color-text-2); font-size: 13px;' }, [
-          h('span', { style: 'color: #3fb950; margin-right: 6px;' }, '＋'),
+          h('span', { style: 'color: var(--tf-success); margin-right: 6px;' }, '＋'),
           `新增转换：${item.fromName} → ${item.toName}`
         ])
       )
@@ -1224,7 +1224,7 @@ async function saveMatrix() {
     if (removed.length > 0) {
       const removedItems = removed.slice(0, 5).map(item =>
         h('div', { style: 'padding: 2px 0; color: var(--color-text-2); font-size: 13px;' }, [
-          h('span', { style: 'color: #f85149; margin-right: 6px;' }, '✕'),
+          h('span', { style: 'color: var(--tf-danger); margin-right: 6px;' }, '✕'),
           `删除转换：${item.fromName} → ${item.toName}`
         ])
       )
@@ -1782,7 +1782,7 @@ onBeforeRouteLeave(() => {
   gap: 8px;
   padding: 8px 12px;
   margin-bottom: 12px;
-  background: rgba(var(--arcoblue-6), 0.08);
+  background: var(--tf-accent-light);
   border: 1px solid rgba(var(--arcoblue-6), 0.2);
   border-radius: 6px;
   font-size: 12px;

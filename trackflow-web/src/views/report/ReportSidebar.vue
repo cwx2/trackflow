@@ -435,19 +435,19 @@ async function handleToggleFavorite(report: ReportDefinitionVO) {
 }
 
 .item-type-dot.dot-issue_distribution {
-  background: var(--tf-accent, #58a6ff);
+  background: var(--tf-accent);
 }
 
 .item-type-dot.dot-timeline {
-  background: var(--tf-success, #3fb950);
+  background: var(--tf-success);
 }
 
 .item-type-dot.dot-state_transition {
-  background: var(--tf-purple, #a371f7);
+  background: var(--tf-purple);
 }
 
 .item-type-dot.dot-time_management {
-  background: var(--tf-warning, #d29922);
+  background: var(--tf-warning);
 }
 
 .item-type-dot.dot-other {
@@ -484,12 +484,12 @@ async function handleToggleFavorite(report: ReportDefinitionVO) {
 }
 
 .favorite-btn:hover {
-  color: var(--tf-warning, #d29922);
+  color: var(--tf-warning);
   transform: scale(1.15);
 }
 
 .unfavorite-btn {
-  color: var(--tf-warning, #d29922);
+  color: var(--tf-warning);
 }
 
 .unfavorite-btn:hover {

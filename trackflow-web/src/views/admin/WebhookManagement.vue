@@ -502,8 +502,8 @@ onMounted(async () => {
   font-weight: 500;
 }
 .status-badge.active {
-  background: rgba(63, 185, 80, 0.15);
-  color: var(--tf-success, #3fb950);
+  background: var(--tf-success-bg);
+  color: var(--tf-success);
 }
 .status-badge.inactive {
   background: rgba(139, 148, 158, 0.15);
@@ -607,12 +607,12 @@ onMounted(async () => {
   flex-shrink: 0;
 }
 .log-status.success {
-  background: rgba(63, 185, 80, 0.15);
-  color: var(--tf-success, #3fb950);
+  background: var(--tf-success-bg);
+  color: var(--tf-success);
 }
 .log-status.failed {
   background: rgba(248, 81, 73, 0.15);
-  color: var(--tf-error, #f85149);
+  color: var(--tf-danger);
 }
 
 .log-event {

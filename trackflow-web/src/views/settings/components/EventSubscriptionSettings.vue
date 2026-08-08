@@ -126,7 +126,7 @@ function onSave() {
   justify-content: space-between;
   padding: 12px 16px;
   margin-bottom: 20px;
-  background: var(--tf-bg-surface, #22252a);
+  background: var(--tf-bg-surface);
   border-radius: 6px;
   border: 1px solid var(--tf-border-light);
 }

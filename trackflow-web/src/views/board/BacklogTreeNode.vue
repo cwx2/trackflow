@@ -112,7 +112,7 @@ function typeLabel(type: string): string {
 }
 
 .backlog-card:hover {
-  border-color: rgb(var(--primary-6));
+  border-color: var(--tf-accent);
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
 }
 
@@ -128,7 +128,7 @@ function typeLabel(type: string): string {
 }
 
 .backlog-card--has-children {
-  border-left: 2px solid rgba(var(--primary-6), 0.3);
+  border-left: 2px solid var(--tf-accent-bg);
 }
 
 /* ===== 展开/折叠按钮 ===== */

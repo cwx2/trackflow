@@ -173,7 +173,7 @@ defineExpose({ resetSubmitting })
 
 .notice-icon {
   font-size: 16px;
-  color: #d29922;
+  color: var(--tf-warning);
   flex-shrink: 0;
   margin-top: 1px;
 }
@@ -204,7 +204,7 @@ defineExpose({ resetSubmitting })
 }
 
 .notice-warning {
-  color: #d29922;
+  color: var(--tf-warning);
   font-weight: 500;
 }
 </style>

@@ -55,13 +55,13 @@ function buildBurndownOption(data: SprintBurndownVO): Record<string, any> {
     tooltip: {
       trigger: 'axis',
       backgroundColor: 'var(--tf-bg-elevated, #22252a)',
-      borderColor: 'var(--tf-border, #30363d)',
-      textStyle: { color: 'var(--tf-text-primary, #e6edf3)', fontSize: 11 }
+      borderColor: 'var(--tf-border)',
+      textStyle: { color: 'var(--tf-text-primary)', fontSize: 11 }
     },
     legend: {
       data: ['理想线', '实际线', '范围线'],
       bottom: 0,
-      textStyle: { color: 'var(--tf-text-secondary, #9ca3af)', fontSize: 10 },
+      textStyle: { color: 'var(--tf-text-secondary)', fontSize: 10 },
       itemWidth: 16,
       itemHeight: 3
     },
@@ -125,13 +125,13 @@ function buildCumulativeFlowOption(data: { dates: string[]; series: Array<{ name
       trigger: 'axis',
       axisPointer: { type: 'cross' },
       backgroundColor: 'var(--tf-bg-elevated, #22252a)',
-      borderColor: 'var(--tf-border, #30363d)',
-      textStyle: { color: 'var(--tf-text-primary, #e6edf3)', fontSize: 11 }
+      borderColor: 'var(--tf-border)',
+      textStyle: { color: 'var(--tf-text-primary)', fontSize: 11 }
     },
     legend: {
       data: data.series.map(s => s.name),
       bottom: 0,
-      textStyle: { color: 'var(--tf-text-secondary, #9ca3af)', fontSize: 10 },
+      textStyle: { color: 'var(--tf-text-secondary)', fontSize: 10 },
       itemWidth: 12,
       itemHeight: 8
     },

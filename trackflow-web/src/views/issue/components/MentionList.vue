@@ -90,7 +90,7 @@ defineExpose({ onKeyDown })
   background: var(--tf-bg-elevated);
   border: 1px solid var(--tf-border);
   border-radius: 6px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--tf-shadow-xl);
   max-height: 240px;
   overflow-y: auto;
   padding: 4px;

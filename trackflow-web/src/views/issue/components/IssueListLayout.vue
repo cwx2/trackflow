@@ -526,7 +526,7 @@ onUnmounted(() => {
 
 .list-error .error-icon {
   font-size: 32px;
-  color: var(--color-danger-6, #f53f3f);
+  color: var(--tf-danger);
   margin-bottom: 12px;
 }
 

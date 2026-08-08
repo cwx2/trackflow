@@ -583,7 +583,7 @@ function confirmDeleteAll() {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--tf-overlay);
   opacity: 0;
   transition: opacity 150ms;
 }
@@ -600,7 +600,7 @@ function confirmDeleteAll() {
   border-radius: 4px;
   border: none;
   background: rgba(255, 255, 255, 0.15);
-  color: #fff;
+  color: var(--tf-text-on-accent);
   cursor: pointer;
   transition: background 150ms;
 }
@@ -765,8 +765,8 @@ function confirmDeleteAll() {
 }
 
 /* Danger option in dropdown */
-.danger-opt :deep(.arco-dropdown-option-content) { color: #f85149; }
-.danger-opt :deep(.arco-icon) { color: #f85149; }
+.danger-opt :deep(.arco-dropdown-option-content) { color: var(--tf-danger); }
+.danger-opt :deep(.arco-icon) { color: var(--tf-danger); }
 
 /* Video play overlay in grid */
 .att-video-play-overlay {

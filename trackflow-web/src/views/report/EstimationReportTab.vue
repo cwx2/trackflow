@@ -131,6 +131,7 @@ import { IconDownload } from '@arco-design/web-vue/es/icon'
 import { reportStatisticsApi } from '@/api/reportStatistics'
 import type { EstimationReportData } from '@/api/reportStatistics'
 import type { ProjectVO } from '@/api/types'
+import { readChartThemeColors } from '@/utils/chartColors'
 
 use([CanvasRenderer, BarChart, TooltipComponent, GridComponent, LegendComponent])
 
@@ -148,16 +149,7 @@ const projects = computed(() => props.projects)
 
 // ─── 主题色 ─────────────────────────────
 
-const chartColors = computed(() => {
-  const style = getComputedStyle(document.documentElement)
-  return {
-    textColor: style.getPropertyValue('--tf-text-secondary').trim() || '#9ca3af',
-    axisColor: style.getPropertyValue('--tf-border').trim() || '#30363d',
-    tooltipBg: style.getPropertyValue('--tf-bg-elevated').trim() || '#22252a',
-    tooltipBorder: style.getPropertyValue('--tf-border').trim() || '#30363d',
-    tooltipText: style.getPropertyValue('--tf-text-primary').trim() || '#e6edf3'
-  }
-})
+const chartColors = computed(() => readChartThemeColors())
 
 const projectComparisonOption = computed(() => {
   if (!reportData.value || !reportData.value.byProject.length) return {}
@@ -520,17 +512,17 @@ defineExpose({ loadData })
 }
 
 .badge-over {
-  background: rgba(248, 81, 73, 0.1);
+  background: var(--tf-danger-bg);
   color: var(--tf-danger);
 }
 
 .badge-under {
-  background: rgba(88, 166, 255, 0.1);
+  background: var(--tf-accent-bg-light);
   color: var(--tf-accent);
 }
 
 .badge-on_track {
-  background: rgba(63, 185, 80, 0.1);
+  background: var(--tf-success-bg);
   color: var(--tf-success);
 }
 

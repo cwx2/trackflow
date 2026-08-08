@@ -178,7 +178,7 @@ watch(() => props.modelValue, (val) => {
 .mode-tab.active {
   background: var(--tf-accent);
   border-color: var(--tf-accent);
-  color: #fff;
+  color: var(--tf-text-on-accent);
 }
 
 .selected-ref {
@@ -186,16 +186,16 @@ watch(() => props.modelValue, (val) => {
   align-items: center;
   gap: 6px;
   padding: 3px 8px;
-  background: #1e3a5f;
-  border: 1px solid #3b82f6;
+  background: var(--tf-accent-bg);
+  border: 1px solid var(--tf-accent);
   border-radius: 6px;
   cursor: pointer;
   font-size: 12px;
 }
 .ref-tag { display: flex; align-items: center; gap: 2px; flex: 1; }
-.ref-node { color: #93c5fd; font-weight: 500; }
-.ref-sep  { color: #475569; }
-.ref-port { color: #e2e8f0; }
+.ref-node { color: var(--tf-accent); font-weight: 500; }
+.ref-sep  { color: var(--tf-text-muted); }
+.ref-port { color: var(--tf-text-primary); }
 .ref-type { color: #64748b; font-size: 10px; }
 .clear-btn { color: #64748b; cursor: pointer; font-size: 10px; }
 .clear-btn:hover { color: #ef4444; }

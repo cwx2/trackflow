@@ -352,7 +352,7 @@ function onNodeClick() {
   border-radius: 8px;
   padding: 4px 0;
   min-width: 120px;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  box-shadow: var(--tf-shadow-lg);
   z-index: 100;
   white-space: nowrap;
 }

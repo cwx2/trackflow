@@ -1241,7 +1241,7 @@ defineExpose({ clearAll, setFilters, setSearchKeyword })
 
 .sq-chip-close:hover {
   background: var(--tf-accent);
-  color: #fff;
+  color: var(--tf-text-on-accent);
 }
 
 .search-input {
@@ -1364,7 +1364,7 @@ defineExpose({ clearAll, setFilters, setSearchKeyword })
 }
 
 .chip-remove:hover {
-  background: rgba(248, 81, 73, 0.1);
+  background: var(--tf-danger-bg);
   color: var(--tf-danger);
 }
 
@@ -1423,7 +1423,7 @@ defineExpose({ clearAll, setFilters, setSearchKeyword })
   background: var(--tf-bg-elevated);
   border: 1px solid var(--tf-border);
   border-radius: var(--tf-radius-lg);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--tf-shadow-xl);
   padding: 4px;
   z-index: 300;
 }
@@ -1476,7 +1476,7 @@ defineExpose({ clearAll, setFilters, setSearchKeyword })
   background: var(--tf-bg-elevated);
   border: 1px solid var(--tf-border);
   border-radius: var(--tf-radius-lg);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  box-shadow: var(--tf-shadow-lg);
   padding: 4px;
   max-height: 320px;
   overflow-y: auto;
@@ -1618,7 +1618,7 @@ defineExpose({ clearAll, setFilters, setSearchKeyword })
   border: none;
   border-radius: 4px;
   background: var(--tf-accent);
-  color: #fff;
+  color: var(--tf-text-on-accent);
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;

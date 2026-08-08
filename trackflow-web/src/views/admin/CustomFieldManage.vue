@@ -1798,8 +1798,8 @@ onMounted(() => {
 }
 
 .field-badge--required {
-  background: color-mix(in srgb, var(--tf-error, #f85149) 12%, transparent);
-  color: var(--tf-error, #f85149);
+  background: color-mix(in srgb, var(--tf-danger) 12%, transparent);
+  color: var(--tf-danger);
 }
 
 .field-badge--global {
@@ -1808,8 +1808,8 @@ onMounted(() => {
 }
 
 .field-badge--private {
-  background: color-mix(in srgb, var(--tf-warning, #d29922) 12%, transparent);
-  color: var(--tf-warning, #d29922);
+  background: color-mix(in srgb, var(--tf-warning) 12%, transparent);
+  color: var(--tf-warning);
 }
 
 .field-badge--hidden {
@@ -2201,7 +2201,7 @@ onMounted(() => {
   background: var(--tf-bg-elevated);
   border: 1px solid var(--tf-border);
   border-radius: 6px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--tf-shadow);
 }
 
 .color-palette-item {
@@ -2222,7 +2222,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
+  color: var(--tf-text-on-accent);
   font-size: 12px;
   font-weight: 700;
   text-shadow: 0 1px 1px rgba(0, 0, 0, 0.3);

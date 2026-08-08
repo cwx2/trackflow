@@ -493,13 +493,13 @@ defineExpose({ removeIssue, refresh })
 }
 
 .view-mode-btn--active {
-  background: rgb(var(--primary-6));
-  color: #fff;
+  background: var(--tf-accent);
+  color: var(--tf-text-on-accent);
 }
 
 .view-mode-btn--active:hover {
-  background: rgb(var(--primary-6));
-  color: #fff;
+  background: var(--tf-accent);
+  color: var(--tf-text-on-accent);
 }
 
 .backlog-search {
@@ -542,7 +542,7 @@ defineExpose({ removeIssue, refresh })
 }
 
 .backlog-card:hover {
-  border-color: rgb(var(--primary-6));
+  border-color: var(--tf-accent);
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
 }
 

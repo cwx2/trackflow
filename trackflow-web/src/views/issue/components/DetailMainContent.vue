@@ -404,11 +404,11 @@ function commitDesc(content: string) {
 .identity-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
 .iss-key { font-size: 12px; color: var(--tf-text-tertiary); }
 .type-badge { font-size: 11px; padding: 2px 6px; border-radius: 3px; font-weight: 600; }
-.t-bug { background: #d32f2f; color: #fff; }
-.t-task { background: #1976d2; color: #fff; }
-.t-feature { background: #388e3c; color: #fff; }
-.t-epic { background: #7b1fa2; color: #fff; }
-.t-story { background: #f57c00; color: #fff; }
+.t-bug { background: #d32f2f; color: var(--tf-text-on-accent); }
+.t-task { background: #1976d2; color: var(--tf-text-on-accent); }
+.t-feature { background: #388e3c; color: var(--tf-text-on-accent); }
+.t-epic { background: #7b1fa2; color: var(--tf-text-on-accent); }
+.t-story { background: #f57c00; color: var(--tf-text-on-accent); }
 
 /* Copy ID button */
 .copy-id-btn {
@@ -472,8 +472,8 @@ function commitDesc(content: string) {
 .action-icon:hover { color: var(--tf-text-primary); background: var(--tf-bg-hover); }
 
 /* More actions dropdown */
-.danger-option :deep(.arco-dropdown-option-content) { color: #f85149; }
-.danger-option :deep(.arco-icon) { color: #f85149; }
+.danger-option :deep(.arco-dropdown-option-content) { color: var(--tf-danger); }
+.danger-option :deep(.arco-icon) { color: var(--tf-danger); }
 
 /* Tags */
 .tag-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; align-items: center; }
@@ -498,7 +498,7 @@ function commitDesc(content: string) {
   margin-top: 4px; width: 220px;
   background: var(--tf-bg-elevated); border: 1px solid var(--tf-border);
   border-radius: 6px; overflow: hidden;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--tf-shadow-xl);
 }
 .tag-search-input {
   width: 100%; padding: 8px 12px; border: none; outline: none;
@@ -525,7 +525,7 @@ function commitDesc(content: string) {
 }
 .tag-picker-confirm {
   padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 500;
-  background: var(--tf-accent); color: #fff; border: none; cursor: pointer;
+  background: var(--tf-accent); color: var(--tf-text-on-accent); border: none; cursor: pointer;
   transition: opacity 150ms;
 }
 .tag-picker-confirm:hover { opacity: 0.85; }
@@ -603,7 +603,7 @@ function commitDesc(content: string) {
   opacity: 0; pointer-events: none;
   transition: opacity 150ms, color 150ms, background 150ms;
 }
-.link-delete-btn:hover { color: var(--color-danger-light-4, #f76965); background: rgba(248, 81, 73, 0.08); }
+.link-delete-btn:hover { color: var(--tf-danger); background: var(--tf-danger-bg); }
 .link-item:hover .link-delete-btn { opacity: 1; pointer-events: auto; }
 
 /* Attachments: now in AttachmentSection.vue */

@@ -141,13 +141,13 @@ watch(() => props.data, (val) => {
 }
 
 .output-icon.success {
-  background: var(--color-success-light-1, rgba(82, 196, 26, 0.1));
+  background: var(--tf-success-bg);
   color: var(--color-success-light-4, #52c41a);
 }
 
 .output-icon.danger {
   background: var(--color-danger-light-1, rgba(245, 34, 45, 0.1));
-  color: var(--color-danger-light-4, #f5222d);
+  color: var(--tf-danger);
 }
 
 .output-label {

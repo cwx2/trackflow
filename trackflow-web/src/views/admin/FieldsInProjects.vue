@@ -936,7 +936,7 @@ defineExpose({ refresh: loadData })
   font-size: 11px;
   padding: 2px 6px;
   border-radius: 3px;
-  background: var(--color-warning-light-1, rgba(210, 153, 34, 0.15));
+  background: var(--tf-warning-bg);
   color: var(--tf-warning);
   font-weight: 500;
 }
@@ -1035,7 +1035,7 @@ defineExpose({ refresh: loadData })
   font-size: 10px;
   padding: 1px 5px;
   border-radius: 3px;
-  background: var(--color-warning-light-1, rgba(210, 153, 34, 0.15));
+  background: var(--tf-warning-bg);
   color: var(--tf-warning);
   font-weight: 500;
 }
@@ -1080,32 +1080,32 @@ defineExpose({ refresh: loadData })
   font-weight: 500;
 }
 .badge-global {
-  background: var(--color-primary-light-1, rgba(88, 166, 255, 0.15));
+  background: var(--tf-accent-subtle));
   color: var(--tf-accent);
 }
 .badge-project {
-  background: var(--color-success-light-1, rgba(63, 185, 80, 0.15));
+  background: var(--tf-success-bg);
   color: var(--tf-success);
 }
 .badge-required {
-  background: var(--color-warning-light-1, rgba(210, 153, 34, 0.15));
+  background: var(--tf-warning-bg);
   color: var(--tf-warning);
 }
 .badge-not-required {
-  background: var(--color-fill-2, rgba(128, 128, 128, 0.1));
+  background: var(--tf-fill-medium);
   color: var(--tf-text-secondary);
 }
 .badge-overridden {
   border: 1px dashed var(--tf-warning);
 }
 .badge-default-override {
-  background: var(--color-primary-light-1, rgba(88, 166, 255, 0.1));
+  background: var(--tf-accent-subtle));
   color: var(--tf-accent);
   border: 1px dashed var(--tf-accent);
 }
 .badge-multi {
-  background: var(--color-purple-light-1, rgba(156, 39, 176, 0.15));
-  color: #b388ff;
+  background: var(--tf-purple-bg);
+  color: var(--tf-purple);
 }
 
 .field-actions {
@@ -1233,7 +1233,7 @@ defineExpose({ refresh: loadData })
   align-items: flex-start;
   gap: 6px;
   padding: 10px 12px;
-  background: var(--color-primary-light-1, rgba(88, 166, 255, 0.08));
+  background: var(--tf-accent-subtle));
   border-radius: 4px;
   font-size: 12px;
   color: var(--tf-text-secondary);

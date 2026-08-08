@@ -219,7 +219,7 @@
                 </div>
               </template>
               <a-option v-for="p in projects" :key="p.id" :value="p.id">
-                <span v-if="p.favorited" style="color: #d29922; margin-right: 4px; font-size: 10px">★</span>{{ p.key }} - {{ p.name }}
+                <span v-if="p.favorited" style="color: var(--tf-warning); margin-right: 4px; font-size: 10px">★</span>{{ p.key }} - {{ p.name }}
               </a-option>
             </a-select>
           </div>
@@ -2015,16 +2015,16 @@ onMounted(() => {
   vertical-align: middle;
 }
 .draft-count-badge:hover {
-  color: var(--tf-accent, rgb(var(--primary-6)));
-  border-color: var(--tf-accent, rgb(var(--primary-6)));
-  background: var(--color-primary-light-1, rgba(var(--primary-6), 0.06));
+  color: var(--tf-accent);
+  border-color: var(--tf-accent);
+  background: var(--tf-accent-subtle);
 }
 
 /* 草稿下拉面板 */
 .draft-dropdown-panel {
   width: 320px;
   max-height: 360px;
-  background: var(--color-bg-popup, var(--color-bg-2));
+  background: var(--tf-popup-bg);
   border-radius: 8px;
   box-shadow: var(--tf-shadow-xl);
   overflow: hidden;
@@ -2121,13 +2121,13 @@ onMounted(() => {
   user-select: none;
 }
 .template-chip:hover {
-  border-color: var(--tf-accent, rgb(var(--primary-6)));
-  color: var(--tf-accent, rgb(var(--primary-6)));
-  background: var(--color-primary-light-1, rgba(var(--primary-6), 0.06));
+  border-color: var(--tf-accent);
+  color: var(--tf-accent);
+  background: var(--tf-accent-subtle);
 }
 .template-chip.active {
-  border-color: var(--tf-accent, rgb(var(--primary-6)));
-  background: var(--tf-accent, rgb(var(--primary-6)));
+  border-color: var(--tf-accent);
+  background: var(--tf-accent);
   color: var(--tf-text-on-accent);
 }
 .template-chip-clear {
@@ -2207,7 +2207,7 @@ onMounted(() => {
   flex-shrink: 0;
   transition: color 100ms;
 }
-.attachment-file-remove:hover { color: var(--color-danger-light-4, #f53f3f); }
+.attachment-file-remove:hover { color: var(--tf-danger); }
 
 /* 粘贴提示 */
 .paste-hint {
@@ -2241,7 +2241,7 @@ onMounted(() => {
   transition: color 150ms;
 }
 .prop-section-header:hover {
-  color: var(--tf-accent, rgb(var(--primary-6)));
+  color: var(--tf-accent);
 }
 .section-title {
   font-size: 12px;
@@ -2257,7 +2257,7 @@ onMounted(() => {
   transition: transform 200ms, color 150ms;
 }
 .prop-section-header:hover .section-toggle {
-  color: var(--tf-accent, rgb(var(--primary-6)));
+  color: var(--tf-accent);
 }
 
 .required-mark { 
@@ -2270,7 +2270,7 @@ onMounted(() => {
 
 /* "设置值"标记 — 无默认值但必填字段的醒目提示 */
 .required-mark.set-value-mark {
-  color: var(--tf-warning, #d29922);
+  color: var(--tf-warning);
 }
 
 /* 必填自定义字段：在主区域直接显示，添加顶部分隔线作为视觉分隔 */
@@ -2317,21 +2317,21 @@ onMounted(() => {
   border-top-left-radius: 0;
   border-bottom-left-radius: 0;
   border-left: 1px solid rgba(255, 255, 255, 0.3);
-  background: rgb(var(--primary-6, 22, 93, 255));
+  background: var(--tf-accent);
   color: var(--tf-text-on-accent);
   cursor: pointer;
   transition: background-color 100ms;
   font-size: 12px;
 }
-.split-arrow-trigger:hover { background: rgb(var(--primary-5, 14, 66, 210)); }
-.split-arrow-trigger:active { background: rgb(var(--primary-7, 14, 66, 210)); }
+.split-arrow-trigger:hover { background: var(--tf-accent-hover); }
+.split-arrow-trigger:active { background: var(--tf-accent); }
 .split-arrow-trigger:disabled { opacity: 0.4; cursor: not-allowed; }
 .split-arrow-trigger :deep(.arco-icon) { font-size: 12px; }
 
 .split-menu {
-  background: var(--color-bg-popup, #fff);
+  background: var(--tf-popup-bg);
   border-radius: 4px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--tf-shadow);
   padding: 4px 0;
   min-width: 120px;
 }
@@ -2345,8 +2345,8 @@ onMounted(() => {
   align-items: center;
   gap: 6px;
 }
-.split-menu-item:hover { background: var(--color-fill-2, #f2f3f5); }
-.split-menu-item.active { color: var(--tf-accent, rgb(var(--primary-6))); font-weight: 500; }
+.split-menu-item:hover { background: var(--tf-fill-medium); }
+.split-menu-item.active { color: var(--tf-accent); font-weight: 500; }
 .split-menu-check { font-size: 12px; }
 
 /* Inline add option in select footer */
@@ -2357,7 +2357,7 @@ onMounted(() => {
   padding: 6px 12px;
   cursor: pointer;
   font-size: 12px;
-  color: var(--tf-accent, rgb(var(--primary-6)));
+  color: var(--tf-accent);
   border-top: 1px solid var(--color-border-2, var(--tf-border-light));
   transition: background 120ms;
 }
@@ -2380,12 +2380,12 @@ onMounted(() => {
   font-size: 12px;
   outline: none;
 }
-.add-opt-field:focus { border-color: var(--tf-accent, rgb(var(--primary-6))); }
+.add-opt-field:focus { border-color: var(--tf-accent); }
 .add-opt-btn {
   padding: 3px 8px;
   border: none;
   border-radius: 4px;
-  background: var(--tf-accent, rgb(var(--primary-6)));
+  background: var(--tf-accent);
   color: var(--tf-text-on-accent);
   font-size: 11px;
   font-weight: 500;
@@ -2429,7 +2429,7 @@ onMounted(() => {
 }
 .linked-issue-key {
   font-weight: 500;
-  color: var(--tf-accent, rgb(var(--primary-6)));
+  color: var(--tf-accent);
 }
 .linked-issue-title {
   flex: 1;
@@ -2443,7 +2443,7 @@ onMounted(() => {
   color: var(--color-text-3);
   transition: color 120ms;
 }
-.remove-link-btn:hover { color: var(--color-danger-light-4, #f53f3f); }
+.remove-link-btn:hover { color: var(--tf-danger); }
 .add-link-row {
   display: flex;
   align-items: center;
@@ -2497,7 +2497,7 @@ onMounted(() => {
 .similar-issue-key {
   font-size: 12px;
   font-weight: 500;
-  color: var(--tf-accent, rgb(var(--primary-6)));
+  color: var(--tf-accent);
   flex-shrink: 0;
 }
 .similar-issue-title {

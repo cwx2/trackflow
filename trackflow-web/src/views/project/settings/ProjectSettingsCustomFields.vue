@@ -1505,7 +1505,7 @@ onMounted(() => {
   padding: 1px 6px;
   border-radius: 3px;
   background: rgba(245, 63, 63, 0.08);
-  color: var(--color-danger-6, #f53f3f);
+  color: var(--tf-danger);
 }
 
 .field-global-badge {
@@ -1523,8 +1523,8 @@ onMounted(() => {
   font-size: 11px;
   padding: 1px 6px;
   border-radius: 3px;
-  background: rgba(210, 153, 34, 0.1);
-  color: var(--tf-warning, #d29922);
+  background: var(--tf-warning-bg);
+  color: var(--tf-warning);
 }
 
 .field-visibility-badge {
@@ -1775,7 +1775,7 @@ onMounted(() => {
 
 .warning-icon {
   font-size: 18px;
-  color: var(--color-danger-6, #f53f3f);
+  color: var(--tf-danger);
   flex-shrink: 0;
   margin-top: 1px;
 }
@@ -1813,7 +1813,7 @@ onMounted(() => {
 
 .effective-value.is-required {
   background: rgba(245, 63, 63, 0.08);
-  color: var(--color-danger-6, #f53f3f);
+  color: var(--tf-danger);
 }
 
 .effective-default {
@@ -1878,7 +1878,7 @@ onMounted(() => {
   border-radius: 3px;
   font-size: 11px;
   font-weight: 700;
-  color: #fff;
+  color: var(--tf-text-on-accent);
 }
 
 .advanced-action-hint {

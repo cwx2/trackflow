@@ -317,7 +317,7 @@ async function doToggle(newEnabled: boolean) {
 
 .disabled-notice .notice-icon {
   font-size: 18px;
-  color: var(--color-warning-6, #d29922);
+  color: var(--tf-warning);
   flex-shrink: 0;
   margin-top: 2px;
 }
@@ -361,7 +361,7 @@ async function doToggle(newEnabled: boolean) {
 
 .feature-icon {
   font-size: 16px;
-  color: var(--color-success-6, #3fb950);
+  color: var(--tf-success);
   flex-shrink: 0;
 }
 
@@ -388,7 +388,7 @@ async function doToggle(newEnabled: boolean) {
 
 .impact-warning-icon {
   font-size: 18px;
-  color: var(--color-warning-6, #d29922);
+  color: var(--tf-warning);
 }
 
 .impact-title {
@@ -422,8 +422,8 @@ async function doToggle(newEnabled: boolean) {
 }
 
 .impact-stat-warning {
-  background: color-mix(in srgb, var(--color-warning-6, #d29922) 8%, transparent);
-  border: 1px solid color-mix(in srgb, var(--color-warning-6, #d29922) 20%, transparent);
+  background: color-mix(in srgb, var(--tf-warning) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--tf-warning) 20%, transparent);
 }
 
 .stat-label {
@@ -438,7 +438,7 @@ async function doToggle(newEnabled: boolean) {
 }
 
 .impact-stat-warning .stat-value {
-  color: var(--color-warning-6, #d29922);
+  color: var(--tf-warning);
 }
 
 .impact-description {
@@ -467,10 +467,10 @@ async function doToggle(newEnabled: boolean) {
   align-items: center;
   gap: 8px;
   padding: 10px 12px;
-  background: color-mix(in srgb, var(--color-success-6, #3fb950) 8%, transparent);
+  background: color-mix(in srgb, var(--tf-success) 8%, transparent);
   border-radius: 4px;
   font-size: 12px;
-  color: var(--color-success-6, #3fb950);
+  color: var(--tf-success);
 }
 
 .reversible-icon {

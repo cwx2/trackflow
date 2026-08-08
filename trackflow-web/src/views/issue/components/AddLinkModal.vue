@@ -457,7 +457,7 @@ async function handleCreateAndLink() {
 }
 
 .form-label .required {
-  color: var(--color-danger-6, #f53f3f);
+  color: var(--tf-danger);
   margin-left: 2px;
 }
 

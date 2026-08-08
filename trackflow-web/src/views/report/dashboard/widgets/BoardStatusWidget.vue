@@ -17,6 +17,7 @@ import { TooltipComponent, LegendComponent, GridComponent } from 'echarts/compon
 import VChart from 'vue-echarts'
 import { IconBarChart } from '@arco-design/web-vue/es/icon'
 import { sprintApi } from '@/api/sprint'
+import { SERIES_ACCENT, SERIES_SUCCESS, SERIES_MARKER } from '@/utils/chartColors'
 
 use([CanvasRenderer, BarChart, TooltipComponent, LegendComponent, GridComponent])
 
@@ -53,8 +54,8 @@ function buildBoardStatusOption(data: BoardStatusData): Record<string, any> {
       trigger: 'axis',
       axisPointer: { type: 'shadow' },
       backgroundColor: 'var(--tf-bg-elevated, #22252a)',
-      borderColor: 'var(--tf-border, #30363d)',
-      textStyle: { color: 'var(--tf-text-primary, #e6edf3)', fontSize: 11 },
+      borderColor: 'var(--tf-border)',
+      textStyle: { color: 'var(--tf-text-primary)', fontSize: 11 },
       formatter: (params: any[]) => {
         let html = `<div style="font-weight:500;margin-bottom:4px">${data.sprintName}</div>`
         params.forEach(p => {
@@ -67,7 +68,7 @@ function buildBoardStatusOption(data: BoardStatusData): Record<string, any> {
     legend: {
       data: ['待处理', '进行中', '已完成'],
       bottom: 0,
-      textStyle: { color: 'var(--tf-text-secondary, #9ca3af)', fontSize: 10 },
+      textStyle: { color: 'var(--tf-text-secondary)', fontSize: 10 },
       itemWidth: 12,
       itemHeight: 8
     },
@@ -94,7 +95,7 @@ function buildBoardStatusOption(data: BoardStatusData): Record<string, any> {
         stack: 'sprint',
         data: [data.todoIssues],
         barWidth: '60%',
-        itemStyle: { color: '#58a6ff', borderRadius: [3, 0, 0, 3] }
+        itemStyle: { color: SERIES_ACCENT, borderRadius: [3, 0, 0, 3] }
       },
       {
         name: '进行中',
@@ -102,7 +103,7 @@ function buildBoardStatusOption(data: BoardStatusData): Record<string, any> {
         stack: 'sprint',
         data: [data.inProgressIssues],
         barWidth: '60%',
-        itemStyle: { color: '#f0883e' }
+        itemStyle: { color: SERIES_MARKER }
       },
       {
         name: '已完成',
@@ -110,7 +111,7 @@ function buildBoardStatusOption(data: BoardStatusData): Record<string, any> {
         stack: 'sprint',
         data: [data.doneIssues],
         barWidth: '60%',
-        itemStyle: { color: '#3fb950', borderRadius: [0, 3, 3, 0] }
+        itemStyle: { color: SERIES_SUCCESS, borderRadius: [0, 3, 3, 0] }
       }
     ]
   }

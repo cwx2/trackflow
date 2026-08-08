@@ -368,7 +368,7 @@ onMounted(() => {
 .icon-text {
   font-size: 16px;
   font-weight: 700;
-  color: #fff;
+  color: var(--tf-text-on-accent);
   text-transform: uppercase;
 }
 
@@ -422,7 +422,7 @@ onMounted(() => {
   padding: 1px 5px;
   border-radius: 3px;
   background: var(--color-warning-light-2, rgba(209, 153, 34, 0.15));
-  color: var(--color-warning-6, #d29922);
+  color: var(--tf-warning);
   margin-left: 4px;
   font-weight: 500;
 }
@@ -446,7 +446,7 @@ onMounted(() => {
 .lead-item.editable:hover .edit-hint-icon { opacity: 1; }
 
 .error-state { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 64px 24px; text-align: center; }
-.error-icon { font-size: 40px; color: var(--tf-danger, #f85149); margin-bottom: 12px; }
+.error-icon { font-size: 40px; color: var(--tf-danger); margin-bottom: 12px; }
 .error-title { font-size: 16px; font-weight: 500; color: var(--tf-text-primary); margin: 0 0 8px; }
 .error-desc { font-size: 13px; color: var(--tf-text-tertiary); margin: 0 0 16px; }
 
@@ -455,22 +455,22 @@ onMounted(() => {
   align-items: center;
   gap: 12px;
   padding: 12px 16px;
-  background: var(--color-warning-light-1, rgba(209, 153, 34, 0.08));
+  background: var(--tf-warning-bg);
   border: 1px solid var(--color-warning-light-3, rgba(209, 153, 34, 0.2));
   border-radius: 6px;
   margin-bottom: 20px;
 }
 
-.archived-icon { font-size: 20px; color: #d29922; flex-shrink: 0; }
+.archived-icon { font-size: 20px; color: var(--tf-warning); flex-shrink: 0; }
 
 .archived-info { flex: 1; display: flex; flex-direction: column; gap: 2px; }
-.archived-title { font-size: 13px; font-weight: 600; color: #d29922; }
+.archived-title { font-size: 13px; font-weight: 600; color: var(--tf-warning); }
 .archived-desc { font-size: 12px; color: var(--tf-text-tertiary); }
 
 :deep(.arco-dropdown-option.danger-option) { color: var(--tf-danger); }
 
 .visibility-badge { padding: 2px 8px; border-radius: 3px; font-weight: 500; }
 .visibility-private { background: var(--tf-bg-surface); color: var(--tf-text-tertiary); }
-.visibility-internal { background: rgba(88, 166, 255, 0.1); color: var(--tf-accent); }
-.visibility-public { background: rgba(63, 185, 80, 0.1); color: #3fb950; }
+.visibility-internal { background: var(--tf-accent-bg-light); color: var(--tf-accent); }
+.visibility-public { background: var(--tf-success-bg); color: var(--tf-success); }
 </style>

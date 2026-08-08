@@ -195,12 +195,12 @@ watch(() => props.data, (val) => {
 }
 
 .output-icon.primary {
-  background: var(--color-primary-light-1, rgba(88, 166, 255, 0.1));
+  background: var(--tf-accent-subtle));
   color: var(--color-primary-light-4, #58a6ff);
 }
 
 .output-icon.success {
-  background: var(--color-success-light-1, rgba(82, 196, 26, 0.1));
+  background: var(--tf-success-bg);
   color: var(--color-success-light-4, #52c41a);
 }
 

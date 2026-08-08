@@ -512,7 +512,7 @@ onBeforeUnmount(() => {
   background: var(--color-bg-2);
   border: 1px solid var(--color-border-2);
   border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  box-shadow: var(--tf-shadow);
   z-index: 10;
 }
 
@@ -586,12 +586,12 @@ onBeforeUnmount(() => {
 
 /* 网格点（dot 类型）适配主题 */
 .lf-grid svg circle {
-  fill: var(--color-text-4, #4b5563) !important;
+  fill: var(--tf-text-muted) !important;
   opacity: 0.4;
 }
 
 .lf-grid svg path {
-  stroke: var(--color-text-4, #4b5563) !important;
+  stroke: var(--tf-text-muted) !important;
   opacity: 0.4;
 }
 
@@ -601,7 +601,7 @@ onBeforeUnmount(() => {
   align-items: center;
   width: 140px;
   height: 44px;
-  background: var(--color-bg-2, #22252a);
+  background: var(--tf-bg-surface);
   border: 2px solid var(--color-border-2);
   border-radius: 8px;
   cursor: pointer;
@@ -611,7 +611,7 @@ onBeforeUnmount(() => {
 }
 
 .status-canvas-node:hover {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--tf-shadow);
 }
 
 .status-canvas-node .node-color-bar {
@@ -631,7 +631,7 @@ onBeforeUnmount(() => {
 .status-canvas-node .node-name {
   font-size: 12px;
   font-weight: 500;
-  color: var(--color-text-1, #e6edf3);
+  color: var(--tf-text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

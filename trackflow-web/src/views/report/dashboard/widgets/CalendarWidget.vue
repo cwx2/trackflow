@@ -307,11 +307,11 @@ defineExpose({ loadData })
 }
 
 .calendar-cell.today {
-  border-color: var(--tf-accent, #58a6ff);
+  border-color: var(--tf-accent);
 }
 
 .calendar-cell.today .cell-day {
-  color: var(--tf-accent, #58a6ff);
+  color: var(--tf-accent);
   font-weight: 700;
 }
 
@@ -353,13 +353,13 @@ defineExpose({ loadData })
 .cell-issue-key {
   font-size: 9px;
   font-weight: 600;
-  color: var(--tf-accent, #58a6ff);
+  color: var(--tf-accent);
   white-space: nowrap;
   flex-shrink: 0;
 }
 
 .cell-issue.overdue .cell-issue-key {
-  color: var(--tf-danger, #f85149);
+  color: var(--tf-danger);
 }
 
 .cell-issue-title {

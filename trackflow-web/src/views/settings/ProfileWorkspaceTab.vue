@@ -319,11 +319,11 @@ onMounted(() => {
 }
 
 .priority-critical {
-  color: var(--color-danger-6, #f53f3f);
+  color: var(--tf-danger);
 }
 
 .priority-major {
-  color: var(--color-warning-6, #ff7d00);
+  color: var(--tf-warning);
 }
 
 .priority-normal {

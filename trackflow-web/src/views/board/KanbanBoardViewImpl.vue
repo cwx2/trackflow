@@ -473,9 +473,9 @@
                 <div v-if="cardSize !== 'S' && hasVisibleCustomFields(issue)" class="card-custom-fields">
                   <template v-for="detail in getVisibleCustomFieldDetails(issue)" :key="detail.customFieldId">
                     <template v-if="detail.isMulti && detail.displayValues">
-                      <span v-for="(dv, idx) in detail.displayValues" :key="idx" class="card-cf-tag" :style="cardConfig.showCustomFieldColors !== false && detail.colors?.[idx] ? { background: detail.colors[idx], color: '#fff' } : {}">{{ dv }}</span>
+                      <span v-for="(dv, idx) in detail.displayValues" :key="idx" class="card-cf-tag" :style="cardConfig.showCustomFieldColors !== false && detail.colors?.[idx] ? { background: detail.colors[idx], color: 'var(--tf-text-on-accent)' } : {}">{{ dv }}</span>
                     </template>
-                    <span v-else-if="cardConfig.showCustomFieldColors !== false && detail.color" class="card-cf-tag" :style="{ background: detail.color, color: '#fff' }">{{ detail.displayValue }}</span>
+                    <span v-else-if="cardConfig.showCustomFieldColors !== false && detail.color" class="card-cf-tag" :style="{ background: detail.color, color: 'var(--tf-text-on-accent)' }">{{ detail.displayValue }}</span>
                     <span v-else class="card-cf-tag">{{ detail.displayValue }}</span>
                   </template>
                 </div>
@@ -488,7 +488,7 @@
                   <span v-if="isCardFieldVisible('sprint') && issue.sprintId" class="card-meta-tag">🏃 {{ getSprintName(issue.sprintId) }}</span>
                   <span v-if="isCardFieldVisible('estimatedHours') && issue.estimatedHours" class="card-meta-tag">⏱ {{ issue.estimatedHours }}h</span>
                   <template v-if="isCardFieldVisible('tags') && (issue as any).tags && (issue as any).tags.length > 0">
-                    <span v-for="tag in getVisibleTags(issue)" :key="tag.id" class="card-tag" :style="tag.color ? { background: tag.color, color: '#fff' } : {}">{{ tag.name }}</span>
+                    <span v-for="tag in getVisibleTags(issue)" :key="tag.id" class="card-tag" :style="tag.color ? { background: tag.color, color: 'var(--tf-text-on-accent)' } : {}">{{ tag.name }}</span>
                   </template>
                 </div>
                 <div class="card-footer">
@@ -792,9 +792,9 @@
                       <div v-if="cardSize !== 'S' && hasVisibleCustomFields(issue)" class="card-custom-fields">
                         <template v-for="detail in getVisibleCustomFieldDetails(issue)" :key="detail.customFieldId">
                           <template v-if="detail.isMulti && detail.displayValues">
-                            <span v-for="(dv, idx) in detail.displayValues" :key="idx" class="card-cf-tag" :style="cardConfig.showCustomFieldColors !== false && detail.colors?.[idx] ? { background: detail.colors[idx], color: '#fff' } : {}">{{ dv }}</span>
+                            <span v-for="(dv, idx) in detail.displayValues" :key="idx" class="card-cf-tag" :style="cardConfig.showCustomFieldColors !== false && detail.colors?.[idx] ? { background: detail.colors[idx], color: 'var(--tf-text-on-accent)' } : {}">{{ dv }}</span>
                           </template>
-                          <span v-else-if="cardConfig.showCustomFieldColors !== false && detail.color" class="card-cf-tag" :style="{ background: detail.color, color: '#fff' }">{{ detail.displayValue }}</span>
+                          <span v-else-if="cardConfig.showCustomFieldColors !== false && detail.color" class="card-cf-tag" :style="{ background: detail.color, color: 'var(--tf-text-on-accent)' }">{{ detail.displayValue }}</span>
                           <span v-else class="card-cf-tag">{{ detail.displayValue }}</span>
                         </template>
                       </div>
@@ -807,7 +807,7 @@
                         <span v-if="isCardFieldVisible('sprint') && issue.sprintId" class="card-meta-tag">🏃 {{ getSprintName(issue.sprintId) }}</span>
                         <span v-if="isCardFieldVisible('estimatedHours') && issue.estimatedHours" class="card-meta-tag">⏱ {{ issue.estimatedHours }}h</span>
                         <template v-if="isCardFieldVisible('tags') && (issue as any).tags && (issue as any).tags.length > 0">
-                          <span v-for="tag in getVisibleTags(issue)" :key="tag.id" class="card-tag" :style="tag.color ? { background: tag.color, color: '#fff' } : {}">{{ tag.name }}</span>
+                          <span v-for="tag in getVisibleTags(issue)" :key="tag.id" class="card-tag" :style="tag.color ? { background: tag.color, color: 'var(--tf-text-on-accent)' } : {}">{{ tag.name }}</span>
                         </template>
                       </div>
                       <div class="card-footer">

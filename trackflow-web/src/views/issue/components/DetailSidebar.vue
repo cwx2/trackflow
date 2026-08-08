@@ -700,7 +700,7 @@ defineExpose({ highlightField })
 
 .resize-handle:hover::before,
 .detail-sidebar.resizing .resize-handle::before {
-  background: var(--tf-accent, #58a6ff);
+  background: var(--tf-accent);
 }
 
 .resize-handle:hover {
@@ -771,14 +771,14 @@ defineExpose({ highlightField })
 /* 字段高亮引导动画：状态转换校验失败时闪烁提示用户 */
 .sb-field.field-highlight {
   animation: field-highlight-pulse 0.6s ease-in-out 3;
-  outline: 2px solid var(--tf-accent, #58a6ff);
+  outline: 2px solid var(--tf-accent);
   outline-offset: 1px;
   border-radius: 4px;
 }
 
 @keyframes field-highlight-pulse {
   0%, 100% { background: transparent; }
-  50% { background: rgba(88, 166, 255, 0.12); }
+  50% { background: var(--tf-accent-bg-light); }
 }
 
 /* 可编辑字段 hover 效果 */
@@ -922,7 +922,7 @@ defineExpose({ highlightField })
 }
 
 .val-text.prompt-text {
-  color: var(--tf-warning, #d29922);
+  color: var(--tf-warning);
   font-style: italic;
   font-size: 11px;
 }
@@ -944,7 +944,7 @@ defineExpose({ highlightField })
 .val-badge {
   font-size: 10px;
   font-weight: 700;
-  color: #fff;
+  color: var(--tf-text-on-accent);
   padding: 2px 5px;
   border-radius: 3px;
   flex-shrink: 0;
@@ -962,7 +962,7 @@ defineExpose({ highlightField })
   border: 1px solid var(--tf-border);
   border-radius: 6px;
   overflow: hidden;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--tf-shadow-xl);
 }
 
 .dropdown-search {
@@ -1016,7 +1016,7 @@ defineExpose({ highlightField })
 .item-badge {
   font-size: 10px;
   font-weight: 700;
-  color: #fff;
+  color: var(--tf-text-on-accent);
   padding: 2px 6px;
   border-radius: 3px;
 }
@@ -1051,7 +1051,7 @@ defineExpose({ highlightField })
   border: none;
   border-radius: 4px;
   background: var(--tf-accent);
-  color: #fff;
+  color: var(--tf-text-on-accent);
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
@@ -1065,8 +1065,8 @@ defineExpose({ highlightField })
   border: 1px solid var(--tf-border);
 }
 .clear-btn:hover {
-  color: var(--tf-error, #f85149);
-  border-color: var(--tf-error, #f85149);
+  color: var(--tf-danger);
+  border-color: var(--tf-danger);
   background: transparent;
 }
 
@@ -1091,7 +1091,7 @@ defineExpose({ highlightField })
 .multi-item.selected .item-check {
   background: var(--tf-accent);
   border-color: var(--tf-accent);
-  color: #fff;
+  color: var(--tf-text-on-accent);
 }
 
 /* ===== Inline Add Option ===== */
@@ -1148,17 +1148,17 @@ defineExpose({ highlightField })
 
 /* ========== 截止日期过期样式 ========== */
 .val-text.due-overdue {
-  color: var(--tf-danger, #f85149) !important;
+  color: var(--tf-danger) !important;
   font-weight: 500;
 }
 .val-text.due-due-soon {
-  color: var(--tf-warning, #d29922) !important;
+  color: var(--tf-warning) !important;
   font-weight: 500;
 }
 
 /* ========== 工时超出预估样式 ========== */
 .val-text.time-over-budget {
-  color: var(--tf-danger, #f85149) !important;
+  color: var(--tf-danger) !important;
   font-weight: 500;
 }
 

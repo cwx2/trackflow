@@ -371,7 +371,7 @@ function handleProjectPrefChange(item: ProjectPrefItem, field: string, value: bo
   gap: 8px;
   margin-bottom: 16px;
   padding: 12px;
-  background: var(--tf-bg-surface, #22252a);
+  background: var(--tf-bg-surface);
   border-radius: 6px;
   border: 1px solid var(--tf-border-light);
 }
@@ -498,7 +498,7 @@ function handleProjectPrefChange(item: ProjectPrefItem, field: string, value: bo
 }
 .project-card-action:hover {
   background: var(--tf-bg-active);
-  color: var(--tf-error, #f85149);
+  color: var(--tf-danger);
 }
 
 .expand-icon {

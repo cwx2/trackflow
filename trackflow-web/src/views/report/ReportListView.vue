@@ -1034,21 +1034,21 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   margin-bottom: 12px;
   padding: 8px 12px;
-  background: var(--tf-bg-surface, #22252a);
+  background: var(--tf-bg-surface);
   border-radius: 6px;
-  border: 1px solid var(--tf-border, #30363d);
+  border: 1px solid var(--tf-border);
   grid-column: 1 / -1;
 }
 
 .category-label {
   font-size: 14px;
   font-weight: 600;
-  color: var(--tf-text-primary, #e6edf3);
+  color: var(--tf-text-primary);
 }
 
 .category-count {
   font-size: 12px;
-  color: var(--tf-text-tertiary, #6b7280);
+  color: var(--tf-text-tertiary);
 }
 
 .report-results-info {
@@ -1062,12 +1062,12 @@ onBeforeUnmount(() => {
 
 .results-count {
   font-size: 13px;
-  color: var(--tf-text-secondary, #9ca3af);
+  color: var(--tf-text-secondary);
 }
 
 .results-keyword {
   font-size: 12px;
-  color: var(--tf-text-tertiary, #6b7280);
+  color: var(--tf-text-tertiary);
   font-style: italic;
 }
 
@@ -1124,7 +1124,7 @@ onBeforeUnmount(() => {
 
 .report-card:hover {
   border-color: var(--tf-accent);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  box-shadow: var(--tf-shadow);
 }
 
 .report-card.is-loading {
@@ -1161,12 +1161,12 @@ onBeforeUnmount(() => {
 }
 
 .favorite-btn:hover {
-  color: var(--tf-warning, #d29922);
+  color: var(--tf-warning);
   transform: scale(1.15);
 }
 
 .favorite-btn.is-favorited {
-  color: var(--tf-warning, #d29922);
+  color: var(--tf-warning);
 }
 
 .system-badge {
@@ -1190,7 +1190,7 @@ onBeforeUnmount(() => {
 }
 
 .card-type-badge.type-by_status { color: var(--tf-accent); background: var(--tf-accent-bg-light); }
-.card-type-badge.type-by_assignee { color: var(--tf-purple, #a371f7); background: var(--tf-purple-bg); }
+.card-type-badge.type-by_assignee { color: var(--tf-purple); background: var(--tf-purple-bg); }
 .card-type-badge.type-by_priority { color: var(--tf-warning); background: var(--tf-warning-bg); }
 .card-type-badge.type-by_type { color: var(--tf-success); background: var(--tf-success-bg); }
 .card-type-badge.type-issue_count { color: var(--tf-success); background: var(--tf-success-bg); }
@@ -1341,8 +1341,8 @@ onBeforeUnmount(() => {
   }
 
   .report-card {
-    background: #fff !important;
-    border: 1px solid #ddd !important;
+    background: var(--tf-bg-body) !important;
+    border: 1px solid var(--tf-border) !important;
     break-inside: avoid;
     page-break-inside: avoid;
     margin-bottom: 16px;
@@ -1377,8 +1377,8 @@ onBeforeUnmount(() => {
 
   .matrix-table th,
   .matrix-table td {
-    border: 1px solid #ddd !important;
-    background: #fff !important;
+    border: 1px solid var(--tf-border) !important;
+    background: var(--tf-bg-body) !important;
     color: #000 !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;

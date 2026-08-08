@@ -1397,7 +1397,7 @@ function printReport() {
 
 .stat-open .stat-value { color: var(--tf-accent); }
 .stat-done .stat-value { color: var(--tf-success); }
-.stat-rate .stat-value { color: var(--tf-purple, #a371f7); }
+.stat-rate .stat-value { color: var(--tf-purple); }
 .stat-overdue .stat-value { color: var(--tf-danger); }
 
 /* 图表网格 */
@@ -1615,8 +1615,8 @@ function printReport() {
   }
 
   .stat-card {
-    background: #fff !important;
-    border: 1px solid #ddd !important;
+    background: var(--tf-bg-body) !important;
+    border: 1px solid var(--tf-border) !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
@@ -1634,8 +1634,8 @@ function printReport() {
   }
 
   .chart-card {
-    background: #fff !important;
-    border: 1px solid #ddd !important;
+    background: var(--tf-bg-body) !important;
+    border: 1px solid var(--tf-border) !important;
     break-inside: avoid;
     page-break-inside: avoid;
   }

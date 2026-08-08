@@ -353,13 +353,13 @@ function formatDate(dateStr?: string): string {
   transition: border-color 0.15s;
 }
 .sprint-card:hover {
-  border-color: rgb(var(--primary-6));
+  border-color: var(--tf-accent);
 }
 .sprint-card.active {
-  border-left: 3px solid rgb(var(--primary-6));
+  border-left: 3px solid var(--tf-accent);
 }
 .sprint-card.sprint-next {
-  border-left: 3px solid rgb(var(--primary-6));
+  border-left: 3px solid var(--tf-accent);
 }
 .sprint-card.completed {
   opacity: 0.7;
@@ -405,11 +405,11 @@ function formatDate(dateStr?: string): string {
 }
 
 .sprint-status-badge.active {
-  background: rgba(var(--primary-6), 0.1);
-  color: rgb(var(--primary-6));
+  background: var(--tf-accent-light);
+  color: var(--tf-accent);
 }
 .sprint-status-badge.active.overdue {
-  background: rgba(var(--danger-6), 0.1);
+  background: var(--tf-danger-bg);
   color: rgb(var(--danger-6));
 }
 .sprint-status-badge.planned {
@@ -417,12 +417,12 @@ function formatDate(dateStr?: string): string {
   color: var(--color-text-3);
 }
 .sprint-status-badge.next {
-  background: rgba(var(--primary-6), 0.1);
-  color: rgb(var(--primary-6));
+  background: var(--tf-accent-light);
+  color: var(--tf-accent);
 }
 .sprint-status-badge.completed {
-  background: rgba(var(--green-6), 0.1);
-  color: rgb(var(--green-6));
+  background: var(--tf-success-bg);
+  color: var(--tf-success);
 }
 .sprint-status-badge.archived {
   background: var(--color-fill-2);
@@ -461,13 +461,13 @@ function formatDate(dateStr?: string): string {
   transition: color 0.15s;
 }
 .sprint-name-edit-icon:hover {
-  color: rgb(var(--primary-6));
+  color: var(--tf-accent);
 }
 
 .sprint-name-input {
   font-size: 14px;
   font-weight: 500;
-  border: 1px solid rgb(var(--primary-6));
+  border: 1px solid var(--tf-accent);
   border-radius: 4px;
   padding: 2px 8px;
   outline: none;
@@ -498,7 +498,7 @@ function formatDate(dateStr?: string): string {
 .sprint-status-warning {
   margin-top: 8px;
   padding: 8px 12px;
-  background: rgba(var(--warning-6), 0.08);
+  background: var(--tf-warning-bg);
   border-radius: 6px;
   display: flex;
   align-items: center;
@@ -529,7 +529,7 @@ function formatDate(dateStr?: string): string {
 .sprint-goal-banner {
   margin-top: 8px;
   padding: 8px 12px;
-  background: rgba(var(--primary-6), 0.05);
+  background: var(--tf-accent-subtle);
   border-radius: 6px;
   display: flex;
   align-items: flex-start;

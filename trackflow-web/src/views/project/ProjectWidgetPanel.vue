@@ -409,7 +409,7 @@ watch(() => props.projectId, (newId) => {
 }
 
 .widget-type-card:hover {
-  border-color: rgb(var(--primary-6));
+  border-color: var(--tf-accent);
   background: var(--color-fill-1);
 }
 

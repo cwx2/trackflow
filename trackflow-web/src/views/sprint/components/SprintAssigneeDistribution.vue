@@ -238,11 +238,11 @@ function handleClickAssignee(userId: string | null) {
 }
 
 .assignee-row.unassigned {
-  background: rgba(var(--warning-6), 0.04);
+  background: var(--tf-warning-bg);
   border: 1px solid rgba(var(--warning-6), 0.12);
 }
 .assignee-row.unassigned:hover {
-  background: rgba(var(--warning-6), 0.08);
+  background: var(--tf-warning-bg);
 }
 
 .assignee-info {

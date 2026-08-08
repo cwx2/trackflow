@@ -1418,7 +1418,7 @@ watch(projects, () => {
 }
 
 .section-icon.favorite-icon {
-  color: #d29922;
+  color: var(--tf-warning);
 }
 
 .section-title {
@@ -1464,12 +1464,12 @@ watch(projects, () => {
 
 .favorite-btn:hover {
   background: var(--tf-bg-hover);
-  color: #d29922;
+  color: var(--tf-warning);
 }
 
 .favorite-btn.favorited {
   opacity: 1;
-  color: #d29922;
+  color: var(--tf-warning);
 }
 
 .project-row:hover .favorite-btn {
@@ -1505,7 +1505,7 @@ watch(projects, () => {
 .icon-text {
   font-size: 11px;
   font-weight: 700;
-  color: #fff;
+  color: var(--tf-text-on-accent);
   text-transform: uppercase;
 }
 
@@ -1534,12 +1534,12 @@ watch(projects, () => {
   white-space: nowrap;
 }
 .visibility-tag.vis-internal {
-  background: rgba(88, 166, 255, 0.1);
+  background: var(--tf-accent-bg-light);
   color: var(--tf-accent);
 }
 .visibility-tag.vis-public {
-  background: rgba(63, 185, 80, 0.1);
-  color: #3fb950;
+  background: var(--tf-success-bg);
+  color: var(--tf-success);
 }
 .project-desc {
   font-size: 12px;
@@ -1807,7 +1807,7 @@ watch(projects, () => {
   align-items: center;
   gap: 8px;
   padding: 10px 12px;
-  background: rgba(248, 81, 73, 0.08);
+  background: var(--tf-danger-bg);
   border: 1px solid rgba(248, 81, 73, 0.2);
   border-radius: var(--tf-radius-md);
   font-size: 13px;

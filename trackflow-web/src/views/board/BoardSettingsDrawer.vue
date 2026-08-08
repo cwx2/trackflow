@@ -1208,11 +1208,11 @@ async function handleSave() {
 }
 
 .column-item--drop-above {
-  border-top: 2px solid rgb(var(--primary-6));
+  border-top: 2px solid var(--tf-accent);
 }
 
 .column-item--drop-below {
-  border-bottom: 2px solid rgb(var(--primary-6));
+  border-bottom: 2px solid var(--tf-accent);
 }
 
 .col-drag-handle {
@@ -1393,7 +1393,7 @@ async function handleSave() {
 
 .wip-indicator--over {
   color: rgb(var(--danger-6));
-  background: rgba(var(--danger-6), 0.1);
+  background: var(--tf-danger-bg);
 }
 
 .wip-indicator--under {
@@ -1452,8 +1452,8 @@ async function handleSave() {
 
 .saved-query-shared-badge {
   font-size: 10px;
-  color: rgb(var(--primary-6));
-  background: rgba(var(--primary-6), 0.1);
+  color: var(--tf-accent);
+  background: var(--tf-accent-light);
   padding: 1px 5px;
   border-radius: 3px;
   margin-left: 6px;

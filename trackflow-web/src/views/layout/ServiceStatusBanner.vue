@@ -45,7 +45,7 @@ function handleDismiss() {
 }
 
 :root[arco-theme="dark"] .service-status-banner {
-  background: rgba(var(--danger-6), 0.15);
+  background: var(--tf-danger-bg);
   border-bottom-color: rgba(var(--danger-6), 0.3);
 }
 
@@ -60,13 +60,13 @@ function handleDismiss() {
 
 .banner-icon {
   font-size: 16px;
-  color: var(--color-danger-6, #f53f3f);
+  color: var(--tf-danger);
   flex-shrink: 0;
 }
 
 .banner-message {
   font-size: 13px;
-  color: var(--color-danger-6, #f53f3f);
+  color: var(--tf-danger);
   font-weight: 500;
 }
 
@@ -81,7 +81,7 @@ function handleDismiss() {
 
 .banner-close-btn {
   flex-shrink: 0;
-  color: var(--color-danger-6, #f53f3f);
+  color: var(--tf-danger);
 }
 
 /* Transition animation */

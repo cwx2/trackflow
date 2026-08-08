@@ -1099,7 +1099,7 @@ onUnmounted(() => {
   border: 1px solid var(--tf-border);
   border-radius: 8px;
   overflow: hidden;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--tf-shadow-xl);
   display: flex;
   flex-direction: column;
 }
@@ -1122,7 +1122,7 @@ onUnmounted(() => {
   cursor: pointer;
   color: var(--tf-text-secondary);
   font-size: 10px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--tf-shadow);
   transition: background 0.15s, color 0.15s;
   flex-shrink: 0;
 }

@@ -549,7 +549,7 @@ onMounted(() => {
 }
 
 .token-expired {
-  color: var(--color-danger-6, #f53f3f);
+  color: var(--tf-danger);
 }
 
 /* Security Tips */
@@ -642,7 +642,7 @@ onMounted(() => {
 }
 
 .success-icon {
-  color: var(--color-success-6, #00b42a);
+  color: var(--tf-success);
   font-size: 20px;
 }
 

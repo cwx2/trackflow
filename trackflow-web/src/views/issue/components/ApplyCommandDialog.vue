@@ -312,7 +312,7 @@ async function execute(silent: boolean) {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--tf-overlay);
   display: flex;
   align-items: flex-start;
   justify-content: center;
@@ -448,7 +448,7 @@ async function execute(silent: boolean) {
 }
 
 .cmd-preview-item.has-error {
-  background: rgba(248, 81, 73, 0.1);
+  background: var(--tf-danger-bg);
 }
 
 .cmd-field {
@@ -539,7 +539,7 @@ async function execute(silent: boolean) {
 
 .cmd-btn-primary {
   background: var(--tf-accent);
-  color: #fff;
+  color: var(--tf-text-on-accent);
   display: flex;
   align-items: center;
 }

@@ -1288,7 +1288,7 @@ onMounted(async () => {
 .toggle-btn { height: 28px; padding: 0 12px; border: none; background: transparent; color: var(--tf-text-secondary); font-size: 12px; cursor: pointer; transition: background 0.15s, color 0.15s; }
 .toggle-btn + .toggle-btn { border-left: 1px solid var(--tf-border); }
 .toggle-btn.active { background: var(--tf-accent-bg); color: var(--tf-accent); font-weight: 500; }
-.add-time-btn { height: 32px; padding: 0 14px; border: none; border-radius: var(--tf-radius-md); background: var(--tf-accent); color: #fff; font-size: 12px; font-weight: 500; cursor: pointer; transition: opacity 0.15s; }
+.add-time-btn { height: 32px; padding: 0 14px; border: none; border-radius: var(--tf-radius-md); background: var(--tf-accent); color: var(--tf-text-on-accent); font-size: 12px; font-weight: 500; cursor: pointer; transition: opacity 0.15s; }
 .add-time-btn:hover { opacity: 0.9; }
 
 /* Week Grid - styles moved to WeekGrid.vue */
@@ -1350,7 +1350,7 @@ onMounted(async () => {
 .empty-hint span:last-child { font-size: 12px; color: var(--tf-text-secondary); }
 
 /* Loading */
-.loading-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.05); z-index: 10; pointer-events: none; }
+.loading-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: center; background: var(--tf-fill-light); z-index: 10; pointer-events: none; }
 
 /* Dialog */
 .time-dialog { padding: 4px 0; }

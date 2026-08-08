@@ -430,7 +430,7 @@ onMounted(() => {
 
 .priority-critical { background: rgba(248, 81, 73, 0.15); color: var(--tf-danger); }
 .priority-major { background: rgba(210, 153, 34, 0.15); color: var(--tf-warning); }
-.priority-normal { background: rgba(88, 166, 255, 0.1); color: var(--tf-accent); }
+.priority-normal { background: var(--tf-accent-bg-light); color: var(--tf-accent); }
 .priority-minor { background: var(--tf-bg-hover); color: var(--tf-text-tertiary); }
 
 .deleted-time {

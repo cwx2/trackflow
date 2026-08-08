@@ -41,8 +41,8 @@ defineEmits<{
   border-radius: 6px;
   margin-bottom: 4px;
 }
-.sprint-guidance-banner.is-warning { background: rgba(var(--warning-6), 0.08); border: 1px solid rgba(var(--warning-6), 0.25); }
-.sprint-guidance-banner.is-info { background: rgba(var(--primary-6), 0.06); border: 1px solid rgba(var(--primary-6), 0.15); }
+.sprint-guidance-banner.is-warning { background: var(--tf-warning-bg); border: 1px solid rgba(var(--warning-6), 0.25); }
+.sprint-guidance-banner.is-info { background: var(--tf-accent-subtle); border: 1px solid var(--tf-accent-bg); }
 .warning-bar-icon { font-size: 16px; flex-shrink: 0; }
 .warning-bar-text { flex: 1; font-size: 13px; color: var(--color-text-1); line-height: 1.4; }
 .warning-bar-action { flex-shrink: 0; }

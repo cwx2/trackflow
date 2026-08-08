@@ -154,7 +154,7 @@ function handleCancel() {
   border-radius: 3px;
   font-size: 12px;
   font-weight: 500;
-  color: #fff;
+  color: var(--tf-text-on-accent);
 }
 
 .assignee-section {

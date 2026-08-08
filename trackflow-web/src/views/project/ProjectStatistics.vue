@@ -138,11 +138,11 @@ function formatSprintDate(dateStr?: string): string {
   line-height: 1.2;
   letter-spacing: -0.3px;
 }
-.stat-value.stat-open { color: var(--tf-accent, #58a6ff); }
-.stat-value.stat-done { color: #3fb950; }
-.stat-value.stat-rate { color: #d29922; }
-.stat-value.stat-new { color: var(--tf-accent, #58a6ff); }
-.stat-value.stat-closed-week { color: #3fb950; }
+.stat-value.stat-open { color: var(--tf-accent); }
+.stat-value.stat-done { color: var(--tf-success); }
+.stat-value.stat-rate { color: var(--tf-warning); }
+.stat-value.stat-new { color: var(--tf-accent); }
+.stat-value.stat-closed-week { color: var(--tf-success); }
 
 .stat-label { font-size: 11px; color: var(--tf-text-tertiary); font-weight: 500; }
 

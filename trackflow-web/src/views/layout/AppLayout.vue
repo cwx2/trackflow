@@ -874,7 +874,7 @@ onUnmounted(() => document.removeEventListener('click', handleClickOutside))
   height: 16px;
   padding: 0 4px;
   border-radius: 8px;
-  background: var(--tf-danger, #f85149);
+  background: var(--tf-danger);
   color: var(--tf-text-on-accent);
   font-size: 10px;
   font-weight: 600;
@@ -903,7 +903,7 @@ onUnmounted(() => document.removeEventListener('click', handleClickOutside))
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--tf-success, #3fb950);
+  background: var(--tf-success);
   animation: timer-pulse-anim 1.5s ease-in-out infinite;
 }
 
@@ -922,7 +922,7 @@ onUnmounted(() => document.removeEventListener('click', handleClickOutside))
 .timer-badge-key {
   font-size: 11px;
   font-weight: 500;
-  color: var(--tf-accent, #58a6ff);
+  color: var(--tf-accent);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -932,7 +932,7 @@ onUnmounted(() => document.removeEventListener('click', handleClickOutside))
 .timer-elapsed {
   font-size: 11px;
   font-weight: 500;
-  color: var(--tf-success, #3fb950);
+  color: var(--tf-success);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   flex-shrink: 0;
@@ -945,7 +945,7 @@ onUnmounted(() => document.removeEventListener('click', handleClickOutside))
   left: 8px;
   margin-bottom: 8px;
   width: 220px;
-  background: var(--tf-bg-elevated, #2a2d33);
+  background: var(--tf-bg-elevated);
   border: 1px solid var(--tf-border, rgba(255,255,255,0.1));
   border-radius: 8px;
   padding: 12px;
@@ -990,13 +990,13 @@ onUnmounted(() => document.removeEventListener('click', handleClickOutside))
 .timer-issue-key {
   font-size: 11px;
   font-weight: 500;
-  color: var(--tf-accent, #58a6ff);
+  color: var(--tf-accent);
   margin-right: 6px;
 }
 
 .timer-issue-title {
   font-size: 12px;
-  color: var(--tf-text-secondary, #9ca3af);
+  color: var(--tf-text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1021,7 +1021,7 @@ onUnmounted(() => document.removeEventListener('click', handleClickOutside))
   padding: 6px 12px;
   border: none;
   border-radius: 6px;
-  background: var(--tf-danger, #f85149);
+  background: var(--tf-danger);
   color: var(--tf-text-on-accent);
   font-size: 12px;
   font-weight: 500;

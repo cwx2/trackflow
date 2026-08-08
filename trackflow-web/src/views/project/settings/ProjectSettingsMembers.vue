@@ -643,11 +643,11 @@ onMounted(() => {
 }
 
 .dot-add {
-  background: var(--color-success-6, #00b42a);
+  background: var(--tf-success);
 }
 
 .dot-remove {
-  background: var(--color-danger-6, #f53f3f);
+  background: var(--tf-danger);
 }
 
 .dot-change {

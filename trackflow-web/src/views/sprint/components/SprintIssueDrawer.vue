@@ -361,7 +361,7 @@ function handleClose() {
   color: rgb(var(--warning-6));
 }
 .assignee-cell.unassigned:hover {
-  background: rgba(var(--warning-6), 0.08);
+  background: var(--tf-warning-bg);
 }
 .assignee-cell.editing {
   opacity: 0.6;
@@ -442,7 +442,7 @@ function handleClose() {
   background: var(--color-fill-2);
 }
 .dropdown-item.active {
-  background: rgba(var(--primary-6), 0.08);
+  background: var(--tf-accent-light);
 }
 
 .unassigned-icon {
@@ -454,7 +454,7 @@ function handleClose() {
 .check-icon {
   margin-left: auto;
   font-size: 12px;
-  color: rgb(var(--primary-6));
+  color: var(--tf-accent);
 }
 
 /* Loading & empty */

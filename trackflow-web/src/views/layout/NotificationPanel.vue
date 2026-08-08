@@ -536,7 +536,7 @@ function handleDeleteAllRead() {
   background: var(--tf-bg-elevated);
   border: 1px solid var(--tf-border);
   border-radius: 10px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  box-shadow: var(--tf-shadow-lg);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -994,7 +994,7 @@ function handleDeleteAllRead() {
   opacity: 0.8;
 }
 .item-delete-btn:hover {
-  color: var(--tf-error, #f85149);
+  color: var(--tf-danger);
 }
 
 /* Panel Footer */

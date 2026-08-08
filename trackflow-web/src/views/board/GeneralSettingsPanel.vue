@@ -43,7 +43,7 @@
         </a-option>
       </a-select>
       <div v-if="editableLinkedProjectIds.length > 0" class="multi-project-hint">
-        <icon-info-circle style="color: rgb(var(--primary-6)); margin-right: 4px;" />
+        <icon-info-circle style="color: var(--tf-accent); margin-right: 4px;" />
         <span>
           跨项目看板将合并展示来自
           <strong>{{ editableLinkedProjectIds.length + 1 }}</strong>
@@ -594,7 +594,7 @@ function toggleEditRole(code: string, checked: boolean) {
 }
 
 .behavior-option--active {
-  background: rgba(var(--primary-6), 0.04);
+  background: var(--tf-accent-subtle);
 }
 
 .behavior-option + .behavior-option {
@@ -625,7 +625,7 @@ function toggleEditRole(code: string, checked: boolean) {
   align-items: flex-start;
   gap: 10px;
   padding: 10px 14px;
-  background: rgba(var(--warning-6), 0.08);
+  background: var(--tf-warning-bg);
   border: 1px solid rgba(var(--warning-6), 0.3);
   border-radius: 6px;
   margin-top: 8px;
@@ -727,7 +727,7 @@ function toggleEditRole(code: string, checked: boolean) {
 
 .query-validation-error {
   font-size: 12px;
-  color: rgb(var(--red-6));
+  color: var(--tf-danger);
   display: flex;
   align-items: center;
   gap: 4px;
@@ -764,7 +764,7 @@ function toggleEditRole(code: string, checked: boolean) {
 }
 
 .role-item--checked {
-  background: rgba(var(--primary-6), 0.04);
+  background: var(--tf-accent-subtle);
 }
 
 .role-item + .role-item {
@@ -794,9 +794,9 @@ function toggleEditRole(code: string, checked: boolean) {
 .project-option-key {
   font-size: 12px;
   font-weight: 600;
-  color: rgb(var(--primary-6));
+  color: var(--tf-accent);
   margin-right: 6px;
-  background: rgba(var(--primary-6), 0.1);
+  background: var(--tf-accent-light);
   padding: 1px 4px;
   border-radius: 3px;
 }

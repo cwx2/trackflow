@@ -266,10 +266,10 @@ onMounted(() => {
   align-items: center;
   gap: 4px;
   padding: 4px 10px;
-  border: 1px solid var(--color-border-2, #3a3d42);
+  border: 1px solid var(--tf-border);
   border-radius: 6px;
-  background: var(--color-bg-2, #22252a);
-  color: var(--color-text-1, #e6edf3);
+  background: var(--tf-bg-surface);
+  color: var(--tf-text-primary);
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
@@ -279,13 +279,13 @@ onMounted(() => {
 }
 
 .board-selector-btn:hover {
-  border-color: var(--color-border-3, #4a4d52);
-  background: var(--color-bg-3, #2a2d33);
+  border-color: var(--tf-border);
+  background: var(--tf-bg-elevated);
 }
 
 .board-selector-btn--active {
-  border-color: rgb(var(--primary-6, 64 128 255));
-  background: var(--color-bg-3, #2a2d33);
+  border-color: var(--tf-accent);
+  background: var(--tf-bg-elevated);
 }
 
 .board-selector-btn__name {
@@ -310,16 +310,16 @@ onMounted(() => {
   max-height: 420px;
   display: flex;
   flex-direction: column;
-  background: var(--color-bg-popup, #2a2d33);
-  border: 1px solid var(--color-border-2, #3a3d42);
+  background: var(--tf-popup-bg);
+  border: 1px solid var(--tf-border);
   border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--tf-shadow-lg);
   overflow: hidden;
 }
 
 .board-selector-search {
   padding: 8px 12px;
-  border-bottom: 1px solid var(--color-border-1, #333639);
+  border-bottom: 1px solid var(--tf-border-light);
 }
 
 .board-selector-list {
@@ -332,7 +332,7 @@ onMounted(() => {
   padding: 6px 12px 4px;
   font-size: 11px;
   font-weight: 500;
-  color: var(--color-text-3, #6b7280);
+  color: var(--tf-text-tertiary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -340,7 +340,7 @@ onMounted(() => {
 .board-selector-divider {
   margin: 4px 12px;
   height: 1px;
-  background: var(--color-border-1, #333639);
+  background: var(--tf-border-light);
 }
 
 .board-selector-item {
@@ -353,11 +353,11 @@ onMounted(() => {
 }
 
 .board-selector-item:hover {
-  background: var(--color-fill-2, #333639);
+  background: var(--tf-fill-medium);
 }
 
 .board-selector-item--active {
-  background: var(--color-fill-2, #333639);
+  background: var(--tf-fill-medium);
 }
 
 .board-selector-item--active::before {
@@ -367,7 +367,7 @@ onMounted(() => {
   top: 0;
   bottom: 0;
   width: 3px;
-  background: rgb(var(--primary-6, 64 128 255));
+  background: var(--tf-accent);
   border-radius: 0 2px 2px 0;
 }
 
@@ -385,19 +385,19 @@ onMounted(() => {
   border: none;
   background: none;
   font-size: 14px;
-  color: var(--color-text-4, #4b5563);
+  color: var(--tf-text-muted);
   cursor: pointer;
   border-radius: 4px;
   transition: all 100ms;
 }
 
 .board-selector-star:hover {
-  color: var(--color-warning-6, #d29922);
-  background: var(--color-fill-2, #333639);
+  color: var(--tf-warning);
+  background: var(--tf-fill-medium);
 }
 
 .board-selector-star--filled {
-  color: var(--color-warning-6, #d29922);
+  color: var(--tf-warning);
 }
 
 .board-selector-item__content {
@@ -410,7 +410,7 @@ onMounted(() => {
 
 .board-selector-item__name {
   font-size: 13px;
-  color: var(--color-text-1, #e6edf3);
+  color: var(--tf-text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -418,13 +418,13 @@ onMounted(() => {
 
 .board-selector-item__meta {
   font-size: 11px;
-  color: var(--color-text-3, #6b7280);
+  color: var(--tf-text-tertiary);
 }
 
 .board-selector-item__owner {
   flex-shrink: 0;
   font-size: 11px;
-  color: var(--color-text-3, #6b7280);
+  color: var(--tf-text-tertiary);
   max-width: 80px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -434,7 +434,7 @@ onMounted(() => {
 .board-selector-empty {
   padding: 24px 12px;
   text-align: center;
-  color: var(--color-text-3, #6b7280);
+  color: var(--tf-text-tertiary);
   font-size: 13px;
 }
 
@@ -444,7 +444,7 @@ onMounted(() => {
   justify-content: center;
   gap: 8px;
   padding: 16px;
-  color: var(--color-text-3, #6b7280);
+  color: var(--tf-text-tertiary);
   font-size: 12px;
 }
 
@@ -459,7 +459,7 @@ onMounted(() => {
   border: none;
   background: none;
   font-size: 13px;
-  color: var(--color-text-4, #4b5563);
+  color: var(--tf-text-muted);
   cursor: pointer;
   border-radius: 4px;
   transition: all 100ms;
@@ -471,7 +471,7 @@ onMounted(() => {
 }
 
 .board-selector-clone-btn:hover {
-  color: var(--color-text-1, #e6edf3);
-  background: var(--color-fill-3, #3a3d42);
+  color: var(--tf-text-primary);
+  background: var(--tf-fill-heavy);
 }
 </style>

@@ -636,7 +636,7 @@ async function submitDelete() {
 }
 
 .danger-title {
-  color: var(--color-danger-6, #f53f3f);
+  color: var(--tf-danger);
 }
 
 .danger-item {
@@ -687,7 +687,7 @@ async function submitDelete() {
 
 .warning-icon {
   font-size: 18px;
-  color: var(--color-danger-6, #f53f3f);
+  color: var(--tf-danger);
   flex-shrink: 0;
   margin-top: 1px;
 }
@@ -712,7 +712,7 @@ async function submitDelete() {
 }
 
 .impact-warn {
-  color: var(--color-danger-6, #f53f3f);
+  color: var(--tf-danger);
   font-size: 12px;
 }
 

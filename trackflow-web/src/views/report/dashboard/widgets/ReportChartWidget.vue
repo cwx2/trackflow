@@ -89,14 +89,14 @@ function buildPieOption(data: ReportDataVO): Record<string, any> {
       trigger: 'item',
       formatter: '{b}: {c} ({d}%)',
       backgroundColor: 'var(--tf-bg-elevated, #22252a)',
-      borderColor: 'var(--tf-border, #30363d)',
-      textStyle: { color: 'var(--tf-text-primary, #e6edf3)', fontSize: 11 }
+      borderColor: 'var(--tf-border)',
+      textStyle: { color: 'var(--tf-text-primary)', fontSize: 11 }
     },
     legend: {
       orient: 'vertical',
       right: 4,
       top: 'center',
-      textStyle: { color: 'var(--tf-text-secondary, #9ca3af)', fontSize: 10 },
+      textStyle: { color: 'var(--tf-text-secondary)', fontSize: 10 },
       itemWidth: 8,
       itemHeight: 8,
       itemGap: 6
@@ -202,7 +202,7 @@ function buildStackedBarOption(data: ReportDataVO): Record<string, any> {
     },
     legend: {
       bottom: 0,
-      textStyle: { color: 'var(--tf-text-secondary, #9ca3af)', fontSize: 10 },
+      textStyle: { color: 'var(--tf-text-secondary)', fontSize: 10 },
       itemWidth: 8,
       itemHeight: 8,
       itemGap: 8

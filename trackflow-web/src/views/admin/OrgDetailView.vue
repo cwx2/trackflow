@@ -508,7 +508,7 @@ onMounted(loadOrg)
 /* Table cells */
 .code-tag { font-size: 11px; background: var(--bg-tertiary); padding: 2px 6px; border-radius: var(--radius-sm); color: var(--accent-blue); }
 .status-badge { font-size: 11px; padding: 2px 8px; border-radius: 10px; background: var(--bg-tertiary); color: var(--text-secondary); text-transform: capitalize; }
-.status-badge.active { background: rgba(var(--green-6), 0.1); color: var(--color-success-light); }
+.status-badge.active { background: var(--tf-success-bg); color: var(--color-success-light); }
 
 .user-cell { display: flex; flex-direction: column; gap: 2px; }
 .user-display-name { font-size: 13px; font-weight: 500; color: var(--text-primary); }

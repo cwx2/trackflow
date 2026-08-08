@@ -343,18 +343,18 @@ onMounted(() => loadLinkTypes())
 }
 
 .direction-badge.directed {
-  background: rgba(88, 166, 255, 0.12);
-  color: #58a6ff;
+  background: var(--tf-accent-bg-light);
+  color: var(--tf-accent);
 }
 
 .direction-badge.undirected {
-  background: rgba(63, 185, 80, 0.12);
-  color: #3fb950;
+  background: var(--tf-success-bg);
+  color: var(--tf-success);
 }
 
 .direction-badge.aggregation {
-  background: rgba(210, 153, 34, 0.12);
-  color: #d29922;
+  background: var(--tf-warning-bg);
+  color: var(--tf-warning);
 }
 
 /* Form hints */
@@ -401,7 +401,7 @@ onMounted(() => loadLinkTypes())
 
 .warning-impact {
   font-size: 12px;
-  color: var(--tf-warning, #d29922);
+  color: var(--tf-warning);
   margin: 0;
 }
 
@@ -411,7 +411,7 @@ onMounted(() => loadLinkTypes())
 
 .warning-safe {
   font-size: 12px;
-  color: var(--tf-success, #3fb950);
+  color: var(--tf-success);
   margin: 0;
 }
 

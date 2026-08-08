@@ -313,7 +313,7 @@ function strategyDescription(config: TransitionActionVO['actionConfig'], actionT
 .transition-name-section {
   margin-bottom: 16px;
   padding-bottom: 16px;
-  border-bottom: 1px solid var(--color-border-2, rgba(255,255,255,0.08));
+  border-bottom: 1px solid var(--tf-border);
 }
 
 .transition-name-section .section-label {
@@ -350,18 +350,18 @@ function strategyDescription(config: TransitionActionVO['actionConfig'], actionT
 }
 
 .action-item.path-invalid {
-  border-left: 3px solid var(--color-warning-6, #ff7d00);
+  border-left: 3px solid var(--tf-warning);
   opacity: 0.75;
 }
 
 .path-warning-icon {
-  color: var(--color-warning-6, #ff7d00);
+  color: var(--tf-warning);
   font-size: 14px;
   flex-shrink: 0;
 }
 
 .path-invalid-label {
-  color: var(--color-warning-6, #ff7d00);
+  color: var(--tf-warning);
   font-weight: 500;
 }
 

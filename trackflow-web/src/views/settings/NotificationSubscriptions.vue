@@ -488,7 +488,7 @@ function resetForm() {
   cursor: pointer;
   transition: all 150ms;
   user-select: none;
-  background: var(--tf-bg-surface, #22252a);
+  background: var(--tf-bg-surface);
   color: var(--tf-text-tertiary);
   border: 1px solid var(--tf-border-light);
 }
@@ -516,8 +516,8 @@ function resetForm() {
 }
 
 .sub-item-delete:hover {
-  background: rgba(248, 81, 73, 0.1);
-  color: var(--tf-error, #f85149);
+  background: var(--tf-danger-bg);
+  color: var(--tf-danger);
 }
 
 /* Add Form */

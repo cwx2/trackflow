@@ -411,7 +411,7 @@ function truncateDescription(desc?: string): string {
 
 /* Keyboard focus (J/K navigation) — distinct from active/selected */
 .issue-list-item.focused {
-  outline: 2px solid var(--tf-accent, #58a6ff);
+  outline: 2px solid var(--tf-accent);
   outline-offset: -2px;
   background: var(--tf-bg-hover, var(--color-fill-1));
 }
@@ -529,7 +529,7 @@ function truncateDescription(desc?: string): string {
   border-radius: 3px;
   font-size: 11px;
   font-weight: 700;
-  color: #fff;
+  color: var(--tf-text-on-accent);
   line-height: 1;
 }
 
@@ -563,7 +563,7 @@ function truncateDescription(desc?: string): string {
   display: inline-block;
   max-width: 72px;
   font-size: 11px;
-  color: #fff;
+  color: var(--tf-text-on-accent);
   padding: 1px 5px;
   border-radius: 3px;
   font-weight: 500;
@@ -592,7 +592,7 @@ function truncateDescription(desc?: string): string {
 .item-status {
   flex-shrink: 0;
   font-size: 11px;
-  color: #fff;
+  color: var(--tf-text-on-accent);
   padding: 1px 6px;
   border-radius: 3px;
   font-weight: 500;
@@ -635,7 +635,7 @@ function truncateDescription(desc?: string): string {
 }
 
 .field-cf-badge {
-  color: #fff;
+  color: var(--tf-text-on-accent);
   padding: 0 4px;
   border-radius: 2px;
   font-size: 11px;

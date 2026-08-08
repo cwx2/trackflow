@@ -161,7 +161,7 @@ async function confirmDelete() {
   align-items: center;
   gap: 8px;
   padding: 10px 12px;
-  background: rgba(var(--warning-6), 0.08);
+  background: var(--tf-warning-bg);
   border: 1px solid rgba(var(--warning-6), 0.2);
   border-radius: 6px;
   font-size: 13px;
@@ -169,7 +169,7 @@ async function confirmDelete() {
   color: rgb(var(--warning-6));
 }
 .delete-warning-banner.danger {
-  background: rgba(var(--danger-6), 0.08);
+  background: var(--tf-danger-bg);
   border-color: rgba(var(--danger-6), 0.2);
   color: rgb(var(--danger-6));
 }

@@ -131,8 +131,8 @@ function workTypeLabel(type: string): string {
 .entry-issue.deleted { color: var(--tf-text-tertiary); font-style: italic; cursor: default; }
 .entry-issue.deleted:hover { text-decoration: none; }
 .entry-duration { font-size: 12px; font-weight: 600; color: var(--tf-text-primary); }
-.entry-ongoing { color: var(--tf-success, #3fb950); display: flex; align-items: center; gap: 4px; font-weight: 500; }
-.ongoing-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--tf-success, #3fb950); animation: timer-pulse-anim 1.5s ease-in-out infinite; }
+.entry-ongoing { color: var(--tf-success); display: flex; align-items: center; gap: 4px; font-weight: 500; }
+.ongoing-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--tf-success); animation: timer-pulse-anim 1.5s ease-in-out infinite; }
 @keyframes timer-pulse-anim { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
 .entry-desc { font-size: 10px; color: var(--tf-text-tertiary); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .entry-type { font-size: 10px; color: var(--tf-text-muted); margin-top: 2px; }

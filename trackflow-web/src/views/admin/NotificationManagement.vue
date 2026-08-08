@@ -898,7 +898,7 @@ onMounted(async () => {
   margin-top: 12px;
   padding: 8px 12px;
   background: var(--tf-bg-surface);
-  border: 1px solid var(--color-warning-light-4, #ffe4b0);
+  border: 1px solid var(--tf-warning);
   border-radius: 4px;
   font-size: 11px;
   color: var(--tf-text-secondary);
@@ -1042,7 +1042,7 @@ onMounted(async () => {
 }
 
 .required {
-  color: var(--color-danger-6, #f53f3f);
+  color: var(--tf-danger);
 }
 
 .email-config-status {
@@ -1059,8 +1059,8 @@ onMounted(async () => {
 }
 
 .status-badge--ok {
-  color: var(--color-success-6, #00b42a);
-  background: var(--color-success-light-1, rgba(0, 180, 42, 0.1));
+  color: var(--tf-success);
+  background: var(--tf-success-bg);
 }
 
 .status-badge--incomplete {

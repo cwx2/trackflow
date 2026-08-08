@@ -829,7 +829,7 @@ function onDragStart(event: DragEvent, issue: IssueVO, source: string) {
     const el = document.createElement('div')
     el.className = 'drag-ghost'
     el.textContent = `${idsToMove.size} 个工单`
-    el.style.cssText = 'position:fixed;top:-100px;left:-100px;padding:6px 12px;background:var(--color-primary-light-2,#4080ff);color:#fff;border-radius:4px;font-size:12px;font-weight:500;z-index:9999;'
+    el.style.cssText = 'position:fixed;top:-100px;left:-100px;padding:6px 12px;background:var(--tf-accent);color: var(--tf-text-on-accent);border-radius:4px;font-size:12px;font-weight:500;z-index:9999;'
     document.body.appendChild(el)
     event.dataTransfer.setDragImage(el, 0, 0)
     setTimeout(() => document.body.removeChild(el), 0)
@@ -1316,13 +1316,13 @@ onMounted(async () => {
 }
 .selection-indicator {
   font-size: 12px;
-  color: rgb(var(--primary-6));
+  color: var(--tf-accent);
   font-weight: 500;
   display: flex;
   align-items: center;
   gap: 6px;
   padding: 4px 10px;
-  background: rgba(var(--primary-6), 0.08);
+  background: var(--tf-accent-light);
   border-radius: 4px;
 }
 
@@ -1459,8 +1459,8 @@ onMounted(async () => {
   font-weight: 500;
 }
 .sprint-badge.active {
-  background: rgba(var(--primary-6), 0.1);
-  color: rgb(var(--primary-6));
+  background: var(--tf-accent-light);
+  color: var(--tf-accent);
 }
 .sprint-badge.planned {
   background: var(--color-fill-2);
@@ -1481,8 +1481,8 @@ onMounted(async () => {
   margin: 0 4px 4px;
 }
 .panel-body.drop-target {
-  background: rgba(var(--primary-6), 0.04);
-  border-color: rgba(var(--primary-6), 0.3);
+  background: var(--tf-accent-subtle);
+  border-color: var(--tf-accent-bg);
 }
 
 .panel-spin {
@@ -1508,16 +1508,16 @@ onMounted(async () => {
   user-select: none;
 }
 .planning-card:hover {
-  border-color: rgb(var(--primary-6));
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+  border-color: var(--tf-accent);
+  box-shadow: var(--tf-shadow-sm);
 }
 .planning-card:active {
   cursor: grabbing;
 }
 .planning-card--selected {
-  border-color: rgb(var(--primary-6));
-  background: rgba(var(--primary-6), 0.04);
-  box-shadow: 0 0 0 1px rgba(var(--primary-6), 0.3);
+  border-color: var(--tf-accent);
+  background: var(--tf-accent-subtle);
+  box-shadow: 0 0 0 1px var(--tf-accent-bg);
 }
 .planning-card--dragging {
   opacity: 0.4;
@@ -1615,7 +1615,7 @@ onMounted(async () => {
 }
 
 .hours-stat-value.planned {
-  color: rgb(var(--primary-6));
+  color: var(--tf-accent);
 }
 
 .hours-stat-value.velocity {
@@ -1643,18 +1643,18 @@ onMounted(async () => {
 }
 
 .load-badge-light {
-  background: rgba(var(--blue-4), 0.1);
-  color: rgb(var(--blue-6));
+  background: var(--tf-accent-light);
+  color: var(--tf-accent);
 }
 
 .load-badge-healthy {
-  background: rgba(var(--green-4), 0.15);
-  color: rgb(var(--green-6));
+  background: var(--tf-success-bg);
+  color: var(--tf-success);
 }
 
 .load-badge-overloaded {
-  background: rgba(var(--red-4), 0.15);
-  color: rgb(var(--red-6));
+  background: var(--tf-danger-bg);
+  color: var(--tf-danger);
 }
 
 /* 工时进度条 */
@@ -1674,15 +1674,15 @@ onMounted(async () => {
 }
 
 .hours-progress-fill.progress-normal {
-  background: rgb(var(--primary-6));
+  background: var(--tf-accent);
 }
 
 .hours-progress-fill.progress-healthy {
-  background: rgb(var(--green-6));
+  background: var(--tf-success);
 }
 
 .hours-progress-fill.progress-overloaded {
-  background: rgb(var(--red-5));
+  background: var(--tf-danger);
 }
 
 /* 历史速率芯片 */
@@ -1792,10 +1792,10 @@ onMounted(async () => {
 .planning-context-menu {
   position: fixed;
   z-index: 9999;
-  background: var(--color-bg-popup, var(--color-bg-2));
+  background: var(--tf-popup-bg);
   border: 1px solid var(--color-border);
   border-radius: 6px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  box-shadow: var(--tf-shadow-xl);
   padding: 4px 0;
   min-width: 160px;
 }
@@ -1825,10 +1825,10 @@ onMounted(async () => {
   position: absolute;
   left: 100%;
   top: -4px;
-  background: var(--color-bg-popup, var(--color-bg-2));
+  background: var(--tf-popup-bg);
   border: 1px solid var(--color-border);
   border-radius: 6px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  box-shadow: var(--tf-shadow-xl);
   padding: 4px 0;
   min-width: 140px;
   max-height: 280px;
@@ -1912,7 +1912,7 @@ onMounted(async () => {
 .sprint-goal-textarea {
   width: 100%;
   padding: 6px 8px;
-  border: 1px solid rgb(var(--primary-6));
+  border: 1px solid var(--tf-accent);
   border-radius: 4px;
   background: var(--color-bg-2);
   color: var(--color-text-1);
@@ -1922,7 +1922,7 @@ onMounted(async () => {
   outline: none;
   box-sizing: border-box;
   font-family: inherit;
-  box-shadow: 0 0 0 2px rgba(var(--primary-6), 0.15);
+  box-shadow: 0 0 0 2px var(--tf-accent-bg);
   transition: border-color 0.15s;
 }
 
@@ -1949,7 +1949,7 @@ onMounted(async () => {
 .panel-create-btn:hover,
 .panel-view-issues-btn:hover {
   background: var(--color-fill-3);
-  color: rgb(var(--primary-6));
+  color: var(--tf-accent);
 }
 .panel-create-btn:active,
 .panel-view-issues-btn:active {
@@ -1983,7 +1983,7 @@ onMounted(async () => {
   color: var(--color-text-4);
 }
 .quick-add-input:focus {
-  border-color: rgb(var(--primary-6));
+  border-color: var(--tf-accent);
   border-style: solid;
   background: var(--color-bg-2);
 }

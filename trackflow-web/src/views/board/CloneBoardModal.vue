@@ -180,7 +180,7 @@ function handleCancel() {
 }
 
 .clone-board-modal__desc strong {
-  color: var(--color-text-1, #e6edf3);
+  color: var(--tf-text-primary);
 }
 
 .clone-board-modal__info {
@@ -192,18 +192,18 @@ function handleCancel() {
   border-radius: 6px;
   margin-top: 16px;
   font-size: 12px;
-  color: var(--color-text-3, #6b7280);
+  color: var(--tf-text-tertiary);
   line-height: 1.5;
 }
 
 .info-icon {
   flex-shrink: 0;
   margin-top: 2px;
-  color: rgb(var(--primary-6, 64 128 255));
+  color: var(--tf-accent);
 }
 
 .key-tip {
   font-size: 11px;
-  color: var(--color-text-4, #4b5563);
+  color: var(--tf-text-muted);
 }
 </style>

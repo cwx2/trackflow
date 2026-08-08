@@ -515,7 +515,7 @@ onMounted(() => {
   height: 20px;
   padding: 0 6px;
   background: var(--tf-accent);
-  color: #fff;
+  color: var(--tf-text-on-accent);
   font-size: 11px;
   font-weight: 600;
   border-radius: 10px;
@@ -887,7 +887,7 @@ onMounted(() => {
   color: var(--tf-accent);
 }
 .item-delete-btn:hover {
-  color: var(--tf-error, #f85149);
+  color: var(--tf-danger);
 }
 
 /* Pagination */

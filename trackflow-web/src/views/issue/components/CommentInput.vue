@@ -314,9 +314,9 @@ defineExpose({ insertReplyQuote })
 }
 .visibility-btn:hover { color: var(--tf-text-primary); border-color: var(--tf-border); }
 .visibility-btn.restricted {
-  color: var(--tf-warning, #d29922);
-  border-color: var(--tf-warning, #d29922);
-  background: rgba(210, 153, 34, 0.08);
+  color: var(--tf-warning);
+  border-color: var(--tf-warning);
+  background: var(--tf-warning-bg);
 }
 .lock-icon { font-size: 12px; }
 .visibility-label { max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -327,7 +327,7 @@ defineExpose({ insertReplyQuote })
   margin-top: 4px; min-width: 180px;
   background: var(--tf-bg-elevated); border: 1px solid var(--tf-border);
   border-radius: 6px; padding: 4px 0;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--tf-shadow-xl);
 }
 .dropdown-header {
   padding: 6px 12px; font-size: 11px; font-weight: 600;
@@ -371,20 +371,20 @@ defineExpose({ insertReplyQuote })
   background: none; color: var(--tf-text-tertiary); cursor: pointer;
   transition: color 150ms, background 150ms;
 }
-.btn-start-timer:hover { color: var(--tf-success, #3fb950); background: var(--tf-bg-hover); }
+.btn-start-timer:hover { color: var(--tf-success); background: var(--tf-bg-hover); }
 .btn-stop-timer {
   font-size: 12px; padding: 4px 12px; border-radius: 3px; border: none;
-  background: none; color: var(--tf-success, #3fb950); cursor: pointer;
+  background: none; color: var(--tf-success); cursor: pointer;
   font-variant-numeric: tabular-nums;
   transition: color 150ms, background 150ms;
 }
-.btn-stop-timer:hover { color: var(--tf-danger, #f85149); background: var(--tf-bg-hover); }
+.btn-stop-timer:hover { color: var(--tf-danger); background: var(--tf-bg-hover); }
 .timer-elsewhere-hint {
   font-size: 11px; color: var(--tf-text-muted); padding: 4px 8px;
 }
 .btn-submit {
   font-size: 12px; padding: 4px 16px; border-radius: 3px; border: none;
-  background: var(--tf-accent); color: #fff; font-weight: 500; cursor: pointer;
+  background: var(--tf-accent); color: var(--tf-text-on-accent); font-weight: 500; cursor: pointer;
   transition: background 150ms;
 }
 .btn-submit:disabled { opacity: 0.35; cursor: default; }

@@ -505,22 +505,22 @@ function formatGenericDetails(d: Record<string, any>): string {
 }
 
 .action-success {
-  background: rgba(76, 175, 80, 0.12);
+  background: var(--tf-success-bg);
   color: var(--accent-green);
 }
 
 .action-danger {
-  background: rgba(244, 67, 54, 0.12);
+  background: var(--tf-danger-bg);
   color: var(--accent-red);
 }
 
 .action-warning {
-  background: rgba(255, 152, 0, 0.12);
-  color: var(--accent-orange, #f0a020);
+  background: var(--tf-warning-bg);
+  color: var(--tf-warning);
 }
 
 .action-auth {
-  background: rgba(88, 166, 255, 0.12);
+  background: var(--tf-accent-bg-light);
   color: var(--accent-blue);
 }
 

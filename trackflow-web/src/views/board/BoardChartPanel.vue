@@ -70,6 +70,7 @@ import {
 import VChart from 'vue-echarts'
 import { reportStatisticsApi } from '@/api'
 import type { BurndownData, CumulativeFlowData } from '@/api/reportStatistics'
+import { readChartThemeColors, SERIES_ACCENT, SERIES_TERTIARY, SERIES_DANGER } from '@/utils/chartColors'
 
 // 注册 ECharts 组件
 use([CanvasRenderer, LineChart, TooltipComponent, LegendComponent, GridComponent, MarkLineComponent])
@@ -141,13 +142,13 @@ function buildBurndownOption(data: BurndownData) {
   if (!dates || dates.length === 0) return {}
 
   const shortDates = dates.map(d => d.substring(5))
-  const isDark = document.documentElement.getAttribute('data-theme') === 'dark'
-  const textColor = isDark ? '#9ca3af' : '#57606a'
-  const axisColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'
-  const tooltipBg = isDark ? '#2a2d33' : '#fff'
-  const tooltipBorder = isDark ? '#3d4048' : '#e5e7eb'
-  const idealColor = isDark ? '#6b7280' : '#9ca3af'
-  const actualColor = isDark ? '#58a6ff' : '#0969da'
+  const theme = readChartThemeColors()
+  const textColor = theme.textColor
+  const axisColor = theme.axisColor
+  const tooltipBg = theme.tooltipBg
+  const tooltipBorder = theme.tooltipBorder
+  const idealColor = SERIES_TERTIARY
+  const actualColor = SERIES_ACCENT
 
   // Y-axis unit based on calculation mode
   const mode = data.mode || 'issue_count'
@@ -264,11 +265,11 @@ function buildCumulativeFlowOption(data: CumulativeFlowData) {
   if (!dates || dates.length === 0 || !series || series.length === 0) return {}
 
   const shortDates = dates.map(d => d.substring(5))
-  const isDark = document.documentElement.getAttribute('data-theme') === 'dark'
-  const textColor = isDark ? '#9ca3af' : '#57606a'
-  const axisColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'
-  const tooltipBg = isDark ? '#2a2d33' : '#fff'
-  const tooltipBorder = isDark ? '#3d4048' : '#e5e7eb'
+  const theme = readChartThemeColors()
+  const textColor = theme.textColor
+  const axisColor = theme.axisColor
+  const tooltipBg = theme.tooltipBg
+  const tooltipBorder = theme.tooltipBorder
 
   const legendData = series.map(s => s.name)
   const chartSeries = series.map(s => ({

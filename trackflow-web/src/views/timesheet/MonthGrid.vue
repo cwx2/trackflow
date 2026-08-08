@@ -101,6 +101,6 @@ function formatDuration(minutes: number): string {
 .month-entry-key { color: var(--tf-accent); font-weight: 500; }
 .month-entry-key.deleted { color: var(--tf-text-tertiary); font-style: italic; }
 .month-entry-dur { color: var(--tf-text-tertiary); }
-.month-entry-ongoing { color: var(--tf-success, #3fb950); }
+.month-entry-ongoing { color: var(--tf-success); }
 .month-entry-more { font-size: 9px; color: var(--tf-text-muted); text-align: center; padding: 1px; }
 </style>

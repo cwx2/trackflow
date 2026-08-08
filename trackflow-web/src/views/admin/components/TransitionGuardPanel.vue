@@ -447,7 +447,7 @@ function needsValue(operator: string): boolean {
 .and-badge {
   font-size: 10px;
   font-weight: 600;
-  color: var(--color-warning-6, #ff7d00);
+  color: var(--tf-warning);
   background: rgba(var(--orange-6), 0.1);
   padding: 1px 6px;
   border-radius: 3px;

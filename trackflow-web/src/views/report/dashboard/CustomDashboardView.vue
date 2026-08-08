@@ -1044,12 +1044,12 @@ watch(showEditModal, (val) => {
 }
 
 .tab-star:hover {
-  color: var(--tf-warning, #d29922);
+  color: var(--tf-warning);
   transform: scale(1.2);
 }
 
 .tab-star-active {
-  color: var(--tf-warning, #d29922);
+  color: var(--tf-warning);
 }
 
 .tab-star-active:hover {
@@ -1069,8 +1069,8 @@ watch(showEditModal, (val) => {
 .tab-system-badge {
   font-size: 10px;
   font-weight: 500;
-  color: var(--tf-success, #3fb950);
-  background: color-mix(in srgb, var(--tf-success, #3fb950) 12%, transparent);
+  color: var(--tf-success);
+  background: color-mix(in srgb, var(--tf-success) 12%, transparent);
   padding: 1px 5px;
   border-radius: 3px;
   line-height: 1.4;
@@ -1081,8 +1081,8 @@ watch(showEditModal, (val) => {
   align-items: center;
   font-size: 11px;
   font-weight: 500;
-  color: var(--tf-success, #3fb950);
-  background: color-mix(in srgb, var(--tf-success, #3fb950) 10%, transparent);
+  color: var(--tf-success);
+  background: color-mix(in srgb, var(--tf-success) 10%, transparent);
   padding: 2px 8px;
   border-radius: 10px;
   white-space: nowrap;
@@ -1157,7 +1157,7 @@ watch(showEditModal, (val) => {
 }
 
 .default-btn-active {
-  color: var(--tf-warning, #d29922) !important;
+  color: var(--tf-warning) !important;
 }
 
 /* Grid 容器 */

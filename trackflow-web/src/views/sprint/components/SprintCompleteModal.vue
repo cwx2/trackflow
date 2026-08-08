@@ -186,7 +186,7 @@ async function confirmComplete() {
   align-items: center;
   gap: 8px;
   padding: 10px 12px;
-  background: rgba(var(--warning-6), 0.08);
+  background: var(--tf-warning-bg);
   border-radius: 6px;
   font-size: 13px;
   color: var(--color-text-1);

@@ -143,7 +143,7 @@ function viewUserProfile() {
   background: var(--tf-bg-elevated);
   border: 1px solid var(--tf-border);
   border-radius: 8px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--tf-shadow-xl);
 }
 
 .card-loading {
@@ -206,7 +206,7 @@ function viewUserProfile() {
 }
 .card-action-btn:hover {
   background: var(--tf-accent);
-  color: #fff;
+  color: var(--tf-text-on-accent);
 }
 
 .card-error {

@@ -252,11 +252,11 @@ watch(() => props.visible, (val) => {
 }
 
 .change-group.added {
-  background: rgba(63, 185, 80, 0.08);
+  background: var(--tf-success-bg);
 }
 
 .change-group.removed {
-  background: rgba(248, 81, 73, 0.08);
+  background: var(--tf-danger-bg);
 }
 
 .change-label {
@@ -269,11 +269,11 @@ watch(() => props.visible, (val) => {
 }
 
 .change-group.added .change-label {
-  color: var(--color-success, #3fb950);
+  color: var(--tf-success);
 }
 
 .change-group.removed .change-label {
-  color: var(--color-danger, #f85149);
+  color: var(--tf-danger);
 }
 
 .change-item {

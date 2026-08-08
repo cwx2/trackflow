@@ -62,6 +62,7 @@ import {
 import VChart from 'vue-echarts'
 import { sprintApi } from '@/api'
 import type { SprintBurndownVO } from '@/api/types'
+import { readChartThemeColors, SERIES_ACCENT, SERIES_DANGER, SERIES_WARNING, SERIES_SUCCESS } from '@/utils/chartColors'
 
 // 注册 ECharts 组件
 use([CanvasRenderer, LineChart, TooltipComponent, LegendComponent, GridComponent, MarkLineComponent])
@@ -118,16 +119,16 @@ const chartOption = computed(() => {
   const shortDates = dates.map(d => d.substring(5))
 
   // 主题色（使用 CSS 变量兼容暗色/亮色主题）
-  const isDark = document.documentElement.getAttribute('data-theme') === 'dark'
-  const textColor = isDark ? '#9ca3af' : '#57606a'
-  const axisColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'
-  const tooltipBg = isDark ? '#2a2d33' : '#fff'
-  const tooltipBorder = isDark ? '#3d4048' : '#e5e7eb'
+  const theme = readChartThemeColors()
+  const textColor = theme.textColor
+  const axisColor = theme.axisColor
+  const tooltipBg = theme.tooltipBg
+  const tooltipBorder = theme.tooltipBorder
   // YouTrack 风格配色：理想线=蓝色，实际线=红色
-  const idealColor = isDark ? '#58a6ff' : '#0969da'  // 蓝色
-  const actualColor = isDark ? '#f85149' : '#cf222e' // 红色
-  const scopeColor = isDark ? '#d29922' : '#9a6700'
-  const todayLineColor = isDark ? '#3fb950' : '#1a7f37'
+  const idealColor = SERIES_ACCENT
+  const actualColor = SERIES_DANGER
+  const scopeColor = SERIES_WARNING
+  const todayLineColor = SERIES_SUCCESS
 
   // 判断是否有范围变化（scope line 不是一条直线）
   const showScopeLine = scopeLine.length > 0 && hasScopeChange.value

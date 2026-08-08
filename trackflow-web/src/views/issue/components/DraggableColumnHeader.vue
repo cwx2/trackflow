@@ -110,12 +110,12 @@ function onDrop(e: DragEvent) {
   white-space: nowrap;
   font-size: 11px;
   font-weight: 500;
-  color: var(--tf-text-tertiary, #6b7280);
+  color: var(--tf-text-tertiary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 .col-label.sortable { cursor: pointer; }
-.col-label.sortable:hover { color: var(--tf-text-primary, #e6edf3); }
+.col-label.sortable:hover { color: var(--tf-text-primary); }
 
 .sort-arrow {
   font-size: 10px;
@@ -123,7 +123,7 @@ function onDrop(e: DragEvent) {
   transition: opacity 0.15s;
 }
 .sort-arrow.active {
-  color: var(--tf-accent, #58a6ff);
+  color: var(--tf-accent);
   opacity: 1;
 }
 .sort-arrow.hint {
@@ -144,7 +144,7 @@ function onDrop(e: DragEvent) {
   align-items: center;
 }
 .col-header:hover .col-remove { opacity: 1; }
-.col-remove:hover { color: var(--tf-danger, #f85149); }
+.col-remove:hover { color: var(--tf-danger); }
 
 .col-header.is-fixed .drag-handle,
 .col-header.is-fixed .col-remove { display: none; }

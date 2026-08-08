@@ -101,7 +101,7 @@ defineEmits<{
 .nav-card:hover {
   background: var(--tf-bg-hover);
   border-color: var(--tf-accent);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--tf-shadow);
 }
 
 .nav-card-icon {
@@ -113,7 +113,7 @@ defineEmits<{
   justify-content: center;
   flex-shrink: 0;
   font-size: 18px;
-  color: #fff;
+  color: var(--tf-text-on-accent);
 }
 
 .issues-icon { background: #3f51b5; }

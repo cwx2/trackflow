@@ -12,6 +12,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { reportStatisticsApi } from '@/api/reportStatistics'
 import type { OverviewData } from '@/api/reportStatistics'
+import { CHART_PALETTE, SERIES_ACCENT, SERIES_SUCCESS, SERIES_DANGER, SERIES_WARNING, SERIES_PURPLE } from '@/utils/chartColors'
 
 const props = defineProps<{
   config: Record<string, any>
@@ -34,12 +35,12 @@ const queryTypeLabels: Record<QueryType, string> = {
 }
 
 const queryTypeColors: Record<QueryType, string> = {
-  total: '#58a6ff',
-  open: '#f0883e',
-  closed: '#3fb950',
-  unassigned: '#d29922',
-  overdue: '#f85149',
-  completion_rate: '#a371f7'
+  total: SERIES_ACCENT,
+  open: CHART_PALETTE[2],
+  closed: SERIES_SUCCESS,
+  unassigned: SERIES_WARNING,
+  overdue: SERIES_DANGER,
+  completion_rate: SERIES_PURPLE
 }
 
 const overviewData = ref<OverviewData | null>(null)

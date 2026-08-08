@@ -534,14 +534,14 @@ onMounted(loadSettings)
   display: flex;
   gap: 10px;
   padding: 12px 16px;
-  background: var(--color-warning-light-1, rgba(255, 183, 77, 0.08));
+  background: var(--tf-warning-bg);
   border-radius: 6px;
   margin-bottom: 20px;
   align-items: flex-start;
 }
 
 .recalc-warning-icon {
-  color: var(--color-warning-6, #ff7d00);
+  color: var(--tf-warning);
   font-size: 18px;
   flex-shrink: 0;
   margin-top: 2px;
@@ -626,7 +626,7 @@ onMounted(loadSettings)
 
 .recalc-option-warning {
   font-size: 11px;
-  color: var(--color-warning-6, #ff7d00);
+  color: var(--tf-warning);
   margin-top: 4px;
 }
 

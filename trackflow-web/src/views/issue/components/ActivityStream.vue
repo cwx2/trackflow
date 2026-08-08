@@ -658,7 +658,7 @@ defineExpose({
   transition: background 150ms, color 150ms;
   font-weight: 500; white-space: nowrap;
 }
-.add-time-btn:hover { background: var(--tf-accent); color: #fff; }
+.add-time-btn:hover { background: var(--tf-accent); color: var(--tf-text-on-accent); }
 .add-time-btn .add-time-icon { font-size: 12px; }
 
 .settings-dropdown-wrap { margin-left: auto; position: relative; }
@@ -674,7 +674,7 @@ defineExpose({
   margin-top: 4px; min-width: 160px;
   background: var(--tf-bg-elevated); border: 1px solid var(--tf-border);
   border-radius: 6px; padding: 4px 0;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--tf-shadow-xl);
 }
 .dropdown-item {
   display: flex; align-items: center; gap: 8px;
@@ -718,10 +718,10 @@ defineExpose({
 
 .automation-badge {
   font-size: 10px;
-  color: var(--tf-warning, #d29922);
+  color: var(--tf-warning);
   padding: 1px 6px;
   border-radius: 3px;
-  background: rgba(210, 153, 34, 0.12);
+  background: var(--tf-warning-bg);
   font-weight: 500;
   white-space: nowrap;
   cursor: default;
@@ -736,10 +736,10 @@ defineExpose({
 
 .visibility-badge {
   font-size: 10px;
-  color: var(--tf-warning, #d29922);
+  color: var(--tf-warning);
   padding: 1px 6px;
   border-radius: 3px;
-  background: rgba(210, 153, 34, 0.1);
+  background: var(--tf-warning-bg);
   max-width: 200px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -761,7 +761,7 @@ defineExpose({
   display: inline-flex; align-items: center; justify-content: center;
 }
 .action-btn:hover { color: var(--tf-text-primary); background: var(--tf-bg-hover); }
-.action-btn-danger:hover { color: var(--tf-error); background: rgba(248, 81, 73, 0.1); }
+.action-btn-danger:hover { color: var(--tf-error); background: var(--tf-danger-bg); }
 
 .comment-text { font-size: 13px; color: var(--tf-text-secondary); line-height: 1.5; margin-top: 4px; }
 .comment-text.collapsed { max-height: 60px; overflow: hidden; position: relative; }
@@ -860,7 +860,7 @@ defineExpose({
   color: var(--tf-text-error, #f85149);
 }
 .deleted-action-btn-danger:hover {
-  background: rgba(248, 81, 73, 0.1);
+  background: var(--tf-danger-bg);
 }
 
 /* Edit mode */
@@ -887,7 +887,7 @@ defineExpose({
 .btn-cancel:hover { color: var(--tf-text-primary); }
 .btn-save {
   font-size: 12px; padding: 4px 16px; border-radius: 3px; border: none;
-  background: var(--tf-accent); color: #fff; font-weight: 500; cursor: pointer;
+  background: var(--tf-accent); color: var(--tf-text-on-accent); font-weight: 500; cursor: pointer;
   transition: background 150ms;
 }
 .btn-save:disabled { opacity: 0.35; cursor: default; }

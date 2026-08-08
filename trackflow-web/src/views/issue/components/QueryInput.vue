@@ -625,7 +625,7 @@ onUnmounted(() => document.removeEventListener('mousedown', handleOutsideClick))
   right: 0;
   max-height: 280px;
   overflow-y: auto;
-  background: var(--tf-bg-elevated, #2a2d33);
+  background: var(--tf-bg-elevated);
   border: 1px solid var(--tf-border);
   border-radius: var(--tf-radius-md);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);

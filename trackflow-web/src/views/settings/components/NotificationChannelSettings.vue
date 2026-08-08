@@ -200,7 +200,7 @@ function handleQuietToggle(enabled: boolean | string | number) {
   align-items: center;
   justify-content: space-between;
   padding: 12px 16px;
-  background: var(--tf-bg-surface, #22252a);
+  background: var(--tf-bg-surface);
   border-radius: 6px;
   border: 1px solid var(--tf-border-light);
 }
@@ -240,7 +240,7 @@ function handleQuietToggle(enabled: boolean | string | number) {
 .email-per-event {
   margin-top: 16px;
   padding: 16px;
-  background: var(--tf-bg-surface, #22252a);
+  background: var(--tf-bg-surface);
   border-radius: 6px;
   border: 1px solid var(--tf-border-light);
 }
@@ -286,7 +286,7 @@ function handleQuietToggle(enabled: boolean | string | number) {
 
 .quiet-hours {
   padding: 12px 16px;
-  background: var(--tf-bg-surface, #22252a);
+  background: var(--tf-bg-surface);
   border-radius: 6px;
   border: 1px solid var(--tf-border-light);
 }
