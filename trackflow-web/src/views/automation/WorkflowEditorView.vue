@@ -53,23 +53,24 @@
               <span class="panel-title">{{ getNodeTitle(selectedNode.properties?.nodeType) }}</span>
               <a-button type="text" size="small" status="danger" @click="deleteSelectedNode">删除</a-button>
             </div>
-            <CliAgentConfig v-if="selectedNode.properties?.nodeType === 'cli-agent'" v-model:data="selectedNode.properties" />
-            <VariablesConfig v-else-if="selectedNode.properties?.nodeType === 'variables'" v-model:data="selectedNode.properties" />
-            <ConditionConfig v-else-if="selectedNode.properties?.nodeType === 'condition'" v-model:data="selectedNode.properties" />
-            <LoopConfig v-else-if="selectedNode.properties?.nodeType === 'loop'" v-model:data="selectedNode.properties" />
-            <FileInputConfig v-else-if="selectedNode.properties?.nodeType === 'file-input'" v-model:data="selectedNode.properties" />
-            <DelayConfig v-else-if="selectedNode.properties?.nodeType === 'delay'" v-model:data="selectedNode.properties" />
-            <CodeConfig v-else-if="selectedNode.properties?.nodeType === 'code'" v-model:data="selectedNode.properties" />
-            <HttpRequestConfig v-else-if="selectedNode.properties?.nodeType === 'http-request'" v-model:data="selectedNode.properties" />
-            <SubWorkflowConfig v-else-if="selectedNode.properties?.nodeType === 'sub-workflow'" v-model:data="selectedNode.properties" />
-            <IssueSearchConfig v-else-if="selectedNode.properties?.nodeType === 'trackflow-issue-search'" v-model:data="selectedNode.properties" />
-            <IssueTransitionConfig v-else-if="selectedNode.properties?.nodeType === 'trackflow-issue-transition'" v-model:data="selectedNode.properties" />
-            <IssueContextConfig v-else-if="selectedNode.properties?.nodeType === 'trackflow-issue-context'" v-model:data="selectedNode.properties" />
-            <IssueUpdateConfig v-else-if="selectedNode.properties?.nodeType === 'trackflow-issue-update'" v-model:data="selectedNode.properties" />
-            <RoleAgentConfig v-else-if="selectedNode.properties?.nodeType === 'role-agent'" v-model:data="selectedNode.properties" />
+            <CliAgentConfig v-if="selectedNode.properties?.nodeType === 'cli-agent'" :data="selectedNode.properties" @update:data="updateSelectedNodeProperties" />
+            <VariablesConfig v-else-if="selectedNode.properties?.nodeType === 'variables'" :data="selectedNode.properties" @update:data="updateSelectedNodeProperties" />
+            <ConditionConfig v-else-if="selectedNode.properties?.nodeType === 'condition'" :data="selectedNode.properties" @update:data="updateSelectedNodeProperties" />
+            <LoopConfig v-else-if="selectedNode.properties?.nodeType === 'loop'" :data="selectedNode.properties" @update:data="updateSelectedNodeProperties" />
+            <FileInputConfig v-else-if="selectedNode.properties?.nodeType === 'file-input'" :data="selectedNode.properties" @update:data="updateSelectedNodeProperties" />
+            <DelayConfig v-else-if="selectedNode.properties?.nodeType === 'delay'" :data="selectedNode.properties" @update:data="updateSelectedNodeProperties" />
+            <CodeConfig v-else-if="selectedNode.properties?.nodeType === 'code'" :data="selectedNode.properties" @update:data="updateSelectedNodeProperties" />
+            <HttpRequestConfig v-else-if="selectedNode.properties?.nodeType === 'http-request'" :data="selectedNode.properties" @update:data="updateSelectedNodeProperties" />
+            <SubWorkflowConfig v-else-if="selectedNode.properties?.nodeType === 'sub-workflow'" :data="selectedNode.properties" @update:data="updateSelectedNodeProperties" />
+            <IssueSearchConfig v-else-if="selectedNode.properties?.nodeType === 'trackflow-issue-search'" :data="selectedNode.properties" @update:data="updateSelectedNodeProperties" />
+            <IssueTransitionConfig v-else-if="selectedNode.properties?.nodeType === 'trackflow-issue-transition'" :data="selectedNode.properties" @update:data="updateSelectedNodeProperties" />
+            <IssueContextConfig v-else-if="selectedNode.properties?.nodeType === 'trackflow-issue-context'" :data="selectedNode.properties" @update:data="updateSelectedNodeProperties" />
+            <IssueUpdateConfig v-else-if="selectedNode.properties?.nodeType === 'trackflow-issue-update'" :data="selectedNode.properties" @update:data="updateSelectedNodeProperties" />
+            <RoleAgentConfig v-else-if="selectedNode.properties?.nodeType === 'role-agent'" :data="selectedNode.properties" @update:data="updateSelectedNodeProperties" />
             <GenericNodeConfig
               v-else
-              v-model:data="selectedNode.properties"
+              :data="selectedNode.properties"
+              @update:data="updateSelectedNodeProperties"
               :definition="getNodeDefinition(selectedNode.properties?.nodeType)"
             />
           </template>
@@ -217,7 +218,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { pauseTracking, resetTracking } from '@vue/reactivity'
 import { useRoute, useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
@@ -307,10 +308,18 @@ const settingsModel = computed(() => ({
 const globalVariables = ref<Record<string, GlobalVariable>>({})
 const selectedNode = ref<any>(null)
 
-watch(selectedNode, value => {
-  if (!lf || !value?.id || !value.properties) return
-  lf.setProperties(value.id, JSON.parse(JSON.stringify(value.properties)))
-}, { deep: true })
+/**
+ * 配置面板是唯一允许回写画布的入口。不能 watch selectedNode 再回写 LogicFlow，
+ * 因为 LogicFlow 的重新渲染会再次触发 node:click，形成 Vue 的递归更新。
+ */
+function updateSelectedNodeProperties(properties: Record<string, unknown>) {
+  const current = selectedNode.value
+  if (!lf || !current?.id || !properties) return
+  const nextProperties = JSON.parse(JSON.stringify(properties))
+  if (JSON.stringify(current.properties) === JSON.stringify(nextProperties)) return
+  lf.setProperties(current.id, nextProperties)
+  selectedNode.value = { ...current, properties: nextProperties }
+}
 
 // 面板开关
 const rightPanelOpen = ref(false)  // 默认收起，点击节点时自动打开
