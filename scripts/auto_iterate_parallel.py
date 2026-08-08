@@ -41,7 +41,7 @@ AI 后端：
 
 用法：
   # 默认启动（Kiro CLI，1 生产者 + 1 消费者）
-  python scripts/auto_iterate_parallel.py
+  python scripts/auto_iterate_parallel.py --mode pipeline
 
   # 使用 Claude Code（通过 --claude 切换）
   python scripts/auto_iterate_parallel.py --claude
