@@ -2140,7 +2140,7 @@ onMounted(() => {
 .template-chip.active {
   border-color: var(--tf-accent, rgb(var(--primary-6)));
   background: var(--tf-accent, rgb(var(--primary-6)));
-  color: #fff;
+  color: var(--tf-text-on-accent);
 }
 .template-chip-clear {
   border-style: dashed;
@@ -2219,7 +2219,7 @@ onMounted(() => {
   flex-shrink: 0;
   transition: color 100ms;
 }
-.attachment-file-remove:hover { color: var(--color-danger-light-4, #f53f3f); }
+.attachment-file-remove:hover { color: var(--tf-danger); }
 
 /* 粘贴提示 */
 .paste-hint {
@@ -2363,7 +2363,7 @@ onMounted(() => {
   align-items: center;
   gap: 6px;
 }
-.split-menu-item:hover { background: var(--color-fill-2, #f2f3f5); }
+.split-menu-item:hover { background: var(--color-fill-2, var(--tf-bg-hover)); }
 .split-menu-item.active { color: var(--tf-accent, rgb(var(--primary-6))); font-weight: 500; }
 .split-menu-check { font-size: 12px; }
 
@@ -2404,7 +2404,7 @@ onMounted(() => {
   border: none;
   border-radius: 4px;
   background: var(--tf-accent, rgb(var(--primary-6)));
-  color: #fff;
+  color: var(--tf-text-on-accent);
   font-size: 11px;
   font-weight: 500;
   cursor: pointer;
@@ -2461,7 +2461,7 @@ onMounted(() => {
   color: var(--color-text-3);
   transition: color 120ms;
 }
-.remove-link-btn:hover { color: var(--color-danger-light-4, #f53f3f); }
+.remove-link-btn:hover { color: var(--tf-danger); }
 .add-link-row {
   display: flex;
   align-items: center;
