@@ -149,13 +149,13 @@
       <div class="sidebar-footer">
         <template v-if="canCreateIssue">
           <a-tooltip v-if="sidebarCollapsed" content="创建" position="right" :mini="true">
-            <router-link to="/issues/create" class="footer-item">
+            <div class="footer-item" @click="openCreatePanel">
               <icon-plus-circle class="nav-icon" /><span class="nav-label">创建</span>
-            </router-link>
+            </div>
           </a-tooltip>
-          <router-link v-else to="/issues/create" class="footer-item">
+          <div v-else class="footer-item" @click="openCreatePanel">
             <icon-plus-circle class="nav-icon" /><span class="nav-label">创建</span>
-          </router-link>
+          </div>
         </template>
 
         <!-- 通知铃铛 -->
@@ -274,6 +274,17 @@
 
     <!-- 通知面板 -->
     <NotificationPanel />
+
+    <!-- 全局创建工单弹窗（从侧边栏触发，不跳转页面） -->
+    <IssueCreatePanel
+      v-if="canCreateIssue"
+      :visible="showCreatePanel"
+      :draft-id="createPanelDraftId"
+      @update:visible="onCreatePanelVisibleChange"
+      @created="onCreatePanelCreated"
+      @cancel-with-data="onCreatePanelCancel"
+      @expand-to-fullscreen="onCreatePanelExpand"
+    />
   </div>
 </template>
 
@@ -289,6 +300,7 @@ import { IconMoon, IconSun, IconCommon, IconLeft, IconRight } from '@arco-design
 import TabBar from './TabBar.vue'
 import NotificationPanel from './NotificationPanel.vue'
 import ServiceStatusBanner from './ServiceStatusBanner.vue'
+import IssueCreatePanel from '@/views/issue/IssueCreatePanel.vue'
 import trackflowLogoUrl from '@/assets/trackflow-watermark.svg'
 import { UserAvatar } from '@/components/base'
 import trackflowIconUrl from '@/assets/trackflow-icon.svg'
@@ -439,6 +451,54 @@ async function handleStopTimer() {
 function handleLogout() {
   showUserMenu.value = false
   authStore.logout()
+}
+
+// ========== 全局创建工单弹窗 ==========
+const showCreatePanel = ref(false)
+const createPanelDraftId = ref<string | null>(null)
+
+function openCreatePanel() {
+  createPanelDraftId.value = null
+  showCreatePanel.value = true
+}
+
+function onCreatePanelVisibleChange(val: boolean) {
+  showCreatePanel.value = val
+  if (!val) {
+    createPanelDraftId.value = null
+  }
+}
+
+function onCreatePanelCreated() {
+  showCreatePanel.value = false
+  createPanelDraftId.value = null
+}
+
+function onCreatePanelCancel(formData: any) {
+  // 有内容时自动保存为草稿（IssueCreatePanel 内部已处理 Message 提示）
+  // 此处只需关闭面板
+  showCreatePanel.value = false
+  createPanelDraftId.value = null
+}
+
+function onCreatePanelExpand(formData: any) {
+  showCreatePanel.value = false
+  createPanelDraftId.value = null
+  // 如果有内容，先保存为草稿再跳转全屏页面
+  if (formData && (formData.title?.trim() || formData.description?.trim())) {
+    const key = 'trackflow:issue-drafts'
+    try {
+      const drafts = JSON.parse(localStorage.getItem(key) || '[]')
+      const draftId = `draft_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+      drafts.unshift({ id: draftId, ...formData, updatedAt: Date.now() })
+      // 最多保留 10 个草稿
+      if (drafts.length > 10) drafts.length = 10
+      localStorage.setItem(key, JSON.stringify(drafts))
+      router.push({ name: 'IssueCreate', query: { draftId } })
+      return
+    } catch { /* ignore */ }
+  }
+  router.push({ name: 'IssueCreate' })
 }
 
 // 点击外部关闭菜单
