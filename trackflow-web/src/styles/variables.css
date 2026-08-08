@@ -300,6 +300,16 @@
   --accent-purple: var(--tf-purple);
 }
 
+/* ===== 打印主题（Print Media）===== */
+@media print {
+  :root {
+    --tf-print-text-primary: #000000;
+    --tf-print-text-secondary: #333333;
+    --tf-print-text-tertiary: #555555;
+    --tf-print-bg-surface: #f5f5f5;
+  }
+}
+
 /* ===== 护眼主题 Arco Design 组件变量覆盖（Everforest 风格）===== */
 /* 当 html 有 data-theme="green" 且 body 有 arco-theme="dark" 时，
    覆盖 Arco Design 的内置暗色主题变量，使组件配色与 Everforest 蓝绿背景协调 */

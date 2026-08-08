@@ -1622,11 +1622,11 @@ function printReport() {
   }
 
   .stat-value {
-    color: #000 !important;
+    color: var(--tf-print-text-primary) !important;
   }
 
   .stat-label {
-    color: #555 !important;
+    color: var(--tf-print-text-tertiary) !important;
   }
 
   .chart-grid {
@@ -1645,11 +1645,11 @@ function printReport() {
   }
 
   .chart-title {
-    color: #000 !important;
+    color: var(--tf-print-text-primary) !important;
   }
 
   .chart-subtitle {
-    color: #555 !important;
+    color: var(--tf-print-text-tertiary) !important;
   }
 
   .chart-instance {

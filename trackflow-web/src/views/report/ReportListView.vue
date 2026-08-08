@@ -1356,15 +1356,15 @@ onBeforeUnmount(() => {
   }
 
   .card-title {
-    color: #000 !important;
+    color: var(--tf-print-text-primary) !important;
   }
 
   .card-meta {
-    color: #555 !important;
+    color: var(--tf-print-text-tertiary) !important;
   }
 
   .chart-summary {
-    color: #333 !important;
+    color: var(--tf-print-text-secondary) !important;
   }
 
   .report-chart-instance {
@@ -1379,13 +1379,13 @@ onBeforeUnmount(() => {
   .matrix-table td {
     border: 1px solid var(--tf-border) !important;
     background: var(--tf-bg-body) !important;
-    color: #000 !important;
+    color: var(--tf-print-text-primary) !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
 
   .matrix-table th {
-    background: #f5f5f5 !important;
+    background: var(--tf-print-bg-surface) !important;
   }
 }
 </style>
