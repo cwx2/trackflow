@@ -308,8 +308,8 @@ watch(() => props.canQuickActions, () => {
 .vote-btn.active:hover { color: var(--tf-accent); }
 
 /* Watch/Star 按钮激活态 */
-.watch-btn.active { color: #f0a020; }
-.watch-btn.active:hover { color: #f0a020; }
+.watch-btn.active { color: var(--tf-star); }
+.watch-btn.active:hover { color: var(--tf-star); }
 
 .badge-count {
   font-size: 11px;

@@ -61,10 +61,10 @@ watch(local, (val) => {
   width: 100%;
   min-height: 160px;
   padding: 10px;
-  background: #0d1117;
+  background: var(--tf-code-block-bg);
   border: 1px solid var(--tf-border);
   border-radius: 6px;
-  color: #e6edf3;
+  color: var(--tf-code-block-text);
   font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
   font-size: 12px;
   line-height: 1.6;

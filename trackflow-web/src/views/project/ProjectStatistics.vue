@@ -187,7 +187,7 @@ function formatSprintDate(dateStr?: string): string {
 }
 .sprint-progress { display: flex; flex-direction: column; gap: 6px; }
 .progress-bar { height: 6px; border-radius: 3px; background: var(--tf-bg-hover); overflow: hidden; }
-.progress-fill { height: 100%; border-radius: 3px; background: #3fb950; transition: width 0.3s ease; }
+.progress-fill { height: 100%; border-radius: 3px; background: var(--tf-success); transition: width 0.3s ease; }
 .progress-text { font-size: 12px; color: var(--tf-text-secondary); }
 .sprint-dates { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--tf-text-tertiary); }
 </style>

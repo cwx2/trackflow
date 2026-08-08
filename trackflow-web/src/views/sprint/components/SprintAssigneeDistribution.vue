@@ -318,10 +318,10 @@ function handleClickAssignee(userId: string | null) {
   height: 100%;
 }
 .mini-bar-segment.done {
-  background: #3fb950;
+  background: var(--tf-success);
 }
 .mini-bar-segment.in-progress {
-  background: #58a6ff;
+  background: var(--tf-accent);
 }
 .mini-bar-segment.todo {
   background: var(--color-fill-3);
