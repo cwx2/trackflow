@@ -113,30 +113,21 @@ public class BoardDataService {
                 .filter(col -> showAll || Boolean.TRUE.equals(col.getVisible()))
                 .toList();
 
-        // 区分：需要加载工单的列 vs 折叠列（仅需统计）
-        List<BoardColumnVO> loadColumns = new ArrayList<>();
-        List<BoardColumnVO> collapsedOnlyColumns = new ArrayList<>();
-
-        for (BoardColumnVO col : visibleColumns) {
-            Long statusIdLong = parseStatusId(col);
-            if (statusIdLong != null && collapsedStatusIds.contains(statusIdLong)) {
-                collapsedOnlyColumns.add(col);
-            } else {
-                loadColumns.add(col);
-            }
-        }
+        // 区分折叠列（用于结果构建时不返回具体工单）
+        // REQ-382: 所有可见列都参与 SQL 查询，确保 estimation 基于实际过滤数据
 
         // 4. 构建查询参数并执行单次 SQL
+        // REQ-382: 查询所有可见列（含折叠列）的工单，以正确计算 sprint 过滤后的 estimation
         List<Long> statusIds = null;
         List<String> priorities = null;
 
         if ("priority".equals(columnField)) {
-            priorities = loadColumns.stream()
+            priorities = visibleColumns.stream()
                     .map(BoardColumnVO::getFieldValue)
                     .filter(Objects::nonNull)
                     .toList();
         } else {
-            statusIds = loadColumns.stream()
+            statusIds = visibleColumns.stream()
                     .map(col -> {
                         try {
                             return col.getStatusId() != null ? Long.parseLong(col.getStatusId()) : null;
@@ -239,10 +230,16 @@ public class BoardDataService {
             colData.setCollapsed(isCollapsed);
 
             if (isCollapsed) {
-                // 折叠列：使用列配置中的统计数据，不返回具体工单
+                // 折叠列：不返回具体工单，但从实际过滤后的卡片计算统计数据
+                // REQ-382: 使用 sprint 过滤后的实际卡片计算 estimation，避免使用项目级全量值
+                List<BoardCardVO> columnCards = groupedCards.getOrDefault(colKey, Collections.emptyList());
                 colData.setIssues(Collections.emptyList());
-                colData.setTotalCount(col.getIssueCount() != null ? col.getIssueCount() : 0);
-                colData.setTotalEstimation(col.getTotalEstimation());
+                colData.setTotalCount(columnCards.size());
+                BigDecimal estimation = columnCards.stream()
+                        .map(BoardCardVO::getEstimatedHours)
+                        .filter(Objects::nonNull)
+                        .reduce(BigDecimal.ZERO, BigDecimal::add);
+                colData.setTotalEstimation(estimation.compareTo(BigDecimal.ZERO) > 0 ? estimation : null);
             } else {
                 // 展开列：返回实际工单（限制每列数量）
                 List<BoardCardVO> columnCards = groupedCards.getOrDefault(colKey, Collections.emptyList());
@@ -268,6 +265,28 @@ public class BoardDataService {
         }
 
         result.setColumns(columnDataList);
+
+        // REQ-382: 同步 columnConfigs 的 totalEstimation/issueCount 为实际过滤后的值
+        // 前端工具栏从 columnConfigs[].totalEstimation 计算看板总预估工时
+        Map<String, BoardDataVO.ColumnData> colDataMap = new HashMap<>();
+        for (BoardDataVO.ColumnData cd : columnDataList) {
+            if (cd.getStatusId() != null) {
+                colDataMap.put(cd.getStatusId(), cd);
+            }
+        }
+        for (BoardColumnVO cfg : columnConfigs) {
+            String cfgKey = cfg.getStatusId() != null ? cfg.getStatusId() : cfg.getFieldValue();
+            BoardDataVO.ColumnData actualCol = colDataMap.get(cfgKey);
+            if (actualCol != null) {
+                cfg.setTotalEstimation(actualCol.getTotalEstimation());
+                cfg.setIssueCount(actualCol.getTotalCount());
+            } else {
+                // 列不在可见范围内（hidden），estimation 清零
+                cfg.setTotalEstimation(null);
+                cfg.setIssueCount(0);
+            }
+        }
+
         result.setColumnConfigs(columnConfigs);
         result.setTotalIssueCount(totalIssueCount);
         result.setTruncated(totalInDb >= BOARD_MAX_ISSUES);
