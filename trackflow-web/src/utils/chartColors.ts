@@ -171,6 +171,8 @@ function hexToRgb(hex: string): string {
 
 /** 创建趋势色：accent 蓝 */
 export const SERIES_ACCENT = '#58a6ff'
+/** accent 蓝半透明（用于柱状图填充） */
+export const SERIES_ACCENT_LIGHT = 'rgba(88, 166, 255, 0.2)'
 /** 完成/已解决色：success 绿 */
 export const SERIES_SUCCESS = '#3fb950'
 /** 危险/实际剩余色：danger 红 */

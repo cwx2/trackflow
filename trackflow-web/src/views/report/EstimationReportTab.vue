@@ -131,7 +131,7 @@ import { IconDownload } from '@arco-design/web-vue/es/icon'
 import { reportStatisticsApi } from '@/api/reportStatistics'
 import type { EstimationReportData } from '@/api/reportStatistics'
 import type { ProjectVO } from '@/api/types'
-import { readChartThemeColors } from '@/utils/chartColors'
+import { readChartThemeColors, SERIES_ACCENT, SERIES_SUCCESS } from '@/utils/chartColors'
 
 use([CanvasRenderer, BarChart, TooltipComponent, GridComponent, LegendComponent])
 
@@ -202,14 +202,14 @@ const projectComparisonOption = computed(() => {
         barWidth: '35%',
         barGap: '10%',
         data: items.map(i => i.estimatedHours),
-        itemStyle: { color: '#58a6ff', borderRadius: [0, 3, 3, 0] }
+        itemStyle: { color: SERIES_ACCENT, borderRadius: [0, 3, 3, 0] }
       },
       {
         name: '实际工时',
         type: 'bar',
         barWidth: '35%',
         data: items.map(i => i.spentHours),
-        itemStyle: { color: '#3fb950', borderRadius: [0, 3, 3, 0] }
+        itemStyle: { color: SERIES_SUCCESS, borderRadius: [0, 3, 3, 0] }
       }
     ]
   }

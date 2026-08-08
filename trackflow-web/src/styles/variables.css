@@ -61,7 +61,11 @@
   --tf-fill-heavy: rgba(255, 255, 255, 0.14);
   --tf-accent-subtle: rgba(88, 166, 255, 0.04);
   --tf-accent-light: rgba(88, 166, 255, 0.08);
+  --tf-accent-medium: rgba(88, 166, 255, 0.15);
+  --tf-accent-strong: rgba(88, 166, 255, 0.3);
   --tf-danger-bg: rgba(248, 81, 73, 0.1);
+  --tf-danger-medium: rgba(248, 81, 73, 0.15);
+  --tf-danger-strong: rgba(248, 81, 73, 0.3);
   --tf-accent-bg-light: rgba(88, 166, 255, 0.1);
   --tf-success-bg: rgba(63, 185, 80, 0.1);
   --tf-warning-bg: rgba(210, 153, 34, 0.1);
@@ -140,7 +144,11 @@
   --tf-fill-heavy: rgba(0, 0, 0, 0.1);
   --tf-accent-subtle: rgba(9, 105, 218, 0.04);
   --tf-accent-light: rgba(9, 105, 218, 0.08);
+  --tf-accent-medium: rgba(9, 105, 218, 0.15);
+  --tf-accent-strong: rgba(9, 105, 218, 0.3);
   --tf-danger-bg: rgba(207, 34, 46, 0.08);
+  --tf-danger-medium: rgba(207, 34, 46, 0.15);
+  --tf-danger-strong: rgba(207, 34, 46, 0.3);
   --tf-accent-bg-light: rgba(9, 105, 218, 0.08);
   --tf-success-bg: rgba(26, 127, 55, 0.08);
   --tf-warning-bg: rgba(154, 103, 0, 0.08);
@@ -219,7 +227,11 @@
   --tf-fill-heavy: rgba(167, 192, 128, 0.14);
   --tf-accent-subtle: rgba(167, 192, 128, 0.04);
   --tf-accent-light: rgba(167, 192, 128, 0.08);
+  --tf-accent-medium: rgba(167, 192, 128, 0.15);
+  --tf-accent-strong: rgba(167, 192, 128, 0.3);
   --tf-danger-bg: rgba(230, 126, 128, 0.1);
+  --tf-danger-medium: rgba(230, 126, 128, 0.15);
+  --tf-danger-strong: rgba(230, 126, 128, 0.3);
   --tf-accent-bg-light: rgba(167, 192, 128, 0.12);
   --tf-success-bg: rgba(131, 192, 146, 0.1);
   --tf-warning-bg: rgba(219, 188, 127, 0.1);

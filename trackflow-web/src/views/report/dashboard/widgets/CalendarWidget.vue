@@ -331,7 +331,7 @@ defineExpose({ loadData })
   align-items: center;
   gap: 2px;
   padding: 1px 3px;
-  background: rgba(88, 166, 255, 0.15);
+  background: var(--tf-accent-medium);
   border-radius: 2px;
   cursor: pointer;
   transition: background 0.1s;
@@ -339,15 +339,15 @@ defineExpose({ loadData })
 }
 
 .cell-issue:hover {
-  background: rgba(88, 166, 255, 0.3);
+  background: var(--tf-accent-strong);
 }
 
 .cell-issue.overdue {
-  background: rgba(248, 81, 73, 0.15);
+  background: var(--tf-danger-medium);
 }
 
 .cell-issue.overdue:hover {
-  background: rgba(248, 81, 73, 0.3);
+  background: var(--tf-danger-strong);
 }
 
 .cell-issue-key {

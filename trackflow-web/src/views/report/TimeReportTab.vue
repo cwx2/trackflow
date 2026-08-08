@@ -318,7 +318,7 @@ import {
   IconClockCircle
 } from '@arco-design/web-vue/es/icon'
 import { reportStatisticsApi } from '@/api/reportStatistics'
-import { readChartThemeColors, CHART_PALETTE } from '@/utils/chartColors'
+import { readChartThemeColors, CHART_PALETTE, SERIES_ACCENT } from '@/utils/chartColors'
 import type { TimeReportData, TimeReportGroupedData } from '@/api/reportStatistics'
 import type { ProjectVO } from '@/api/types'
 
@@ -431,7 +431,7 @@ const trendChartOption = computed(() => {
       type: 'bar',
       data: trendMinutes,
       barWidth: '60%',
-      itemStyle: { color: '#58a6ff', borderRadius: [3, 3, 0, 0] }
+      itemStyle: { color: SERIES_ACCENT, borderRadius: [3, 3, 0, 0] }
     }]
   }
 })

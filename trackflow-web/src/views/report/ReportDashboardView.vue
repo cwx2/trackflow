@@ -371,7 +371,7 @@ import { projectApi, sprintApi } from '@/api'
 import type { DashboardData, ProjectComparisonData, CumulativeFlowData, ResolutionTimeData } from '@/api/reportStatistics'
 import type { ProjectVO } from '@/api/types'
 import { localizeStatusName, priorityLabelMap } from '@/utils/fieldLabels'
-import { useChartColors, SERIES_ACCENT, SERIES_SUCCESS, SERIES_DANGER, SERIES_TERTIARY, SERIES_PURPLE, SERIES_MARKER, areaGradient, getChartDownloadBgColor } from '@/utils/chartColors'
+import { useChartColors, SERIES_ACCENT, SERIES_ACCENT_LIGHT, SERIES_SUCCESS, SERIES_DANGER, SERIES_TERTIARY, SERIES_PURPLE, SERIES_MARKER, areaGradient, getChartDownloadBgColor } from '@/utils/chartColors'
 
 // 注册 ECharts 组件
 use([CanvasRenderer, PieChart, BarChart, LineChart, TitleComponent, TooltipComponent, LegendComponent, GridComponent])
@@ -1076,7 +1076,7 @@ const resolutionTimeChartOption = computed(() => {
         yAxisIndex: 1,
         data: resolvedCount,
         barWidth: '40%',
-        itemStyle: { color: `rgba(88, 166, 255, 0.2)`, borderRadius: [3, 3, 0, 0] }
+        itemStyle: { color: SERIES_ACCENT_LIGHT, borderRadius: [3, 3, 0, 0] }
       }
     ]
   }
