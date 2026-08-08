@@ -1006,7 +1006,7 @@ import { projectApi, issueApi, sprintApi, customFieldApi } from '@/api'
 import type { IssueVO, IssueStatusVO, ProjectMemberVO, SprintVO, CustomFieldValueVO } from '@/api/types'
 import type { TableData } from '@arco-design/web-vue'
 import { useAuthStore } from '@/stores/auth'
-import { localizeStatusName } from '@/utils/fieldLabels'
+import { localizeStatusName, queryFieldKeyToLabel } from '@/utils/fieldLabels'
 import { DEFAULT_PRIORITY_OPTIONS, DEFAULT_PRIORITY_COLOR } from '@/composables/usePriorityOptions'
 import { DEFAULT_ISSUE_TYPE_OPTIONS, DEFAULT_ISSUE_TYPE_COLOR } from './composables/useIssueTypeOptions'
 import { extractVersion, showActionFeedback } from '@/utils/transition'
@@ -1037,6 +1037,8 @@ import ApplyCommandDialog from './components/ApplyCommandDialog.vue'
 import KeyboardShortcutsHelp from './components/KeyboardShortcutsHelp.vue'
 import ViewSettingsMenu from './components/ViewSettingsMenu.vue'
 import IssueListLayout from './components/IssueListLayout.vue'
+
+const router = useRouter()
 
 const router = useRouter()
 const route = useRoute()
@@ -1086,1029 +1088,144 @@ const canViewSprintGlobal = computed(() => {
 // Shared state (declared early for composable dependencies)
 const activeProjectId = ref<string | null>(null)
 const filterBarRef = ref<InstanceType<typeof FilterBar> | null>(null)
+const filterProject = ref<string | undefined>(undefined)
+const searchKeyword = ref('')
+const globalFilterParams = ref<Record<string, any>>({})
+const initialFilterChips = ref<any[]>([])
+const statusCache = ref<IssueStatusVO[]>([])
+const sprintOptionsCache = reactive<Record<string, SprintVO[]>>({})
 
+// Priority & issue type options
+const priorityOptions = ref(DEFAULT_PRIORITY_OPTIONS.map(o => ({ ...o })))
+const issueTypeOptions = ref(DEFAULT_ISSUE_TYPE_OPTIONS.map(o => ({ ...o })))
+
+// Column config
 const {
   visibleColumns, toggleColumn, reorderColumn,
   standardColumns, customFieldColumns, isVisible: isColumnVisible, resetToDefault: resetColumns
 } = useColumnConfig(activeProjectId as any)
 
-// Panel state
-const savedQueries = ref<any[]>([])
-const projectList = ref<any[]>([])
-const activeQueryId = ref<string | null>(null)
-const activeQueryName = ref('\u6240\u6709\u5de5\u5355') // "所有工单"
-const activeQueryObj = ref<any>(null) // Track full active query object for chip-click
-const expandedGroups = reactive(new Set<string>(['saved', 'projects', 'drafts', 'tags']))
-const panelSearch = ref('')
-
-// Tags panel state
-const favoriteTags = ref<TagPanelItemVO[]>([])
-const activeTagId = ref<string | null>(null)
-const showManageTagsModal = ref(false)
-const availableTags = ref<AvailableTagVO[]>([])
-
-// Projects favorite panel state
-const favoriteProjects = computed(() => projectList.value.filter(p => p.favorited))
-const showManageProjectsModal = ref(false)
-const manageProjectSearch = ref('')
-const manageProjectsLoading = ref(false)
-const allProjectsForManage = ref<any[]>([])
-
-const filteredManageProjects = computed(() => {
-  const list = allProjectsForManage.value
-  if (!manageProjectSearch.value) return list
-  const kw = manageProjectSearch.value.toLowerCase()
-  return list.filter((p: any) => p.name.toLowerCase().includes(kw) || p.key.toLowerCase().includes(kw))
-})
-
-async function openManageProjectsModal() {
-  showManageProjectsModal.value = true
-  manageProjectSearch.value = ''
-  manageProjectsLoading.value = true
-  try {
-    // Load all accessible projects (no pagination limit), and merge favorite status
-    const res = await projectApi.list({ pageSize: 100 })
-    const projects = res.data?.list || []
-    // Merge favorited status from projectList (which was loaded with populateFavoriteStatus)
-    const favoriteIds = new Set(projectList.value.filter(p => p.favorited).map(p => p.id))
-    allProjectsForManage.value = projects.map((p: any) => ({
-      ...p,
-      favorited: favoriteIds.has(p.id)
-    }))
-  } catch {
-    allProjectsForManage.value = []
-  } finally {
-    manageProjectsLoading.value = false
-  }
-}
-
-async function toggleProjectFavorite(p: any) {
-  try {
-    const res = await projectApi.toggleFavorite(p.id)
-    const newFavorited = res.data?.favorited ?? !p.favorited
-    p.favorited = newFavorited
-    // Sync favorited status back to projectList (used by favoriteProjects computed)
-    const inList = projectList.value.find(pr => pr.id === p.id)
-    if (inList) {
-      inList.favorited = newFavorited
-    }
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '操作失败')
-  }
-}
-
-// ===== Breadcrumb navigation computed =====
-const activeProjectName = computed(() => {
-  if (!activeProjectId.value) return ''
-  const p = projectList.value.find(pr => pr.id === activeProjectId.value)
-  return p?.name || ''
-})
-const activeQueryProjectName = computed(() => {
-  // If the active saved query has a project scope, show it in breadcrumb
-  if (!activeQueryObj.value) return ''
-  const filtersRaw = activeQueryObj.value.filters
-  if (!filtersRaw) return ''
-  let filters: any[]
-  if (typeof filtersRaw === 'string') {
-    try { filters = JSON.parse(filtersRaw) } catch { return '' }
-  } else {
-    filters = filtersRaw
-  }
-  if (!Array.isArray(filters)) return ''
-  const projectFilter = filters.find((f: any) => f.field === 'project')
-  if (!projectFilter || !projectFilter.value || projectFilter.value.length === 0) return ''
-  const projId = projectFilter.value[0]
-  const p = projectList.value.find(pr => pr.id === projId)
-  return p?.name || ''
-})
-function navigateToQueryProject() {
-  // Navigate from saved query breadcrumb to the query's project
-  if (!activeQueryObj.value) return
-  const filtersRaw = activeQueryObj.value.filters
-  if (!filtersRaw) return
-  let filters: any[]
-  if (typeof filtersRaw === 'string') {
-    try { filters = JSON.parse(filtersRaw) } catch { return }
-  } else {
-    filters = filtersRaw
-  }
-  if (!Array.isArray(filters)) return
-  const projectFilter = filters.find((f: any) => f.field === 'project')
-  if (!projectFilter || !projectFilter.value || projectFilter.value.length === 0) return
-  const projId = projectFilter.value[0]
-  const p = projectList.value.find(pr => pr.id === projId)
-  if (p) {
-    selectProject(p)
-  }
-}
-
-// ===== WebSocket 实时更新 =====
-// 新变更通知指示器（当有对列表外的更新时提示用户）
-const hasNewUpdates = ref(false)
-
-// 订阅当前项目的 Issue 变更事件
-useIssueProjectSubscription(
-  () => activeProjectId.value,
-  (event: IssueRealtimeEvent) => {
-    // 忽略自己的操作（已在本地更新）
-    const currentUserId = authStore.user?.id
-    if (currentUserId && String(event.operatorId) === String(currentUserId)) return
-
-    if (event.action === 'FIELD_UPDATED') {
-      // 更新列表中对应工单的字段
-      const idx = issues.value.findIndex(i => String(i.id) === String(event.issueId))
-      if (idx !== -1) {
-        // 在列表中找到 → 就地更新字段（YouTrack 行为：不改变排序和筛选位置）
-        const patch: Partial<IssueVO> = {}
-        for (const [key, value] of Object.entries(event.changes)) {
-          ;(patch as any)[key] = value
-        }
-        updateLocalIssue(String(event.issueId), patch)
-      } else {
-        // 不在当前列表中 → 不添加（YouTrack 行为：新匹配的不自动加入）
-        hasNewUpdates.value = true
-      }
-    } else if (event.action === 'CREATED') {
-      // 新工单创建：不自动加入列表，只显示通知提示
-      hasNewUpdates.value = true
-    } else if (event.action === 'DELETED') {
-      // 工单被删除：从列表中移除
-      const idx = issues.value.findIndex(i => String(i.id) === String(event.issueId))
-      if (idx !== -1) {
-        issues.value.splice(idx, 1)
-        totalIssues.value = Math.max(0, totalIssues.value - 1)
-      }
-    }
-  }
-)
-// ===== End WebSocket =====
-
-// Manual order computed (depends on activeProjectId and activeQueryId)
-const isDraggable = computed(() => {
-  return isListLayout.value && (!!activeProjectId.value || !!activeQueryId.value)
-})
-const sortedIssueIds = computed(() => manualOrderData.value?.issueIds || [])
-
-// Computed: whether the active query belongs to the current user (for edit permission)
-const activeQueryOwned = computed(() => {
-  if (!activeQueryObj.value) return false
-  return isOwnQuery(activeQueryObj.value)
-})
-
-// Computed: readonly filter labels for non-owned queries (shown in FilterBar chip tooltip/expansion)
-const activeQueryReadonlyLabels = computed<string[]>(() => {
-  if (!activeQueryObj.value?.filters) return []
-  let filters: any[]
-  if (typeof activeQueryObj.value.filters === 'string') {
-    try { filters = JSON.parse(activeQueryObj.value.filters) } catch { return [] }
-  } else {
-    filters = activeQueryObj.value.filters
-  }
-  if (!Array.isArray(filters)) return []
-
-  const operatorLabels: Record<string, string> = {
-    eq: '=', neq: '≠', in: '∈', not_in: '∉', contains: '包含', open: '未关闭'
-  }
-
-  return filters.map((f: any) => {
-    const fieldLabel = queryFieldKeyToLabel[f.field] || f.field
-    const op = f.operator
-
-    // Handle special "open" operator (means all non-closed statuses)
-    if (op === 'open') return `${fieldLabel}: 未关闭`
-
-    let values: string
-    if (Array.isArray(f.value)) {
-      values = f.value.map((v: string) => {
-        if (v === '${currentUser}') return '我'
-        if (f.field === 'type') return getIssueTypeLabelForRecord(v)
-        if (f.field === 'priority') return priorityLabelMap[v] || v
-        if (f.field === 'status') {
-          const st = statusCache.value.find(s => s.code === v || s.id === v)
-          return st ? localizeStatusName(st.name) : v
-        }
-        if (f.field === 'project') {
-          const p = projectList.value.find(pr => pr.id === v)
-          return p ? p.name : v
-        }
-        return v
-      }).join(', ')
-    } else {
-      values = String(f.value || '')
-    }
-
-    const opLabel = (op && op !== 'eq') ? ` ${operatorLabels[op] || op}` : ':'
-    return `${fieldLabel}${opLabel} ${values}`
-  }).filter(l => l && l.trim())
-})
-
-// Create query modal state
-const showCreateQueryModal = ref(false)
-const createQueryLoading = ref(false)
-const queryIconOptions = ['🧪', '🐛', '🚀', '⚡', '📋', '🎯', '🔥', '💡', '⭐', '🏷️', '📌', '🔍', '✅', '⏳', '🎨', '🛡️']
-const createQueryForm = reactive({
-  name: '',
-  pinned: true,
-  shared: false,
-  icon: '',
-  queryText: ''
-})
-
-// Pre-fill query text from current filters is handled in openCreateQueryModal
-
-function openCreateQueryModal() {
-  createQueryForm.name = ''
-  createQueryForm.pinned = true
-  createQueryForm.shared = false
-  createQueryForm.icon = ''
-  // Pre-fill query text from current context:
-  // 1. If viewing a saved query, use its filters as the starting point
-  // 2. Otherwise use the page-level filter params
-  let preFilters: any[] = []
-  if (activeQueryObj.value && activeQueryObj.value.filters) {
-    try {
-      const raw = activeQueryObj.value.filters
-      preFilters = typeof raw === 'string' ? JSON.parse(raw) : (Array.isArray(raw) ? raw : [])
-    } catch {
-      preFilters = []
-    }
-  } else {
-    preFilters = buildCurrentFilters()
-  }
-  createQueryForm.queryText = filtersToQueryText(preFilters)
-  showCreateQueryModal.value = true
-}
-
-async function handleCreateQuery() {
-  if (!createQueryForm.name.trim()) {
-    Message.warning('请输入查询名称')
-    return
-  }
-  createQueryLoading.value = true
-  try {
-    // Parse the user-editable query text into structured filters
-    const filters = queryTextToFilters(createQueryForm.queryText)
-
-    await queryApi.create({
-      name: createQueryForm.name.trim(),
-      filters: filters,
-      pinned: createQueryForm.pinned,
-      shared: createQueryForm.shared,
-      icon: createQueryForm.icon || undefined
-    })
-    Message.success('查询已保存')
-    showCreateQueryModal.value = false
-    loadPanel() // Refresh panel to show new query
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '保存查询失败')
-  } finally {
-    createQueryLoading.value = false
-  }
-}
-
-async function confirmDeleteQuery(q: any) {
-  const { confirmDelete } = useConfirmDelete()
-  confirmDelete({
-    itemName: `查询「${q.name}」`,
-    onConfirm: async () => {
-      try {
-        await queryApi.delete(q.id)
-        Message.success('查询已删除')
-        if (activeQueryId.value === q.id) {
-          activeQueryId.value = null
-          activeQueryName.value = '所有工单'
-          activeQueryObj.value = null
-          refreshList()
-        }
-        loadPanel()
-      } catch (e: any) {
-        Message.error(e.response?.data?.message || '删除失败')
-      }
-    }
-  })
-}
-
-// ========== Edit query ==========
-const showEditQueryModal = ref(false)
-const editQueryLoading = ref(false)
-const editQueryForm = reactive({
-  id: '',
-  name: '',
-  icon: '',
-  pinned: false,
-  shared: false,
-  filters: [] as any[],
-  queryText: ''
-})
-
-// (editQueryFiltersPreview removed — replaced by editable queryText input)
-
-// ===== Query text ↔ Filters JSON conversion (YouTrack-style editable query) =====
-
-// (Field label mappings imported from @/utils/fieldLabels: queryFieldKeyToLabel, queryFieldLabelToKey)
-
-/**
- * Convert filter JSON array to human-readable query text.
- * e.g. [{"field":"project","operator":"eq","value":["id"]}] → "项目: DE4"
- */
-function filtersToQueryText(filters: any[]): string {
-  if (!filters || filters.length === 0) return ''
-  const parts: string[] = []
-  for (const f of filters) {
-    // Resolve field label: built-in fields use queryFieldKeyToLabel, custom fields use their name
-    let fieldLabel: string
-    if (f.field.startsWith('cf.') || f.field.startsWith('customField.')) {
-      // Custom field: the field key is "cf.{id}", display as field name stored in filter
-      // If filter has a displayName property, use it; otherwise fallback to key
-      fieldLabel = f.displayName || f.field
-    } else {
-      fieldLabel = queryFieldKeyToLabel[f.field] || f.field
-    }
-    const op = f.operator
-
-    // Special operators
-    if (op === 'open') { parts.push(`${fieldLabel}: 未关闭`); continue }
-    if (op === 'closed') { parts.push(`${fieldLabel}: 已关闭`); continue }
-    if (op === 'is_empty') { parts.push(`${fieldLabel}: 无`); continue }
-    if (op === 'is_not_empty') { parts.push(`${fieldLabel}: 有`); continue }
-
-    let values: string
-    if (Array.isArray(f.value)) {
-      values = f.value.map((v: string) => {
-        if (v === '${currentUser}') return '我'
-        if (f.field === 'type') return getIssueTypeLabelForRecord(v)
-        if (f.field === 'priority') return priorityLabelMap[v] || v
-        if (f.field === 'status') {
-          const st = statusCache.value.find(s => s.code === v || s.id === v)
-          return st ? localizeStatusName(st.name) : v
-        }
-        if (f.field === 'project') {
-          const p = projectList.value.find(pr => pr.id === v)
-          return p ? (p.key || p.name) : v
-        }
-        return v
-      }).join(', ')
-    } else {
-      values = String(f.value || '')
-    }
-
-    // Operator display
-    let prefix = ''
-    if (op === 'neq' || op === 'not_in') prefix = '-'
-
-    // Between renders as "field: val1 .. val2"
-    if (op === 'between' && Array.isArray(f.value) && f.value.length >= 2) {
-      parts.push(`${fieldLabel}: ${f.value[0]} .. ${f.value[1]}`)
-    } else {
-      parts.push(`${fieldLabel}: ${prefix}${values}`)
-    }
-  }
-  return parts.join('  ')
-}
-
-/**
- * Parse human-readable query text back into filter JSON array.
- * Supports YouTrack-style syntax:
- * - "字段: 值" — basic filter
- * - "字段: 值1, 值2" — multi-value (OR, operator: in)
- * - "字段: -值" — exclude (operator: neq/not_in)
- * - "字段: 值1 .. 值2" — range (operator: between)
- * - "字段: 无" — is_empty
- * - "字段: 有" — is_not_empty
- * - "字段: 未关闭" — status open
- * - "字段: 已关闭" — status closed
- */
-function queryTextToFilters(text: string): any[] {
-  if (!text || !text.trim()) return []
-  const filters: any[] = []
-
-  // Normalize Chinese colon
-  const normalized = text.replace(/：/g, ':')
-
-  // Strategy: find all known field labels followed by ":" in the text
-  // Then extract value between current field's ":" and next field's start
-  const allFields = [...Object.keys(queryFieldLabelToKey)]
-  // Sort by length descending so longer names match first (e.g. "创建日期" before "日期")
-  allFields.sort((a, b) => b.length - a.length)
-
-  interface FieldMatch { field: string; valueStart: number; matchStart: number }
-  const matches: FieldMatch[] = []
-
-  for (const fieldLabel of allFields) {
-    // Find all occurrences of "fieldLabel:" in the text
-    let searchFrom = 0
-    while (true) {
-      const idx = normalized.indexOf(`${fieldLabel}:`, searchFrom)
-      if (idx < 0) break
-      // Make sure it's at start or after whitespace (not middle of another word)
-      const charBefore = idx > 0 ? normalized[idx - 1] : ' '
-      if (idx === 0 || charBefore === ' ') {
-        const valueStart = idx + fieldLabel.length + 1 // after ":"
-        // Skip optional space after colon
-        const afterColon = normalized.substring(valueStart)
-        const spaceMatch = afterColon.match(/^\s*/)
-        const actualValueStart = valueStart + (spaceMatch ? spaceMatch[0].length : 0)
-        matches.push({ field: fieldLabel, valueStart: actualValueStart, matchStart: idx })
-      }
-      searchFrom = idx + 1
-    }
-  }
-
-  // Sort by position in text
-  matches.sort((a, b) => a.matchStart - b.matchStart)
-
-  // Extract value for each field (from valueStart to next field's matchStart)
-  for (let i = 0; i < matches.length; i++) {
-    const { field: fieldLabel, valueStart } = matches[i]
-    const valueEnd = i + 1 < matches.length ? matches[i + 1].matchStart : normalized.length
-    let valuePart = normalized.substring(valueStart, valueEnd).trim()
-
-    const fieldKey = queryFieldLabelToKey[fieldLabel] || fieldLabel
-
-    // Handle special keywords
-    if (valuePart === '未关闭') { filters.push({ field: fieldKey, operator: 'open', value: [] }); continue }
-    if (valuePart === '已关闭') { filters.push({ field: fieldKey, operator: 'closed', value: [] }); continue }
-    if (valuePart === '无') { filters.push({ field: fieldKey, operator: 'is_empty', value: [] }); continue }
-    if (valuePart === '有') { filters.push({ field: fieldKey, operator: 'is_not_empty', value: [] }); continue }
-
-    // Check for range operator ".."
-    if (valuePart.includes('..')) {
-      const rangeParts = valuePart.split('..').map(p => p.trim())
-      if (rangeParts.length === 2 && rangeParts[0] && rangeParts[1]) {
-        filters.push({ field: fieldKey, operator: 'between', value: rangeParts })
-        continue
-      }
-    }
-
-    // Check for exclude prefix "-"
-    const isNegative = valuePart.startsWith('-')
-    if (isNegative) valuePart = valuePart.substring(1).trim()
-
-    // Split by comma for multi-value
-    const values = valuePart.split(/[,，]/).map(v => v.trim()).filter(v => v)
-    if (values.length === 0) continue
-
-    const resolvedValues = values.map(v => resolveValueToId(fieldKey, v))
-
-    const operator = isNegative
-      ? (resolvedValues.length > 1 ? 'not_in' : 'neq')
-      : (resolvedValues.length > 1 ? 'in' : 'eq')
-
-    filters.push({ field: fieldKey, operator, value: resolvedValues })
-  }
-  return filters
-}
-
-/** Resolve a human-readable value back to its internal ID/key */
-function resolveValueToId(fieldKey: string, v: string): string {
-  if (v === '我') return '${currentUser}'
-  if (fieldKey === 'project') {
-    const p = projectList.value.find(pr => pr.key === v || pr.name === v)
-    return p ? p.id : v
-  }
-  if (fieldKey === 'priority') return priorityReverseLabelMap[v] || v
-  if (fieldKey === 'type') {
-    const entry = issueTypeOptions.value.find(o => o.label === v || o.value === v)
-    return entry ? entry.value : v
-  }
-  if (fieldKey === 'status') {
-    const st = statusCache.value.find(s => localizeStatusName(s.name) === v || s.name === v)
-    return st ? st.id : v
-  }
-  return v
-}
-
-function openEditQueryModal(q: any) {
-  editQueryForm.id = q.id
-  editQueryForm.name = q.name || ''
-  editQueryForm.icon = q.icon || ''
-  editQueryForm.pinned = q.pinned || false
-  editQueryForm.shared = q.shared || false
-  // Parse filters and convert to human-readable query text
-  try {
-    editQueryForm.filters = q.filters ? JSON.parse(q.filters) : []
-  } catch {
-    editQueryForm.filters = []
-  }
-  editQueryForm.queryText = filtersToQueryText(editQueryForm.filters)
-  showEditQueryModal.value = true
-}
-
-async function handleEditQuery() {
-  if (!editQueryForm.name.trim()) {
-    Message.warning('请输入查询名称')
-    return
-  }
-  editQueryLoading.value = true
-  try {
-    // Parse query text back to filters JSON
-    const newFilters = queryTextToFilters(editQueryForm.queryText)
-    const originalQueryText = filtersToQueryText(editQueryForm.filters)
-    const filtersChanged = editQueryForm.queryText.trim() !== originalQueryText.trim()
-
-    const updateData: Record<string, any> = {
-      name: editQueryForm.name.trim(),
-      icon: editQueryForm.icon || '',
-      pinned: editQueryForm.pinned,
-      shared: editQueryForm.shared
-    }
-    // Always send the parsed filters (user may have edited the query text)
-    if (filtersChanged) {
-      updateData.filters = newFilters
-    }
-    await queryApi.update(editQueryForm.id, updateData)
-    Message.success('查询已更新')
-    showEditQueryModal.value = false
-
-    // If this was the active query, update local state
-    if (activeQueryId.value === editQueryForm.id) {
-      activeQueryName.value = editQueryForm.name.trim()
-      // Update activeQueryObj to reflect changes
-      if (activeQueryObj.value) {
-        activeQueryObj.value = {
-          ...activeQueryObj.value,
-          name: editQueryForm.name.trim(),
-          icon: editQueryForm.icon || '',
-          pinned: editQueryForm.pinned,
-          shared: editQueryForm.shared,
-          ...(filtersChanged ? { filters: JSON.stringify(newFilters) } : {})
-        }
-      }
-      // If filters were changed, refresh the list
-      if (filtersChanged) {
-        refreshList()
-      }
-    }
-    loadPanel()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '更新失败')
-  } finally {
-    editQueryLoading.value = false
-  }
-}
-
-// ========== Rename query ==========
-const showRenameQueryModal = ref(false)
-const renameQueryLoading = ref(false)
-const renameQueryForm = reactive({
-  id: '',
-  name: ''
-})
-
-function openRenameQueryModal(q: any) {
-  renameQueryForm.id = q.id
-  renameQueryForm.name = q.name || ''
-  showRenameQueryModal.value = true
-}
-
-async function handleRenameQuery() {
-  if (!renameQueryForm.name.trim()) {
-    Message.warning('请输入查询名称')
-    return
-  }
-  renameQueryLoading.value = true
-  try {
-    await queryApi.update(renameQueryForm.id, { name: renameQueryForm.name.trim() })
-    Message.success('重命名成功')
-    showRenameQueryModal.value = false
-    // Update local activeQueryName if this is the currently selected query
-    if (activeQueryId.value === renameQueryForm.id) {
-      activeQueryName.value = renameQueryForm.name.trim()
-    }
-    loadPanel()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '重命名失败')
-  } finally {
-    renameQueryLoading.value = false
-  }
-}
-
-// ========== Toggle shared/pinned ==========
-async function toggleQueryShared(q: any) {
-  try {
-    await queryApi.update(q.id, { shared: !q.shared })
-    Message.success(q.shared ? '已设为私有' : '已设为共享')
-    loadPanel()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '操作失败')
-  }
-}
-
-async function toggleQueryPinned(q: any) {
-  try {
-    await queryApi.update(q.id, { pinned: !q.pinned })
-    Message.success(q.pinned ? '已取消置顶' : '已置顶')
-    loadPanel()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '操作失败')
-  }
-}
-
-// ========== Manage query favorites ==========
-const showManageQueriesModal = ref(false)
-const manageQuerySearch = ref('')
-const availableQueries = ref<any[]>([])
-
-/** Check if a query belongs to the current user AND is editable (not shared/system) */
-function isOwnQuery(q: any): boolean {
-  if (!q) return false
-  const currentUserId = authStore.user?.userId || authStore.user?.id || ''
-  // Must be created by current user AND not shared (shared queries are system/public, not editable)
-  return q.userId === String(currentUserId) && !q.shared
-}
-function isOwnQueryById(userId: string): boolean {
-  const currentUserId = authStore.user?.userId || authStore.user?.id || ''
-  return userId === String(currentUserId)
-}
-
-const filteredManageQueries = computed(() => {
-  if (!manageQuerySearch.value) return availableQueries.value
-  const kw = manageQuerySearch.value.toLowerCase()
-  return availableQueries.value.filter((q: any) => q.name.toLowerCase().includes(kw))
-})
-
-async function openManageQueriesModal() {
-  showManageQueriesModal.value = true
-  manageQuerySearch.value = ''
-  try {
-    const res = await queryApi.getAvailableQueries(activeProjectId.value || undefined)
-    availableQueries.value = res.data || []
-  } catch (e: any) {
-    Message.error('加载可用查询失败')
-    availableQueries.value = []
-  }
-}
-
-async function toggleFavorite(q: any) {
-  try {
-    if (q.favorited) {
-      await queryApi.removeFavorite(q.id)
-      q.favorited = false
-      Message.success(`已从面板移除「${q.name}」`)
-    } else {
-      await queryApi.addFavorite(q.id)
-      q.favorited = true
-      Message.success(`已添加「${q.name}」到面板`)
-    }
-    loadPanel()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '操作失败')
-  }
-}
-
-async function handleRemoveFavorite(q: any) {
-  try {
-    await queryApi.removeFavorite(q.id)
-    Message.success(`已从面板移除「${q.name}」`)
-    loadPanel()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '操作失败')
-  }
-}
-
-// Context menu trigger (for the ⋯ button — dispatches a synthetic contextmenu event
-// so the a-dropdown with trigger="contextMenu" picks it up)
-function triggerContextMenu(event: MouseEvent, _q: any) {
-  const target = (event.target as HTMLElement).closest('.query-item')
-  if (target) {
-    const contextMenuEvent = new MouseEvent('contextmenu', {
-      bubbles: true,
-      cancelable: true,
-      clientX: event.clientX,
-      clientY: event.clientY
-    })
-    target.dispatchEvent(contextMenuEvent)
-  }
-}
-
-// Helper: build filters from current active state (reused from handleCreateQuery)
-function buildCurrentFilters(): any[] {
-  const filters: any[] = []
-  if (globalFilterParams.value.statusId) {
-    const statusIds = String(globalFilterParams.value.statusId).split(',')
-    const statusCodes = statusIds.map(id => {
-      const s = statusCache.value.find(st => st.id === id)
-      return s?.code || id
-    })
-    filters.push({ field: 'status', operator: 'in', value: statusCodes })
-  }
-  if (globalFilterParams.value.assigneeId) {
-    filters.push({ field: 'assignee', operator: 'eq', value: [globalFilterParams.value.assigneeId] })
-  }
-  if (globalFilterParams.value.priority) {
-    filters.push({ field: 'priority', operator: 'eq', value: [globalFilterParams.value.priority] })
-  }
-  if (globalFilterParams.value.sprintId) {
-    filters.push({ field: 'sprint', operator: 'eq', value: [globalFilterParams.value.sprintId] })
-  }
-  if (globalFilterParams.value.issueType) {
-    filters.push({ field: 'type', operator: 'eq', value: [globalFilterParams.value.issueType] })
-  }
-  if (searchKeyword.value.trim()) {
-    filters.push({ field: 'keyword', operator: 'contains', value: [searchKeyword.value.trim()] })
-  }
-  if (activeProjectId.value) {
-    filters.push({ field: 'project', operator: 'eq', value: [activeProjectId.value] })
-  }
-  return filters
-}
-
-// Panel resize
-const PANEL_WIDTH_KEY = 'trackflow:panel-width'
-const panelWidth = ref(loadPanelWidth())
-
-function loadPanelWidth(): number {
-  try {
-    const stored = localStorage.getItem(PANEL_WIDTH_KEY)
-    if (stored) return Math.max(200, Math.min(500, Number(stored)))
-  } catch { /* localStorage 读取容错 */ }
-  return 280
-}
-
-function startPanelResize(e: MouseEvent) {
-  e.preventDefault()
-  const startX = e.clientX
-  const startWidth = panelWidth.value
-
-  function onMove(ev: MouseEvent) {
-    const delta = ev.clientX - startX
-    panelWidth.value = Math.max(200, Math.min(500, startWidth + delta))
-  }
-  function onUp() {
-    document.removeEventListener('mousemove', onMove)
-    document.removeEventListener('mouseup', onUp)
-    document.body.style.cursor = ''
-    document.body.style.userSelect = ''
-    localStorage.setItem(PANEL_WIDTH_KEY, String(panelWidth.value))
-  }
-  document.body.style.cursor = 'col-resize'
-  document.body.style.userSelect = 'none'
-  document.addEventListener('mousemove', onMove)
-  document.addEventListener('mouseup', onUp)
-}
-
-const panelWidthBeforeCollapse = ref(280)
-
-function togglePanelCollapse() {
-  if (panelWidth.value <= 200) {
-    // 当前已是最小宽度，恢复到之前记录的宽度
-    panelWidth.value = panelWidthBeforeCollapse.value
-  } else {
-    // 记录当前宽度，然后缩到最小
-    panelWidthBeforeCollapse.value = panelWidth.value
-    panelWidth.value = 200
-  }
-  localStorage.setItem(PANEL_WIDTH_KEY, String(panelWidth.value))
-}
-
-// Filters
-const filterProject = ref<string | undefined>(undefined)
-const searchKeyword = ref('')
-const globalFilterParams = ref<Record<string, any>>({})
-const initialFilterChips = ref<any[]>([])
-
-// Hide resolved toggle (persisted in localStorage)
+// ===== Project & Tag panel composable =====
+const {
+  projectList, favoriteProjects, showManageProjectsModal, manageProjectSearch,
+  manageProjectsLoading, filteredManageProjects,
+  loadProjects, openManageProjectsModal, toggleProjectFavorite,
+  favoriteTags, activeTagId, showManageTagsModal, availableTags,
+  loadTags, openManageTagsModal, toggleTagFavorite
+} = useProjectTagPanel({ activeProjectId })
+
+// Hide resolved toggle
 const HIDE_RESOLVED_KEY = 'trackflow:hide-resolved'
-const hideResolved = ref(loadHideResolved())
-
-function loadHideResolved(): boolean {
-  try {
-    return localStorage.getItem(HIDE_RESOLVED_KEY) === 'true'
-  } catch { return false }
-}
+const hideResolved = ref(localStorage.getItem(HIDE_RESOLVED_KEY) === 'true')
 
 function toggleHideResolved() {
   hideResolved.value = !hideResolved.value
   localStorage.setItem(HIDE_RESOLVED_KEY, String(hideResolved.value))
   currentPage.value = 1
   refreshList()
-  loadPanel() // 刷新面板计数以匹配 hideResolved 状态
+  loadPanel()
 }
 
-/** Resolve date keyword (今天/昨天/etc) to ISO date string */
-function resolveDateKeyword(value: string): string | null {
-  const today = new Date()
-  const fmt = (d: Date) => d.toISOString().split('T')[0]
-  switch (value) {
-    case 'today': case '今天': return fmt(today)
-    case 'yesterday': case '昨天': return fmt(new Date(today.getTime() - 86400000))
-    default:
-      // If value looks like a date (yyyy-MM-dd), return as-is
-      if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value
-      return null
-  }
-}
-
-function onGlobalSearch(keyword: string) {
-  // Detect structured query syntax (e.g. "状态: Testing  负责人: 我")
-  // If any known field label followed by ":" is found, parse as structured query
-  const normalized = keyword.replace(/：/g, ':')
-  const allFieldLabels = Object.keys(queryFieldLabelToKey)
-  const hasStructuredSyntax = allFieldLabels.some(label => {
-    const idx = normalized.indexOf(`${label}:`)
-    if (idx < 0) return false
-    // Must be at start or after whitespace
-    return idx === 0 || normalized[idx - 1] === ' '
-  })
-
-  if (hasStructuredSyntax) {
-    // Parse structured query using existing queryTextToFilters
-    const parsedFilters = queryTextToFilters(keyword)
-    if (parsedFilters.length > 0) {
-      // Convert structured filters to globalFilterParams format (same mapping as FilterBar.emitFilters)
-      const filterParams: Record<string, any> = {}
-      let remainingKeyword = ''
-
-      for (const f of parsedFilters) {
-        const fieldKey = f.field
-        const op = f.operator
-        const values: string[] = f.value || []
-        const isNegative = op === 'neq' || op === 'not_in'
-
-        switch (fieldKey) {
-          case 'status':
-            if (op === 'open') {
-              // Find all non-closed status IDs
-              const openIds = statusCache.value.filter(s => !s.isClosed).map(s => s.id)
-              if (openIds.length) filterParams.statusId = openIds.join(',')
-            } else if (op === 'closed') {
-              const closedIds = statusCache.value.filter(s => s.isClosed).map(s => s.id)
-              if (closedIds.length) filterParams.statusId = closedIds.join(',')
-            } else {
-              // Resolve status name/code to IDs
-              const statusIds = values.map(v => {
-                const st = statusCache.value.find(s =>
-                  s.code === v || s.name === v || localizeStatusName(s.name) === v
-                )
-                return st?.id || v
-              })
-              if (!isNegative) filterParams.statusId = statusIds.join(',')
-              else filterParams.statusIdNot = statusIds.join(',')
-            }
-            break
-          case 'priority':
-            if (op === 'between' && values.length >= 2) {
-              // Resolve range using priorityOptions order (position-based)
-              const opts = priorityOptions.value
-              const findIdx = (v: string) => opts.findIndex(o =>
-                o.value.toLowerCase() === v.toLowerCase() || o.label === v
-              )
-              let startIdx = findIdx(values[0])
-              let endIdx = findIdx(values[1])
-              if (startIdx >= 0 && endIdx >= 0) {
-                // Auto-swap if reversed
-                if (startIdx > endIdx) [startIdx, endIdx] = [endIdx, startIdx]
-                const rangeValues = opts.slice(startIdx, endIdx + 1).map(o => o.value)
-                filterParams.priority = rangeValues.join(',')
-              } else {
-                // Fallback: send raw values as-is
-                filterParams.priority = values.join(',')
-              }
-            } else if (!isNegative) {
-              filterParams.priority = values.join(',')
-            } else {
-              filterParams.priorityNot = values.join(',')
-            }
-            break
-          case 'type':
-            if (!isNegative) filterParams.issueType = values.join(',')
-            else filterParams.issueTypeNot = values.join(',')
-            break
-          case 'assignee':
-            if (values.includes('${currentUser}')) {
-              filterParams.assignedToMe = 'true'
-            } else if (!isNegative) {
-              filterParams.assigneeId = values.join(',')
-            } else {
-              filterParams.assigneeIdNot = values.join(',')
-            }
-            break
-          case 'reporter':
-            if (values.includes('${currentUser}')) {
-              filterParams.reportedByMe = 'true'
-            }
-            break
-          case 'sprint':
-            if (!isNegative) filterParams.sprintId = values.join(',')
-            else filterParams.sprintIdNot = values.join(',')
-            break
-          case 'project': {
-            const p = projectList.value.find(pr => pr.key === values[0] || pr.name === values[0])
-            if (p) filterParams.projectId = p.id
-            else filterParams.projectId = values[0]
-            break
-          }
-          case 'keyword':
-            remainingKeyword = values.join(' ')
-            break
-          case 'createdAt':
-            if (op === 'between' && values.length >= 2) {
-              filterParams.createdAfter = values[0]
-              filterParams.createdBefore = values[1]
-            }
-            break
-          case 'updatedAt':
-            if (op === 'between' && values.length >= 2) {
-              filterParams.updatedAfter = values[0]
-              filterParams.updatedBefore = values[1]
-            }
-            break
-          case 'resolvedAt':
-            if (op === 'between' && values.length >= 2) {
-              filterParams.resolvedAfter = values[0]
-              filterParams.resolvedBefore = values[1]
-            }
-            break
-          case 'dueDate':
-            if (op === 'between' && values.length >= 2) {
-              filterParams.dueAfter = values[0]
-              filterParams.dueBefore = values[1]
-            } else if (values.length > 0) {
-              // Single date value — map to due on that date
-              const dateVal = resolveDateKeyword(values[0])
-              if (dateVal) {
-                filterParams.dueAfter = dateVal
-                filterParams.dueBefore = dateVal
-              }
-            }
-            break
-          default:
-            // Unknown field — treat as keyword fragment
-            break
-        }
-      }
-
-      searchKeyword.value = remainingKeyword
-      globalFilterParams.value = filterParams
-      currentPage.value = 1
-      refreshList()
-      return
-    }
-  }
-
-  // Fallback: plain keyword search (original behavior)
-  searchKeyword.value = keyword
-  globalFilterParams.value = {}
-  currentPage.value = 1
-  refreshList()
-}
-
-function onGlobalFilter(filters: Record<string, any>) {
-  searchKeyword.value = ''
-  globalFilterParams.value = filters
-  // If user modifies filters while a saved query is active, switch to ad-hoc mode
-  if (activeQueryId.value) {
-    activeQueryId.value = null
-    activeQueryName.value = '所有工单'
-    activeQueryObj.value = null
-  }
-  currentPage.value = 1
-  refreshList()
-}
-
-function onClearQuery() {
-  activeQueryId.value = null
-  activeQueryName.value = '所有工单'
-  activeQueryObj.value = null
-  searchKeyword.value = ''
-  globalFilterParams.value = {}
-  currentPage.value = 1
-  // Remove query param from URL
-  const { project, ...rest } = route.query
-  router.replace({ query: project ? { project } : {} })
-  // Clear FilterBar chips
-  filterBarRef.value?.clearAll()
-
-  // Persist user's preference to show all issues
-  localStorage.setItem('tf_last_active_query_all', 'true')
-  localStorage.removeItem('tf_last_active_query_id')
-
-  refreshList()
-}
-
-function onQueryChipClick() {
-  // If the user owns the query, open the edit modal for it
-  if (activeQueryObj.value && isOwnQuery(activeQueryObj.value)) {
-    openEditQueryModal(activeQueryObj.value)
-  }
-}
-
-// Quick create
-const showInlineCreate = ref(false)
-const showCreatePanel = ref(false)
-const createPanelRef = ref<InstanceType<typeof IssueCreatePanel> | null>(null)
-const quickCreating = ref(false)
-const quickForm = reactive({
-  projectId: undefined as string | undefined,
-  title: '',
-  issueType: '任务',
-  priority: '普通'
+// ===== Query Panel composable =====
+const {
+  savedQueries, activeQueryId, activeQueryName, activeQueryObj,
+  expandedGroups, panelSearch, panelLoadFailed, panelWidth,
+  filteredQueries,
+  showCreateQueryModal, createQueryLoading, queryIconOptions, createQueryForm,
+  showEditQueryModal, editQueryLoading, editQueryForm,
+  showRenameQueryModal, renameQueryLoading, renameQueryForm,
+  showManageQueriesModal, manageQuerySearch, filteredManageQueries,
+  loadPanel, isOwnQuery, isOwnQueryById,
+  openCreateQueryModal, handleCreateQuery, confirmDeleteQuery,
+  openEditQueryModal, handleEditQuery, openRenameQueryModal, handleRenameQuery,
+  toggleQueryShared, toggleQueryPinned,
+  openManageQueriesModal, toggleFavorite, handleRemoveFavorite,
+  triggerContextMenu, startPanelResize, togglePanelCollapse,
+  selectTag: queryPanelSelectTag,
+  filtersToQueryText, queryTextToFilters, resolveValueToId
+} = useQueryPanel({
+  statusCache,
+  projectList,
+  issueTypeOptions,
+  priorityOptions,
+  activeProjectId,
+  hideResolved,
+  refreshList,
+  getIssueTypeLabelForRecord
 })
 
-// Drafts
+// ===== Export composable =====
+const { exportLoading, handleExport, onBatchExport } = useIssueExport({
+  activeProjectId, filterProject, hideResolved, globalFilterParams, searchKeyword, selectedIds
+})
+
+// ===== Dashboard Filter composable =====
+const { applyDashboardFilter, hasDashboardFilterParams } = useDashboardFilter({
+  activeQueryId, activeQueryObj, activeProjectId, filterProject,
+  searchKeyword, globalFilterParams, initialFilterChips, activeQueryName,
+  statusCache, sprintOptionsCache, projectList, filterBarRef, refreshList
+})
+
+// ===== Preview mode =====
+const PREVIEW_MODE_KEY = 'trackflow:preview-mode'
+type PreviewMode = 'sidebar' | 'off'
+const previewMode = ref<PreviewMode>((localStorage.getItem(PREVIEW_MODE_KEY) as PreviewMode) || 'off')
+const previewVisible = ref(false)
+const previewIssueId = ref<string | null>(null)
+const activeIssueIndex = ref<number>(-1)
+
+function setPreviewMode(mode: PreviewMode) {
+  previewMode.value = mode
+  localStorage.setItem(PREVIEW_MODE_KEY, mode)
+  if (mode === 'off') { previewVisible.value = false; previewIssueId.value = null; activeIssueIndex.value = -1 }
+}
+function openPreview(issue: IssueVO, index: number) { previewIssueId.value = issue.id; previewVisible.value = true; activeIssueIndex.value = index }
+function closePreview() { previewVisible.value = false; activeIssueIndex.value = -1 }
+function onPreviewVisibleChange(val: boolean) { previewVisible.value = val; if (!val) activeIssueIndex.value = -1 }
+function onPreviewGoDetail(issueId: string) { previewVisible.value = false; router.push({ name: 'IssueDetail', params: { id: issueId } }) }
+
+// ===== Keyboard Nav composable =====
+const showCommandDialog = ref(false)
+const showShortcutsHelp = ref(false)
+const showCreatePanel = ref(false)
+
+const {
+  focusedIndex, focusedIssueId, handleKeyboardNav, navigateIssue
+} = useKeyboardNav({
+  issues, canCreateIssueGlobal, canBatchOps,
+  previewMode, previewVisible, previewIssueId, activeIssueIndex,
+  showCommandDialog, showCreatePanel, showShortcutsHelp, selectedCount,
+  toggle, toggleAll, openPreview, closePreview, onPreviewGoDetail
+})
+
+// ===== Context Menu composable =====
+const {
+  contextMenu, ctxTransitions, ctxTransitionsLoading,
+  ctxSprintsLoading, ctxSprintSubVisible, ctxSprintGroups,
+  openContextMenu, closeContextMenu,
+  onListItemContextMenu, onTableRowContextMenu,
+  ctxCopyIssueKey, ctxCopyLink, ctxOpenNewTab,
+  ctxSetStatus, ctxLoadSprints, ctxMoveSprint, ctxSelectSprint,
+  onGlobalKeydownCtx
+} = useContextMenu({ refreshList, updateLocalIssue, sprintOptionsCache, canEditIssue })
+
+// ===== Table Config composable =====
+const {
+  columnWidths, tableMinWidth, tableColumns, rowSelection,
+  onColumnResize, onHeaderSort, onHeaderRemove, onHeaderDragDrop,
+  getColumnSortDir, isColumnFixed, isColumnSortable,
+  isResolved, getStatusName, getStatusColor, getSprintName,
+  getDueDateStatus, getDueDateTooltip, getRowClass,
+  formatHoursCell, formatRemainingCell, getSpentHoursClass, getRemainingClass
+} = useTableConfig({
+  visibleColumns, canBatchOps, statusCache, sortState,
+  previewMode, previewVisible, previewIssueId, focusedIssueId,
+  sprintOptionsCache, toggleColumn, reorderColumn
+})
+
+// ===== Drafts =====
 const { draftList, draftCount, hasDrafts, saveDraft, deleteDraft, deleteAllDrafts, getDraft } = useDrafts()
 const activeDraftId = ref<string | null>(null)
-// 刚从会话恢复的草稿 ID，用于高亮提示（3 秒后自动清除）
 const recoveredDraftId = ref<string | null>(null)
 
 function formatDraftTime(timestamp: number): string {
@@ -2120,301 +1237,27 @@ function formatDraftTime(timestamp: number): string {
   if (diff < 604800000) return `${Math.floor(diff / 86400000)}天前`
   return new Date(timestamp).toLocaleDateString()
 }
-
-function openDraftCreate() {
-  activeDraftId.value = null
-  showCreatePanel.value = true
-}
-
-function openDraft(draft: IssueDraft) {
-  activeDraftId.value = draft.id
-  showCreatePanel.value = true
-}
-
-function handleDeleteDraft(draftId: string) {
-  deleteDraft(draftId)
-  Message.success('草稿已删除')
-}
-
+function openDraftCreate() { activeDraftId.value = null; showCreatePanel.value = true }
+function openDraft(draft: IssueDraft) { activeDraftId.value = draft.id; showCreatePanel.value = true }
+function handleDeleteDraft(draftId: string) { deleteDraft(draftId); Message.success('草稿已删除') }
 function handleDeleteAllDrafts() {
   const { confirmDangerDelete } = useConfirmDelete()
-  confirmDangerDelete({
-    itemName: `全部 ${draftCount.value} 个草稿`,
-    impactDescription: '删除后无法恢复',
-    confirmText: '全部删除',
-    onConfirm: () => {
-      deleteAllDrafts()
-      Message.success('所有草稿已删除')
-    }
-  })
+  confirmDangerDelete({ itemName: `全部 ${draftCount.value} 个草稿`, impactDescription: '删除后无法恢复', confirmText: '全部删除', onConfirm: () => { deleteAllDrafts(); Message.success('所有草稿已删除') } })
 }
-
-/**
- * 创建面板关闭时自动保存草稿
- * IssueCreatePanel 的 @cancel 事件会调用此方法
- */
 function onCreatePanelCancel(formData: any) {
-  if (formData && (formData.title?.trim() || formData.description?.trim())) {
-    saveDraft(formData, activeDraftId.value || undefined)
-    Message.info('已保存为草稿')
-  }
+  if (formData && (formData.title?.trim() || formData.description?.trim())) { saveDraft(formData, activeDraftId.value || undefined); Message.info('已保存为草稿') }
   activeDraftId.value = null
 }
-
-function onCreatePanelCreated() {
-  // 如果从草稿创建成功，删除该草稿
-  if (activeDraftId.value) {
-    deleteDraft(activeDraftId.value)
-    activeDraftId.value = null
-  }
-  refreshList()
-}
-
-/**
- * 用户点击创建面板的「全屏」按钮
- * 保存草稿后跳转到全屏创建页面，已填写内容通过草稿恢复
- */
+function onCreatePanelCreated() { if (activeDraftId.value) { deleteDraft(activeDraftId.value); activeDraftId.value = null }; refreshList() }
 function onCreatePanelExpand(formData: any) {
-  // 关闭弹窗
-  showCreatePanel.value = false
-  activeDraftId.value = null
-  // 如果有内容，先保存为草稿
-  if (formData && (formData.title?.trim() || formData.description?.trim())) {
-    const draftId = saveDraft(formData)
-    if (draftId) {
-      router.push({ name: 'IssueCreate', query: { draftId } })
-      return
-    }
-  }
+  showCreatePanel.value = false; activeDraftId.value = null
+  if (formData && (formData.title?.trim() || formData.description?.trim())) { const draftId = saveDraft(formData); if (draftId) { router.push({ name: 'IssueCreate', query: { draftId } }); return } }
   router.push({ name: 'IssueCreate' })
 }
+const createPanelRef = ref<InstanceType<typeof IssueCreatePanel> | null>(null)
 
-// Apply Command dialog
-const showCommandDialog = ref(false)
 
-// Keyboard shortcuts help panel
-const showShortcutsHelp = ref(false)
-
-// ===== Keyboard focused index (J/K navigation in list) =====
-/** Index of the keyboard-focused row in the current issues list (-1 = no focus) */
-const focusedIndex = ref<number>(-1)
-
-/** ID of the keyboard-focused issue (derived from focusedIndex) */
-const focusedIssueId = computed<string | null>(() => {
-  if (focusedIndex.value >= 0 && focusedIndex.value < issues.value.length) {
-    return issues.value[focusedIndex.value].id
-  }
-  return null
-})
-
-/** Scroll the focused row into view if needed */
-function scrollFocusedIntoView() {
-  if (focusedIndex.value < 0) return
-  const issue = issues.value[focusedIndex.value]
-  if (!issue) return
-  // List layout: IssueListItem has data-id attribute
-  // Table layout: Arco table renders <tr data-row-key="id">
-  const el = (
-    document.querySelector(`[data-id="${issue.id}"]`) ||
-    document.querySelector(`[data-row-key="${issue.id}"]`)
-  ) as HTMLElement | null
-  el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
-}
-
-// ===== Preview mode (YouTrack-style Sidebar / Off) =====
-const PREVIEW_MODE_KEY = 'trackflow:preview-mode'
-type PreviewMode = 'sidebar' | 'off'
-const previewMode = ref<PreviewMode>(loadPreviewMode())
-const previewVisible = ref(false)
-const previewIssueId = ref<string | null>(null)
-const activeIssueIndex = ref<number>(-1)
-
-function loadPreviewMode(): PreviewMode {
-  try {
-    const stored = localStorage.getItem(PREVIEW_MODE_KEY)
-    if (stored === 'sidebar' || stored === 'off') return stored
-  } catch { /* localStorage 读取容错 */ }
-  return 'off'
-}
-
-function setPreviewMode(mode: PreviewMode) {
-  previewMode.value = mode
-  localStorage.setItem(PREVIEW_MODE_KEY, mode)
-  if (mode === 'off') {
-    previewVisible.value = false
-    previewIssueId.value = null
-    activeIssueIndex.value = -1
-  }
-}
-
-function openPreview(issue: IssueVO, index: number) {
-  previewIssueId.value = issue.id
-  previewVisible.value = true
-  activeIssueIndex.value = index
-}
-
-function closePreview() {
-  previewVisible.value = false
-  activeIssueIndex.value = -1
-}
-
-function onPreviewVisibleChange(val: boolean) {
-  previewVisible.value = val
-  if (!val) {
-    activeIssueIndex.value = -1
-  }
-}
-
-function onPreviewGoDetail(issueId: string) {
-  previewVisible.value = false
-  router.push({ name: 'IssueDetail', params: { id: issueId } })
-}
-
-// Keyboard navigation for preview mode
-function handleKeyboardNav(e: KeyboardEvent) {
-  // Apply Command dialog: Ctrl+Alt+J
-  if (e.key === 'j' && e.ctrlKey && e.altKey && selectedCount.value > 0) {
-    e.preventDefault()
-    showCommandDialog.value = true
-    return
-  }
-
-  // Don't intercept when focus is in an input field (typing)
-  const tag = (e.target as HTMLElement)?.tagName?.toLowerCase()
-  const isEditing = tag === 'input' || tag === 'textarea' || tag === 'select'
-  // Also skip if target is a contenteditable element (Tiptap editor)
-  const isContentEditable = (e.target as HTMLElement)?.isContentEditable
-
-  // ===== Preview mode sidebar: ArrowUp/Down navigate preview =====
-  if (previewMode.value === 'sidebar' && previewVisible.value && !isEditing && !isContentEditable) {
-    if (e.key === 'ArrowDown') {
-      e.preventDefault()
-      navigateIssue(1)
-      return
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault()
-      navigateIssue(-1)
-      return
-    } else if (e.key === 'Enter') {
-      e.preventDefault()
-      if (previewIssueId.value) {
-        onPreviewGoDetail(previewIssueId.value)
-      }
-      return
-    } else if (e.key === 'Escape') {
-      e.preventDefault()
-      closePreview()
-      return
-    }
-  }
-
-  // ===== Global shortcuts (not in input) =====
-  if (isEditing || isContentEditable) return
-
-  // Escape: close any open panel/modal
-  if (e.key === 'Escape') {
-    if (showShortcutsHelp.value) {
-      showShortcutsHelp.value = false
-    } else if (previewVisible.value) {
-      closePreview()
-    } else if (showCommandDialog.value) {
-      showCommandDialog.value = false
-    } else if (focusedIndex.value >= 0) {
-      focusedIndex.value = -1
-    }
-    return
-  }
-
-  // ? — toggle shortcuts help panel
-  if (e.key === '?' || (e.key === '/' && e.shiftKey)) {
-    e.preventDefault()
-    showShortcutsHelp.value = !showShortcutsHelp.value
-    return
-  }
-
-  // Don't trigger list shortcuts when any modal/dialog is open
-  if (showCommandDialog.value || showCreatePanel.value || showShortcutsHelp.value) return
-
-  // N — create new issue
-  if (e.key === 'n' || e.key === 'N') {
-    if (canCreateIssueGlobal) {
-      e.preventDefault()
-      showCreatePanel.value = true
-    }
-    return
-  }
-
-  // J / ArrowDown — move focus down
-  if (e.key === 'j' || e.key === 'J' || e.key === 'ArrowDown') {
-    e.preventDefault()
-    if (issues.value.length === 0) return
-    if (focusedIndex.value < issues.value.length - 1) {
-      focusedIndex.value++
-    } else {
-      focusedIndex.value = 0 // wrap to top
-    }
-    scrollFocusedIntoView()
-    return
-  }
-
-  // K / ArrowUp — move focus up
-  if (e.key === 'k' || e.key === 'K' || e.key === 'ArrowUp') {
-    e.preventDefault()
-    if (issues.value.length === 0) return
-    if (focusedIndex.value > 0) {
-      focusedIndex.value--
-    } else {
-      focusedIndex.value = issues.value.length - 1 // wrap to bottom
-    }
-    scrollFocusedIntoView()
-    return
-  }
-
-  // Enter — open focused issue
-  if (e.key === 'Enter' && focusedIndex.value >= 0) {
-    e.preventDefault()
-    const issue = issues.value[focusedIndex.value]
-    if (issue) {
-      if (previewMode.value === 'sidebar') {
-        openPreview(issue, focusedIndex.value)
-      } else {
-        router.push(`/issues/${issue.issueKey}`)
-      }
-    }
-    return
-  }
-
-  // Space — select/deselect focused issue
-  if (e.key === ' ' && focusedIndex.value >= 0 && canBatchOps.value) {
-    e.preventDefault()
-    const issue = issues.value[focusedIndex.value]
-    if (issue) {
-      toggle(issue.id)
-    }
-    return
-  }
-
-  // Ctrl+A — select all
-  if ((e.ctrlKey || e.metaKey) && (e.key === 'a' || e.key === 'A') && canBatchOps.value) {
-    e.preventDefault()
-    toggleAll()
-    return
-  }
-}
-
-function navigateIssue(direction: number) {
-  const newIndex = activeIssueIndex.value + direction
-  if (newIndex >= 0 && newIndex < issues.value.length) {
-    activeIssueIndex.value = newIndex
-    const issue = issues.value[newIndex]
-    previewIssueId.value = issue.id
-  }
-}
-
-// Status cache
-const statusCache = ref<IssueStatusVO[]>([])
-
-// Inline edit dropdowns
+// ===== Inline Edit State =====
 const statusDropdowns = reactive<Record<string, boolean>>({})
 const assigneeDropdowns = reactive<Record<string, boolean>>({})
 const sprintDropdowns = reactive<Record<string, boolean>>({})
@@ -2425,17 +1268,12 @@ const assigneeSearch = ref('')
 const assigneeOptions = ref<ProjectMemberVO[]>([])
 const assigneeOptionsLoading = ref(false)
 const sprintOptionsLoading = reactive<Record<string, boolean>>({})
-const sprintOptionsCache = reactive<Record<string, SprintVO[]>>({})
 
-// Badge fields map (projectId → badge field configs)
+// Badge fields
 import type { BadgeFieldConfig, BadgeColorRule } from './components/badgeTypes'
 const badgeFieldsMap = reactive<Record<string, BadgeFieldConfig[]>>({})
 const badgeFieldsLoadedProjects = new Set<string>()
 
-/**
- * 加载项目的徽章字段配置。
- * 从项目自定义字段中筛选 showAsBadge=true 且类型为整数的字段。
- */
 async function loadBadgeFields(projectIds: string[]) {
   const toLoad = projectIds.filter(pid => pid && !badgeFieldsLoadedProjects.has(pid))
   if (toLoad.length === 0) return
@@ -2443,33 +1281,23 @@ async function loadBadgeFields(projectIds: string[]) {
     badgeFieldsLoadedProjects.add(pid)
     try {
       const res = await customFieldApi.listByProject(pid)
-      const fields = (res.data || []).filter(
-        (f: any) => f.showAsBadge && (f.fieldFormat === 'int' || f.fieldFormat === 'integer')
-      )
+      const fields = (res.data || []).filter((f: any) => f.showAsBadge && (f.fieldFormat === 'int' || f.fieldFormat === 'integer'))
       if (fields.length > 0) {
         badgeFieldsMap[pid] = fields.slice(0, 2).map((f: any) => {
           let colorRules: BadgeColorRule[] | null = null
-          if (f.badgeColorRules) {
-            try { colorRules = JSON.parse(f.badgeColorRules) } catch { /* ignore */ }
-          }
+          if (f.badgeColorRules) { try { colorRules = JSON.parse(f.badgeColorRules) } catch { /* ignore */ } }
           return { fieldId: f.id, fieldName: f.name, colorRules }
         })
       }
-    } catch { /* non-critical, silently ignore */ }
+    } catch { /* non-critical */ }
   }
 }
-
-/** 在工单加载后自动加载相关项目的徽章字段配置 */
 function loadBadgeFieldsForIssues() {
   const projectIds = [...new Set(issues.value.map(i => i.projectId).filter(Boolean))]
   if (projectIds.length > 0) loadBadgeFields(projectIds)
 }
-const priorityOptions = ref(DEFAULT_PRIORITY_OPTIONS.map(o => ({ ...o })))
 
-// 工单类型选项（从自定义字段系统动态加载）
-const issueTypeOptions = ref(DEFAULT_ISSUE_TYPE_OPTIONS.map(o => ({ ...o })))
-
-// Load priority and issue type options from custom field system when project changes
+// Load priority/type options when project changes
 watch(activeProjectId, async (projectId) => {
   if (projectId) {
     const loaded = await loadPriorityOptions(projectId)
@@ -2479,443 +1307,30 @@ watch(activeProjectId, async (projectId) => {
   }
 }, { immediate: true })
 
-/** 根据工单类型值从动态选项中获取颜色 */
 function getIssueTypeColorForRecord(issueType: string | null | undefined): string {
   const t = issueType || '任务'
   const opt = issueTypeOptions.value.find(o => o.value === t || o.value.toLowerCase() === t.toLowerCase())
   return opt?.color || DEFAULT_ISSUE_TYPE_COLOR
 }
-
-/** 根据工单类型值从动态选项中获取中文标签 */
 function getIssueTypeLabelForRecord(issueType: string | null | undefined): string {
   if (!issueType) return '未知'
   const opt = issueTypeOptions.value.find(o => o.value === issueType || o.value.toLowerCase() === issueType.toLowerCase())
   return opt?.label || issueType
 }
 
-// Column widths — default values, user can resize via drag
-const COLUMN_WIDTH_STORAGE_KEY = 'trackflow:issue-column-widths'
-const DEFAULT_COLUMN_WIDTHS: Record<string, number> = {
-  issueKey: 130,
-  title: 300, // min width for title
-  assignee: 110,
-  status: 120,
-  sprint: 160,
-  priority: 100,
-  updatedAt: 100,
-  issueType: 80,
-  reporter: 110,
-  createdAt: 110,
-  dueDate: 100,
-  estimatedHours: 100,
-  spentHours: 100,
-  remaining: 100
-}
-
-const columnWidths = reactive<Record<string, number>>(loadColumnWidths())
-
-function loadColumnWidths(): Record<string, number> {
-  try {
-    const stored = localStorage.getItem(COLUMN_WIDTH_STORAGE_KEY)
-    if (stored) return { ...DEFAULT_COLUMN_WIDTHS, ...JSON.parse(stored) }
-  } catch { /* JSON 解析容错，失败降级为默认列宽 */ }
-  return { ...DEFAULT_COLUMN_WIDTHS }
-}
-
-/**
- * 表格最小总宽度 = 各可见列宽度之和 + checkbox列(60px，仅有权限时)
- */
-const tableMinWidth = computed(() => {
-  const sum = visibleColumns.value
-    .filter(c => c.key !== 'checkbox')
-    .reduce((acc, col) => {
-      return acc + (columnWidths[col.key] || DEFAULT_COLUMN_WIDTHS[col.key] || 100)
-    }, 0)
-  return sum + (canBatchOps.value ? 60 : 0)
-})
-
-/**
- * 动态生成 a-table columns 配置
- */
-const tableColumns = computed(() => {
-  return visibleColumns.value
-    .filter(c => c.key !== 'checkbox')
-    .map(col => ({
-      title: col.label,
-      dataIndex: col.key,
-      slotName: col.key === 'title' ? 'title-cell' : col.key.startsWith('cf_') ? 'customFieldCell' : col.key,
-      titleSlotName: 'column-header',
-      width: columnWidths[col.key] || DEFAULT_COLUMN_WIDTHS[col.key] || 100,
-      ellipsis: true,
-      tooltip: col.key === 'title'
-    }))
-})
-
-// Row selection config for a-table (only show when user has batch ops permission)
-const rowSelection = computed(() => {
-  if (!canBatchOps.value) return undefined
-  return {
-    type: 'checkbox' as const,
-    showCheckedAll: true
-  }
-})
-
-// a-table event handlers
-const selectedKeysArray = computed(() => [...selectedIds.value])
-
-/** 根据 column.dataIndex（格式 "cf_{fieldId}"）从 customFieldDetails 中查找对应字段详情 */
-function getCustomFieldDetail(record: any, dataIndex: string): CustomFieldValueVO | undefined {
-  if (!record.customFieldDetails || !dataIndex?.startsWith('cf_')) return undefined
-  const fieldId = dataIndex.substring(3) // 去掉 "cf_" 前缀
-  return record.customFieldDetails.find((d: CustomFieldValueVO) => d.customFieldId === fieldId)
-}
-
-function onRowClick(record: TableData) {
-  if (previewMode.value === 'sidebar') {
-    const index = issues.value.findIndex(i => i.id === record.id)
-    openPreview(record as unknown as IssueVO, index)
-  } else {
-    router.push(`/issues/${record.issueKey}`)
-  }
-}
-function onRowDblClick(record: TableData) {
-  // Double-click always navigates to full detail page regardless of preview mode
-  router.push(`/issues/${record.issueKey}`)
-}
-
-// List layout event handlers
-function onListItemClick(issue: IssueVO) {
-  if (previewMode.value === 'sidebar') {
-    const index = issues.value.findIndex(i => i.id === issue.id)
-    openPreview(issue, index)
-  } else {
-    router.push(`/issues/${issue.issueKey}`)
-  }
-}
-function onListItemDblClick(issue: IssueVO) {
-  router.push(`/issues/${issue.issueKey}`)
-}
-function onListSortChange(field: string) {
-  // 三态切换: null → asc → desc → null (same logic as table)
-  if (sortState.value.field !== field) {
-    sortState.value = { field, direction: 'asc' }
-  } else if (sortState.value.direction === 'asc') {
-    sortState.value = { field, direction: 'desc' }
-  } else {
-    sortState.value = { field: null, direction: null }
-  }
-  currentPage.value = 1
-  refreshList()
-}
-function onListItemSelect(issue: IssueVO) {
-  toggle(issue.id)
-}
-
-// ============================================================
-// Context Menu (Right-click)
-// ============================================================
-const contextMenu = reactive<{
-  visible: boolean
-  x: number
-  y: number
-  issue: IssueVO | null
-}>({
-  visible: false,
-  x: 0,
-  y: 0,
-  issue: null
-})
-
-const ctxTransitions = ref<IssueStatusVO[]>([])
-const ctxTransitionsLoading = ref(false)
-const ctxSprintsLoading = ref(false)
-const ctxSprintSubVisible = ref(false)
-const ctxSprintGroupsData = ref<{ label: string, items: SprintVO[] }[]>([])
-const ctxSprintGroups = computed(() => ctxSprintGroupsData.value)
-
-function openContextMenu(issue: IssueVO, event: MouseEvent) {
-  contextMenu.issue = issue
-  contextMenu.visible = true
-  // Calculate position to keep menu inside viewport
-  const menuWidth = 220
-  const menuHeight = 300
-  const vw = window.innerWidth
-  const vh = window.innerHeight
-  contextMenu.x = event.clientX + menuWidth > vw ? event.clientX - menuWidth : event.clientX
-  contextMenu.y = event.clientY + menuHeight > vh ? event.clientY - menuHeight : event.clientY
-  ctxTransitions.value = []
-  ctxTransitionsLoading.value = false
-  ctxSprintSubVisible.value = false
-  // Preload transitions
-  loadCtxTransitions(issue)
-}
-
-function closeContextMenu() {
-  contextMenu.visible = false
-  contextMenu.issue = null
-  ctxSprintSubVisible.value = false
-}
-
-async function loadCtxTransitions(issue: IssueVO) {
-  ctxTransitionsLoading.value = true
-  try {
-    const res = await issueApi.getAvailableTransitions(issue.id)
-    if (res.code === 0) {
-      ctxTransitions.value = (res.data || []).filter((t: IssueStatusVO) => t.id !== issue.statusId)
-    }
-  } catch (e) {
-    console.error('[IssueList] 加载右键菜单可用转换失败:', e)
-  } finally {
-    ctxTransitionsLoading.value = false
-  }
-}
-
-// List layout context menu handler
-function onListItemContextMenu({ issue, event }: { issue: IssueVO, event: MouseEvent }) {
-  openContextMenu(issue, event)
-}
-
-// Table context menu handler — identify row from DOM
-function onTableContextMenu(event: MouseEvent) {
-  // Walk up the DOM tree to find the table row element
-  let target = event.target as HTMLElement | null
-  while (target && !target.classList.contains('arco-table-tr')) {
-    target = target.parentElement
-  }
-  if (!target) return
-  // Get issue id from data-issue-id attribute (set via row-props)
-  const issueId = target.getAttribute('data-issue-id')
-  if (!issueId) return
-  const issue = issues.value.find(i => i.id === issueId)
-  if (!issue) return
-  openContextMenu(issue, event)
-}
-
-// Table row-contextmenu event from Arco Design
-function onTableRowContextMenu(record: IssueWithDesc, event: MouseEvent) {
-  event.preventDefault()
-  openContextMenu(record, event)
-}
-
-function ctxCopyIssueKey() {
-  if (!contextMenu.issue) return
-  navigator.clipboard.writeText(contextMenu.issue.issueKey || '')
-  Message.success(`已复制工单 ID: ${contextMenu.issue.issueKey}`)
-  closeContextMenu()
-}
-
-function ctxCopyLink() {
-  if (!contextMenu.issue) return
-  const url = `${window.location.origin}/issues/${contextMenu.issue.issueKey}`
-  navigator.clipboard.writeText(url)
-  Message.success('已复制工单链接')
-  closeContextMenu()
-}
-
-function ctxOpenNewTab() {
-  if (!contextMenu.issue) return
-  window.open(`/issues/${contextMenu.issue.issueKey}`, '_blank')
-  closeContextMenu()
-}
-
-async function ctxSetStatus(st: IssueStatusVO) {
-  if (!contextMenu.issue) return
-  const issue = contextMenu.issue
-  closeContextMenu()
-  try {
-    await issueApi.transitStatus(issue.id, st.id, undefined, issue.version)
-    Message.success(`状态已更新为 ${localizeStatusName(st.name)}`)
-    await refreshList()
-    useNavBadge().refresh() // 状态变更后刷新导航栏 badge
-  } catch (e: any) {
-    Message.error(e?.response?.data?.message || '状态变更失败')
-  }
-}
-
-async function ctxLoadSprints() {
-  if (!contextMenu.issue) return
-  ctxSprintSubVisible.value = true
-  if (ctxSprintGroupsData.value.length > 0) return // already loaded
-  ctxSprintsLoading.value = true
-  try {
-    const projectId = contextMenu.issue.projectId
-    if (!sprintOptionsCache[projectId]) {
-      const res = await sprintApi.listByProject(projectId)
-      if (res.code === 0) {
-        sprintOptionsCache[projectId] = res.data?.list || []
-      }
-    }
-    const sprints = sprintOptionsCache[projectId] || []
-    const active = sprints.filter((s: SprintVO) => s.status === 'active')
-    const planned = sprints.filter((s: SprintVO) => s.status === 'planned')
-    const groups: { label: string, items: SprintVO[] }[] = []
-    if (active.length) groups.push({ label: '进行中', items: active })
-    if (planned.length) groups.push({ label: '计划中', items: planned })
-    ctxSprintGroupsData.value = groups
-  } catch (e) {
-    console.error('[IssueList] 加载右键菜单 Sprint 列表失败:', e)
-  } finally {
-    ctxSprintsLoading.value = false
-  }
-}
-
-function ctxMoveSprint() {
-  // Clicking the parent just toggles the sub menu
-  ctxSprintSubVisible.value = !ctxSprintSubVisible.value
-  if (ctxSprintSubVisible.value) ctxLoadSprints()
-}
-
-async function ctxSelectSprint(sprint: SprintVO | null) {
-  if (!contextMenu.issue) return
-  const issue = contextMenu.issue
-  closeContextMenu()
-  try {
-    await issueApi.update(issue.id, { sprintId: sprint?.id || null, version: issue.version })
-    Message.success(sprint ? `已移至 Sprint: ${sprint.name}` : '已移出 Sprint')
-    await refreshList()
-  } catch (e: any) {
-    Message.error(e?.response?.data?.message || 'Sprint 更新失败')
-  }
-}
-
-// Close context menu on scroll or escape key
-function onGlobalKeydownCtx(e: KeyboardEvent) {
-  if (e.key === 'Escape') closeContextMenu()
-}
-
-// Manual order handlers
-async function onManualOrderChange(issueIds: string[]) {
-  await saveManualOrder(issueIds)
-}
-
-async function onDiscardManualOrder() {
-  await discardManualOrder()
-  refreshList()
-}
-
-function onSelectionChange(rowKeys: (string | number)[]) {
-  selectedIds.value = new Set(rowKeys.map(String))
-}
-function onColumnResize(dataIndex: string, width: number) {
-  columnWidths[dataIndex] = width
-  localStorage.setItem(COLUMN_WIDTH_STORAGE_KEY, JSON.stringify(columnWidths))
-}
-
-// Column header interactions
-function onHeaderSort(key: string) {
-  // 三态切换: null → asc → desc → null
-  if (sortState.value.field !== key) {
-    sortState.value = { field: key, direction: 'asc' }
-  } else if (sortState.value.direction === 'asc') {
-    sortState.value = { field: key, direction: 'desc' }
-  } else {
-    sortState.value = { field: null, direction: null }
-  }
-}
-function onHeaderRemove(key: string) {
-  toggleColumn(key)
-}
-function onHeaderDragDrop(fromKey: string, toKey: string) {
-  reorderColumn(fromKey, toKey)
-}
-function getColumnSortDir(key: string): 'asc' | 'desc' | null {
-  if (sortState.value.field === key) return sortState.value.direction
-  return null
-}
-function isColumnFixed(key: string): boolean {
-  const col = visibleColumns.value.find(c => c.key === key)
-  return col?.fixed === true
-}
-function isColumnSortable(key: string): boolean {
-  const col = visibleColumns.value.find(c => c.key === key)
-  return col?.sortable === true
-}
-
-// Status helpers
-function isResolved(statusId: string): boolean {
-  const s = statusCache.value.find(st => st.id === statusId)
-  return s?.isClosed === true
-}
-
-// Due date helpers
-function getDueDateStatus(record: TableData): 'overdue' | 'due-soon' | 'normal' {
-  if (!record.dueDate) return 'normal'
-  // Closed issues don't show warning colors
-  if (isResolved(record.statusId as string)) return 'normal'
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const due = new Date(record.dueDate as string)
-  due.setHours(0, 0, 0, 0)
-  const diffDays = Math.floor((due.getTime() - today.getTime()) / 86400000)
-  if (diffDays < 0) return 'overdue'
-  if (diffDays <= 3) return 'due-soon'
-  return 'normal'
-}
-function getDueDateTooltip(record: TableData): string {
-  if (!record.dueDate) return ''
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const due = new Date(record.dueDate as string)
-  due.setHours(0, 0, 0, 0)
-  const diffDays = Math.floor((due.getTime() - today.getTime()) / 86400000)
-  if (diffDays < 0) return `已逾期 ${Math.abs(diffDays)} 天`
-  if (diffDays === 0) return '今天到期'
-  if (diffDays === 1) return '明天到期'
-  return `${diffDays} 天后到期`
-}
-
-function getRowClass(record: TableData): string {
-  const classes: string[] = []
-  if (isResolved(record.statusId as string)) classes.push('issue-resolved')
-  if (previewMode.value === 'sidebar' && previewVisible.value && record.id === previewIssueId.value) {
-    classes.push('issue-previewing')
-  }
-  // Keyboard focus (J/K navigation in table mode)
-  if (focusedIssueId.value && record.id === focusedIssueId.value) {
-    classes.push('issue-keyboard-focused')
-  }
-  return classes.join(' ')
-}
-function getStatusName(id: string, inlineName?: string) {
-  if (inlineName) return localizeStatusName(inlineName)
-  const s = statusCache.value.find(st => st.id === id)
-  return localizeStatusName(s?.name)
-}
-function getStatusColor(id: string, inlineColor?: string) {
-  if (inlineColor) return inlineColor
-  const s = statusCache.value.find(st => st.id === id)
-  return s?.color || 'var(--tf-text-tertiary)'
-}
-function getSprintName(sprintId?: string, inlineName?: string) {
-  if (inlineName) return inlineName
-  if (!sprintId) return ''
-  for (const sprints of Object.values(sprintOptionsCache)) {
-    const found = (sprints as SprintVO[]).find(s => s.id === sprintId)
-    if (found) return found.name
-  }
-  return ''
-}
-
-// Inline edit - Status
+// ===== Inline Edit Handlers =====
 async function openStatusEdit(issue: IssueVO) {
   if (isCellEditing(issue.id, 'statusId')) return
   statusDropdowns[issue.id] = true
   transitionsLoading[issue.id] = true
-  try {
-    const res = await issueApi.getAvailableTransitions(issue.id)
-    availableTransitions[issue.id] = res.data || []
-  } catch {
-    availableTransitions[issue.id] = []
-    Message.error({ content: '\u83B7\u53D6\u53EF\u7528\u72B6\u6001\u5931\u8D25', duration: 3000 })
-    statusDropdowns[issue.id] = false
-  } finally {
-    transitionsLoading[issue.id] = false
-  }
+  try { const res = await issueApi.getAvailableTransitions(issue.id); availableTransitions[issue.id] = res.data || [] }
+  catch { availableTransitions[issue.id] = []; Message.error({ content: '获取可用状态失败', duration: 3000 }); statusDropdowns[issue.id] = false }
+  finally { transitionsLoading[issue.id] = false }
 }
+
 function selectStatus(issue: IssueVO, status: IssueStatusVO) {
   statusDropdowns[issue.id] = false
   if (status.requireComment) {
-    // Show a modal to collect comment before transitioning
     let commentText = ''
     Modal.confirm({
       title: '状态变更 — 请填写理由',
@@ -2924,130 +1339,45 @@ function selectStatus(issue: IssueVO, status: IssueStatusVO) {
           h('span', { style: 'color:var(--color-text-3);font-size:13px' }, '目标状态：'),
           h('span', { style: `background:${status.color};color: var(--tf-text-on-accent);padding:2px 8px;border-radius:3px;font-size:12px` }, localizeStatusName(status.name))
         ]),
-        h('textarea', {
-          placeholder: '请说明退回/变更的原因（必填）',
-          style: 'width:100%;min-height:80px;margin-top:8px;padding:8px;border:1px solid var(--color-border-2);border-radius:4px;resize:vertical;font-size:13px;background:var(--color-bg-2);color:var(--color-text-1)',
-          onInput: (e: Event) => { commentText = (e.target as HTMLTextAreaElement).value }
-        })
+        h('textarea', { placeholder: '请说明退回/变更的原因（必填）', style: 'width:100%;min-height:80px;margin-top:8px;padding:8px;border:1px solid var(--color-border-2);border-radius:4px;resize:vertical;font-size:13px;background:var(--color-bg-2);color:var(--color-text-1)', onInput: (e: Event) => { commentText = (e.target as HTMLTextAreaElement).value } })
       ]),
-      okText: '确认变更',
-      cancelText: '取消',
-      width: 480,
-      onBeforeOk: () => {
-        if (!commentText.trim()) {
-          Message.warning('请填写变更理由')
-          return false
-        }
-        return true
-      },
-      onOk: () => {
-        performStatusTransition(issue, status, commentText.trim())
-      }
+      okText: '确认变更', cancelText: '取消', width: 480,
+      onBeforeOk: () => { if (!commentText.trim()) { Message.warning('请填写变更理由'); return false }; return true },
+      onOk: () => { performStatusTransition(issue, status, commentText.trim()) }
     })
-  } else {
-    performStatusTransition(issue, status, undefined)
-  }
+  } else { performStatusTransition(issue, status, undefined) }
 }
 
-/** 执行状态转换，处理各种警告（描述为空、WIP 超限、关闭确认、字段校验） */
 async function performStatusTransition(issue: IssueVO, status: IssueStatusVO, comment?: string, forceFlags?: { force?: boolean; forceWip?: boolean; forceDescEmpty?: boolean }) {
   const oldStatusId = issue.statusId
-  // 乐观更新
   issue.statusId = status.id
-
   try {
     const res = await issueApi.transitStatus(issue.id, status.id, comment, issue.version, forceFlags?.force, forceFlags?.forceWip, forceFlags?.forceDescEmpty)
-
     if (res.code === 0) {
-      // 检查是否为字段校验失败（状态转换被阻止）
       const actionResult = res.data?.actionResult
       if (actionResult?.outcome === 'FIELD_VALIDATION_FAILED') {
-        // 回滚乐观更新
         issue.statusId = oldStatusId
-        // 显示警告消息，提供跳转详情页按钮引导用户填写字段
-        Modal.warning({
-          title: '字段校验',
-          content: actionResult.warningMessage || `请先填写「${actionResult.requiredFieldName}」字段`,
-          okText: '打开详情填写',
-          cancelText: '知道了',
-          hideCancel: false,
-          onOk: () => {
-            router.push(`/issues/${issue.issueKey}`)
-          }
-        })
+        Modal.warning({ title: '字段校验', content: actionResult.warningMessage || `请先填写「${actionResult.requiredFieldName}」字段`, okText: '打开详情填写', cancelText: '知道了', hideCancel: false, onOk: () => { router.push(`/issues/${issue.issueKey}`) } })
         return
       }
-
-      // 成功：同步版本号
-      if (res.data != null) {
-        const version = extractVersion(res.data)
-        if (version != null) {
-          issue.version = version
-        } else {
-          issue.version = (issue.version || 0) + 1
-        }
-        showActionFeedback(res.data)
-      }
+      if (res.data != null) { const version = extractVersion(res.data); if (version != null) issue.version = version; else issue.version = (issue.version || 0) + 1; showActionFeedback(res.data) }
       onInlineEditSuccess(issue, 'statusId', status.id)
       return
     }
-
-    // 错误码处理
-    issue.statusId = oldStatusId // 回滚
-
-    if (res.code === ERROR_CODES.DESCRIPTION_EMPTY_WARNING) {
-      // 描述为空警告
-      Modal.warning({
-        title: '工单描述为空',
-        content: res.message,
-        okText: '继续变更',
-        cancelText: '取消',
-        hideCancel: false,
-        onOk: () => performStatusTransition(issue, status, comment, { ...forceFlags, forceDescEmpty: true })
-      })
-    } else if (res.code === ERROR_CODES.WIP_LIMIT_EXCEEDED) {
-      // WIP 超限
-      Modal.warning({
-        title: 'WIP 限制',
-        content: res.message,
-        okText: '继续移入',
-        cancelText: '取消',
-        hideCancel: false,
-        onOk: () => performStatusTransition(issue, status, comment, { ...forceFlags, forceWip: true })
-      })
-    } else if (res.code === ERROR_CODES.CLOSE_CONFIRMATION_REQUIRED) {
-      // 关闭确认
-      Modal.warning({
-        title: '确认关闭',
-        content: res.message,
-        okText: '强制关闭',
-        cancelText: '取消',
-        hideCancel: false,
-        onOk: () => performStatusTransition(issue, status, comment, { ...forceFlags, force: true })
-      })
-    } else {
-      Message.error({ content: res.message || '状态变更失败', duration: 3000 })
-    }
-  } catch (e: any) {
     issue.statusId = oldStatusId
-    Message.error({ content: e.response?.data?.message || '状态变更失败', duration: 3000 })
-  }
+    if (res.code === ERROR_CODES.DESCRIPTION_EMPTY_WARNING) { Modal.warning({ title: '工单描述为空', content: res.message, okText: '继续变更', cancelText: '取消', hideCancel: false, onOk: () => performStatusTransition(issue, status, comment, { ...forceFlags, forceDescEmpty: true }) }) }
+    else if (res.code === ERROR_CODES.WIP_LIMIT_EXCEEDED) { Modal.warning({ title: 'WIP 限制', content: res.message, okText: '继续移入', cancelText: '取消', hideCancel: false, onOk: () => performStatusTransition(issue, status, comment, { ...forceFlags, forceWip: true }) }) }
+    else if (res.code === ERROR_CODES.CLOSE_CONFIRMATION_REQUIRED) { Modal.warning({ title: '确认关闭', content: res.message, okText: '强制关闭', cancelText: '取消', hideCancel: false, onOk: () => performStatusTransition(issue, status, comment, { ...forceFlags, force: true }) }) }
+    else { Message.error({ content: res.message || '状态变更失败', duration: 3000 }) }
+  } catch (e: any) { issue.statusId = oldStatusId; Message.error({ content: e.response?.data?.message || '状态变更失败', duration: 3000 }) }
 }
 
-// Inline edit - Assignee
 async function openAssigneeEdit(issue: IssueVO) {
   if (isCellEditing(issue.id, 'assigneeId')) return
-  assigneeDropdowns[issue.id] = true
-  assigneeSearch.value = ''
-  assigneeOptionsLoading.value = true
-  try {
-    const res = await projectApi.listAssignableMembers(issue.projectId)
-    assigneeOptions.value = res.data || []
-  } catch {
-    assigneeOptions.value = []
-  } finally {
-    assigneeOptionsLoading.value = false
-  }
+  assigneeDropdowns[issue.id] = true; assigneeSearch.value = ''; assigneeOptionsLoading.value = true
+  try { const res = await projectApi.listAssignableMembers(issue.projectId); assigneeOptions.value = res.data || [] }
+  catch { assigneeOptions.value = [] }
+  finally { assigneeOptionsLoading.value = false }
 }
 const filteredAssigneeOptions = computed(() => {
   if (!assigneeSearch.value) return assigneeOptions.value
@@ -3056,28 +1386,17 @@ const filteredAssigneeOptions = computed(() => {
 })
 function selectAssignee(issue: IssueVO, member: ProjectMemberVO | null) {
   Object.keys(assigneeDropdowns).forEach(k => { assigneeDropdowns[k] = false })
-  executeEdit(
-    issue.id, 'assigneeId', member?.userId || null,
-    (_signal) => issueApi.assign(issue.id, member?.userId || ''),
-    () => ({ assigneeId: member?.userId || undefined, assigneeName: member?.displayName || undefined }),
-    onInlineEditSuccess
-  )
+  executeEdit(issue.id, 'assigneeId', member?.userId || null, (_signal) => issueApi.assign(issue.id, member?.userId || ''), () => ({ assigneeId: member?.userId || undefined, assigneeName: member?.displayName || undefined }), onInlineEditSuccess)
 }
 
-// Inline edit - Sprint
 async function openSprintEdit(issue: IssueVO) {
   if (isCellEditing(issue.id, 'sprintId')) return
   sprintDropdowns[issue.id] = true
   if (!sprintOptionsCache[issue.projectId]) {
     sprintOptionsLoading[issue.id] = true
-    try {
-      const res = await sprintApi.listByProject(issue.projectId, { _silent403: true })
-      sprintOptionsCache[issue.projectId] = res.data?.list || []
-    } catch {
-      sprintOptionsCache[issue.projectId] = []
-    } finally {
-      sprintOptionsLoading[issue.id] = false
-    }
+    try { const res = await sprintApi.listByProject(issue.projectId, { _silent403: true }); sprintOptionsCache[issue.projectId] = res.data?.list || [] }
+    catch { sprintOptionsCache[issue.projectId] = [] }
+    finally { sprintOptionsLoading[issue.id] = false }
   }
 }
 function getSprintGroups(projectId: string) {
@@ -3086,337 +1405,154 @@ function getSprintGroups(projectId: string) {
   const active = sprints.filter(s => s.status?.toLowerCase() === 'active')
   const planned = sprints.filter(s => s.status?.toLowerCase() === 'planned')
   const completed = sprints.filter(s => s.status?.toLowerCase() === 'completed')
-  if (active.length) groups.push({ label: '\u8FDB\u884C\u4E2D', items: active })
-  if (planned.length) groups.push({ label: '\u8BA1\u5212\u4E2D', items: planned })
-  if (completed.length) groups.push({ label: '\u5DF2\u5B8C\u6210', items: completed })
+  if (active.length) groups.push({ label: '进行中', items: active })
+  if (planned.length) groups.push({ label: '计划中', items: planned })
+  if (completed.length) groups.push({ label: '已完成', items: completed })
   return groups
 }
-function selectSprint(issue: IssueVO, sprint: SprintVO | null) {
-  sprintDropdowns[issue.id] = false
-  executeEdit(issue.id, 'sprintId', sprint?.id || null, (_signal) => issueApi.update(issue.id, { sprintId: sprint?.id || null, version: issue.version }), undefined, onInlineEditSuccess)
-}
+function selectSprint(issue: IssueVO, sprint: SprintVO | null) { sprintDropdowns[issue.id] = false; executeEdit(issue.id, 'sprintId', sprint?.id || null, (_signal) => issueApi.update(issue.id, { sprintId: sprint?.id || null, version: issue.version }), undefined, onInlineEditSuccess) }
+function selectPriority(issue: IssueVO, priority: string) { priorityDropdowns[issue.id] = false; executeEdit(issue.id, 'priority', priority, (_signal) => issueApi.update(issue.id, { priority, version: issue.version }), undefined, onInlineEditSuccess) }
 
-// ========== 列表模式 Sprint 内联编辑 ==========
-// 用于追踪哪些 issue 的 sprint 选项正在加载（Set<issueId>）
+// List layout Sprint inline edit
 const listSprintLoadingIds = reactive<Set<string>>(new Set())
-
-/**
- * 列表模式：用户点击了 Sprint 字段，加载该项目的 Sprint 选项
- */
 async function onListSprintEdit(issue: IssueVO) {
   if (!issue.projectId) return
-  // 已有缓存（包括空数组）则直接跳过
   if (sprintOptionsCache[issue.projectId] !== undefined) return
   listSprintLoadingIds.add(issue.id)
-  try {
-    const res = await sprintApi.listByProject(issue.projectId, { _silent403: true })
-    sprintOptionsCache[issue.projectId] = res.data?.list || []
-  } catch {
-    sprintOptionsCache[issue.projectId] = []
-  } finally {
-    listSprintLoadingIds.delete(issue.id)
-  }
+  try { const res = await sprintApi.listByProject(issue.projectId, { _silent403: true }); sprintOptionsCache[issue.projectId] = res.data?.list || [] }
+  catch { sprintOptionsCache[issue.projectId] = [] }
+  finally { listSprintLoadingIds.delete(issue.id) }
 }
-
-/**
-/**
- * 列表模式：用户选择了某个 Sprint（或"无 Sprint"）
- */
 function onListSprintSelect(issue: IssueVO, sprint: SprintVO | null) {
-  const newSprintId = sprint?.id ?? null
-  const newSprintName = sprint?.name ?? null
-  executeEdit(
-    issue.id,
-    'sprintId',
-    newSprintId,
-    (_signal) => issueApi.update(issue.id, { sprintId: newSprintId, version: issue.version }),
-    // 乐观更新：同时更新 sprintId 和 sprintName
-    (_iss) => ({
-      sprintId: newSprintId ?? undefined,
-      sprintName: newSprintName ?? undefined
-    }),
-    onInlineEditSuccess
-  )
+  const newSprintId = sprint?.id ?? null; const newSprintName = sprint?.name ?? null
+  executeEdit(issue.id, 'sprintId', newSprintId, (_signal) => issueApi.update(issue.id, { sprintId: newSprintId, version: issue.version }), (_iss) => ({ sprintId: newSprintId ?? undefined, sprintName: newSprintName ?? undefined }), onInlineEditSuccess)
 }
 
-// Inline edit - Priority
-function selectPriority(issue: IssueVO, priority: string) {
-  priorityDropdowns[issue.id] = false
-  executeEdit(issue.id, 'priority', priority, (_signal) => issueApi.update(issue.id, { priority, version: issue.version }), undefined, onInlineEditSuccess)
+// ===== Batch Operations =====
+async function onBatchState(statusId: string) { const result = await batchTransitStatus(selectedIssues.value, statusId); if (result.succeeded > 0) { selectedIssues.value.forEach(issue => { if (!result.failures.find(f => f.issueId === issue.id)) updateLocalIssue(issue.id, { statusId }) }); useNavBadge().refresh() }; clearSelection() }
+async function onBatchAssign(assigneeId: string | null) { await batchAssign(selectedIssues.value, assigneeId || ''); refreshList(); clearSelection() }
+async function onBatchSprint(sprintId: string | null) { const result = await batchUpdateSprint(selectedIssues.value, sprintId); if (result.succeeded > 0) selectedIssues.value.forEach(issue => { if (!result.failures.find(f => f.issueId === issue.id)) updateLocalIssue(issue.id, { sprintId: sprintId || undefined }) }); clearSelection() }
+async function onBatchPriority(priority: string) { const result = await batchUpdatePriority(selectedIssues.value, priority); if (result.succeeded > 0) selectedIssues.value.forEach(issue => { if (!result.failures.find(f => f.issueId === issue.id)) updateLocalIssue(issue.id, { priority }) }); clearSelection() }
+async function onBatchTagAdd(tagId: string) { const result = await batchTagAdd(selectedIssues.value, tagId); if (result.succeeded > 0) refreshList(); clearSelection() }
+async function onBatchTagRemove(tagId: string) { const result = await batchTagRemove(selectedIssues.value, tagId); if (result.succeeded > 0) refreshList(); clearSelection() }
+async function onBatchLink(linkType: string, targetIssueId: string) { const result = await batchAddLink(selectedIssues.value, linkType, targetIssueId); if (result.succeeded > 0) refreshList(); clearSelection() }
+async function onBatchDelete() { const result = await batchDelete(selectedIssues.value); if (result.succeeded > 0) refreshList(); clearSelection() }
+function onCommandExecuted() { refreshList(); clearSelection() }
+
+// ===== Filter match check =====
+function checkIssueMatchesFilter(issue: IssueVO): boolean {
+  const fp = globalFilterParams.value
+  if (fp.assigneeId === 'none' && issue.assigneeId) return false
+  if (fp.assigneeId && fp.assigneeId !== 'none' && issue.assigneeId !== fp.assigneeId) return false
+  if (fp.statusId) { const statusIds = String(fp.statusId).split(','); if (!statusIds.includes(String(issue.statusId))) return false }
+  if (fp.sprintId) { if (fp.sprintId === 'none' && issue.sprintId) return false; if (fp.sprintId !== 'none' && issue.sprintId !== fp.sprintId) return false }
+  if (fp.priority && issue.priority !== fp.priority) return false
+  if (fp.issueType && issue.issueType !== fp.issueType) return false
+  if ((fp.hideResolved === 'true' || hideResolved.value) && statusCache.value.find(s => s.id === issue.statusId)?.isClosed) return false
+  return true
+}
+function onInlineEditSuccess(issue: IssueVO, field: string, _newValue: any) {
+  if (!checkIssueMatchesFilter(issue)) removeLocalIssue(issue.id)
+  if (field === 'statusId') useNavBadge().refresh()
 }
 
-// Batch operation handlers
-async function onBatchState(statusId: string) {
-  const result = await batchTransitStatus(selectedIssues.value, statusId)
-  if (result.succeeded > 0) {
-    selectedIssues.value.forEach(issue => {
-      if (!result.failures.find(f => f.issueId === issue.id)) {
-        updateLocalIssue(issue.id, { statusId })
-      }
-    })
-    useNavBadge().refresh() // 批量状态变更后刷新导航栏 badge
-  }
-  clearSelection()
+// ===== Helpers =====
+const selectedKeysArray = computed(() => [...selectedIds.value])
+function getCustomFieldDetail(record: any, dataIndex: string): CustomFieldValueVO | undefined {
+  if (!record.customFieldDetails || !dataIndex?.startsWith('cf_')) return undefined
+  const fieldId = dataIndex.substring(3)
+  return record.customFieldDetails.find((d: CustomFieldValueVO) => d.customFieldId === fieldId)
 }
-async function onBatchAssign(assigneeId: string | null) {
-  await batchAssign(selectedIssues.value, assigneeId || '')
-  refreshList()
-  clearSelection()
-}
-async function onBatchSprint(sprintId: string | null) {
-  const result = await batchUpdateSprint(selectedIssues.value, sprintId)
-  if (result.succeeded > 0) {
-    selectedIssues.value.forEach(issue => {
-      if (!result.failures.find(f => f.issueId === issue.id)) {
-        updateLocalIssue(issue.id, { sprintId: sprintId || undefined })
-      }
-    })
-  }
-  clearSelection()
-}
-async function onBatchPriority(priority: string) {
-  const result = await batchUpdatePriority(selectedIssues.value, priority)
-  if (result.succeeded > 0) {
-    selectedIssues.value.forEach(issue => {
-      if (!result.failures.find(f => f.issueId === issue.id)) {
-        updateLocalIssue(issue.id, { priority })
-      }
-    })
-  }
-  clearSelection()
-}
-async function onBatchTagAdd(tagId: string) {
-  const result = await batchTagAdd(selectedIssues.value, tagId)
-  if (result.succeeded > 0) {
-    refreshList()
-  }
-  clearSelection()
-}
-async function onBatchTagRemove(tagId: string) {
-  const result = await batchTagRemove(selectedIssues.value, tagId)
-  if (result.succeeded > 0) {
-    refreshList()
-  }
-  clearSelection()
-}
-async function onBatchLink(linkType: string, targetIssueId: string) {
-  const result = await batchAddLink(selectedIssues.value, linkType, targetIssueId)
-  if (result.succeeded > 0) {
-    refreshList()
-  }
-  clearSelection()
-}
-async function onBatchDelete() {
-  const result = await batchDelete(selectedIssues.value)
-  if (result.succeeded > 0) {
-    refreshList()
-  }
-  clearSelection()
-}
+function formatCount(count: number) { if (count >= 10000) return Math.floor(count / 1000) + 'k+'; if (count >= 1000) return (count / 1000).toFixed(1) + 'k'; return String(count) }
+function formatTime(dt: string) { if (!dt) return ''; const d = new Date(dt); const now = new Date(); const diff = now.getTime() - d.getTime(); const mins = Math.floor(diff / 60000); if (mins < 60) return `${mins}分钟前`; const hours = Math.floor(mins / 60); if (hours < 24) return `${hours}小时前`; const days = Math.floor(hours / 24); if (days < 30) return `${days}天前`; return d.toLocaleDateString('zh-CN') }
 
-function onCommandExecuted() {
-  refreshList()
-  clearSelection()
-}
-
-// ========== 导出功能 ==========
-const exportLoading = ref(false)
-
-async function handleExport(format: string | number | Record<string, any> | undefined) {
-  await doExport(String(format), false)
-}
-
-function onBatchExport(format: string) {
-  doExport(format, true)
-}
-
-async function doExport(format: string, selectedOnly: boolean) {
-  if (format !== 'xlsx' && format !== 'csv') return
-  exportLoading.value = true
-  try {
-    const payload: Record<string, any> = { format }
-
-    if (selectedOnly && selectedIds.value.size > 0) {
-      // 选中导出模式
-      payload.issueIds = [...selectedIds.value]
-    } else {
-      // 筛选导出模式：复用当前筛选条件
-      if (activeProjectId.value) payload.projectId = activeProjectId.value
-      if (filterProject.value) payload.projectId = filterProject.value
-      if (hideResolved.value) payload.hideResolved = 'true'
-      // Merge global filter params
-      const fp = globalFilterParams.value
-      if (fp.statusId) payload.statusId = fp.statusId
-      if (fp.priority) payload.priority = fp.priority
-      if (fp.assigneeId) payload.assigneeId = fp.assigneeId
-      if (fp.sprintId) payload.sprintId = fp.sprintId
-      if (fp.issueType) payload.issueType = fp.issueType
-      if (fp.keyword) payload.keyword = fp.keyword
-      if (fp.statusIdNot) payload.statusIdNot = fp.statusIdNot
-      if (fp.priorityNot) payload.priorityNot = fp.priorityNot
-      if (fp.assigneeIdNot) payload.assigneeIdNot = fp.assigneeIdNot
-      if (fp.sprintIdNot) payload.sprintIdNot = fp.sprintIdNot
-      if (fp.issueTypeNot) payload.issueTypeNot = fp.issueTypeNot
-      if (searchKeyword.value.trim()) payload.keyword = searchKeyword.value.trim()
-    }
-
-    const response = await issueApi.export(payload as any)
-    // response 是 Blob（responseType: 'blob'）
-    const blob = response instanceof Blob ? response : new Blob([response as any])
-    const ext = format === 'xlsx' ? '.xlsx' : '.csv'
-    const filename = `TrackFlow_Issues_${new Date().toISOString().slice(0, 10)}${ext}`
-
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = filename
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    URL.revokeObjectURL(url)
-
-    Message.success(`导出成功 (${format.toUpperCase()})`)
-  } catch (e: any) {
-    // Blob error response needs special handling
-    if (e.response?.data instanceof Blob) {
-      const text = await e.response.data.text()
-      try {
-        const json = JSON.parse(text)
-        Message.error(json.message || '导出失败')
-      } catch {
-        Message.error('导出失败')
-      }
-    } else {
-      Message.error(e.response?.data?.message || '导出失败')
-    }
-  } finally {
-    exportLoading.value = false
-  }
-}
-
-// Panel helpers
-const filteredQueries = computed(() => {
-  if (!panelSearch.value) return savedQueries.value
-  const kw = panelSearch.value.toLowerCase()
-  return savedQueries.value.filter((q: any) => q.name.toLowerCase().includes(kw))
-})
-function toggleGroup(group: string) {
-  if (expandedGroups.has(group)) expandedGroups.delete(group)
-  else expandedGroups.add(group)
-}
-function formatCount(count: number) {
-  if (count >= 10000) return Math.floor(count / 1000) + 'k+'
-  if (count >= 1000) return (count / 1000).toFixed(1) + 'k'
-  return String(count)
-}
-
-function formatTime(dt: string) {
-  if (!dt) return ''
-  const d = new Date(dt)
-  const now = new Date()
-  const diff = now.getTime() - d.getTime()
-  const mins = Math.floor(diff / 60000)
-  if (mins < 60) return `${mins}\u5206\u949F\u524D`
-  const hours = Math.floor(mins / 60)
-  if (hours < 24) return `${hours}\u5C0F\u65F6\u524D`
-  const days = Math.floor(hours / 24)
-  if (days < 30) return `${days}\u5929\u524D`
-  return d.toLocaleDateString('zh-CN')
-}
-/**
- * 将小时数（BigDecimal/number）格式化为 "Xh Ym" 格式
- * 例如：2.5 → "2h 30m"，0.75 → "45m"，0 → "—"
- */
-function formatHoursCell(hours: number | null | undefined): string {
-  if (hours == null || hours <= 0) return '\u2014'
-  const totalMins = Math.round(hours * 60)
-  const h = Math.floor(totalMins / 60)
-  const m = totalMins % 60
-  if (h === 0) return `${m}m`
-  if (m === 0) return `${h}h`
-  return `${h}h ${m}m`
-}
-
-/**
- * 计算剩余工时 = estimatedHours - spentHours，并格式化
- */
-function formatRemainingCell(record: any): string {
-  const estimated = record.estimatedHours ?? 0
-  if (estimated <= 0) return '\u2014'
-  const spent = record.spentHours ?? 0
-  const remaining = estimated - spent
-  if (remaining <= 0) return '0h'
-  const totalMins = Math.round(remaining * 60)
-  const h = Math.floor(totalMins / 60)
-  const m = totalMins % 60
-  if (h === 0) return `${m}m`
-  if (m === 0) return `${h}h`
-  return `${h}h ${m}m`
-}
-
-/** 已用工时超出预估时高亮红色 */
-function getSpentHoursClass(record: any): string {
-  const estimated = record.estimatedHours ?? 0
-  const spent = record.spentHours ?? 0
-  if (estimated > 0 && spent > estimated) return 'time-over-budget'
-  return ''
-}
-
-/** 剩余工时为负（超出）时高亮红色 */
-function getRemainingClass(record: any): string {
-  const estimated = record.estimatedHours ?? 0
-  const spent = record.spentHours ?? 0
-  if (estimated > 0 && spent > estimated) return 'time-over-budget'
-  return ''
-}
-
+// ===== Quick Create =====
+const showInlineCreate = ref(false)
+const quickCreating = ref(false)
+const quickForm = reactive({ projectId: undefined as string | undefined, title: '', issueType: '任务', priority: '普通' })
 const QUICK_CREATE_PROJECT_KEY = 'trackflow:quick-create-project'
 
 function resolveQuickCreateProject(): string | undefined {
-  // Priority 1: current active project filter (sidebar or dropdown)
   if (activeProjectId.value) return activeProjectId.value
   if (filterProject.value) return filterProject.value
-
-  // Priority 2: last used project from localStorage
   const lastUsed = localStorage.getItem(QUICK_CREATE_PROJECT_KEY)
   if (lastUsed && projectList.value.some(p => p.id === lastUsed)) return lastUsed
-
-  // Priority 3: user only belongs to one project
   if (projectList.value.length === 1) return projectList.value[0].id
-
   return undefined
 }
-
-function toggleInlineCreate() {
-  showInlineCreate.value = !showInlineCreate.value
-  if (showInlineCreate.value) {
-    quickForm.projectId = resolveQuickCreateProject()
-  }
-}
+function toggleInlineCreate() { showInlineCreate.value = !showInlineCreate.value; if (showInlineCreate.value) quickForm.projectId = resolveQuickCreateProject() }
 async function quickCreate() {
-  if (!quickForm.projectId) {
-    Message.warning('请先选择项目')
-    return
-  }
-  if (!quickForm.title.trim()) {
-    Message.warning('请输入工单标题')
-    return
-  }
+  if (!quickForm.projectId) { Message.warning('请先选择项目'); return }
+  if (!quickForm.title.trim()) { Message.warning('请输入工单标题'); return }
   quickCreating.value = true
-  try {
-    await issueApi.create({ projectId: quickForm.projectId, title: quickForm.title.trim(), issueType: quickForm.issueType, priority: quickForm.priority })
-    Message.success('\u5DE5\u5355\u521B\u5EFA\u6210\u529F')
-    // Remember last used project
-    localStorage.setItem(QUICK_CREATE_PROJECT_KEY, quickForm.projectId)
-    quickForm.title = ''
-    refreshList()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '\u521B\u5EFA\u5931\u8D25')
-  } finally {
-    quickCreating.value = false
-  }
+  try { await issueApi.create({ projectId: quickForm.projectId, title: quickForm.title.trim(), issueType: quickForm.issueType, priority: quickForm.priority }); Message.success('工单创建成功'); localStorage.setItem(QUICK_CREATE_PROJECT_KEY, quickForm.projectId); quickForm.title = ''; refreshList() }
+  catch (e: any) { Message.error(e.response?.data?.message || '创建失败') }
+  finally { quickCreating.value = false }
 }
 
+
+// ===== WebSocket realtime updates =====
+const hasNewUpdates = ref(false)
+useIssueProjectSubscription(
+  () => activeProjectId.value,
+  (event: IssueRealtimeEvent) => {
+    const currentUserId = authStore.user?.id
+    if (currentUserId && String(event.operatorId) === String(currentUserId)) return
+    if (event.action === 'FIELD_UPDATED') {
+      const idx = issues.value.findIndex(i => String(i.id) === String(event.issueId))
+      if (idx !== -1) { const patch: Partial<IssueVO> = {}; for (const [key, value] of Object.entries(event.changes)) { ;(patch as any)[key] = value }; updateLocalIssue(String(event.issueId), patch) }
+      else { hasNewUpdates.value = true }
+    } else if (event.action === 'CREATED') { hasNewUpdates.value = true }
+    else if (event.action === 'DELETED') { const idx = issues.value.findIndex(i => String(i.id) === String(event.issueId)); if (idx !== -1) { issues.value.splice(idx, 1); totalIssues.value = Math.max(0, totalIssues.value - 1) } }
+  }
+)
+function onRefreshForUpdates() { hasNewUpdates.value = false; refreshList() }
+
+// ===== Navigation & Selection Computed =====
+const isDraggable = computed(() => isListLayout.value && (!!activeProjectId.value || !!activeQueryId.value))
+const sortedIssueIds = computed(() => manualOrderData.value?.issueIds || [])
+const activeQueryOwned = computed(() => { if (!activeQueryObj.value) return false; return isOwnQuery(activeQueryObj.value) })
+const activeProjectName = computed(() => { if (!activeProjectId.value) return ''; const p = projectList.value.find(pr => pr.id === activeProjectId.value); return p?.name || '' })
+
+const activeQueryProjectName = computed(() => {
+  if (!activeQueryObj.value) return ''
+  const filtersRaw = activeQueryObj.value.filters
+  if (!filtersRaw) return ''
+  let filters: any[]
+  if (typeof filtersRaw === 'string') { try { filters = JSON.parse(filtersRaw) } catch { return '' } } else { filters = filtersRaw }
+  if (!Array.isArray(filters)) return ''
+  const projectFilter = filters.find((f: any) => f.field === 'project')
+  if (!projectFilter || !projectFilter.value || projectFilter.value.length === 0) return ''
+  const p = projectList.value.find(pr => pr.id === projectFilter.value[0])
+  return p?.name || ''
+})
+function navigateToQueryProject() {
+  if (!activeQueryObj.value) return
+  const filtersRaw = activeQueryObj.value.filters; if (!filtersRaw) return
+  let filters: any[]; if (typeof filtersRaw === 'string') { try { filters = JSON.parse(filtersRaw) } catch { return } } else { filters = filtersRaw }
+  if (!Array.isArray(filters)) return
+  const projectFilter = filters.find((f: any) => f.field === 'project')
+  if (!projectFilter || !projectFilter.value || projectFilter.value.length === 0) return
+  const p = projectList.value.find(pr => pr.id === projectFilter.value[0])
+  if (p) selectProject(p)
+}
+
+const activeQueryReadonlyLabels = computed<string[]>(() => {
+  if (!activeQueryObj.value?.filters) return []
+  let filters: any[]; if (typeof activeQueryObj.value.filters === 'string') { try { filters = JSON.parse(activeQueryObj.value.filters) } catch { return [] } } else { filters = activeQueryObj.value.filters }
+  if (!Array.isArray(filters)) return []
+  const operatorLabels: Record<string, string> = { eq: '=', neq: '≠', in: '∈', not_in: '∉', contains: '包含', open: '未关闭' }
+  return filters.map((f: any) => {
+    const fieldLabel = queryFieldKeyToLabel[f.field] || f.field; const op = f.operator
+    if (op === 'open') return `${fieldLabel}: 未关闭`
+    let values: string
+    if (Array.isArray(f.value)) { values = f.value.map((v: string) => { if (v === '${currentUser}') return '我'; if (f.field === 'type') return getIssueTypeLabelForRecord(v); return v }).join(', ') } else { values = String(f.value || '') }
+    const opLabel = (op && op !== 'eq') ? ` ${operatorLabels[op] || op}` : ':'
+    return `${fieldLabel}${opLabel} ${values}`
+  }).filter(l => l && l.trim())
+})
+
+// ===== Coordination Functions =====
 function buildFilters() {
   const filters: Record<string, any> = {}
   if (activeProjectId.value) filters.projectId = activeProjectId.value
@@ -3424,844 +1560,120 @@ function buildFilters() {
   if (activeQueryId.value) filters.queryId = activeQueryId.value
   if (searchKeyword.value.trim()) filters.keyword = searchKeyword.value.trim()
   if (hideResolved.value) filters.hideResolved = 'true'
-  // Merge global filter params (from FilterBar's filter mode)
   Object.assign(filters, globalFilterParams.value)
   return filters
 }
 function refreshList() { loadIssues(buildFilters()).then(() => { loadPermissions(); preloadSprintNames(); loadBadgeFieldsForIssues() }) }
 
-/**
- * 检查工单是否仍满足当前筛选条件
- * 用于行内编辑后决定是否从列表中移除工单
- */
-function checkIssueMatchesFilter(issue: IssueVO): boolean {
-  const fp = globalFilterParams.value
-
-  // 检查负责人筛选
-  // assigneeId = 'none' 表示筛选"未分配"的工单
-  if (fp.assigneeId === 'none' && issue.assigneeId) {
-    return false // 工单已分配，不满足"未分配"条件
-  }
-  // assigneeId 为具体 ID 时，检查是否匹配
-  if (fp.assigneeId && fp.assigneeId !== 'none' && issue.assigneeId !== fp.assigneeId) {
-    return false
-  }
-
-  // 检查状态筛选
-  if (fp.statusId) {
-    const statusIds = String(fp.statusId).split(',')
-    if (!statusIds.includes(String(issue.statusId))) {
-      return false
-    }
-  }
-
-  // 检查 Sprint 筛选
-  if (fp.sprintId) {
-    if (fp.sprintId === 'none' && issue.sprintId) {
-      return false // 工单已有 Sprint，不满足"无 Sprint"条件
-    }
-    if (fp.sprintId !== 'none' && issue.sprintId !== fp.sprintId) {
-      return false
-    }
-  }
-
-  // 检查优先级筛选
-  if (fp.priority && issue.priority !== fp.priority) {
-    return false
-  }
-
-  // 检查工单类型筛选
-  if (fp.issueType && issue.issueType !== fp.issueType) {
-    return false
-  }
-
-  // 检查隐藏已解决
-  if (fp.hideResolved === 'true' || hideResolved.value) {
-    const status = statusCache.value.find(s => s.id === issue.statusId)
-    if (status?.isClosed) {
-      return false
-    }
-  }
-
-  return true
-}
-
-/**
- * 行内编辑成功后的回调
- * 检查工单是否仍满足筛选条件，不满足则从列表中移除
- * 如果是状态变更，还会刷新导航栏 badge
- */
-function onInlineEditSuccess(issue: IssueVO, field: string, _newValue: any) {
-  if (!checkIssueMatchesFilter(issue)) {
-    removeLocalIssue(issue.id)
-  }
-  // 状态变更后刷新导航栏 badge（更新待测试工单数等）
-  if (field === 'statusId') {
-    useNavBadge().refresh()
-  }
-}
-
-function onRefreshForUpdates() {
-  hasNewUpdates.value = false
-  refreshList()
-}
-
-/** 预加载当前列表中涉及到的 sprint 名称 */
 async function preloadSprintNames() {
-  // 用户无 sprint:view 权限时跳过，避免触发 403
   if (!canViewSprintGlobal.value) return
   const projectIds = [...new Set(issues.value.map(i => i.projectId).filter(Boolean))]
   const toLoad = projectIds.filter(pid => !sprintOptionsCache[pid])
-  await Promise.all(toLoad.map(async (pid) => {
-    try {
-      const res = await sprintApi.listByProject(pid, { _silent403: true })
-      sprintOptionsCache[pid] = res.data?.list || []
-    } catch {
-      sprintOptionsCache[pid] = []
-    }
-  }))
+  await Promise.all(toLoad.map(async (pid) => { try { const res = await sprintApi.listByProject(pid, { _silent403: true }); sprintOptionsCache[pid] = res.data?.list || [] } catch { sprintOptionsCache[pid] = [] } }))
 }
-function onFilterChange() {
-  currentPage.value = 1
-  // Sync project context when filterProject dropdown changes
-  if (filterProject.value) {
-    const matched = projectList.value.find(p => p.id === filterProject.value)
-    activeProjectId.value = filterProject.value
-    activeQueryName.value = matched?.name || '所有工单'
-    router.replace({ query: { ...route.query, project: matched?.key || filterProject.value } })
-  } else {
-    // Cleared project filter
-    activeProjectId.value = null
-    activeQueryName.value = '所有工单'
-    const { project, ...rest } = route.query
-    router.replace({ query: rest })
-  }
+
+// ===== Search & Filter =====
+function onGlobalSearch(keyword: string) { searchKeyword.value = keyword; globalFilterParams.value = {}; currentPage.value = 1; refreshList() }
+function onGlobalFilter(filters: Record<string, any>) {
+  searchKeyword.value = ''; globalFilterParams.value = filters
+  if (activeQueryId.value) { activeQueryId.value = null; activeQueryName.value = '所有工单'; activeQueryObj.value = null }
+  currentPage.value = 1; refreshList()
+}
+function onClearQuery() {
+  activeQueryId.value = null; activeQueryName.value = '所有工单'; activeQueryObj.value = null; searchKeyword.value = ''; globalFilterParams.value = {}; currentPage.value = 1
+  const { project, ...rest } = route.query; router.replace({ query: project ? { project } : {} })
+  filterBarRef.value?.clearAll()
+  localStorage.setItem('tf_last_active_query_all', 'true'); localStorage.removeItem('tf_last_active_query_id')
   refreshList()
 }
-
-/**
- * 将 Saved Query 的 filters JSON 转换为 FilterBar 可展示的 InitialFilter[] 格式
- * 处理: 字段名映射、值名称解析、特殊操作符（open）、${currentUser} 替换
- */
-function parseSavedQueryFilters(filtersRaw: string | any[] | null | undefined): any[] {
-  if (!filtersRaw) return []
-
-  let filters: any[]
-  if (typeof filtersRaw === 'string') {
-    try { filters = JSON.parse(filtersRaw) } catch { return [] }
-  } else {
-    filters = filtersRaw
-  }
-  if (!Array.isArray(filters) || filters.length === 0) return []
-
-  // Field name mapping: DB filter field → FilterBar fieldKey
-  const fieldMap: Record<string, string> = {
-    type: 'issueType',
-    status: 'status',
-    sprint: 'sprint',
-    assignee: 'assignee',
-    priority: 'priority',
-    project: 'project',
-    reporter: 'reporter',
-  }
-
-  // Operator mapping: DB operator → FilterBar operator
-  const operatorMap: Record<string, string> = {
-    eq: 'is',
-    neq: 'is_not',
-    in: 'any_of',
-    not_in: 'none_of',
-    contains: 'is',
-    open: 'any_of',  // "open" means all non-closed statuses
-  }
-
-  const currentUserId = authStore.user?.userId || authStore.user?.id || ''
-
-  const chips: any[] = []
-
-  for (const f of filters) {
-    const fieldKey = fieldMap[f.field]
-    if (!fieldKey) continue  // Skip unknown fields (like 'keyword', 'reporter')
-
-    // Skip reporter field — FilterBar doesn't have it
-    if (fieldKey === 'reporter') continue
-
-    const operator = operatorMap[f.operator] || 'is'
-    let values: string[] = []
-    let valueLabels: string[] = []
-
-    // Handle special operator "open" = all non-closed statuses
-    if (f.field === 'status' && f.operator === 'open') {
-      // "open" is a semantic operator meaning "all non-closed"
-      // Show a single summarized chip instead of listing all open statuses
-      const openStatuses = statusCache.value.filter(s => !s.isClosed)
-      values = openStatuses.map(s => s.id)
-      valueLabels = ['未关闭']
-    } else {
-      // Normal values
-      const rawValues: string[] = f.value || []
-      for (const v of rawValues) {
-        // Replace ${currentUser}
-        const resolvedValue = v === '${currentUser}' ? currentUserId : v
-
-        switch (fieldKey) {
-          case 'status': {
-            // Values are status codes — resolve to IDs and labels
-            const status = statusCache.value.find(s => s.code === resolvedValue || s.id === resolvedValue)
-            if (status) {
-              values.push(status.id)
-              valueLabels.push(localizeStatusName(status.name))
-            } else {
-              values.push(resolvedValue)
-              valueLabels.push(resolvedValue)
-            }
-            break
-          }
-          case 'issueType': {
-            values.push(resolvedValue)
-            valueLabels.push(getIssueTypeLabelForRecord(resolvedValue))
-            break
-          }
-          case 'priority': {
-            values.push(resolvedValue)
-            valueLabels.push(priorityLabelMap[resolvedValue] || resolvedValue)
-            break
-          }
-          case 'sprint': {
-            values.push(resolvedValue)
-            // Try to resolve sprint name from cache
-            let sprintLabel = `Sprint #${resolvedValue}`
-            for (const sprints of Object.values(sprintOptionsCache)) {
-              const matched = sprints.find(s => s.id === resolvedValue)
-              if (matched) { sprintLabel = matched.name; break }
-            }
-            valueLabels.push(sprintLabel)
-            break
-          }
-          case 'assignee': {
-            values.push(resolvedValue)
-            if (v === '${currentUser}') {
-              valueLabels.push('我')
-            } else {
-              valueLabels.push(resolvedValue)
-            }
-            break
-          }
-          case 'project': {
-            values.push(resolvedValue)
-            const proj = projectList.value.find(p => p.id === resolvedValue)
-            valueLabels.push(proj ? proj.name : resolvedValue)
-            break
-          }
-          default: {
-            values.push(resolvedValue)
-            valueLabels.push(resolvedValue)
-          }
-        }
-      }
-    }
-
-    if (values.length > 0) {
-      chips.push({ fieldKey, operator, values, valueLabels })
-    }
-  }
-
-  return chips
-}
-
-/**
- * 解析 Saved Query 的 sortCriteria JSON 并应用到 sortState。
- * sortCriteria 格式: [{"field":"priority","direction":"desc"}]
- * 如果没有有效的排序配置，清除 sortState（回退到后端默认排序）。
- */
-function applySavedQuerySort(q: any) {
-  if (!q.sortCriteria) {
-    sortState.value = { field: null, direction: null }
-    return
-  }
-  try {
-    const criteria = typeof q.sortCriteria === 'string' ? JSON.parse(q.sortCriteria) : q.sortCriteria
-    if (Array.isArray(criteria) && criteria.length > 0 && criteria[0].field) {
-      const dir = criteria[0].direction === 'desc' ? 'desc' : 'asc'
-      sortState.value = { field: criteria[0].field, direction: dir }
-    } else {
-      sortState.value = { field: null, direction: null }
-    }
-  } catch {
-    sortState.value = { field: null, direction: null }
-  }
-}
+function onQueryChipClick() { if (activeQueryObj.value && isOwnQuery(activeQueryObj.value)) openEditQueryModal(activeQueryObj.value) }
 
 function selectQuery(q: any) {
   activeQueryId.value = q.id; activeQueryName.value = q.name; activeQueryObj.value = q; activeProjectId.value = null; activeTagId.value = null; filterProject.value = undefined; searchKeyword.value = ''; globalFilterParams.value = {}; currentPage.value = 1
-  const { project, ...rest } = route.query
-  router.replace({ query: rest })
-
-  // Apply saved query's sort criteria to sortState
-  applySavedQuerySort(q)
-
-  // Persist user's query preference
-  localStorage.setItem('tf_last_active_query_id', q.id)
-  localStorage.removeItem('tf_last_active_query_all')
-
-  // YouTrack style: clicking a saved query only shows the query name chip in search bar
-  // Does NOT expand filter conditions — user must click the chip to see/edit conditions
-  filterBarRef.value?.clearAll()
-
-  refreshList()
+  const { project, ...rest } = route.query; router.replace({ query: rest })
+  // Apply saved query sort criteria
+  if (q.sortCriteria) { try { const criteria = typeof q.sortCriteria === 'string' ? JSON.parse(q.sortCriteria) : q.sortCriteria; if (Array.isArray(criteria) && criteria.length > 0 && criteria[0].field) { sortState.value = { field: criteria[0].field, direction: criteria[0].direction === 'desc' ? 'desc' : 'asc' } } else { sortState.value = { field: null, direction: null } } } catch { sortState.value = { field: null, direction: null } } } else { sortState.value = { field: null, direction: null } }
+  localStorage.setItem('tf_last_active_query_id', q.id); localStorage.removeItem('tf_last_active_query_all')
+  filterBarRef.value?.clearAll(); refreshList()
 }
 function selectAllProjects() {
-  if (activeProjectId.value === null && activeTagId.value === null && activeQueryId.value === null && searchKeyword.value === '') return // Already showing all
+  if (activeProjectId.value === null && activeTagId.value === null && activeQueryId.value === null && searchKeyword.value === '') return
   activeProjectId.value = null; activeQueryId.value = null; activeTagId.value = null; activeQueryName.value = '所有工单'; activeQueryObj.value = null; filterProject.value = undefined; searchKeyword.value = ''; globalFilterParams.value = {}; currentPage.value = 1
-  sortState.value = { field: null, direction: null }
-  const { project, ...rest } = route.query
-  router.replace({ query: rest })
-
-  // Clear FilterBar UI (has its own internal searchKeyword state)
-  filterBarRef.value?.clearAll()
-
-  // Persist user's preference to show all issues
-  localStorage.setItem('tf_last_active_query_all', 'true')
-  localStorage.removeItem('tf_last_active_query_id')
-
-  refreshList()
-  loadPanel()
-  loadTags()
+  sortState.value = { field: null, direction: null }; const { project, ...rest } = route.query; router.replace({ query: rest })
+  filterBarRef.value?.clearAll(); localStorage.setItem('tf_last_active_query_all', 'true'); localStorage.removeItem('tf_last_active_query_id')
+  refreshList(); loadPanel(); loadTags()
 }
 function selectProject(p: any) {
-  if (activeProjectId.value === p.id) {
-    // Toggle off: clicking active project clears the filter
-    selectAllProjects()
-    return
-  }
-  // Select project
+  if (activeProjectId.value === p.id) { selectAllProjects(); return }
   activeProjectId.value = p.id; activeQueryId.value = null; activeTagId.value = null; activeQueryName.value = p.name; activeQueryObj.value = null; filterProject.value = p.id; globalFilterParams.value = {}; currentPage.value = 1
-  router.replace({ query: { ...route.query, project: p.key } })
+  router.replace({ query: { ...route.query, project: p.key } }); refreshList(); loadPanel(); loadTags()
+}
+function selectTag(tag: any) { queryPanelSelectTag(tag); activeProjectId.value = null; filterProject.value = undefined; currentPage.value = 1; globalFilterParams.value = tag.id ? { tagId: tag.id } : {}; refreshList() }
+function onFilterChange() {
+  currentPage.value = 1
+  if (filterProject.value) { const matched = projectList.value.find(p => p.id === filterProject.value); activeProjectId.value = filterProject.value; activeQueryName.value = matched?.name || '所有工单'; router.replace({ query: { ...route.query, project: matched?.key || filterProject.value } }) }
+  else { activeProjectId.value = null; activeQueryName.value = '所有工单'; const { project, ...rest } = route.query; router.replace({ query: rest }) }
   refreshList()
-  loadPanel()
-  loadTags()
 }
 
+// ===== Table/List event handlers =====
+function onRowClick(record: TableData) { if (previewMode.value === 'sidebar') { const index = issues.value.findIndex(i => i.id === record.id); openPreview(record as unknown as IssueVO, index) } else { router.push(`/issues/${record.issueKey}`) } }
+function onRowDblClick(record: TableData) { router.push(`/issues/${record.issueKey}`) }
+function onListItemClick(issue: IssueVO) { if (previewMode.value === 'sidebar') { const index = issues.value.findIndex(i => i.id === issue.id); openPreview(issue, index) } else { router.push(`/issues/${issue.issueKey}`) } }
+function onListItemDblClick(issue: IssueVO) { router.push(`/issues/${issue.issueKey}`) }
+function onListSortChange(field: string) { if (sortState.value.field !== field) { sortState.value = { field, direction: 'asc' } } else if (sortState.value.direction === 'asc') { sortState.value = { field, direction: 'desc' } } else { sortState.value = { field: null, direction: null } }; currentPage.value = 1; refreshList() }
+function onListItemSelect(issue: IssueVO) { toggle(issue.id) }
+function onSelectionChange(rowKeys: (string | number)[]) { selectedIds.value = new Set(rowKeys.map(String)) }
+async function onManualOrderChange(issueIds: string[]) { await saveManualOrder(issueIds) }
+async function onDiscardManualOrder() { await discardManualOrder(); refreshList() }
+
+// ===== Status loading =====
+async function loadStatuses() { try { const res = await issueApi.listStatuses(); statusCache.value = res.data || [] } catch { statusCache.value = [] } }
+
+// ===== Watchers =====
 watch(currentPage, () => refreshList())
 watch(pageSize, () => refreshList())
 watch(sortState, () => refreshList(), { deep: true })
-
-// Reset keyboard focus when issues list changes (pagination, filter, sort)
 watch(issues, () => { focusedIndex.value = -1 })
+watch([activeProjectId, activeQueryId], () => { if (activeProjectId.value) loadManualOrder({ type: 'project', id: activeProjectId.value }); else if (activeQueryId.value) loadManualOrder({ type: 'query', id: activeQueryId.value }); else resetManualOrder() })
 
-// Load manual order when context changes
-watch([activeProjectId, activeQueryId], () => {
-  if (activeProjectId.value) {
-    loadManualOrder({ type: 'project', id: activeProjectId.value })
-  } else if (activeQueryId.value) {
-    loadManualOrder({ type: 'query', id: activeQueryId.value })
-  } else {
-    resetManualOrder()
-  }
-})
-
-// Init
-const panelLoadFailed = ref(false)
-
-async function loadPanel() {
-  try {
-    panelLoadFailed.value = false
-    const res = await queryApi.getPanel(activeProjectId.value || undefined, hideResolved.value)
-    const data = res.data || {}
-    savedQueries.value = [...(data.pinned || []), ...(data.queries || [])]
-  } catch (error: any) {
-    // 会话过期导致的请求取消，静默处理（handleSessionExpired 会处理跳转）
-    if (axios.isCancel(error)) return
-
-    panelLoadFailed.value = true
-    // Keep previous data if available; only clear if this is the first load
-    if (savedQueries.value.length === 0 || savedQueries.value[0]?.id === '1') {
-      savedQueries.value = []
-    }
-    // For 429 specifically, schedule an auto-retry after the retry-after period
-    if (error?.response?.status === 429) {
-      const retryAfter = parseInt(error.response.headers?.['retry-after'] || '60', 10)
-      setTimeout(() => loadPanel(), Math.min(retryAfter, 120) * 1000)
-    }
-  }
-}
-async function loadProjects() {
-  try { const res = await projectApi.list({ pageSize: 50 }); projectList.value = res.data?.list || [] }
-  catch (e) {
-    // 会话过期导致的请求取消，静默处理
-    if (axios.isCancel(e)) return
-    projectList.value = []
-  }
-}
-async function loadTags() {
-  try {
-    const res = await tagApi.getFavoritePanel(activeProjectId.value || undefined)
-    favoriteTags.value = res.data || []
-  } catch (e) {
-    // 会话过期导致的请求取消，静默处理
-    if (axios.isCancel(e)) return
-    favoriteTags.value = []
-  }
-}
-function selectTag(tag: TagPanelItemVO) {
-  if (activeTagId.value === tag.id) {
-    // Deselect tag — back to all
-    activeTagId.value = null
-    activeQueryId.value = null
-    activeQueryName.value = '所有工单'
-    activeQueryObj.value = null
-    globalFilterParams.value = {}
-    currentPage.value = 1
-    refreshList()
-    return
-  }
-  activeTagId.value = tag.id
-  activeQueryId.value = null
-  activeQueryName.value = tag.name
-  activeQueryObj.value = null
-  activeProjectId.value = null
-  filterProject.value = undefined
-  currentPage.value = 1
-  // Set global filter to filter by tag
-  globalFilterParams.value = { tagId: tag.id }
-  refreshList()
-}
-async function openManageTagsModal() {
-  showManageTagsModal.value = true
-  try {
-    const res = await tagApi.listAvailableTags(activeProjectId.value || undefined)
-    availableTags.value = res.data || []
-  } catch {
-    availableTags.value = []
-  }
-}
-async function toggleTagFavorite(tag: AvailableTagVO) {
-  try {
-    if (tag.favorited) {
-      await tagApi.removeFavorite(tag.id)
-      tag.favorited = false
-    } else {
-      await tagApi.addFavorite(tag.id)
-      tag.favorited = true
-    }
-    // Reload tags panel
-    await loadTags()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '操作失败')
-  }
-}
-async function loadStatuses() {
-  try { const res = await issueApi.listStatuses(); statusCache.value = res.data || [] }
-  catch (e) {
-    // 会话过期导致的请求取消，静默处理
-    if (axios.isCancel(e)) return
-    statusCache.value = []
-  }
-}
-
-/**
- * Auto-select the default saved query (first pinned query, typically "分配给我")
- * when the user navigates to the Issues list without explicit URL params.
- * This provides a YouTrack-like "open and see my tasks" experience.
- */
-
+// ===== Lifecycle =====
 onMounted(async () => {
-  // 检查是否有会话过期时保存的恢复草稿 — 保存为正式草稿但不自动打开模态框
-  // YouTrack 标准行为：草稿列在侧边栏，用户手动点击才打开创建面板
   const recoveryDraft = consumeSessionRecoveryDraft()
   if (recoveryDraft && recoveryDraft.formData) {
     const formData = recoveryDraft.formData
-    // 只有表单有实质内容时才恢复
     if (formData.title?.trim() || formData.description?.trim()) {
-      // 保存为正式草稿（持久化到 localStorage）
       const savedId = saveDraft(formData)
-      if (savedId) {
-        // 展开草稿分组，让用户看到恢复的草稿
-        expandedGroups.add('drafts')
-        // 设置刚恢复的草稿 ID，用于视觉高亮提示
-        recoveredDraftId.value = savedId
-        // 延迟显示提示（等页面渲染完成）
-        setTimeout(() => {
-          Message.info({
-            content: '已恢复上次会话过期时的工单草稿，点击左侧草稿区继续编辑',
-            duration: 5000
-          })
-          // 高亮效果 3 秒后自动移除
-          setTimeout(() => {
-            recoveredDraftId.value = null
-          }, 3000)
-        }, 500)
+      if (savedId) { expandedGroups.add('drafts'); recoveredDraftId.value = savedId
+        setTimeout(() => { Message.info({ content: '已恢复上次会话过期时的工单草稿，点击左侧草稿区继续编辑', duration: 5000 }); setTimeout(() => { recoveredDraftId.value = null }, 3000) }, 500)
       }
     }
   }
-
-  await loadPanel()
-  await loadProjects()
-  await loadTags()
-  await loadStatuses()
-
-  // Resolve project from URL param (supports both key and id for backward compat)
-  if (route.query.project) {
-    const queryProject = String(route.query.project)
-    const matched = projectList.value.find(p => p.key === queryProject || p.id === queryProject)
-    if (matched) {
-      activeProjectId.value = matched.id
-      activeQueryName.value = matched.name
-      filterProject.value = matched.id
-    } else {
-      // Fallback: treat as ID directly (backward compat for old bookmarks)
-      activeProjectId.value = queryProject
-    }
-  }
-
-  // Sync project context display from URL param after projectList is loaded
-  if (activeProjectId.value && projectList.value.length > 0 && !filterProject.value) {
-    const matched = projectList.value.find(p => p.id === activeProjectId.value)
-    if (matched) {
-      activeQueryName.value = matched.name
-      filterProject.value = matched.id
-    }
-  }
-
-  // Handle dashboard filter params (statusId, statusCode, statusCategory, status, label, sprint, keyword, etc.)
-  if (route.query.statusId || route.query.statusCode || route.query.statusCategory || route.query.statusName || route.query.status || route.query.overdue || route.query.dueSoon || route.query.sprint || route.query.reportedByMe || route.query.assignedToMe || route.query.priority || route.query.issueType || route.query.assigneeName || route.query.assignee || route.query.reporter || route.query.projectId || route.query.keyword) {
-    applyDashboardFilter()
-  } else if (!route.query.project && !activeProjectId.value) {
-    // Restore user's last query preference, or show all issues on first visit (YouTrack standard)
-    // Check localStorage for user's last selected query preference
-    const lastQueryId = localStorage.getItem('tf_last_active_query_id')
-    const lastQueryIsAll = localStorage.getItem('tf_last_active_query_all') === 'true'
-
-    if (lastQueryIsAll) {
-      // User explicitly chose "所有工单" last time, respect that
-      refreshList()
-    } else if (lastQueryId && savedQueries.value.length > 0) {
-      // Restore user's last selected query
-      const matched = savedQueries.value.find((q: any) => q.id === lastQueryId)
-      if (matched) {
-        selectQuery(matched)
-      } else {
-        // Last selected query no longer exists — show all issues
-        localStorage.removeItem('tf_last_active_query_id')
-        refreshList()
-      }
-    } else {
-      // First visit or no preference — show all issues (YouTrack standard: unfiltered list on first visit)
-      refreshList()
-    }
-  } else {
-    refreshList()
-  }
-
-  // Listen for undo-restore events from batch delete
+  await loadPanel(); await loadProjects(); await loadTags(); await loadStatuses()
+  if (route.query.project) { const queryProject = String(route.query.project); const matched = projectList.value.find(p => p.key === queryProject || p.id === queryProject); if (matched) { activeProjectId.value = matched.id; activeQueryName.value = matched.name; filterProject.value = matched.id } else { activeProjectId.value = queryProject } }
+  if (activeProjectId.value && projectList.value.length > 0 && !filterProject.value) { const matched = projectList.value.find(p => p.id === activeProjectId.value); if (matched) { activeQueryName.value = matched.name; filterProject.value = matched.id } }
+  if (hasDashboardFilterParams()) { applyDashboardFilter() }
+  else if (!route.query.project && !activeProjectId.value) {
+    const lastQueryId = localStorage.getItem('tf_last_active_query_id'); const lastQueryIsAll = localStorage.getItem('tf_last_active_query_all') === 'true'
+    if (lastQueryIsAll) { refreshList() } else if (lastQueryId && savedQueries.value.length > 0) { const matched = savedQueries.value.find((q: any) => q.id === lastQueryId); if (matched) selectQuery(matched); else { localStorage.removeItem('tf_last_active_query_id'); refreshList() } } else { refreshList() }
+  } else { refreshList() }
   window.addEventListener('trackflow:issues-restored', handleIssuesRestored)
-
-  // Keyboard navigation for preview mode
   document.addEventListener('keydown', handleKeyboardNav)
-  // Context menu escape key
   document.addEventListener('keydown', onGlobalKeydownCtx)
 })
+onUnmounted(() => { window.removeEventListener('trackflow:issues-restored', handleIssuesRestored); document.removeEventListener('keydown', handleKeyboardNav); document.removeEventListener('keydown', onGlobalKeydownCtx) })
+function handleIssuesRestored() { refreshList() }
 
-onUnmounted(() => {
-  window.removeEventListener('trackflow:issues-restored', handleIssuesRestored)
-  document.removeEventListener('keydown', handleKeyboardNav)
-  document.removeEventListener('keydown', onGlobalKeydownCtx)
-})
-
-function handleIssuesRestored() {
-  refreshList()
-}
-
-function applyDashboardFilter() {
-  // 清除已选中的保存查询，防止 buildFilters() 中 queryId 覆盖 dashboard 过滤条件
-  activeQueryId.value = null
-  activeQueryObj.value = null
-  filterProject.value = undefined
-  searchKeyword.value = ''
-
-  const filters: Record<string, any> = {}
-  const chips: any[] = []
-
-  if (route.query.statusId) {
-    const statusIds = String(route.query.statusId).split(',')
-    filters.statusId = String(route.query.statusId)
-
-    // Build chip with status names
-    const statusNames = statusIds.map(id => {
-      const s = statusCache.value.find(st => st.id === id)
-      return s?.name || id
-    })
-    chips.push({
-      fieldKey: 'status',
-      operator: 'any_of',
-      values: statusIds,
-      valueLabels: statusNames
-    })
-  }
-
-  // statusCode: 单个状态代码（如 'testing'）
-  if (route.query.statusCode) {
-    const code = String(route.query.statusCode)
-    const matchedStatus = statusCache.value.find(st => st.code === code)
-    if (matchedStatus) {
-      filters.statusId = matchedStatus.id
-      chips.push({
-        fieldKey: 'status',
-        operator: 'any_of',
-        values: [matchedStatus.id],
-        valueLabels: [matchedStatus.name]
-      })
-    }
-  }
-
-  // statusName: 按状态英文名匹配（从报表图表下钻时使用）
-  if (route.query.statusName) {
-    const name = String(route.query.statusName)
-    const matchedStatus = statusCache.value.find(st => st.name === name)
-    if (matchedStatus) {
-      filters.statusId = matchedStatus.id
-      chips.push({
-        fieldKey: 'status',
-        operator: 'any_of',
-        values: [matchedStatus.id],
-        valueLabels: [matchedStatus.name]
-      })
-    }
-  }
-
-  // status: 通用状态筛选参数（支持英文名、本地化名、状态代码）
-  // 这是最用户友好的参数，如 ?status=Code Review 或 ?status=代码审查
-  if (route.query.status) {
-    const statusParam = String(route.query.status)
-    // 尝试按多种方式匹配状态
-    const matchedStatus = statusCache.value.find(st =>
-      st.name === statusParam ||
-      localizeStatusName(st.name) === statusParam ||
-      st.code === statusParam
-    )
-    if (matchedStatus) {
-      filters.statusId = matchedStatus.id
-      chips.push({
-        fieldKey: 'status',
-        operator: 'any_of',
-        values: [matchedStatus.id],
-        valueLabels: [localizeStatusName(matchedStatus.name)]
-      })
-    }
-  }
-
-  // statusCategory: 状态分类（如 'open', 'in_progress', 'done'）
-  if (route.query.statusCategory) {
-    const category = String(route.query.statusCategory)
-    const matchedStatuses = statusCache.value.filter(st => st.category === category)
-    if (matchedStatuses.length > 0) {
-      const ids = matchedStatuses.map(s => s.id)
-      filters.statusId = ids.join(',')
-      chips.push({
-        fieldKey: 'status',
-        operator: 'any_of',
-        values: ids,
-        valueLabels: matchedStatuses.map(s => s.name)
-      })
-    }
-  }
-
-  // reportedByMe: 我报告的未解决工单
-  if (route.query.reportedByMe) {
-    filters.reportedByMe = 'true'
-    chips.push({
-      fieldKey: 'reporter',
-      operator: 'equals',
-      values: ['me'],
-      valueLabels: ['我']
-    })
-  }
-
-  // assignedToMe: 分配给我的工单
-  if (route.query.assignedToMe) {
-    filters.assignedToMe = 'true'
-    chips.push({
-      fieldKey: 'assignee',
-      operator: 'equals',
-      values: ['me'],
-      valueLabels: ['我']
-    })
-  }
-
-  if (route.query.overdue) {
-    filters.overdue = 'true'
-    // No chip needed — displayed in label
-  }
-
-  if (route.query.dueSoon) {
-    filters.dueSoon = 'true'
-  }
-
-  if (route.query.sprint) {
-    filters.sprintId = String(route.query.sprint)
-    // Resolve sprint display name from label param (only when no statusCategory, since
-    // combined labels like "Sprint Name - 已完成工单" are meant for the page title, not the chip)
-    let sprintDisplayName = ''
-    if (route.query.label && !route.query.statusCategory) {
-      sprintDisplayName = String(route.query.label)
-    }
-    if (!sprintDisplayName) {
-      const sprintId = String(route.query.sprint)
-      for (const sprints of Object.values(sprintOptionsCache)) {
-        const matched = sprints.find(s => s.id === sprintId)
-        if (matched) { sprintDisplayName = matched.name; break }
-      }
-    }
-    if (!sprintDisplayName) {
-      sprintDisplayName = `Sprint #${route.query.sprint}`
-    }
-    chips.push({
-      fieldKey: 'sprint',
-      operator: 'equals',
-      values: [String(route.query.sprint)],
-      valueLabels: [sprintDisplayName]
-    })
-  }
-
-  // priority: 优先级（如 'Normal', 'High'）
-  if (route.query.priority) {
-    const priority = String(route.query.priority)
-    filters.priority = priority
-    chips.push({
-      fieldKey: 'priority',
-      operator: 'equals',
-      values: [priority],
-      valueLabels: [priority]
-    })
-  }
-
-  // issueType: 工单类型（如 'Bug', 'Task', 'Feature'）
-  if (route.query.issueType) {
-    const issueType = String(route.query.issueType)
-    filters.issueType = issueType
-    chips.push({
-      fieldKey: 'type',
-      operator: 'equals',
-      values: [issueType],
-      valueLabels: [issueType]
-    })
-  }
-
-  // assigneeName: 按负责人名称筛选
-  if (route.query.assigneeName) {
-    const name = String(route.query.assigneeName)
-    filters.assigneeName = name
-    chips.push({
-      fieldKey: 'assignee',
-      operator: 'equals',
-      values: [name],
-      valueLabels: [name]
-    })
-  }
-
-  // assignee=unassigned: 筛选未分配负责人的工单
-  // assignee={userId}: 筛选某个用户负责的工单
-  if (route.query.assignee === 'unassigned') {
-    filters.assigneeId = 'none'
-    chips.push({
-      fieldKey: 'assignee',
-      operator: 'equals',
-      values: ['none'],
-      valueLabels: ['未分配']
-    })
-  } else if (route.query.assignee) {
-    const assigneeUserId = String(route.query.assignee)
-    filters.assigneeId = assigneeUserId
-    const assigneeLabel = route.query.assigneeName
-      ? String(route.query.assigneeName)
-      : assigneeUserId
-    chips.push({
-      fieldKey: 'assignee',
-      operator: 'equals',
-      values: [assigneeUserId],
-      valueLabels: [assigneeLabel]
-    })
-  }
-
-  // reporter={userId}: 筛选某个用户报告的工单
-  if (route.query.reporter) {
-    const reporterUserId = String(route.query.reporter)
-    filters.reporterId = reporterUserId
-    const reporterLabel = route.query.reporterName
-      ? String(route.query.reporterName)
-      : reporterUserId
-    chips.push({
-      fieldKey: 'reporter',
-      operator: 'equals',
-      values: [reporterUserId],
-      valueLabels: [reporterLabel]
-    })
-  }
-
-  // keyword: 关键字搜索（支持 URL 分享和书签）
-  if (route.query.keyword) {
-    const keyword = String(route.query.keyword)
-    searchKeyword.value = keyword
-    // 设置 FilterBar 中的搜索关键字显示
-    // 使用 nextTick 确保 FilterBar 已挂载
-    nextTick(() => {
-      filterBarRef.value?.setSearchKeyword(keyword)
-    })
-  }
-
-  // project (key) or projectId: 项目筛选（从 Sprint/报表页面跳转时带入）
-  // 两个参数都支持项目 Key 和数字 ID 两种格式
-  const projectParam = route.query.project || route.query.projectId
-  if (projectParam) {
-    const queryProject = String(projectParam)
-    const matched = projectList.value.find(p => p.key === queryProject || p.id === queryProject)
-    if (matched) {
-      filterProject.value = matched.id
-      activeProjectId.value = matched.id
-    }
-  }
-
-  // Set display label
-  if (route.query.label) {
-    activeQueryName.value = String(route.query.label)
-  }
-
-  initialFilterChips.value = chips
-  globalFilterParams.value = filters
-  refreshList()
-}
-
-// 路由守卫：离开时检查创建面板是否有未保存数据
+// Route leave guard
 onBeforeRouteLeave((_to, _from, next) => {
   const panel = createPanelRef.value
-  // 如果用户已经在处理丢弃流程（isDiscarding 为 true），直接放行
-  // 避免在丢弃确认框显示期间重复弹出「未保存更改」对话框
-  if (panel?.isDiscarding) {
-    next()
-    return
-  }
+  if (panel?.isDiscarding) { next(); return }
   if (showCreatePanel.value && panel && panel.isDirty) {
-    // 先暂停 beforeunload 监听器，避免 SPA 内部导航时触发浏览器级别的空内容弹窗
-    // 让应用内的 Modal.confirm 独占处理用户确认
     panel.suspendBeforeUnload?.()
-
-    Modal.confirm({
-      title: '有未保存的更改',
-      content: '创建工单表单中有未保存的内容，确定要离开吗？',
-      okText: '放弃更改',
-      cancelText: '继续编辑',
-      simple: false,
-      onOk: () => { next() },
-      onCancel: () => {
-        // 用户取消导航，恢复 beforeunload 监听器（仍需防止浏览器关闭/刷新丢失数据）
-        panel.resumeBeforeUnload?.()
-        next(false)
-      }
-    })
-  } else {
-    next()
-  }
+    Modal.confirm({ title: '有未保存的更改', content: '创建工单表单中有未保存的内容，确定要离开吗？', okText: '放弃更改', cancelText: '继续编辑', simple: false, onOk: () => { next() }, onCancel: () => { panel.resumeBeforeUnload?.(); next(false) } })
+  } else { next() }
 })
+
 </script>
 
 <style scoped>
