@@ -14,6 +14,10 @@
           @change="(val: any) => setInputLiteral('issueId', val)"
         />
         <template #extra>通常由上游"查找工单"节点通过连线自动传入，也可手动填写固定 ID</template>
+      </a-form-item>
+
+      <a-form-item label="优先级">
+        <template #extra>留空则不修改当前优先级，选择后将覆盖原值</template>
         <a-select
           :model-value="getInputLiteral('priority')"
           placeholder="不修改"
@@ -33,7 +37,6 @@
             <span class="priority-dot" style="background: var(--tf-priority-low)"></span> Low
           </a-option>
         </a-select>
-        <template #extra>留空则不修改当前优先级，选择后将覆盖原值</template>
       </a-form-item>
 
       <a-form-item label="负责人">
