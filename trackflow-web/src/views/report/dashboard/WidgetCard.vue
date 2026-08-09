@@ -53,8 +53,14 @@
         <a-spin dot />
       </div>
 
+      <!-- 权限不足状态（优雅降级，仿 YouTrack 空 Widget 风格） -->
+      <div v-if="permissionDenied && !loading" class="widget-permission-denied">
+        <icon-lock :size="24" class="permission-icon" />
+        <span class="permission-text">暂无权限查看此数据</span>
+      </div>
+
       <!-- 错误状态 -->
-      <div v-if="error && !loading" class="widget-error">
+      <div v-else-if="error && !loading" class="widget-error">
         <icon-exclamation-circle-fill :size="24" class="error-icon" />
         <span class="error-text">{{ error }}</span>
         <a-button size="mini" type="text" @click="refreshData">
@@ -66,12 +72,13 @@
       <!-- 动态 Widget 内容（始终保持挂载，用 v-show 控制可见性） -->
       <component
         v-if="widgetComponent"
-        v-show="!loading && !error"
+        v-show="!loading && !error && !permissionDenied"
         :is="widgetComponent"
         ref="widgetRef"
         v-bind="widgetProps"
         @loaded="onWidgetLoaded"
         @error="onWidgetError"
+        @permission-denied="onWidgetPermissionDenied"
       />
 
       <!-- 未知类型（注册表中无对应 Widget） -->
@@ -90,7 +97,7 @@ import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import {
   IconMore, IconEdit, IconDelete, IconRefresh, IconLink, IconSwap,
-  IconExclamationCircleFill, IconQuestionCircle
+  IconExclamationCircleFill, IconQuestionCircle, IconLock
 } from '@arco-design/web-vue/es/icon'
 import type { DashboardWidgetVO } from '@/api/customDashboard'
 import { getWidget } from '@/widgets'
@@ -111,6 +118,7 @@ defineEmits<{
 const loading = ref(false)
 const refreshing = ref(false)
 const error = ref<string | null>(null)
+const permissionDenied = ref(false)
 const dataLoaded = ref(false)
 const widgetRef = ref<{ loadData?: (force?: boolean) => Promise<void>; navigateToFilteredList?: () => void } | null>(null)
 
@@ -202,6 +210,7 @@ function onWidgetLoaded() {
   clearLoadingTimeout()
   loading.value = false
   error.value = null
+  permissionDenied.value = false
   dataLoaded.value = true
 }
 
@@ -209,6 +218,14 @@ function onWidgetError(message: string) {
   clearLoadingTimeout()
   loading.value = false
   error.value = message
+}
+
+function onWidgetPermissionDenied() {
+  clearLoadingTimeout()
+  loading.value = false
+  error.value = null
+  permissionDenied.value = true
+  dataLoaded.value = true
 }
 
 // ─── 数据加载与刷新 ──────────────────────────────────────
@@ -233,6 +250,7 @@ async function loadData() {
 async function refreshData() {
   refreshing.value = true
   error.value = null
+  permissionDenied.value = false
   dataLoaded.value = false
   loading.value = true
   startLoadingTimeout()
@@ -430,6 +448,28 @@ onBeforeUnmount(() => {
   color: var(--tf-text-tertiary);
   line-height: 1.4;
   max-width: 160px;
+}
+
+.widget-permission-denied {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  gap: 8px;
+  padding: 12px;
+}
+
+.permission-icon {
+  color: var(--tf-text-quaternary);
+  opacity: 0.5;
+}
+
+.permission-text {
+  font-size: 11px;
+  color: var(--tf-text-tertiary);
+  text-align: center;
+  line-height: 1.4;
 }
 
 .widget-configure-hint {

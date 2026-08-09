@@ -35,6 +35,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   loaded: []
   error: [message: string]
+  'permission-denied': []
 }>()
 
 interface ActivityItem {
@@ -117,7 +118,12 @@ async function loadData(_force = false) {
     activityFeedData.value = res.data || []
     emit('loaded')
   } catch (e: any) {
-    emit('error', e.response?.data?.message || '加载活动数据失败')
+    const status = e.response?.status
+    if (status === 403) {
+      emit('permission-denied')
+    } else {
+      emit('error', e.response?.data?.message || '加载活动数据失败')
+    }
   }
 }
 

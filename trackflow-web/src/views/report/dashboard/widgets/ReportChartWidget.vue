@@ -32,6 +32,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   loaded: []
   error: [message: string]
+  'permission-denied': []
 }>()
 
 const reportDataResult = ref<ReportDataVO | null>(null)
@@ -265,7 +266,7 @@ async function loadData(force = false) {
     if (status === 404) {
       emit('error', '关联的报表已被删除，请重新编辑配置')
     } else if (status === 403) {
-      emit('error', '无权限查看此报表')
+      emit('permission-denied')
     } else {
       emit('error', e.response?.data?.message || '加载报表数据失败')
     }

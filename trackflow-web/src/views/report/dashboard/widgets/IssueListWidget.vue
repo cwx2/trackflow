@@ -29,6 +29,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   loaded: []
   error: [message: string]
+  'permission-denied': []
   titleClick: []
 }>()
 
@@ -121,7 +122,12 @@ async function loadData(_force = false) {
     dataLoaded.value = true
     emit('loaded')
   } catch (e: any) {
-    emit('error', e.response?.data?.message || '加载工单列表失败')
+    const status = e.response?.status
+    if (status === 403) {
+      emit('permission-denied')
+    } else {
+      emit('error', e.response?.data?.message || '加载工单列表失败')
+    }
   }
 }
 
