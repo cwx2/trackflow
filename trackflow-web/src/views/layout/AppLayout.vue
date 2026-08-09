@@ -341,9 +341,9 @@ const isAdmin = computed(() => {
       || authStore.hasGlobalPermission('system:manage_roles')
       || authStore.hasGlobalPermission('system:manage_orgs')
   }
-  // 辅助判断：权限未加载时用 Keycloak Token 中的 realm role 做快速前置判断
-  const roles: string[] = authStore.user?.roles || []
-  return roles.includes('tf_admin')
+  // 权限未加载时默认不显示管理入口（deny-by-default，防止无权限用户短暂看到管理菜单）
+  // 权限加载完成后会自动刷新 computed 结果
+  return false
 })
 
 const canManageWorkflow = computed(() => {
@@ -353,8 +353,8 @@ const canManageWorkflow = computed(() => {
   if (authStore.permissionsLoaded) {
     return authStore.hasGlobalPermission('nav:workflow')
   }
-  // 权限未加载时乐观显示，路由守卫 + 后端 @PreAuthorize 做最终拦截
-  return true
+  // 权限未加载时默认不显示（deny-by-default），加载完成后自动刷新
+  return false
 })
 
 const canViewReport = computed(() => {
@@ -364,9 +364,8 @@ const canViewReport = computed(() => {
   if (authStore.permissionsLoaded) {
     return authStore.hasGlobalPermission('nav:report')
   }
-  // 权限未加载时乐观显示，确保所有页面导航一致（包括 403/404 错误页）
-  // 路由守卫 + 后端 @PreAuthorize 做最终权限拦截
-  return true
+  // 权限未加载时默认不显示（deny-by-default），加载完成后自动刷新
+  return false
 })
 
 const canViewTrash = computed(() => {
@@ -376,8 +375,8 @@ const canViewTrash = computed(() => {
   if (authStore.permissionsLoaded) {
     return authStore.hasGlobalPermission('nav:trash')
   }
-  // 权限未加载时乐观显示
-  return true
+  // 权限未加载时默认不显示（deny-by-default），加载完成后自动刷新
+  return false
 })
 
 const canViewSprintPlanning = computed(() => {
@@ -387,8 +386,8 @@ const canViewSprintPlanning = computed(() => {
   if (authStore.permissionsLoaded) {
     return authStore.hasGlobalPermission('nav:sprint_manage')
   }
-  // 权限未加载时乐观显示
-  return true
+  // 权限未加载时默认不显示（deny-by-default），加载完成后自动刷新
+  return false
 })
 
 const canCreateIssue = computed(() => {
@@ -398,9 +397,8 @@ const canCreateIssue = computed(() => {
   if (authStore.permissionsLoaded) {
     return authStore.canCreateIssue
   }
-  // 权限未加载时乐观显示，确保所有页面导航一致（包括 403/404 错误页）
-  // 点击后路由守卫会等待权限加载完成再做拦截
-  return true
+  // 权限未加载时默认不显示创建按钮（deny-by-default），加载完成后自动刷新
+  return false
 })
 
 const isAdminRoute = computed(() => route.path.startsWith('/admin') && !route.path.startsWith('/admin/workflow'))

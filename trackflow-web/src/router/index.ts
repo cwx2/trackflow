@@ -357,14 +357,20 @@ router.beforeEach(async (to, _from, next) => {
     await authStore.loadGlobalPermissions()
   }
 
-  // 如果权限加载失败（permissionsLoaded 仍为 false），对于需要权限检查的路由允许通过
-  // 依赖后端 API 的 @PreAuthorize 做最终权限校验（前端仅作为 UX 优化）
+  // 如果权限加载失败（permissionsLoaded 仍为 false），对于管理路由拒绝访问（deny-by-default），
+  // 对于其他需要权限的路由依赖后端 @PreAuthorize 做最终校验
   const permissionCheckAvailable = authStore.permissionsLoaded
 
   // 管理路由权限检查：支持细粒度权限
+  // - 权限未加载时：直接拒绝（管理路由 deny-by-default，不允许无凭证访问）
   // - 有 requiredPermission → 检查该具体权限（system:manage_users 等）
   // - 无 requiredPermission（Admin 入口页）→ 有任一 system:manage_* 即可访问
-  if (to.meta.requiresAdmin && permissionCheckAvailable) {
+  if (to.meta.requiresAdmin) {
+    if (!permissionCheckAvailable) {
+      // 权限加载失败，拒绝访问管理路由
+      next({ name: 'Forbidden' })
+      return
+    }
     const requiredPerm = to.meta.requiredPermission as string | undefined
     if (requiredPerm) {
       // 子页面：检查具体细粒度权限
