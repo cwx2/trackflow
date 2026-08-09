@@ -203,16 +203,31 @@
 
     <a-modal
       v-model:visible="showRunInputModal"
-      title="试运行输入"
+      :title="`试运行「${workflowName || '工作流'}」`"
       ok-text="开始试运行"
       :ok-loading="isRunning"
       @ok="confirmRun"
     >
-      <p class="run-input-hint">传入触发节点的 JSON 对象。没有输入参数时保持 <code>{}</code> 即可。</p>
+      <a-alert type="info" :show-icon="true" class="run-input-guide">
+        <template #title>{{ runInputGuideTitle }}</template>
+        {{ runInputGuideDescription }}
+      </a-alert>
+      <div v-if="runInputRequirements.length" class="run-input-fields">
+        <span class="run-input-fields-label">{{ runInputRequirements.every(field => !field.required) ? '可选输入' : '需要提供的输入' }}</span>
+        <div class="run-input-field-tags">
+          <a-tag v-for="field in runInputRequirements" :key="field.path" :color="field.required ? 'red' : 'arcoblue'">
+            {{ field.path }}{{ field.required ? '（必填）' : '（可选）' }}
+          </a-tag>
+        </div>
+        <p v-for="field in runInputRequirements" :key="`${field.path}-description`" class="run-input-field-description">
+          <code>{{ field.path }}</code>：{{ field.description || '来自开始节点的触发数据' }}
+        </p>
+      </div>
+      <p class="run-input-hint">输入仅用于本次试运行，不会保存到工作流。</p>
       <a-textarea
         v-model="runInputText"
         :auto-size="{ minRows: 7, maxRows: 14 }"
-        placeholder='例如：{ "issueId": 123, "projectId": 1 }'
+        :placeholder="runInputPlaceholder"
       />
     </a-modal>
 
@@ -417,6 +432,28 @@ const isRunning = ref(false)
 const currentExecutionId = ref<string | null>(null)
 const showRunInputModal = ref(false)
 const runInputText = ref('{}')
+type RunInputRequirement = {
+  path: string
+  required: boolean
+  valueType: string
+  description: string
+}
+const runInputRequirements = ref<RunInputRequirement[]>([])
+const runInputGuideTitle = computed(() => {
+  if (runInputRequirements.value.length === 0) return '此流程无需额外输入，可直接开始试运行。'
+  return runInputRequirements.value.every(field => !field.required)
+    ? '此流程已具备默认行为；下方字段仅用于缩小本次试运行范围。'
+    : '请提供开始节点需要的触发数据，再开始试运行。'
+})
+const runInputGuideDescription = computed(() => {
+  if (runInputRequirements.value.length === 0) return '系统会使用当前登录用户作为执行身份，并按流程中的默认配置运行。'
+  return runInputRequirements.value.every(field => !field.required)
+    ? '保持 {} 会使用默认范围；例如待办工单检测会查询当前用户有权限访问的工单。'
+    : '字段名和说明已列在下方；填写的 JSON 只影响本次试运行，不会改动流程配置。'
+})
+const runInputPlaceholder = computed(() => runInputRequirements.value.length
+  ? createRunInputExample(runInputRequirements.value)
+  : '{}')
 const showNodeTestModal = ref(false)
 const nodeTestNode = ref<any>(null)
 const nodeTestInputText = ref('{}')
@@ -1127,6 +1164,50 @@ function onDragStart(_e: MouseEvent, node: { type: string; label: string; icon: 
 }
 
 // ── 试运行 ────────────────────────────────────────────────
+function getRunInputRequirements(definition: WorkflowDefinition): RunInputRequirement[] {
+  const startNode = definition.nodes.find(node => node.type === 'start')
+  if (!startNode) return []
+
+  const fields = new Map<string, RunInputRequirement>()
+  for (const node of definition.nodes) {
+    for (const input of node.inputs) {
+      const value = input.value
+      if (value?.type !== 'ref' || value.nodeId !== startNode.id
+        || value.outputName !== 'trigger' || !value.path) continue
+
+      const existing = fields.get(value.path)
+      fields.set(value.path, {
+        path: value.path,
+        required: Boolean(existing?.required || input.required),
+        valueType: input.valueType,
+        description: input.description || existing?.description || '',
+      })
+    }
+  }
+  return [...fields.values()]
+}
+
+function createRunInputExample(fields: RunInputRequirement[]): string {
+  const example: Record<string, unknown> = {}
+  for (const field of fields) {
+    const segments = field.path.split('.').filter(Boolean)
+    if (segments.length === 0) continue
+    let target = example
+    for (const segment of segments.slice(0, -1)) {
+      const current = target[segment]
+      if (!current || typeof current !== 'object' || Array.isArray(current)) target[segment] = {}
+      target = target[segment] as Record<string, unknown>
+    }
+    const name = segments[segments.length - 1]
+    target[name] = field.valueType === 'number' ? 1
+      : field.valueType === 'boolean' ? true
+      : field.valueType === 'array' ? []
+      : field.valueType === 'object' ? {}
+      : ''
+  }
+  return JSON.stringify(example, null, 2)
+}
+
 async function handleRun() {
   if (isRunning.value || !lf) return
   const graphData = lf.getGraphData() as { nodes: any[]; edges: any[] }
@@ -1147,6 +1228,7 @@ async function handleRun() {
     return
   }
   if (!(await handleSave())) return
+  runInputRequirements.value = getRunInputRequirements(runDefinition)
   runInputText.value = '{}'
   showRunInputModal.value = true
 }
@@ -1554,6 +1636,28 @@ onUnmounted(() => {
   margin: 0 0 12px;
   color: var(--tf-text-secondary);
   font-size: 13px;
+}
+
+.run-input-guide { margin: 0 0 14px; }
+.run-input-fields {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--tf-border);
+  border-radius: 8px;
+  background: var(--tf-bg-body);
+}
+.run-input-fields-label {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--tf-text-primary);
+  font-size: 13px;
+  font-weight: 600;
+}
+.run-input-field-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.run-input-field-description {
+  margin: 7px 0 0;
+  color: var(--tf-text-secondary);
+  font-size: 12px;
 }
 
 .node-test-warning { margin-bottom: 12px; }
