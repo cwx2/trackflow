@@ -1,6 +1,7 @@
 package com.trackflow.issue.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.trackflow.auth.service.PermissionService;
 import com.trackflow.automation.execution.AutomationActorRunner;
 import com.trackflow.common.event.IssueNotificationEvent;
@@ -103,6 +104,12 @@ public class IssueCommentService {
         comment.setCreatedAt(LocalDateTime.now());
         comment.setUpdatedAt(LocalDateTime.now());
         commentMapper.insert(comment);
+
+        // 触摸 issue 的 updated_at，使评论操作反映在工单更新时间上（与 YouTrack 行为一致）
+        issueMapper.update(null, new LambdaUpdateWrapper<Issue>()
+                .eq(Issue::getId, issueId)
+                .set(Issue::getUpdatedAt, LocalDateTime.now())
+                .set(Issue::getUpdatedBy, currentUserId));
 
         activityService.recordActivity(issueId, currentUserId, "commented", null, null, null);
 
