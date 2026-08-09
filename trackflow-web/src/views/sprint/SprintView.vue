@@ -35,7 +35,7 @@
     <!-- Sprint 列表 -->
     <div class="sprint-list" v-if="loadingState === 'success' && sprints.length > 0">
 
-      <!-- Sprint 导引横幅 -->
+      <!-- Sprint 导引横幅（有计划中的 Sprint 时显示） -->
       <SprintGuidanceBanner
         :show="plannedSprints.length > 0"
         :has-active-sprint="hasActiveSprint"
@@ -43,6 +43,16 @@
         :activate-tooltip="warningBarActivateTooltip"
         :can-activate="!!nextStartableSprint && canEditSprintItem(nextStartableSprint)"
         @activate="nextStartableSprint && handleActivateSprint(nextStartableSprint.id)"
+      />
+
+      <!-- 无活跃 Sprint 且无计划 Sprint 时的引导空状态 -->
+      <SprintNoActiveState
+        v-if="showNoActiveState"
+        :can-create="canCreateSprint"
+        :lingering-issue-count="lingeringIssueCount"
+        @create="openCreateModal"
+        @view-backlog="handleViewBacklog"
+        @view-lingering="handleViewLingeringIssues"
       />
 
       <!-- Active Sprints -->
@@ -238,6 +248,7 @@ import type { SprintVO } from '@/api/types'
 import SprintIssueDrawer from './components/SprintIssueDrawer.vue'
 import SprintCard from './components/SprintCard.vue'
 import SprintGuidanceBanner from './components/SprintGuidanceBanner.vue'
+import SprintNoActiveState from './components/SprintNoActiveState.vue'
 import SprintCompleteModal from './components/SprintCompleteModal.vue'
 import SprintDeleteModal from './components/SprintDeleteModal.vue'
 import SprintFormModal from './components/SprintFormModal.vue'
@@ -308,6 +319,38 @@ const drawerProjectId = ref<string | undefined>(undefined)
 const drawerInitialFilter = ref<'unassigned' | string | null>(null)
 
 
+
+// ===== 无活跃 Sprint 时的状态计算 =====
+
+/** 是否处于"所有 Sprint 已完成，无活跃无计划"状态 */
+const showNoActiveState = computed(() =>
+  !hasActiveSprint.value && plannedSprints.value.length === 0 && completedSprints.value.length > 0
+)
+
+/** 已完成 Sprint 中仍未关闭的工单总数 */
+const lingeringIssueCount = computed(() => {
+  return completedSprints.value.reduce((sum, s) => sum + (s.totalIssues - s.doneIssues), 0)
+})
+
+function handleViewBacklog() {
+  // 导航到 Issue 列表，筛选无 Sprint 或 Backlog 的工单
+  const projectKey = selectedProjectKey.value
+  if (projectKey) {
+    router.push({ path: '/issues', query: { project: projectKey, sprint: 'none' } })
+  } else {
+    router.push({ path: '/issues', query: { sprint: 'none' } })
+  }
+}
+
+function handleViewLingeringIssues() {
+  // 导航到 Issue 列表，筛选属于已完成 Sprint 的未关闭工单
+  const projectKey = selectedProjectKey.value
+  if (projectKey) {
+    router.push({ path: '/issues', query: { project: projectKey, sprintStatus: 'completed' } })
+  } else {
+    router.push({ path: '/issues' })
+  }
+}
 
 const sprintGuidanceMessage = computed(() => {
   if (hasActiveSprint.value) {
