@@ -21,6 +21,7 @@ const COLUMN_WIDTH_STORAGE_KEY = 'trackflow:issue-column-widths'
 const DEFAULT_COLUMN_WIDTHS: Record<string, number> = {
   issueKey: 130,
   title: 300,
+  project: 120,
   assignee: 110,
   status: 120,
   sprint: 160,

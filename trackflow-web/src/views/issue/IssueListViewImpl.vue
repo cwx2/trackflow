@@ -680,6 +680,9 @@
             <span v-if="record.tags.length > 3" class="issue-tag-overflow" :title="record.tags.slice(3).map((t: any) => t.name).join(', ')">+{{ record.tags.length - 3 }}</span>
           </template>
         </template>
+        <template #project="{ record }">
+          <span class="project-badge" :title="record.projectName || record.projectKey || ''">{{ record.projectKey || '\u2014' }}</span>
+        </template>
         <template #assignee="{ record }">
           <div @click.stop>
             <a-trigger v-if="canEditIssue(record)" v-model:popup-visible="assigneeDropdowns[record.id]" trigger="click" position="bl" :popup-offset="4">
@@ -1957,6 +1960,22 @@ onBeforeRouteLeave((_to, _from, next) => {
 .type-label { font-size: 12px; color: var(--tf-text-secondary); display: inline-flex; align-items: center; gap: 4px; }
 .type-color-dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
 .reporter-name { font-size: 12px; color: var(--tf-text-secondary); }
+
+/* Project badge (cross-project column) */
+.project-badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--tf-text-on-accent);
+  background: var(--tf-accent, #58a6ff);
+  padding: 2px 6px;
+  border-radius: 3px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.4;
+}
 
 /* Editable cells */
 .editable-cell { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; padding: 2px 6px; border-radius: 3px; transition: background 0.15s; font-size: 12px; color: var(--tf-text-secondary); }

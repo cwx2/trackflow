@@ -223,6 +223,13 @@ public class IssueQueryService {
                 } else {
                     wrapper.last("ORDER BY " + IssuePriorityHelper.PRIORITY_ORDER_EXPR + " ASC, updated_at DESC");
                 }
+            } else if ("project".equals(sortField)) {
+                hasSpecialSort = true;
+                if (desc) {
+                    wrapper.orderByDesc("project_id");
+                } else {
+                    wrapper.orderByAsc("project_id");
+                }
             }
         }
 

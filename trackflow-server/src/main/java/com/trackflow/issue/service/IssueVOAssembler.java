@@ -13,6 +13,8 @@ import com.trackflow.issue.vo.BatchAvailableStatusVO;
 import com.trackflow.issue.vo.IssueTagVO;
 import com.trackflow.issue.vo.IssueVO;
 import com.trackflow.issue.vo.SimilarIssueVO;
+import com.trackflow.project.entity.Project;
+import com.trackflow.project.mapper.ProjectMapper;
 import com.trackflow.sprint.mapper.SprintMapper;
 import com.trackflow.sprint.entity.Sprint;
 import com.trackflow.common.util.SecurityUtils;
@@ -49,6 +51,7 @@ public class IssueVOAssembler {
     private final SprintMapper sprintMapper;
     private final IssueSprintMapper issueSprintMapper;
     private final IssueMapper issueMapper;
+    private final ProjectMapper projectMapper;
     private final CustomFieldService customFieldService;
     private final IssueTagService tagService;
     private final WorkflowService workflowService;
@@ -64,6 +67,7 @@ public class IssueVOAssembler {
         if (issues == null || issues.isEmpty()) {
             return;
         }
+        fillProjectInfo(issues, voList);
         fillUserInfo(issues, voList);
         fillChildProgress(issues, voList);
         fillStatusInfo(issues, voList);
@@ -71,6 +75,31 @@ public class IssueVOAssembler {
         fillMultiSprintInfo(issues, voList);
         fillCustomFieldValues(issues, voList);
         fillTagInfo(issues, voList);
+    }
+
+    /**
+     * 批量填充 projectKey/projectName（用于跨项目视图中展示项目列）
+     */
+    private void fillProjectInfo(List<Issue> issues, List<IssueVO> voList) {
+        Set<Long> projectIds = new HashSet<>();
+        for (Issue issue : issues) {
+            if (issue.getProjectId() != null) projectIds.add(issue.getProjectId());
+        }
+        if (projectIds.isEmpty()) return;
+
+        Map<Long, Project> projectMap = projectMapper.selectBatchIds(projectIds).stream()
+                .collect(Collectors.toMap(Project::getId, p -> p, (a, b) -> a));
+
+        for (int i = 0; i < issues.size(); i++) {
+            Issue issue = issues.get(i);
+            if (issue.getProjectId() != null) {
+                Project project = projectMap.get(issue.getProjectId());
+                if (project != null) {
+                    voList.get(i).setProjectKey(project.getKey());
+                    voList.get(i).setProjectName(project.getName());
+                }
+            }
+        }
     }
 
     /**

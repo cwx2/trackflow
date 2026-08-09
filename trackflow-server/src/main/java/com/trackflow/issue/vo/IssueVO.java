@@ -11,6 +11,8 @@ import java.util.List;
 public class IssueVO {
     private String id;
     private String projectId;
+    private String projectKey;
+    private String projectName;
     private String issueKey;
     private String title;
     private String issueType;

@@ -1815,6 +1815,7 @@ public class CustomFieldService {
         List<AvailableColumnVO> columns = new ArrayList<>();
         columns.add(buildStandardColumn("issueKey", "编号", true, true));
         columns.add(buildStandardColumn("title", "标题", false, false));
+        columns.add(buildStandardColumn("project", "项目", true, true));
         columns.add(buildStandardColumn("assignee", "负责人", true, true));
         columns.add(buildStandardColumn("status", "状态", true, true));
         columns.add(buildStandardColumn("sprint", "Sprint", true, true));

@@ -16,6 +16,8 @@ export interface SimilarIssueVO {
 export interface IssueVO {
   id: string
   projectId: string
+  projectKey?: string
+  projectName?: string
   issueKey: string
   title: string
   issueType: string

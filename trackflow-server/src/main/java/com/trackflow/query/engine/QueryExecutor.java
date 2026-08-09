@@ -59,7 +59,7 @@ public class QueryExecutor {
     private static final Set<String> ALLOWED_SORT_FIELDS = Set.of(
             "id", "issue_key", "title", "status_id", "priority",
             "assignee_id", "reporter_id", "created_at", "updated_at",
-            "due_date", "sprint_id", "issue_type", "project_id"
+            "due_date", "sprint_id", "issue_type", "project_id", "project"
     );
 
     /**
@@ -233,6 +233,10 @@ public class QueryExecutor {
                 } else {
                     // 内置字段排序（camelCase → snake_case 转换 + 白名单校验）
                     String columnName = camelToSnake(field);
+                    // "project" 是前端列 key 的别名，映射到实际数据库列 project_id
+                    if ("project".equals(columnName)) {
+                        columnName = "project_id";
+                    }
                     if (!ALLOWED_SORT_FIELDS.contains(columnName)) {
                         log.warn("非法排序字段被拦截: {}", field);
                         continue;
