@@ -107,7 +107,6 @@
         @click="executeReport(report)"
       >
         <div class="card-header">
-          <span class="card-type-badge" :class="'type-' + report.type">{{ reportTypeLabel(report.type) }}</span>
           <div class="card-header-right">
             <button
               class="favorite-btn"
@@ -925,30 +924,6 @@ function resetForm() {
   form.movingPeriod = 7
 }
 
-function reportTypeLabel(type: string) {
-  const map: Record<string, string> = {
-    issue_count: '数量统计',
-    by_status: '状态分布',
-    by_assignee: '负责人分布',
-    by_priority: '优先级分布',
-    by_type: '类型分布',
-    by_two_fields: '交叉分析',
-    burndown: '燃尽图',
-    burndown_chart: '燃尽图',
-    cumulative_flow: '累积流图',
-    resolution_time: '解决时间',
-    average_issue_age: '平均工单年龄',
-    fixed_vs_reported: '修复率 vs 报告率',
-    verified_vs_reopened: '验证率 vs 重开率',
-    resolved_vs_new: '解决率 vs 新增率',
-    state_transition: '状态转换',
-    time_report: '时间报表',
-    estimation_report: '预估对比',
-    custom: '自定义'
-  }
-  return map[type] || type
-}
-
 function groupByLabel(groupBy: string) {
   // First check dynamic dimensions from API
   const dim = allDimensions.value.find(d => d.value === groupBy)
@@ -1135,7 +1110,7 @@ onBeforeUnmount(() => {
 .card-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   margin-bottom: 8px;
 }
 
@@ -1179,21 +1154,6 @@ onBeforeUnmount(() => {
   letter-spacing: 0.5px;
   text-transform: uppercase;
 }
-
-.card-type-badge {
-  font-size: 11px;
-  padding: 2px 8px;
-  border-radius: 3px;
-  font-weight: 500;
-  background: var(--tf-bg-surface);
-  color: var(--tf-text-secondary);
-}
-
-.card-type-badge.type-by_status { color: var(--tf-accent); background: var(--tf-accent-bg-light); }
-.card-type-badge.type-by_assignee { color: var(--tf-purple); background: var(--tf-purple-bg); }
-.card-type-badge.type-by_priority { color: var(--tf-warning); background: var(--tf-warning-bg); }
-.card-type-badge.type-by_type { color: var(--tf-success); background: var(--tf-success-bg); }
-.card-type-badge.type-issue_count { color: var(--tf-success); background: var(--tf-success-bg); }
 
 .card-menu-btn {
   font-size: 16px;
