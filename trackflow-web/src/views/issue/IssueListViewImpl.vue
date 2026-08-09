@@ -1540,10 +1540,12 @@ const activeQueryReadonlyLabels = computed<string[]>(() => {
   let filters: any[]; if (typeof activeQueryObj.value.filters === 'string') { try { filters = JSON.parse(activeQueryObj.value.filters) } catch { return [] } } else { filters = activeQueryObj.value.filters }
   if (!Array.isArray(filters)) return []
   const operatorLabels: Record<string, string> = { eq: '=', neq: '≠', in: '∈', not_in: '∉', contains: '包含', open: '未关闭' }
-  // Build status code → displayName map for readable labels
+  // Build status code/id → displayName map for readable labels
   const statusCodeMap: Record<string, string> = {}
+  const statusIdMap: Record<string, string> = {}
   for (const s of statusCache.value) {
     if (s.code) statusCodeMap[s.code] = s.displayName || s.name
+    if (s.id) statusIdMap[s.id] = s.displayName || s.name
   }
   return filters.map((f: any) => {
     const fieldLabel = queryFieldKeyToLabel[f.field] || f.field; const op = f.operator
@@ -1553,7 +1555,7 @@ const activeQueryReadonlyLabels = computed<string[]>(() => {
       values = f.value.map((v: string) => {
         if (v === '${currentUser}') return '我'
         if (f.field === 'type') return getIssueTypeLabelForRecord(v)
-        if (f.field === 'status') return statusCodeMap[v] || localizeStatusName(v) || v
+        if (f.field === 'status') return statusCodeMap[v] || statusIdMap[v] || localizeStatusName(v) || v
         if (f.field === 'priority') return localizePriority(v)
         return v
       }).join(', ')
