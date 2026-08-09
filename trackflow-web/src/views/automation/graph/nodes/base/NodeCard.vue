@@ -30,9 +30,6 @@
         <span v-else-if="runStatus === 'cancelled'" class="status-icon cancelled">■</span>
         <!-- hover 操作菜单 -->
         <div class="hover-actions">
-          <button class="hover-btn" title="运行此节点" @click.stop="emit('run-node')">
-            <IconPlayArrowFill :size="12" />
-          </button>
           <div class="hover-more-wrap" ref="moreMenuRef">
             <button class="hover-btn" title="更多操作" @click.stop="moreMenuOpen = !moreMenuOpen">
               <IconMore :size="14" />
@@ -105,11 +102,11 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import {
-  IconSearch, IconFile, IconCode, IconLink, IconSettings,
+  IconSearch, IconCode, IconLink,
   IconSync, IconSend, IconClockCircle, IconList, IconRobot,
   IconBranch, IconLoop, IconStorage, IconApps, IconCheck,
   IconEdit, IconMessage, IconPlayCircle, IconRecordStop,
-  IconPlayArrowFill, IconMore,
+  IconMore,
 } from '@arco-design/web-vue/es/icon'
 import type { PortDef, NodeMeta, NodeRunStatus } from './BaseNodeModel'
 import { getNodeDefinition } from '../../../node-definitions'
@@ -136,7 +133,6 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  'run-node': []
   'menu-action': [action: string, nodeId: string]
 }>()
 

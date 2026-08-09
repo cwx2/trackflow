@@ -21,7 +21,7 @@ class WorkflowDefinitionModelJsonTest {
                     "position": { "x": 100, "y": 100 },
                     "nodeMeta": { "title": "查找待办需求", "icon": "🔎", "description": "", "color": "#0ea5e9" },
                     "inputs": [{
-                      "name": "projectId", "label": "项目 ID", "valueType": "number",
+                      "name": "savedQueryId", "label": "完整筛选", "valueType": "number",
                       "required": false, "optional": true, "description": "", "value": null
                     }],
                     "outputs": [{
@@ -35,8 +35,8 @@ class WorkflowDefinitionModelJsonTest {
 
         WorkflowDefinitionModel definition = objectMapper.readValue(definitionJson, WorkflowDefinitionModel.class);
 
-        assertEquals("projectId", definition.nodes().getFirst().inputs().getFirst().name());
-        assertEquals("项目 ID", definition.nodes().getFirst().inputs().getFirst().label());
+        assertEquals("savedQueryId", definition.nodes().getFirst().inputs().getFirst().name());
+        assertEquals("完整筛选", definition.nodes().getFirst().inputs().getFirst().label());
         assertEquals(true, definition.nodes().getFirst().inputs().getFirst().optional());
         assertEquals("issues", definition.nodes().getFirst().outputs().getFirst().name());
         assertEquals("需求列表", definition.nodes().getFirst().outputs().getFirst().label());

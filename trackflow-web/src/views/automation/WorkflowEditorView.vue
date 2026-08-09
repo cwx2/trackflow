@@ -109,6 +109,7 @@
       <div v-if="executionPanelOpen" class="execution-overlay">
         <ExecutionPanel
           :node-status-map="nodeStatusMap"
+          :node-execution-details="nodeExecutionDetails"
           :streaming-output="streamingOutput"
           :is-running="isRunning"
           @close="executionPanelOpen = false"
@@ -224,7 +225,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
 import LogicFlow from '@logicflow/core'
 import { Control, MiniMap, Snapshot } from '@logicflow/extension'
-import { automationApi, type WorkflowDefinition, type NodeType, type GlobalVariable } from '@/api'
+import { automationApi, type WorkflowDefinition, type NodeType, type GlobalVariable, type ExecutionDetailVO } from '@/api'
 import { DRAGGABLE_NODES, getNodeDefinition } from './node-definitions'
 import { validateExecutableWorkflow } from './workflow-validator'
 import { FlowEdge } from './graph/edges/FlowEdge'
@@ -327,12 +328,14 @@ const rightPanelOpen = ref(false)  // 默认收起，点击节点时自动打开
 // 执行状态
 type CanvasNodeStatus = 'idle' | 'running' | 'success' | 'failed' | 'skipped' | 'cancelled'
 const nodeStatusMap = ref<Record<string, CanvasNodeStatus>>({})
+const nodeExecutionDetails = ref<Record<string, { input?: unknown; output?: unknown; errorInfo?: string; durationMs?: number; nodeName?: string }>>({})
 const streamingOutput = ref<Record<string, string>>({})
 const isRunning = ref(false)
 const currentExecutionId = ref<string | null>(null)
 const showRunInputModal = ref(false)
 const runInputText = ref('{}')
 let activeEvtSource: EventSource | null = null
+let executionPollTimer: ReturnType<typeof setInterval> | null = null
 
 // 底部工具栏
 const executionPanelOpen = ref(false)
@@ -718,8 +721,14 @@ async function loadWorkflow() {
  * 新格式: { globalVariables: {}, nodes: [{..., nodeMeta, inputs, outputs, config}], edges: [{sourceNodeId, sourcePortName, ...}] }
  */
 function migrateDefinition(raw: any): WorkflowDefinition {
-  // 已经是新格式（有 globalVariables 或 nodes[0].nodeMeta）
-  if (raw.globalVariables !== undefined) return raw as WorkflowDefinition
+  // 已经是新格式：按当前节点注册表重建端口快照。保存时会把旧工作流升级为当前正式契约，
+  // 不在运行时猜测或兼容缺失端口。
+  if (raw.globalVariables !== undefined) {
+    return {
+      ...raw,
+      nodes: (raw.nodes || []).map((node: any) => upgradeNodeContract(node)),
+    } as WorkflowDefinition
+  }
 
   // 旧格式迁移
   return {
@@ -759,6 +768,29 @@ function migrateDefinition(raw: any): WorkflowDefinition {
       targetNodeId: e.target || e.targetNodeId,
       targetPortName: e.targetHandle || e.targetPortName || 'input',
     })),
+  }
+}
+
+function upgradeNodeContract(node: any) {
+  const def = getNodeDefinition(node.type)
+  if (!def) return node
+  const existingInputs = new Map<string, any>((node.inputs || []).map((input: any) => [input.name, input]))
+  return {
+    ...node,
+    nodeMeta: { ...def.meta, ...(node.nodeMeta || {}) },
+    inputs: def.inputPorts.map(port => {
+      const existing = existingInputs.get(port.name)
+      return {
+        name: port.name,
+        label: port.label,
+        valueType: port.valueType,
+        required: port.required,
+        optional: port.optional,
+        description: port.description,
+        value: existing?.value ?? port.defaultValue ?? null,
+      }
+    }),
+    outputs: def.outputPorts,
   }
 }
 
@@ -1024,7 +1056,9 @@ async function confirmRun() {
   }
   isRunning.value = true
   nodeStatusMap.value = {}
+  nodeExecutionDetails.value = {}
   streamingOutput.value = {}
+  executionPanelOpen.value = true
 
   try {
     const res = await automationApi.execute(workflowId.value, runInputs)
@@ -1038,7 +1072,7 @@ async function confirmRun() {
 
     // SSE 监听
     const evtSource = new EventSource(
-      `/api/v1/executions/${res.data.executionId}/stream`,
+      `/api/v1/automation/executions/${res.data.executionId}/stream`,
       { withCredentials: true }
     )
     activeEvtSource = evtSource
@@ -1051,9 +1085,17 @@ async function confirmRun() {
           lf?.setProperties(event.nodeId, { runStatus: 'running' })
         } else if (event.type === 'node_success') {
           nodeStatusMap.value = { ...nodeStatusMap.value, [event.nodeId]: 'success' }
+          nodeExecutionDetails.value = {
+            ...nodeExecutionDetails.value,
+            [event.nodeId]: { output: event.outputs, durationMs: event.durationMs },
+          }
           lf?.setProperties(event.nodeId, { runStatus: 'success' })
         } else if (event.type === 'node_failed') {
           nodeStatusMap.value = { ...nodeStatusMap.value, [event.nodeId]: 'failed' }
+          nodeExecutionDetails.value = {
+            ...nodeExecutionDetails.value,
+            [event.nodeId]: { errorInfo: event.error, durationMs: event.durationMs },
+          }
           lf?.setProperties(event.nodeId, { runStatus: 'failed' })
           Message.error(`节点 ${event.nodeId} 执行失败: ${event.error}`)
         } else if (event.type === 'node_skipped') {
@@ -1066,19 +1108,13 @@ async function confirmRun() {
           }
         } else if (event.type === 'workflow_success') {
           Message.success('工作流执行成功')
-          evtSource.close()
-          activeEvtSource = null
-          isRunning.value = false
+          finishExecutionTracking()
         } else if (event.type === 'workflow_failed') {
           Message.error(`工作流执行失败: ${event.error}`)
-          evtSource.close()
-          activeEvtSource = null
-          isRunning.value = false
+          finishExecutionTracking()
         } else if (event.type === 'workflow_cancelled') {
           Message.info('工作流执行已取消')
-          evtSource.close()
-          activeEvtSource = null
-          isRunning.value = false
+          finishExecutionTracking()
         }
       } catch (e) {
         console.error('[WorkflowEditor] SSE 事件解析失败:', e)
@@ -1088,12 +1124,60 @@ async function confirmRun() {
     evtSource.onerror = () => {
       evtSource.close()
       activeEvtSource = null
-      isRunning.value = false
     }
+    startExecutionPolling(res.data.executionId)
   } catch (e: any) {
     Message.error(e.response?.data?.message || '执行失败')
     isRunning.value = false
   }
+}
+
+function toCanvasNodeStatus(status: string): CanvasNodeStatus {
+  if (status === 'success' || status === 'failed' || status === 'skipped' || status === 'cancelled') return status
+  return status === 'running' || status === 'waiting' || status === 'retrying' ? 'running' : 'idle'
+}
+
+function applyExecutionDetail(detail: ExecutionDetailVO) {
+  const statuses: Record<string, CanvasNodeStatus> = {}
+  const details: Record<string, { input?: unknown; output?: unknown; errorInfo?: string; durationMs?: number; nodeName?: string }> = {}
+  for (const node of detail.nodeExecutions || []) {
+    statuses[node.nodeId] = toCanvasNodeStatus(node.status)
+    details[node.nodeId] = {
+      input: node.input,
+      output: node.output,
+      errorInfo: node.errorInfo,
+      durationMs: node.durationMs,
+      nodeName: node.nodeName,
+    }
+    lf?.setProperties(node.nodeId, { runStatus: statuses[node.nodeId] })
+  }
+  nodeStatusMap.value = statuses
+  nodeExecutionDetails.value = details
+}
+
+async function refreshExecutionDetail(executionId: string) {
+  const res = await automationApi.getExecution(executionId)
+  if (res.code !== 0) return
+  applyExecutionDetail(res.data)
+  if (['success', 'failed', 'cancelled'].includes(res.data.status)) finishExecutionTracking()
+}
+
+function startExecutionPolling(executionId: string) {
+  if (executionPollTimer) clearInterval(executionPollTimer)
+  void refreshExecutionDetail(executionId)
+  executionPollTimer = setInterval(() => {
+    void refreshExecutionDetail(executionId).catch(() => undefined)
+  }, 800)
+}
+
+function finishExecutionTracking() {
+  isRunning.value = false
+  if (executionPollTimer) {
+    clearInterval(executionPollTimer)
+    executionPollTimer = null
+  }
+  activeEvtSource?.close()
+  activeEvtSource = null
 }
 
 async function handleCancelRun() {
@@ -1135,8 +1219,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  activeEvtSource?.close()
-  activeEvtSource = null
+  finishExecutionTracking()
   lf = null
 })
 </script>

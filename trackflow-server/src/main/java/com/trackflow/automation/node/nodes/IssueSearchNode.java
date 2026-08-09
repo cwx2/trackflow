@@ -37,6 +37,8 @@ public class IssueSearchNode implements NodeDefinition, NodeExecutor {
                 new InputPortDef("priority", "string", false, "优先级，多个用逗号分隔（critical,high,medium,low）", false),
                 new InputPortDef("issueType", "string", false, "工单类型，多个用逗号分隔（Bug,Feature,Task 等）", false),
                 new InputPortDef("tagIds", "string", false, "标签 ID，多个用逗号分隔", false),
+                new InputPortDef("savedQueryId", "number", false,
+                        "完整保存筛选 ID；设置后按保存筛选（含自定义字段）查询", true),
                 new InputPortDef("keyword", "string", false, "标题、描述或编号关键词", true),
                 new InputPortDef("assignedToMe", "boolean", false, "只查分配给执行身份的工单", true),
                 new InputPortDef("sort", "string", false, "排序：-priority（默认），created_at，-updated_at", true),
@@ -62,14 +64,16 @@ public class IssueSearchNode implements NodeDefinition, NodeExecutor {
             String priority = stringValue(inputs.get("priority"));
             String issueType = stringValue(inputs.get("issueType"));
             String tagIds = stringValue(inputs.get("tagIds"));
+            Long savedQueryId = longValue(inputs.get("savedQueryId"));
             String keyword = stringValue(inputs.get("keyword"));
             boolean assignedToMe = booleanValue(inputs.get("assignedToMe"));
             String sort = stringValue(inputs.get("sort"));
             int limit = intValue(inputs.get("limit"), 20);
 
-            List<Map<String, Object>> issues = issueFacade.search(
-                    context.getActorUserId(), projectId, statusIds, keyword, assignedToMe,
-                    limit, priority, issueType, tagIds, sort);
+            List<Map<String, Object>> issues = savedQueryId != null
+                    ? issueFacade.searchSavedQuery(context.getActorUserId(), savedQueryId, limit)
+                    : issueFacade.search(context.getActorUserId(), projectId, statusIds, keyword,
+                            assignedToMe, limit, priority, issueType, tagIds, sort);
             return Map.of("issues", issues, "count", issues.size(), "hasWork", !issues.isEmpty());
         } catch (RuntimeException exception) {
             throw new NodeExecutionException(node.id(), exception.getMessage(), exception);

@@ -355,6 +355,9 @@ public class SavedQueryService {
         if (query == null) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Query not found");
         }
+        if (!userId.equals(query.getUserId()) && !Boolean.TRUE.equals(query.getShared())) {
+            throw new BusinessException(ErrorCode.ACCESS_DENIED, "无权执行此保存筛选");
+        }
 
         List<Map<String, Object>> filters = parseFilters(query.getFilters());
 

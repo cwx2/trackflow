@@ -17,6 +17,7 @@ import com.trackflow.issue.mapper.IssueStatusMapper;
 import com.trackflow.issue.service.IssueCommentService;
 import com.trackflow.issue.service.IssueService;
 import com.trackflow.issue.service.IssueTagService;
+import com.trackflow.query.service.SavedQueryService;
 import com.trackflow.system.entity.SysUser;
 import com.trackflow.system.mapper.SysUserMapper;
 import com.trackflow.workflow.service.WorkflowService;
@@ -42,6 +43,7 @@ public class AutomationIssueFacade {
     private final SysUserMapper sysUserMapper;
     private final CustomFieldValueService customFieldValueService;
     private final CustomFieldService customFieldService;
+    private final SavedQueryService savedQueryService;
 
     /**
      * 获取工单的丰富信息（包含状态名称、负责人姓名、评论、标签、自定义字段）。
@@ -73,6 +75,18 @@ public class AutomationIssueFacade {
         query.setPageSize(Math.max(1, Math.min(limit, 100)));
         query.setSort(blankToNull(sort) != null ? sort : "-priority,-created_at");
         Page<Issue> page = issueService.listByQuery(query);
+        return page.getRecords().stream().map(this::toMap).toList();
+    }
+
+    /**
+     * 执行需求列表中已有的完整保存筛选。
+     *
+     * <p>保存筛选由同一个 QueryExecutor 执行，因此状态、负责人、日期、标签、Sprint 和
+     * 自定义字段等条件与需求列表完全一致；查询结果仍按自动化执行身份可访问的项目收敛。</p>
+     */
+    public List<Map<String, Object>> searchSavedQuery(Long actorUserId, Long savedQueryId, int limit) {
+        Page<Issue> page = savedQueryService.executeByIdWithAccessCheck(
+                savedQueryId, 1, Math.max(1, Math.min(limit, 100)), actorUserId, false, null);
         return page.getRecords().stream().map(this::toMap).toList();
     }
 

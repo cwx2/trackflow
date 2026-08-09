@@ -16,6 +16,7 @@ export const issueSearchDefinition: NodeDefinition = {
     { name: 'priority', label: '优先级', valueType: 'string', required: false },
     { name: 'issueType', label: '工单类型', valueType: 'string', required: false },
     { name: 'tagIds', label: '标签 ID', valueType: 'string', required: false },
+    { name: 'savedQueryId', label: '完整筛选', valueType: 'number', required: false, optional: true },
     { name: 'keyword', label: '关键词', valueType: 'string', required: false, optional: true },
     { name: 'assignedToMe', label: '仅分配给执行身份', valueType: 'boolean', required: false, optional: true },
     { name: 'sort', label: '排序', valueType: 'string', required: false, optional: true },

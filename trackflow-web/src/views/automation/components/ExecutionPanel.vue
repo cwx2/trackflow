@@ -74,6 +74,7 @@ interface NodeEntry {
 
 const props = defineProps<{
   nodeStatusMap: Record<string, 'idle' | 'running' | 'success' | 'failed' | 'skipped' | 'cancelled'>
+  nodeExecutionDetails: Record<string, { input?: unknown; output?: unknown; errorInfo?: string; durationMs?: number; nodeName?: string }>
   streamingOutput: Record<string, string>
   isRunning: boolean
 }>()
@@ -91,6 +92,7 @@ const nodeList = computed<NodeEntry[]>(() =>
   Object.entries(props.nodeStatusMap).map(([nodeId, status]) => ({
     nodeId,
     status,
+    ...props.nodeExecutionDetails[nodeId],
   }))
 )
 
