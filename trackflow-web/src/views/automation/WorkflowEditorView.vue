@@ -257,6 +257,63 @@
         <pre v-else>{{ formatNodeTestJson(nodeTestResult.output) }}</pre>
       </div>
     </a-modal>
+
+    <a-modal
+      v-model:visible="showRenameNodeModal"
+      title="重命名节点"
+      ok-text="保存名称"
+      @ok="confirmRenameNode"
+    >
+      <a-form-item label="节点名称" required>
+        <a-input v-model="renameNodeTitle" :max-length="80" placeholder="请输入节点名称" @press-enter="confirmRenameNode" />
+      </a-form-item>
+      <p class="node-action-hint">仅修改画布中的显示名称，不会改变节点类型、配置或数据流。</p>
+    </a-modal>
+
+    <a-modal
+      v-model:visible="showDeleteNodeModal"
+      title="删除节点"
+      ok-text="删除节点"
+      :ok-button-props="{ status: 'danger' }"
+      @ok="confirmDeleteNode"
+    >
+      <a-alert type="warning" :show-icon="true">
+        将删除“{{ nodeActionTarget?.properties?.nodeMeta?.title || '此节点' }}”以及与它相连的线。此操作在保存前可通过工具栏“上一步”撤销。
+      </a-alert>
+    </a-modal>
+
+    <a-modal
+      v-model:visible="showNodeHelpModal"
+      :title="`${nodeHelpDefinition?.meta.title || nodeActionTarget?.properties?.nodeMeta?.title || '节点'}使用说明`"
+      :footer="false"
+      width="560px"
+    >
+      <p class="node-help-description">{{ nodeHelpDefinition?.meta.description || nodeActionTarget?.properties?.nodeMeta?.description || '该节点暂无补充说明。' }}</p>
+      <section v-if="nodeHelpDefinition?.inputPorts.length" class="node-help-section">
+        <h4>输入</h4>
+        <div v-for="port in nodeHelpDefinition.inputPorts" :key="port.name" class="node-help-port">
+          <strong>{{ port.label || port.name }}</strong>
+          <a-tag size="small">{{ port.valueType }}</a-tag>
+          <a-tag v-if="port.required" size="small" color="red">必填</a-tag>
+          <span>{{ port.description || '未提供说明' }}</span>
+        </div>
+      </section>
+      <section v-if="nodeHelpDefinition?.outputPorts.length" class="node-help-section">
+        <h4>输出</h4>
+        <div v-for="port in nodeHelpDefinition.outputPorts" :key="port.name" class="node-help-port">
+          <strong>{{ port.label || port.name }}</strong>
+          <a-tag size="small">{{ port.valueType }}</a-tag>
+          <span>{{ port.description || '未提供说明' }}</span>
+        </div>
+      </section>
+      <section v-if="nodeHelpDefinition?.configFields.length" class="node-help-section">
+        <h4>配置项</h4>
+        <div v-for="field in nodeHelpDefinition.configFields" :key="field.key" class="node-help-port">
+          <strong>{{ field.label }}</strong>
+          <span>{{ field.description || field.placeholder || '在右侧配置面板中设置。' }}</span>
+        </div>
+      </section>
+    </a-modal>
   </div>
 </template>
 

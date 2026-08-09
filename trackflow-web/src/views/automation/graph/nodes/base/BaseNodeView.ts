@@ -42,6 +42,13 @@ export abstract class BaseNodeView extends HtmlNode {
           data: { ...model.getData() },
         })
       },
+      onMenuAction: (action: string, nodeId: string) => {
+        model.graphModel?.eventCenter?.emit('node:menu-action', {
+          action,
+          nodeId,
+          data: { ...model.getData() },
+        })
+      },
     }
   }
 
