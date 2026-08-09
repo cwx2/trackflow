@@ -245,7 +245,16 @@ public class IssueQueryService {
         }
 
         if (!hasCustomFieldSort && !hasSpecialSort) {
-            wrapper.orderByDesc("updated_at");
+            if (keyword != null && !keyword.isBlank() && (sort == null || sort.isBlank())) {
+                // Relevance-based sort: title match first, then description match, then updated_at
+                // Applied as post-query sort to avoid SQL injection via keyword in ORDER BY
+                wrapper.orderByDesc("updated_at");
+                Page<Issue> result = issueMapper.selectPage(query.toPage(), wrapper);
+                applyRelevanceSort(result.getRecords(), keyword.trim());
+                return result;
+            } else {
+                wrapper.orderByDesc("updated_at");
+            }
         }
 
         if (hasCustomFieldSort || hasSpecialSort) {
@@ -340,5 +349,43 @@ public class IssueQueryService {
                 .or()
                 .apply("assignee_id IN (SELECT id FROM sys_user WHERE display_name ILIKE {0} ESCAPE '\\' OR username ILIKE {0} ESCAPE '\\')", likePattern)
         );
+    }
+
+    /**
+     * 对搜索结果按相关性重新排序（应用层排序）。
+     * 排序优先级：标题包含关键词 > 描述包含关键词 > 其他匹配（工单编号/负责人），
+     * 同级别内保持原来的 updated_at DESC 顺序。
+     */
+    private void applyRelevanceSort(List<Issue> records, String keyword) {
+        if (records == null || records.size() <= 1) return;
+        String lowerKeyword = keyword.toLowerCase();
+        records.sort((a, b) -> {
+            int scoreA = computeRelevanceScore(a, lowerKeyword);
+            int scoreB = computeRelevanceScore(b, lowerKeyword);
+            if (scoreA != scoreB) {
+                return Integer.compare(scoreA, scoreB); // lower score = higher relevance
+            }
+            // Same relevance level: keep original updated_at DESC order
+            if (a.getUpdatedAt() != null && b.getUpdatedAt() != null) {
+                return b.getUpdatedAt().compareTo(a.getUpdatedAt());
+            }
+            return 0;
+        });
+    }
+
+    /**
+     * 计算工单的搜索相关性分数（越低越相关）。
+     * 0 = 标题精确包含关键词
+     * 1 = 描述包含关键词
+     * 2 = 其他字段匹配（issue_key / 负责人名等）
+     */
+    private int computeRelevanceScore(Issue issue, String lowerKeyword) {
+        if (issue.getTitle() != null && issue.getTitle().toLowerCase().contains(lowerKeyword)) {
+            return 0;
+        }
+        if (issue.getDescription() != null && issue.getDescription().toLowerCase().contains(lowerKeyword)) {
+            return 1;
+        }
+        return 2;
     }
 }
