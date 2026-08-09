@@ -1694,8 +1694,11 @@ function cleanupOrphanedModals() {
 
 /** 重置表单到初始状态 */
 function resetForm() {
+  form.projectId = undefined
   form.title = ''
   form.description = ''
+  form.issueType = '任务'
+  form.priority = '普通'
   form.statusId = undefined
   form.assigneeId = undefined
   form.sprintId = undefined
@@ -1703,6 +1706,8 @@ function resetForm() {
   form.dueDate = ''
   form.estimatedHours = undefined
   selectedTemplateId.value = null
+  // 重置自定义字段值（防止 isDirty 残留导致 beforeunload 误触发）
+  customFieldValues.value = {}
   // 重置校验错误
   titleError.value = ''
   cfValidationErrors.value = {}
