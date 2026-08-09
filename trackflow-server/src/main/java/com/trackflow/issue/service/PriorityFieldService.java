@@ -63,6 +63,30 @@ public class PriorityFieldService {
     }
 
     /**
+     * 根据优先级值获取对应的选项 ID（用于 EAV 存储）。
+     * <p>
+     * 自定义字段 EAV 表中列表类型字段存储的是 option ID（而非 value 文本）。
+     * 本方法将归一化后的优先级值（如 "高"）映射为对应的 option ID。
+     *
+     * @param priority  归一化后的优先级值
+     * @param projectId 项目 ID
+     * @return option ID 的字符串表示，如果找不到则返回 null
+     */
+    public String getOptionIdByValue(String priority, Long projectId) {
+        if (priority == null || priority.isBlank()) {
+            return null;
+        }
+        String normalized = normalizePriority(priority);
+        List<CustomFieldOption> options = getPriorityOptions(projectId);
+        for (CustomFieldOption option : options) {
+            if (option.getValue().equalsIgnoreCase(normalized)) {
+                return String.valueOf(option.getId());
+            }
+        }
+        return null;
+    }
+
+    /**
      * 验证指定的优先级值在项目中是否有效。
      *
      * @param priority  优先级值（如 "Normal", "Critical"）

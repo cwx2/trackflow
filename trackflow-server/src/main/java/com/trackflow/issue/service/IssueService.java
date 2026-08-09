@@ -235,6 +235,20 @@ public class IssueService {
                 userFieldValues.put(fieldId, entry.getValue());
             }
         }
+        // 内置字段同步：前端通过独立控件选择 Type/Priority，需要映射为 EAV 的 option ID
+        // 否则自定义字段必填校验会因 Type/Priority 字段值缺失而报 400（REQ-403）
+        if (!userFieldValues.containsKey(IssueTypeFieldService.ISSUE_TYPE_FIELD_ID)) {
+            String typeOptionId = issueTypeFieldService.getOptionIdByValue(issue.getIssueType(), issue.getProjectId());
+            if (typeOptionId != null) {
+                userFieldValues.put(IssueTypeFieldService.ISSUE_TYPE_FIELD_ID, typeOptionId);
+            }
+        }
+        if (!userFieldValues.containsKey(PriorityFieldService.PRIORITY_FIELD_ID)) {
+            String priorityOptionId = priorityFieldService.getOptionIdByValue(issue.getPriority(), issue.getProjectId());
+            if (priorityOptionId != null) {
+                userFieldValues.put(PriorityFieldService.PRIORITY_FIELD_ID, priorityOptionId);
+            }
+        }
         // 子工单继承：若创建子工单且用户未提供某个自定义字段值，从父工单继承
         boolean isSubIssue = dto.getParentId() != null && dto.getParentId() != 0;
         boolean isQuickCreate = Boolean.TRUE.equals(dto.getQuickCreate());

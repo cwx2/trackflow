@@ -160,6 +160,29 @@ public class IssueTypeFieldService {
     }
 
     /**
+     * 根据工单类型值获取对应的选项 ID（用于 EAV 存储）。
+     * <p>
+     * 自定义字段 EAV 表中列表类型字段存储的是 option ID（而非 value 文本）。
+     * 本方法将归一化后的类型值（如 "需求"）映射为对应的 option ID。
+     *
+     * @param issueType 归一化后的工单类型值
+     * @param projectId 项目 ID
+     * @return option ID 的字符串表示，如果找不到则返回 null
+     */
+    public String getOptionIdByValue(String issueType, Long projectId) {
+        if (issueType == null || issueType.isBlank()) {
+            return null;
+        }
+        List<CustomFieldOption> options = getIssueTypeOptions(projectId);
+        for (CustomFieldOption option : options) {
+            if (option.getValue().equalsIgnoreCase(issueType)) {
+                return String.valueOf(option.getId());
+            }
+        }
+        return null;
+    }
+
+    /**
      * 验证指定的工单类型值在项目中是否有效。
      *
      * @param issueType 工单类型值（如 "Bug", "Task"）
