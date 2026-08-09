@@ -109,7 +109,7 @@ import {
   IconSync, IconSend, IconClockCircle, IconList, IconRobot,
   IconBranch, IconLoop, IconStorage, IconApps, IconCheck,
   IconEdit, IconMessage, IconPlayCircle, IconRecordStop,
-  IconPlayArrowFill, IconMore,
+  IconMore,
 } from '@arco-design/web-vue/es/icon'
 import type { PortDef, NodeMeta, NodeRunStatus } from './BaseNodeModel'
 import { getNodeDefinition } from '../../../node-definitions'
@@ -136,7 +136,6 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  'run-node': []
   'menu-action': [action: string, nodeId: string]
 }>()
 
