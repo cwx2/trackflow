@@ -10,7 +10,7 @@ export const loopDefinition: NodeDefinition = {
     category: '控制流',
   },
   inputPorts: [
-    { name: 'input', label: '循环输入', valueType: 'string', required: false, description: '循环输入值' },
+    { name: 'input', label: '循环输入', valueType: 'object', required: false, description: '每轮传给子工作流的输入对象' },
   ],
   outputPorts: [
     { name: 'output',    label: '最终输出', valueType: 'object', description: '循环完成后的最终输出' },

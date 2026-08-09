@@ -252,7 +252,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
 import LogicFlow from '@logicflow/core'
 import { Control, MiniMap, Snapshot } from '@logicflow/extension'
-import { automationApi, type WorkflowDefinition, type NodeType, type GlobalVariable, type ExecutionDetailVO, type NodeTestResultVO } from '@/api'
+import { automationApi, type WorkflowDefinition, type WorkflowNode, type NodeType, type GlobalVariable, type ExecutionDetailVO, type NodeTestResultVO } from '@/api'
 import { DRAGGABLE_NODES, getNodeDefinition } from './node-definitions'
 import { validateExecutableWorkflow } from './workflow-validator'
 import { FlowEdge } from './graph/edges/FlowEdge'
@@ -875,7 +875,8 @@ function upgradeNodeContract(node: any) {
   const existingInputs = new Map<string, any>((node.inputs || []).map((input: any) => [input.name, input]))
   return {
     ...node,
-    nodeMeta: { ...def.meta, ...(node.nodeMeta || {}) },
+    // 分类属于节点类型契约；其余展示信息可保留用户在画布中的修改。
+    nodeMeta: { ...def.meta, ...(node.nodeMeta || {}), category: def.meta.category },
     inputs: def.inputPorts.map(port => {
       const existing = existingInputs.get(port.name)
       return {
@@ -892,6 +893,23 @@ function upgradeNodeContract(node: any) {
   }
 }
 
+/** 保存和试运行前从节点注册表重建快照，杜绝过期模板端口重新写回服务端。 */
+function normalizeCanvasNode(canvasNode: any): WorkflowNode {
+  const type = (canvasNode.properties?.nodeType || canvasNode.type) as NodeType
+  return upgradeNodeContract({
+    id: canvasNode.id,
+    type,
+    position: { x: canvasNode.x - 100, y: canvasNode.y - 30 },
+    nodeMeta: canvasNode.properties?.nodeMeta || {
+      title: canvasNode.text?.value || canvasNode.text || getNodeTitle(type),
+      icon: '⬡', description: '', color: '#6366f1',
+    },
+    inputs: canvasNode.properties?.inputs || [],
+    outputs: canvasNode.properties?.outputs || [],
+    config: extractNodeConfig(canvasNode.properties || {}),
+  }) as WorkflowNode
+}
+
 // 保存工作流
 async function handleSave() {
   if (!lf) return false
@@ -902,20 +920,7 @@ async function handleSave() {
     
     const definition: WorkflowDefinition = {
       globalVariables: globalVariables.value,
-      nodes: graphData.nodes.map((n: any) => ({
-        id: n.id,
-        type: (n.properties?.nodeType || n.type) as NodeType,
-        position: { x: n.x - 100, y: n.y - 30 },
-        nodeMeta: n.properties?.nodeMeta || {
-          title: n.text?.value || n.text || getNodeTitle(n.properties?.nodeType),
-          icon: '⬡',
-          description: '',
-          color: '#6366f1',
-        },
-        inputs:  n.properties?.inputs  || [],
-        outputs: n.properties?.outputs || [],
-        config:  extractNodeConfig(n.properties || {}),
-      })),
+      nodes: graphData.nodes.map((n: any) => normalizeCanvasNode(n)),
       edges: graphData.edges.map((e: any) => ({
         id: e.id,
         sourceNodeId:  e.sourceNodeId,
@@ -1098,7 +1103,8 @@ function onDragStart(_e: MouseEvent, node: { type: string; label: string; icon: 
     text: node.label,
     properties: {
       nodeType: node.type,
-      nodeMeta: { title: node.label, icon: node.icon, color: node.color, description: def?.meta.description || '' },
+      nodeMeta: { title: node.label, icon: node.icon, color: node.color,
+        description: def?.meta.description || '', category: def?.meta.category },
       inputs:  (def?.inputPorts  || []).map(p => ({ ...p, value: p.defaultValue ?? null })),
       outputs: def?.outputPorts  || [],
       config:  Object.fromEntries((def?.configFields || []).map(f => [f.key, f.defaultValue ?? ''])),
@@ -1112,15 +1118,7 @@ async function handleRun() {
   const graphData = lf.getGraphData() as { nodes: any[]; edges: any[] }
   const runDefinition: WorkflowDefinition = {
     globalVariables: globalVariables.value,
-    nodes: graphData.nodes.map((n: any) => ({
-      id: n.id,
-      type: (n.properties?.nodeType || n.type) as NodeType,
-      position: { x: n.x - 100, y: n.y - 30 },
-      nodeMeta: n.properties?.nodeMeta,
-      inputs: n.properties?.inputs || [],
-      outputs: n.properties?.outputs || [],
-      config: extractNodeConfig(n.properties || {}),
-    })),
+    nodes: graphData.nodes.map((n: any) => normalizeCanvasNode(n)),
     edges: graphData.edges.map((e: any) => ({
       id: e.id,
       sourceNodeId: e.sourceNodeId,

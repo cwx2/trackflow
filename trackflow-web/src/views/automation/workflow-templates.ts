@@ -6,6 +6,7 @@
  */
 import type { InputValue, NodeType, WorkflowDefinition, WorkflowNode, WorkflowTemplateVO } from '@/api/automation'
 import { getNodeDefinition } from './node-definitions'
+import { validateExecutableWorkflow } from './workflow-validator'
 
 type Position = { x: number; y: number }
 
@@ -140,3 +141,10 @@ export const BUILTIN_WORKFLOW_TEMPLATES: WorkflowTemplateVO[] = [
     definition: definition(DELAY_CHECK),
   },
 ]
+
+// 模板和用户工作流共用同一校验器；任何人修改模板端口后，应用会立即暴露错误，
+// 不再把不可执行的模板交给用户创建副本。
+for (const template of BUILTIN_WORKFLOW_TEMPLATES) {
+  const validationError = validateExecutableWorkflow(JSON.parse(template.definition) as WorkflowDefinition)
+  if (validationError) throw new Error(`内置工作流模板无效：${template.name}：${validationError}`)
+}

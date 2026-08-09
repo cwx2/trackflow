@@ -7,7 +7,8 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
  * 输入参数的值 —— 字面值、变量引用或模板表达式
  * sealed interface 保证只有这三种实现
  */
-@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type")
+// type 既是多态判别字段，也是各 value record 的正式契约字段；必须保留给 record 绑定。
+@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type", visible = true)
 @JsonSubTypes({
     @JsonSubTypes.Type(value = LiteralValue.class, name = "literal"),
     @JsonSubTypes.Type(value = VariableRef.class, name = "ref"),

@@ -6,6 +6,9 @@ import com.trackflow.automation.entity.AutomationWorkflow;
 import com.trackflow.automation.entity.AutomationWorkflowTemplate;
 import com.trackflow.automation.mapper.AutomationWorkflowMapper;
 import com.trackflow.automation.mapper.AutomationWorkflowTemplateMapper;
+import com.trackflow.automation.execution.WorkflowDefinitionValidator;
+import com.trackflow.automation.node.model.WorkflowDefinitionModel;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.util.SecurityUtils;
@@ -26,6 +29,8 @@ public class AutomationWorkflowTemplateService {
 
     private final AutomationWorkflowTemplateMapper templateMapper;
     private final AutomationWorkflowMapper workflowMapper;
+    private final ObjectMapper objectMapper;
+    private final WorkflowDefinitionValidator workflowDefinitionValidator;
 
     /**
      * 获取当前用户可见的模板列表：
@@ -74,6 +79,7 @@ public class AutomationWorkflowTemplateService {
         if (definition == null || definition.isBlank()) {
             throw new BusinessException(ErrorCode.INVALID_PARAMETER, "工作流定义为空，无法保存为模板");
         }
+        validateExecutableTemplate(definition);
 
         AutomationWorkflowTemplate template = new AutomationWorkflowTemplate();
         template.setName(dto.getName());
@@ -103,6 +109,7 @@ public class AutomationWorkflowTemplateService {
         if (template == null) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "模板不存在: " + templateId);
         }
+        validateExecutableTemplate(template.getDefinition());
 
         AutomationWorkflow workflow = new AutomationWorkflow();
         workflow.setName(template.getName() + "（副本）");
@@ -120,6 +127,20 @@ public class AutomationWorkflowTemplateService {
         log.info("从模板克隆工作流: templateId={}, templateName={}, newWorkflowId={}",
                 templateId, template.getName(), workflow.getId());
         return workflow;
+    }
+
+    /** 模板必须在保存与克隆时完整可执行，不能把端口或拓扑错误延后到用户试运行时。 */
+    private void validateExecutableTemplate(String definition) {
+        try {
+            WorkflowDefinitionModel parsed = objectMapper.readValue(definition, WorkflowDefinitionModel.class);
+            workflowDefinitionValidator.validateExecutable(parsed);
+        } catch (BusinessException exception) {
+            throw exception;
+        } catch (RuntimeException exception) {
+            throw new BusinessException(ErrorCode.INVALID_PARAMETER, "模板工作流结构错误: " + exception.getMessage());
+        } catch (Exception exception) {
+            throw new BusinessException(ErrorCode.INVALID_PARAMETER, "模板工作流不是合法 JSON");
+        }
     }
 
     /**

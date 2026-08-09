@@ -52,4 +52,31 @@ class WorkflowDefinitionModelJsonTest {
         assertThrows(Exception.class,
                 () -> objectMapper.readValue(definitionJson, WorkflowDefinitionModel.class));
     }
+
+    @Test
+    void preservesReferenceDiscriminatorAsPartOfInputValueContract() throws Exception {
+        String definitionJson = """
+                {
+                  "globalVariables": {},
+                  "nodes": [{
+                    "id": "start", "type": "start", "position": { "x": 0, "y": 0 },
+                    "nodeMeta": { "title": "Start", "icon": "", "description": "", "color": "#000", "category": "特殊节点" },
+                    "inputs": [], "outputs": [], "config": {}
+                  }, {
+                    "id": "end", "type": "end", "position": { "x": 1, "y": 1 },
+                    "nodeMeta": { "title": "End", "icon": "", "description": "", "color": "#000", "category": "特殊节点" },
+                    "inputs": [{
+                      "name": "result", "label": "result", "valueType": "any", "required": false,
+                      "description": "", "optional": false,
+                      "value": { "type": "ref", "nodeId": "start", "outputName": "trigger" }
+                    }], "outputs": [], "config": {}
+                  }],
+                  "edges": []
+                }
+                """;
+
+        WorkflowDefinitionModel definition = objectMapper.readValue(definitionJson, WorkflowDefinitionModel.class);
+        VariableRef reference = (VariableRef) definition.nodes().get(1).inputs().getFirst().value();
+        assertEquals("ref", reference.type());
+    }
 }
