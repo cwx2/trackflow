@@ -1611,7 +1611,7 @@ const boardStatusIdsForBacklog = computed(() => {
 
 // 隐藏列中有工单的列（用于提示 banner）
 const hiddenIssueColumns = computed(() => {
-  return allColumnConfigs.value.filter(c => !c.visible && c.hasHiddenIssues)
+  return allColumnConfigs.value.filter(c => !c.visible && c.hasHiddenIssues && (c.issueCount || 0) > 0)
 })
 
 // 临时显示全部列（不修改持久化配置）

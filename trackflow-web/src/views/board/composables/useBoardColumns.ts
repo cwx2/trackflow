@@ -330,7 +330,7 @@ export function useBoardColumns(deps: ColumnDeps) {
   }
 
   // ===== Hidden columns =====
-  const hiddenIssueColumns = computed(() => allColumnConfigs.value.filter(c => !c.visible && c.hasHiddenIssues))
+  const hiddenIssueColumns = computed(() => allColumnConfigs.value.filter(c => !c.visible && c.hasHiddenIssues && (c.issueCount || 0) > 0))
   const hiddenIssueTotalCount = computed(() => hiddenIssueColumns.value.reduce((sum, c) => sum + (c.issueCount || 0), 0))
 
   function onHiddenStatusTagClick(col: BoardColumnVO) {

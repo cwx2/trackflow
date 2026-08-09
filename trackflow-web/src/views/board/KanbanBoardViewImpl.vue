@@ -292,7 +292,7 @@
         </span>
       </div>
       <!-- 隐藏列中有工单的警告提示（增强版 Banner — REQ-753） -->
-      <div v-if="hiddenIssueColumns.length > 0 && !loading && !showAllColumns" class="board-hidden-issues-banner board-hidden-issues-banner--enhanced">
+      <div v-if="hiddenIssueTotalCount > 0 && !loading && !showAllColumns" class="board-hidden-issues-banner board-hidden-issues-banner--enhanced">
         <div class="hidden-issues-header">
           <span class="hidden-issues-icon">⚠️</span>
           <span class="hidden-issues-text">
