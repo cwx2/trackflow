@@ -18,7 +18,7 @@ export function useSprintData(selectedProject: ComputedRef<string | null | undef
   const completedSprints = computed(() => sprints.value.filter(s => s.status === 'completed' || s.status === 'Completed'))
   const archivedSprints = computed(() => sprints.value.filter(s => s.status === 'archived' || s.status === 'Archived'))
   const hasActiveSprint = computed(() => activeSprints.value.length > 0)
-  const nextStartableSprint = computed(() => plannedSprints.value.find(s => !isSprintNotStartable(s)) || null)
+  const nextStartableSprint = computed(() => plannedSprints.value.find(s => !isSprintNotStartable(s, hasActiveSprint.value)) || null)
 
   async function loadSprints() {
     loadingState.value = 'loading'

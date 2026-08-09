@@ -640,17 +640,19 @@ public class SprintService {
                     "该项目已有一个活跃的迭代，请先完成当前迭代再激活新的");
         }
 
-        // 日期合理性校验：开始日期不能在未来（容忍当天）
+        // 日期合理性校验
         LocalDate today = LocalDate.now();
-        if (sprint.getStartDate() != null && sprint.getStartDate().isAfter(today)) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST,
-                    "迭代开始日期（" + sprint.getStartDate() + "）还未到达，无法激活。请等到开始日期或修改日期后再激活");
-        }
 
         // 结束日期校验：不允许激活已经过期的 Sprint
         if (sprint.getEndDate() != null && sprint.getEndDate().isBefore(today)) {
             throw new BusinessException(ErrorCode.BAD_REQUEST,
                     "迭代结束日期（" + sprint.getEndDate() + "）已过，无法激活一个已过期的迭代");
+        }
+
+        // 开始日期校验：当无活跃 Sprint 时允许提前启动（自动调整 startDate 为今天）
+        if (sprint.getStartDate() != null && sprint.getStartDate().isAfter(today)) {
+            // 无活跃 Sprint → 允许提前启动，自动将开始日期调整为今天
+            sprint.setStartDate(today);
         }
 
         // 拍摄估算快照 — 记录 Sprint 激活时的范围作为燃尽图基线

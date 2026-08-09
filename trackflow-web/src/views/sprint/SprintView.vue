@@ -92,7 +92,7 @@
         :can-delete="canDeleteSprintItem(sprint)"
         :is-next="!hasActiveSprint && sprint.id === nextPlannedSprintId"
         :has-active-sprint="hasActiveSprint"
-        :is-startable="!isSprintNotStartable(sprint)"
+        :is-startable="!isSprintNotStartable(sprint, hasActiveSprint)"
         :activate-tooltip="getActivateTooltip(sprint)"
         :inline-editable="true"
         @view-issues="viewSprintIssues"
@@ -366,9 +366,15 @@ const warningBarActivateTooltip = computed<string | undefined>(() => {
   if (nextSprint && !canEditSprintItem(nextSprint)) return '您的角色不具有迭代管理权限，请联系项目管理员'
   if (!nextSprint) {
     const next = plannedSprints.value[0]
-    if (next?.startDate) return `开始日期（${formatDate(next.startDate)}）尚未到达`
-    if (next?.endDate) return `结束日期（${formatDate(next.endDate)}）已过期，无法激活`
+    if (next?.endDate) {
+      const end = new Date(next.endDate); const today = new Date(); today.setHours(0,0,0,0); end.setHours(0,0,0,0)
+      if (end.getTime() < today.getTime()) return `结束日期（${formatDate(next.endDate)}）已过期，无法激活`
+    }
     return '当前没有可启动的迭代'
+  }
+  if (nextSprint.startDate) {
+    const start = new Date(nextSprint.startDate); const today = new Date(); today.setHours(0,0,0,0); start.setHours(0,0,0,0)
+    if (start.getTime() > today.getTime()) return `提前启动迭代「${nextSprint.name}」（原计划 ${formatDate(nextSprint.startDate)} 开始）`
   }
   return `启动迭代「${nextSprint.name}」`
 })
@@ -403,7 +409,7 @@ function getActivateTooltip(sprint: SprintVO): string | undefined {
   }
   if (sprint.startDate) {
     const start = new Date(sprint.startDate); const today = new Date(); today.setHours(0,0,0,0); start.setHours(0,0,0,0)
-    if (start.getTime() > today.getTime()) return `开始日期（${formatDate(sprint.startDate)}）尚未到达`
+    if (start.getTime() > today.getTime()) return `提前启动迭代（原计划 ${formatDate(sprint.startDate)} 开始），开始日期将自动调整为今天`
   }
   return undefined
 }

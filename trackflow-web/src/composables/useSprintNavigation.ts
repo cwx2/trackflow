@@ -74,18 +74,33 @@ export function formatDate(dateStr?: string): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-export function isSprintNotStartable(sprint: SprintVO): boolean {
+/**
+ * 判断 Sprint 是否不可启动。
+ *
+ * 规则：
+ * - 结束日期已过 → 不可启动（无论是否有活跃 Sprint）
+ * - 开始日期未到 + 已有活跃 Sprint → 不可启动（需等当前迭代完成）
+ * - 开始日期未到 + 无活跃 Sprint → 可启动（允许提前启动下一个）
+ *
+ * @param sprint 待判断的 Sprint
+ * @param hasActiveSprint 当前项目是否存在活跃的 Sprint
+ */
+export function isSprintNotStartable(sprint: SprintVO, hasActiveSprint = true): boolean {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
-  if (sprint.startDate) {
-    const start = new Date(sprint.startDate)
-    start.setHours(0, 0, 0, 0)
-    if (start.getTime() > today.getTime()) return true
-  }
+  // 结束日期已过 → 绝对不可启动
   if (sprint.endDate) {
     const end = new Date(sprint.endDate)
     end.setHours(0, 0, 0, 0)
     if (end.getTime() < today.getTime()) return true
+  }
+  // 开始日期未到：仅在已有活跃 Sprint 时阻止（有活跃的情况下没必要提前启动）
+  if (sprint.startDate) {
+    const start = new Date(sprint.startDate)
+    start.setHours(0, 0, 0, 0)
+    if (start.getTime() > today.getTime()) {
+      return hasActiveSprint
+    }
   }
   return false
 }
