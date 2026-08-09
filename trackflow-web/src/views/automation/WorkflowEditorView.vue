@@ -895,8 +895,10 @@ function upgradeNodeContract(node: any) {
         name: port.name,
         label: port.label,
         valueType: port.valueType,
-        required: port.required,
-        optional: port.optional,
+        // 端口契约中的布尔字段必须是确定值。节点定义允许省略 optional，
+        // 但传输给服务端时不能把 undefined 交给请求层变成 null。
+        required: port.required === true,
+        optional: port.optional === true,
         description: port.description,
         value: existing?.value ?? port.defaultValue ?? null,
       }
