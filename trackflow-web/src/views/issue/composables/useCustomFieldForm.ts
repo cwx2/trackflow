@@ -22,10 +22,9 @@ export function useCustomFieldForm(
    */
   /**
    * 内置字段中已由创建面板系统控件渲染的字段名（不区分大小写）。
-   * State 已由后端 excludeStateField 排除，此处排除 Priority/Type 避免与
-   * 硬编码的"优先级"/"类型"选择器重复显示（REQ-387）。
+   * 排除 Priority/Type/State 避免与硬编码的"优先级"/"类型"/"状态"选择器重复显示（REQ-387）。
    */
-  const SYSTEM_RENDERED_BUILTIN_NAMES = new Set(['priority', 'type'])
+  const SYSTEM_RENDERED_BUILTIN_NAMES = new Set(['priority', 'type', 'state'])
 
   const fields = computed<CustomFieldDefinitionVO[]>(() => {
     return allFields.value.filter(cf => {
