@@ -31,7 +31,7 @@
         <!-- hover 操作菜单 -->
         <div class="hover-actions">
           <button class="hover-btn" title="试运行此节点" @click.stop="emit('run-node')">
-            <IconPlayArrowFill :size="12" />
+            <IconPlayArrow :size="14" />
           </button>
           <div class="hover-more-wrap" ref="moreMenuRef">
             <button class="hover-btn" title="更多操作" @click.stop="moreMenuOpen = !moreMenuOpen">
@@ -109,7 +109,7 @@ import {
   IconSync, IconSend, IconClockCircle, IconList, IconRobot,
   IconBranch, IconLoop, IconStorage, IconApps, IconCheck,
   IconEdit, IconMessage, IconPlayCircle, IconRecordStop,
-  IconMore,
+  IconPlayArrow, IconMore,
 } from '@arco-design/web-vue/es/icon'
 import type { PortDef, NodeMeta, NodeRunStatus } from './BaseNodeModel'
 import { getNodeDefinition } from '../../../node-definitions'
@@ -136,6 +136,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
+  'run-node': []
   'menu-action': [action: string, nodeId: string]
 }>()
 
