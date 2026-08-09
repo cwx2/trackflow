@@ -37,6 +37,11 @@ export abstract class BaseNodeView extends HtmlNode {
           data: { ...model.getData(), _openPanel: true },
         })
       },
+      onRunNode: () => {
+        model.graphModel?.eventCenter?.emit('node:test', {
+          data: { ...model.getData() },
+        })
+      },
     }
   }
 

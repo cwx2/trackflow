@@ -1,10 +1,12 @@
 package com.trackflow.automation.execution;
 
 import com.trackflow.automation.execution.dto.ExecuteWorkflowDTO;
+import com.trackflow.automation.execution.dto.NodeTestDTO;
 import com.trackflow.automation.execution.entity.AutomationExecution;
 import com.trackflow.automation.execution.vo.ExecutionDetailVO;
 import com.trackflow.automation.execution.vo.ExecutionStartedVO;
 import com.trackflow.automation.execution.vo.ExecutionSummaryVO;
+import com.trackflow.automation.execution.vo.NodeTestResultVO;
 import com.trackflow.automation.node.NodeRegistry;
 import com.trackflow.common.model.PageResult;
 import com.trackflow.common.model.R;
@@ -26,6 +28,7 @@ import java.util.stream.Collectors;
 public class AutomationExecutionController {
 
     private final AutomationExecutionService executionService;
+    private final AutomationNodeTestService nodeTestService;
     private final AutomationExecutionQueryService executionQueryService;
     private final SseNotifier sseNotifier;
     private final NodeRegistry nodeRegistry;
@@ -63,6 +66,17 @@ public class AutomationExecutionController {
                 ? body.getInputs() : Map.of();
         Long executionId = executionService.startDraft(Long.parseLong(id), inputs, currentUserId);
         return R.ok(new ExecutionStartedVO(String.valueOf(executionId)));
+    }
+
+    /** 在不创建工作流执行记录的情况下，试运行画布中的单个节点。 */
+    @PostMapping("/workflows/{id}/nodes/{nodeId}/test")
+    @PreAuthorize("@perm.checkGlobal('system:admin')")
+    public R<NodeTestResultVO> testNode(
+            @PathVariable String id,
+            @PathVariable String nodeId,
+            @RequestBody(required = false) NodeTestDTO body) {
+        return R.ok(nodeTestService.test(Long.parseLong(id), nodeId, body,
+                SecurityUtils.getCurrentUserId()));
     }
 
     // ── SSE 实时流 ────────────────────────────────────────────────

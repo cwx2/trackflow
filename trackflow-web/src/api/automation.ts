@@ -195,6 +195,16 @@ export interface NodeExecutionVO {
   durationMs?: number
 }
 
+export interface NodeTestResultVO {
+  nodeId: string
+  status: 'success' | 'failed' | 'simulated'
+  input: Record<string, unknown>
+  output: Record<string, unknown>
+  error?: string
+  message?: string
+  durationMs: number
+}
+
 export interface ExecutionDetailVO extends ExecutionVO {
   input?: unknown
   output?: unknown
@@ -320,6 +330,11 @@ export const automationApi = {
    */
   execute(id: string, inputs: Record<string, unknown>) {
     return request.post<any, R<{ executionId: string }>>(`/automation/workflows/${id}/execute`, { inputs })
+  },
+
+  /** 试运行工作流中的一个节点；输入只覆盖本次测试，不会保存。 */
+  testNode(id: string, nodeId: string, data: { inputOverrides?: Record<string, unknown>; confirmSideEffects?: boolean }) {
+    return request.post<any, R<NodeTestResultVO>>(`/automation/workflows/${id}/nodes/${nodeId}/test`, data)
   },
 
   /**

@@ -215,6 +215,33 @@
         placeholder='例如：{ "issueId": 123, "projectId": 1 }'
       />
     </a-modal>
+
+    <a-modal
+      v-model:visible="showNodeTestModal"
+      :title="`试运行节点：${nodeTestNode?.properties?.nodeMeta?.title || nodeTestNode?.properties?.nodeType || ''}`"
+      ok-text="运行节点"
+      :ok-loading="nodeTestLoading"
+      @ok="confirmNodeTest"
+    >
+      <a-alert v-if="nodeTestHasSideEffects" type="warning" class="node-test-warning">
+        此节点会执行真实写操作、外部请求或脚本。确认后才会实际运行；测试输入不会保存到工作流。
+      </a-alert>
+      <a-checkbox v-if="nodeTestHasSideEffects" v-model="nodeTestConfirmSideEffects" class="node-test-confirm">
+        我确认允许本次节点试运行产生真实副作用
+      </a-checkbox>
+      <p class="run-input-hint">填写 JSON 对象可覆盖该节点本次运行的输入；留空字段继续使用节点当前配置。</p>
+      <a-textarea
+        v-model="nodeTestInputText"
+        :auto-size="{ minRows: 6, maxRows: 12 }"
+        placeholder='例如：{ "issueId": 123, "content": "节点试运行" }'
+      />
+      <div v-if="nodeTestResult" class="node-test-result" :class="nodeTestResult.status">
+        <div><strong>{{ nodeTestResult.status === 'success' ? '试运行成功' : nodeTestResult.status === 'simulated' ? '预演完成' : '试运行失败' }}</strong> · {{ nodeTestResult.durationMs }}ms</div>
+        <p v-if="nodeTestResult.message">{{ nodeTestResult.message }}</p>
+        <pre v-if="nodeTestResult.error" class="node-test-error">{{ nodeTestResult.error }}</pre>
+        <pre v-else>{{ formatNodeTestJson(nodeTestResult.output) }}</pre>
+      </div>
+    </a-modal>
   </div>
 </template>
 
@@ -225,7 +252,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
 import LogicFlow from '@logicflow/core'
 import { Control, MiniMap, Snapshot } from '@logicflow/extension'
-import { automationApi, type WorkflowDefinition, type NodeType, type GlobalVariable, type ExecutionDetailVO } from '@/api'
+import { automationApi, type WorkflowDefinition, type NodeType, type GlobalVariable, type ExecutionDetailVO, type NodeTestResultVO } from '@/api'
 import { DRAGGABLE_NODES, getNodeDefinition } from './node-definitions'
 import { validateExecutableWorkflow } from './workflow-validator'
 import { FlowEdge } from './graph/edges/FlowEdge'
@@ -322,6 +349,62 @@ function updateSelectedNodeProperties(properties: Record<string, unknown>) {
   selectedNode.value = { ...current, properties: nextProperties }
 }
 
+async function openNodeTest(node: any) {
+  if (!workflowId.value || !lf) return
+  // 节点试运行必须基于当前画布；先保存，使后端执行的定义与用户看到的一致。
+  if (!(await handleSave())) return
+  nodeTestNode.value = JSON.parse(JSON.stringify(node))
+  nodeTestInputText.value = '{}'
+  nodeTestConfirmSideEffects.value = false
+  nodeTestResult.value = null
+  showNodeTestModal.value = true
+}
+
+async function confirmNodeTest() {
+  if (!nodeTestNode.value?.id) return
+  let inputOverrides: Record<string, unknown>
+  try {
+    const parsed = JSON.parse(nodeTestInputText.value || '{}')
+    if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object') {
+      Message.error('节点试运行输入必须是 JSON 对象')
+      return
+    }
+    inputOverrides = parsed as Record<string, unknown>
+  } catch {
+    Message.error('节点试运行输入不是合法 JSON')
+    return
+  }
+  if (nodeTestHasSideEffects.value && !nodeTestConfirmSideEffects.value) {
+    Message.warning('请先确认允许本次试运行产生真实副作用')
+    return
+  }
+  nodeTestLoading.value = true
+  try {
+    const res = await automationApi.testNode(workflowId.value, nodeTestNode.value.id, {
+      inputOverrides,
+      confirmSideEffects: nodeTestConfirmSideEffects.value,
+    })
+    if (res.code === 0) {
+      nodeTestResult.value = res.data
+      const runStatus = res.data.status === 'success' ? 'success' : res.data.status === 'failed' ? 'failed' : 'idle'
+      lf?.setProperties(nodeTestNode.value.id, { runStatus })
+      if (res.data.status === 'success') Message.success('节点试运行成功')
+      else if (res.data.status === 'simulated') Message.info('节点预演完成')
+    } else {
+      Message.error(res.message || '节点试运行失败')
+    }
+  } catch (error: any) {
+    Message.error(error.response?.data?.message || '节点试运行失败')
+  } finally {
+    nodeTestLoading.value = false
+  }
+}
+
+function formatNodeTestJson(value: unknown) {
+  try { return JSON.stringify(value ?? {}, null, 2) }
+  catch { return String(value) }
+}
+
 // 面板开关
 const rightPanelOpen = ref(false)  // 默认收起，点击节点时自动打开
 
@@ -334,8 +417,20 @@ const isRunning = ref(false)
 const currentExecutionId = ref<string | null>(null)
 const showRunInputModal = ref(false)
 const runInputText = ref('{}')
+const showNodeTestModal = ref(false)
+const nodeTestNode = ref<any>(null)
+const nodeTestInputText = ref('{}')
+const nodeTestConfirmSideEffects = ref(false)
+const nodeTestLoading = ref(false)
+const nodeTestResult = ref<NodeTestResultVO | null>(null)
 let activeEvtSource: EventSource | null = null
 let executionPollTimer: ReturnType<typeof setInterval> | null = null
+
+const NODE_TEST_SIDE_EFFECT_TYPES = new Set([
+  'trackflow-issue-comment', 'trackflow-issue-update', 'trackflow-issue-transition',
+  'http-request', 'code', 'cli-agent', 'role-agent',
+])
+const nodeTestHasSideEffects = computed(() => NODE_TEST_SIDE_EFFECT_TYPES.has(nodeTestNode.value?.properties?.nodeType))
 
 // 底部工具栏
 const executionPanelOpen = ref(false)
@@ -625,6 +720,10 @@ function initLogicFlow() {
     // 深拷贝避免直接引用 LogicFlow 内部对象导致的递归更新
     selectedNode.value = JSON.parse(JSON.stringify(data))
     rightPanelOpen.value = true  // 点击节点自动展开右侧面板
+  })
+
+  lf.on('node:test', ({ data }) => {
+    void openNodeTest(data)
   })
 
   // 监听空白点击
@@ -1445,6 +1544,29 @@ onUnmounted(() => {
   color: var(--tf-text-secondary);
   font-size: 13px;
 }
+
+.node-test-warning { margin-bottom: 12px; }
+.node-test-confirm { display: flex; margin: 0 0 12px; }
+.node-test-result {
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid var(--tf-border);
+  border-radius: 8px;
+  background: var(--tf-bg-body);
+  font-size: 12px;
+}
+.node-test-result.success { border-color: var(--tf-success); }
+.node-test-result.failed { border-color: var(--tf-danger); }
+.node-test-result p { margin: 8px 0; color: var(--tf-text-secondary); }
+.node-test-result pre {
+  max-height: 220px;
+  margin: 8px 0 0;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--tf-text-secondary);
+}
+.node-test-error { color: var(--tf-danger) !important; }
 
 /* LogicFlow 的选中态没有传入 Vue 节点属性，在画布层补上可感知的选择反馈。 */
 :deep(.lf-node-selected) .node-card {
