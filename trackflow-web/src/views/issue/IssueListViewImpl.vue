@@ -1006,7 +1006,7 @@ import { projectApi, issueApi, sprintApi, customFieldApi } from '@/api'
 import type { IssueVO, IssueStatusVO, ProjectMemberVO, SprintVO, CustomFieldValueVO } from '@/api/types'
 import type { TableData } from '@arco-design/web-vue'
 import { useAuthStore } from '@/stores/auth'
-import { localizeStatusName, queryFieldKeyToLabel } from '@/utils/fieldLabels'
+import { localizeStatusName, localizePriority, queryFieldKeyToLabel } from '@/utils/fieldLabels'
 import { DEFAULT_PRIORITY_OPTIONS, DEFAULT_PRIORITY_COLOR } from '@/composables/usePriorityOptions'
 import { DEFAULT_ISSUE_TYPE_OPTIONS, DEFAULT_ISSUE_TYPE_COLOR } from './composables/useIssueTypeOptions'
 import { extractVersion, showActionFeedback } from '@/utils/transition'
@@ -1540,11 +1540,24 @@ const activeQueryReadonlyLabels = computed<string[]>(() => {
   let filters: any[]; if (typeof activeQueryObj.value.filters === 'string') { try { filters = JSON.parse(activeQueryObj.value.filters) } catch { return [] } } else { filters = activeQueryObj.value.filters }
   if (!Array.isArray(filters)) return []
   const operatorLabels: Record<string, string> = { eq: '=', neq: '≠', in: '∈', not_in: '∉', contains: '包含', open: '未关闭' }
+  // Build status code → displayName map for readable labels
+  const statusCodeMap: Record<string, string> = {}
+  for (const s of statusCache.value) {
+    if (s.code) statusCodeMap[s.code] = s.displayName || s.name
+  }
   return filters.map((f: any) => {
     const fieldLabel = queryFieldKeyToLabel[f.field] || f.field; const op = f.operator
     if (op === 'open') return `${fieldLabel}: 未关闭`
     let values: string
-    if (Array.isArray(f.value)) { values = f.value.map((v: string) => { if (v === '${currentUser}') return '我'; if (f.field === 'type') return getIssueTypeLabelForRecord(v); return v }).join(', ') } else { values = String(f.value || '') }
+    if (Array.isArray(f.value)) {
+      values = f.value.map((v: string) => {
+        if (v === '${currentUser}') return '我'
+        if (f.field === 'type') return getIssueTypeLabelForRecord(v)
+        if (f.field === 'status') return statusCodeMap[v] || localizeStatusName(v) || v
+        if (f.field === 'priority') return localizePriority(v)
+        return v
+      }).join(', ')
+    } else { values = String(f.value || '') }
     const opLabel = (op && op !== 'eq') ? ` ${operatorLabels[op] || op}` : ':'
     return `${fieldLabel}${opLabel} ${values}`
   }).filter(l => l && l.trim())

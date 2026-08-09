@@ -30,11 +30,13 @@
           <span class="sq-chip-close" @click.stop="handleClearQuery" title="清除查询">✕</span>
         </div>
       </a-tooltip>
-      <div v-else-if="activeQueryName && isOwnedQuery" class="saved-query-chip clickable">
-        <span class="sq-chip-icon">🔍</span>
-        <span class="sq-chip-name" @click="handleChipClick" title="点击编辑查询">{{ activeQueryName }}</span>
-        <span class="sq-chip-close" @click.stop="handleClearQuery" title="清除查询">✕</span>
-      </div>
+      <a-tooltip v-else-if="activeQueryName && isOwnedQuery" :content="ownedFilterTooltip" position="bottom" mini>
+        <div class="saved-query-chip clickable">
+          <span class="sq-chip-icon">🔍</span>
+          <span class="sq-chip-name" @click="handleChipClick" title="点击编辑查询">{{ activeQueryName }}</span>
+          <span class="sq-chip-close" @click.stop="handleClearQuery" title="清除查询">✕</span>
+        </div>
+      </a-tooltip>
       <QueryInput
         v-model="searchKeyword"
         :placeholder="activeQueryName ? '搜索工单...' : '输入搜索请求 (如 状态: 未关闭  负责人: 我)'"
@@ -56,11 +58,13 @@
             <span class="sq-chip-close" @click.stop="handleClearQuery" title="清除查询">✕</span>
           </div>
         </a-tooltip>
-        <div v-else-if="activeQueryName && isOwnedQuery" class="saved-query-chip filter-mode-chip clickable">
-          <span class="sq-chip-icon">🔍</span>
-          <span class="sq-chip-name" @click="handleChipClick" title="点击编辑查询">{{ activeQueryName }}</span>
-          <span class="sq-chip-close" @click.stop="handleClearQuery" title="清除查询">✕</span>
-        </div>
+        <a-tooltip v-else-if="activeQueryName && isOwnedQuery" :content="ownedFilterTooltip" position="bottom" mini>
+          <div class="saved-query-chip filter-mode-chip clickable">
+            <span class="sq-chip-icon">🔍</span>
+            <span class="sq-chip-name" @click="handleChipClick" title="点击编辑查询">{{ activeQueryName }}</span>
+            <span class="sq-chip-close" @click.stop="handleClearQuery" title="清除查询">✕</span>
+          </div>
+        </a-tooltip>
 
         <!-- Active filter chips -->
         <div
@@ -474,6 +478,14 @@ const readonlyFilterTooltip = computed(() => {
     return '无筛选条件'
   }
   return props.readonlyFilterLabels.join('　')
+})
+
+// Tooltip content for owned queries (shows filter conditions + edit hint)
+const ownedFilterTooltip = computed(() => {
+  if (!props.readonlyFilterLabels || props.readonlyFilterLabels.length === 0) {
+    return '无筛选条件 · 点击编辑'
+  }
+  return props.readonlyFilterLabels.join('　') + '　· 点击编辑'
 })
 
 // ==================== Filter Mode - Add Filter ====================
