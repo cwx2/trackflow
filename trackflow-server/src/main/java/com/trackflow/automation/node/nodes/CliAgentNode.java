@@ -5,6 +5,7 @@ import com.trackflow.automation.execution.SseNotifier;
 import com.trackflow.automation.node.NodeDefinition;
 import com.trackflow.automation.node.NodeExecutor;
 import com.trackflow.automation.node.NodeExecutionException;
+import com.trackflow.automation.node.ProcessExecutionSupport;
 import com.trackflow.automation.node.model.InputPortDef;
 import com.trackflow.automation.node.model.OutputPortDef;
 import com.trackflow.automation.node.model.WorkflowNodeModel;
@@ -12,12 +13,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
-import java.io.*;
-import java.nio.charset.StandardCharsets;
+import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
+import java.time.Duration;
 
 /**
  * CLI Agent 节点执行器
@@ -53,9 +53,12 @@ public class CliAgentNode implements NodeDefinition, NodeExecutor {
         Map<String, Object> config  = node.config() != null ? node.config() : Map.of();
         String command  = String.valueOf(config.getOrDefault("command", "kiro-cli"));
         String args     = String.valueOf(config.getOrDefault("args",    "--no-interactive"));
-        int    timeout  = ((Number) config.getOrDefault("timeout", 2400)).intValue();
+        int    timeout  = integerConfig(config.get("timeout"), 2400, 1, 7200, node.id(), "timeout");
         String prompt   = String.valueOf(inputs.getOrDefault("prompt",  ""));
-        String workDir  = String.valueOf(inputs.getOrDefault("workDir", System.getProperty("user.dir")));
+        Object workDirValue = inputs.get("workDir");
+        String workDir = workDirValue == null || workDirValue.toString().isBlank()
+                ? System.getProperty("user.dir") : workDirValue.toString();
+        if (command.isBlank()) throw new NodeExecutionException(node.id(), "命令不能为空");
 
         List<String> cmd = new ArrayList<>();
         cmd.add(command);
@@ -66,55 +69,35 @@ public class CliAgentNode implements NodeDefinition, NodeExecutor {
         }
         if (!prompt.isBlank()) { cmd.add("--prompt"); cmd.add(prompt); }
 
-        log.info("CliAgentNode executing: {}, workDir={}", cmd, workDir);
+        log.info("CliAgentNode executing: command={}, argumentCount={}, workDir={}",
+                command, cmd.size() - 1, workDir);
 
         ProcessBuilder pb = new ProcessBuilder(cmd);
-        pb.directory(new File(workDir));
-        pb.redirectErrorStream(true);
-
-        Process process;
-        try {
-            process = pb.start();
-        } catch (IOException e) {
-            throw new NodeExecutionException(node.id(), "启动命令失败: " + e.getMessage(), e);
+        File workingDirectory = new File(workDir);
+        if (!workingDirectory.isDirectory()) {
+            throw new NodeExecutionException(node.id(), "工作目录不存在或不是目录: " + workDir);
         }
-
-        StringBuilder fullOutput = new StringBuilder();
-        try (BufferedReader reader = new BufferedReader(
-                new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                fullOutput.append(line).append("\n");
-                ctx.sendSseEvent(SseNotifier.nodeStreaming(node.id(), line + "\n"));
-                if (ctx.isCancelled()) {
-                    process.destroyForcibly();
-                    throw new NodeExecutionException(node.id(), "执行被取消");
-                }
-            }
-        } catch (IOException e) {
-            throw new NodeExecutionException(node.id(), "读取输出失败: " + e.getMessage(), e);
-        }
-
-        boolean finished;
-        try {
-            finished = process.waitFor(timeout, TimeUnit.SECONDS);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            process.destroyForcibly();
-            throw new NodeExecutionException(node.id(), "执行被中断");
-        }
-
-        if (!finished) {
-            process.destroyForcibly();
-            throw new NodeExecutionException(node.id(), "执行超时（" + timeout + "秒）");
-        }
-
-        int exitCode = process.exitValue();
+        pb.directory(workingDirectory);
+        ProcessExecutionSupport.Result result = ProcessExecutionSupport.run(pb, Duration.ofSeconds(timeout), ctx,
+                node.id(), line -> ctx.sendSseEvent(SseNotifier.nodeStreaming(node.id(), line)));
+        int exitCode = result.exitCode();
         if (exitCode != 0) {
             throw new NodeExecutionException(node.id(),
-                "命令执行失败，exitCode=" + exitCode + "\n" + fullOutput);
+                "命令执行失败，exitCode=" + exitCode + "\n" + result.output());
         }
 
-        return Map.of("output", fullOutput.toString(), "exitCode", exitCode);
+        return Map.of("output", result.output(), "exitCode", exitCode);
+    }
+
+    private int integerConfig(Object value, int fallback, int min, int max,
+                              String nodeId, String name) throws NodeExecutionException {
+        if (value == null) return fallback;
+        try {
+            int parsed = value instanceof Number number ? number.intValue() : Integer.parseInt(value.toString());
+            if (parsed < min || parsed > max) throw new NumberFormatException();
+            return parsed;
+        } catch (NumberFormatException exception) {
+            throw new NodeExecutionException(nodeId, name + " 必须是 " + min + " 到 " + max + " 的整数");
+        }
     }
 }

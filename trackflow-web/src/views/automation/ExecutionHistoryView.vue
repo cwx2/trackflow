@@ -82,7 +82,7 @@ const router = useRouter()
 const workflowId = computed(() => route.params.id as string)
 const workflowName = ref('')
 
-const { list: executions, total, loading, pagination, refresh: loadExecutions, onPageChange: handlePageChange, onPageSizeChange: handlePageSizeChange } = usePagedList<ExecutionVO>(
+const { list: executions, total, loading, pagination, onPageChange: handlePageChange, onPageSizeChange: handlePageSizeChange } = usePagedList<ExecutionVO>(
   (params) => automationApi.listExecutions(workflowId.value, { page: params.page, pageSize: params.pageSize }),
   { pageSize: 20 }
 )

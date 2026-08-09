@@ -155,7 +155,8 @@ export class FlowEdgeView extends PolylineEdge {
 
     const warningBadge = typeCompat === 'warning' ? buildWarningBadge(model) : null
 
-    const particles: ReturnType<typeof h>[] = []
+    // LogicFlow 的 h() 与 Vue VNode 泛型不同，边子元素只在 SVG 渲染期使用。
+    const particles: any[] = []
     if (isRunning) {
       particles.push(
         h('defs', {}, [h('path', { id: pathId, d: pathD, fill: 'none', stroke: 'none' })]),
@@ -165,7 +166,7 @@ export class FlowEdgeView extends PolylineEdge {
       )
     }
 
-    return h('g', {}, [hitArea, selectionHalo, mainPath, startDot, warningBadge, ...particles].filter(Boolean))
+    return h('g', {}, [hitArea, selectionHalo, mainPath, startDot, warningBadge, ...particles].filter(Boolean) as any)
   }
 
   /** 末端箭头：小实心三角（9×8） */

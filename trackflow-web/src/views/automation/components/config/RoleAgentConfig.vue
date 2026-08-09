@@ -1,6 +1,6 @@
 <template>
   <div class="role-agent-config">
-    <a-form layout="vertical" size="small">
+    <a-form :model="local" layout="vertical">
       <a-form-item label="Agent 角色">
         <a-select
           :model-value="getInputLiteral('roleId')"

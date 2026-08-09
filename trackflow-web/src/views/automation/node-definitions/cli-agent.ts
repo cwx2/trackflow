@@ -20,7 +20,6 @@ export const cliAgentDefinition: NodeDefinition = {
   configFields: [
     { key: 'command', label: '命令',       type: 'string', defaultValue: 'kiro-cli', placeholder: 'kiro-cli' },
     { key: 'args',    label: '固定参数',   type: 'string', defaultValue: '--no-interactive --trust-all-tools', placeholder: '--no-interactive' },
-    { key: 'model',   label: '模型',       type: 'string', defaultValue: '', placeholder: '留空使用默认模型' },
     { key: 'timeout', label: '超时（秒）', type: 'number', defaultValue: 2400 },
   ],
 }

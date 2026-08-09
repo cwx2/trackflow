@@ -1,6 +1,6 @@
 <template>
   <div class="issue-context-config">
-    <a-form layout="vertical" size="small">
+    <a-form :model="local" layout="vertical">
       <a-form-item label="工单对象">
         <div v-if="isReference('issue')" class="reference-value">
           <code>{{ referenceLabel('issue') }}</code>

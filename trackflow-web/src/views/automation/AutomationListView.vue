@@ -184,7 +184,6 @@ import { useRouter } from 'vue-router'
 import { Message, Modal } from '@arco-design/web-vue'
 import { useConfirmDelete } from '@/composables/useConfirmDelete'
 import { automationApi, type WorkflowVO, type CreateWorkflowDTO, type WorkflowTemplateVO } from '@/api'
-import { BUILTIN_WORKFLOW_TEMPLATES } from './workflow-templates'
 
 const router = useRouter()
 
@@ -239,23 +238,18 @@ function handleCreateSelect(value: string | number | Record<string, any> | undef
   }
 }
 
-// 加载模板列表：内置模板从本地代码读取，自定义模板从后端读取后合并
+// 模板（包括内置模板）统一由后端提供与校验，避免前端副本和数据库模板漂移。
 async function loadTemplates() {
   templateLoading.value = true
   try {
-    // 内置模板直接用本地定义，无需网络请求
-    const builtin = BUILTIN_WORKFLOW_TEMPLATES
-    // 自定义模板（用户保存的）从后端加载
-    let custom: WorkflowTemplateVO[] = []
-    try {
-      const res = await automationApi.listTemplates()
-      if (res.code === 0) {
-        custom = (res.data || []).filter((t: WorkflowTemplateVO) => !t.isBuiltin)
-      }
-    } catch {
-      // 自定义模板加载失败不影响内置模板显示
+    const res = await automationApi.listTemplates()
+    if (res.code !== 0) {
+      Message.error(res.message || '加载模板失败')
+      return
     }
-    templates.value = [...builtin, ...custom]
+    templates.value = res.data || []
+  } catch (error: any) {
+    Message.error(error.response?.data?.message || '加载模板失败')
   } finally {
     templateLoading.value = false
   }
@@ -266,21 +260,9 @@ async function handleCloneTemplate(tpl: WorkflowTemplateVO) {
   cloneLoadingId.value = tpl.id
   try {
     let workflowId: string
-    if (tpl.isBuiltin) {
-      // 内置模板：直接用本地 definition 创建工作流草稿
-      const res = await automationApi.create({
-        name: tpl.name + '（副本）',
-        description: tpl.description,
-        definition: tpl.definition,
-      })
-      if (res.code !== 0) { Message.error(res.message || '创建失败'); return }
-      workflowId = res.data.id
-    } else {
-      // 自定义模板：走后端克隆接口
-      const res = await automationApi.cloneFromTemplate(tpl.id)
-      if (res.code !== 0) { Message.error(res.message || '克隆失败'); return }
-      workflowId = res.data.id
-    }
+    const res = await automationApi.cloneFromTemplate(tpl.id)
+    if (res.code !== 0) { Message.error(res.message || '克隆失败'); return }
+    workflowId = res.data.id
     Message.success('已从模板创建工作流')
     showTemplateModal.value = false
     router.push(`/automation/${workflowId}`)

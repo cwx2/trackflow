@@ -79,7 +79,7 @@
 <script setup lang="ts">
 import { reactive, watch } from 'vue'
 import { Message } from '@arco-design/web-vue'
-import type { NodeDefinition } from '../node-definitions'
+import type { NodeDefinition } from '../../node-definitions'
 
 const props = defineProps<{ data: Record<string, any>; definition?: NodeDefinition }>()
 const emit = defineEmits<{ (event: 'update:data', value: Record<string, any>): void }>()

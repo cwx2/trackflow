@@ -1,6 +1,6 @@
 <template>
   <div class="issue-update-config">
-    <a-form layout="vertical" size="small">
+    <a-form :model="local" layout="vertical">
       <a-form-item label="工单 ID">
         <div v-if="isReference('issueId')" class="reference-value">
           <code>{{ referenceLabel('issueId') }}</code>

@@ -253,7 +253,7 @@ import { Message } from '@arco-design/web-vue'
 import LogicFlow from '@logicflow/core'
 import { Control, MiniMap, Snapshot } from '@logicflow/extension'
 import { automationApi, type WorkflowDefinition, type WorkflowNode, type NodeType, type GlobalVariable, type ExecutionDetailVO, type NodeTestResultVO } from '@/api'
-import { DRAGGABLE_NODES, getNodeDefinition } from './node-definitions'
+import { DRAGGABLE_NODES, findNodeContractDrift, getNodeDefinition } from './node-definitions'
 import { validateExecutableWorkflow } from './workflow-validator'
 import { FlowEdge } from './graph/edges/FlowEdge'
 import { registerAllNodes } from './graph/nodes/index'
@@ -641,8 +641,20 @@ const nodeCategories = computed(() => {
 })
 
 // 初始化 LogicFlow
-function initLogicFlow() {
+async function initLogicFlow() {
   if (!containerRef.value) return
+  try {
+    const definitionRes = await automationApi.getNodeDefinitions()
+    const drift = definitionRes.code === 0 ? findNodeContractDrift(definitionRes.data || [])
+      : ['无法读取后端节点执行目录']
+    if (drift.length > 0) {
+      Message.error(`节点契约未同步：${drift[0]}`)
+      return
+    }
+  } catch (error: any) {
+    Message.error(error.response?.data?.message || '无法校验后端节点执行目录')
+    return
+  }
   
   // 使用插件
   LogicFlow.use(Control)
@@ -745,7 +757,7 @@ function initLogicFlow() {
   })
 
   // 加载数据
-  loadWorkflow()
+  await loadWorkflow()
 }
 
 // 加载工作流
@@ -1310,7 +1322,7 @@ function getNodeTitle(type: string): string {
 
 onMounted(() => {
   setTimeout(() => {
-    initLogicFlow()
+    void initLogicFlow()
   }, 0)
 })
 

@@ -14,9 +14,16 @@ public class NodeRegistry {
     private final Map<String, NodeExecutor>   executors   = new HashMap<>();
 
     public NodeRegistry(List<NodeDefinition> defs, List<NodeExecutor> execs) {
-        defs.forEach(d  -> definitions.put(d.getType(), d));
-        execs.forEach(e -> executors.put(e.getType(), e));
+        defs.forEach(d  -> register(definitions, d.getType(), d, "定义"));
+        execs.forEach(e -> register(executors, e.getType(), e, "执行器"));
         verifyExecutableCatalog();
+    }
+
+    private <T> void register(Map<String, T> target, String type, T value, String kind) {
+        if (type == null || type.isBlank()) throw new IllegalStateException("自动化节点" + kind + "类型不能为空");
+        if (target.putIfAbsent(type, value) != null) {
+            throw new IllegalStateException("自动化节点" + kind + "重复注册: " + type);
+        }
     }
 
     /**
@@ -36,5 +43,8 @@ public class NodeRegistry {
 
     public NodeDefinition getDefinition(String type)       { return definitions.get(type); }
     public NodeExecutor   getExecutor(String type)         { return executors.get(type); }
-    public Collection<NodeDefinition> getAllDefinitions()   { return definitions.values(); }
+    public Collection<NodeDefinition> getAllDefinitions()   {
+        return definitions.entrySet().stream().sorted(Map.Entry.comparingByKey())
+                .map(Map.Entry::getValue).toList();
+    }
 }

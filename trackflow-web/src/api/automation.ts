@@ -29,6 +29,30 @@ export interface WorkflowDetailVO extends WorkflowVO {
   publishedAt?: string
 }
 
+/** 后端节点注册表的运行时契约；端口数据以此为服务端权威来源。 */
+export interface AutomationNodeDefinitionVO {
+  type: string
+  title: string
+  icon: string
+  color: string
+  description: string
+  category: string
+  inputPorts: Array<{
+    name: string
+    label?: string
+    valueType: ValueType
+    required: boolean
+    description?: string
+    optional?: boolean
+  }>
+  outputPorts: Array<{
+    name: string
+    label?: string
+    valueType: ValueType
+    description?: string
+  }>
+}
+
 export interface CreateWorkflowDTO {
   name: string
   description?: string
@@ -238,6 +262,10 @@ export interface CreateTemplateFromWorkflowDTO {
 // ====== API 函数 ======
 
 export const automationApi = {
+  getNodeDefinitions() {
+    return request.get<any, R<AutomationNodeDefinitionVO[]>>('/automation/node-definitions')
+  },
+
   /**
    * 获取工作流列表
    */

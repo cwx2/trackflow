@@ -3,18 +3,17 @@ package com.trackflow.automation.node.nodes;
 import com.trackflow.automation.execution.ExecutionContext;
 import com.trackflow.automation.node.NodeDefinition;
 import com.trackflow.automation.node.NodeExecutionException;
+import com.trackflow.automation.node.ProcessExecutionSupport;
 import com.trackflow.automation.node.NodeExecutor;
 import com.trackflow.automation.node.model.InputPortDef;
 import com.trackflow.automation.node.model.OutputPortDef;
 import com.trackflow.automation.node.model.WorkflowNodeModel;
 import org.springframework.stereotype.Component;
 
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
+import java.time.Duration;
 
 /**
  * 代码节点：执行 Shell 或 Python 脚本，支持输入变量注入为环境变量
@@ -46,14 +45,13 @@ public class CodeNode implements NodeDefinition, NodeExecutor {
     public Map<String, Object> execute(Map<String, Object> inputs, WorkflowNodeModel node, ExecutionContext ctx)
             throws NodeExecutionException {
         Map<String, Object> config = node.config() != null ? node.config() : Map.of();
-        String language = (String) config.getOrDefault("language", "shell");
-        String script   = (String) config.getOrDefault("script", "echo hello");
-        int timeoutSec  = ((Number) config.getOrDefault("timeout", 30)).intValue();
+        String language = String.valueOf(config.getOrDefault("language", "shell"));
+        String script   = String.valueOf(config.getOrDefault("script", "echo hello"));
+        int timeoutSec  = integerConfig(config.get("timeout"), 30, node.id());
 
         try {
             List<String> cmd = buildCommand(language, script);
             ProcessBuilder pb = new ProcessBuilder(cmd);
-            pb.redirectErrorStream(true);
 
             // 将输入数据注入为环境变量
             if (inputs.get("input") instanceof Map<?,?> inputMap) {
@@ -63,28 +61,28 @@ public class CodeNode implements NodeDefinition, NodeExecutor {
                 });
             }
 
-            Process process = pb.start();
-            StringBuilder output = new StringBuilder();
-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    output.append(line).append("\n");
-                }
-            }
-            boolean finished = process.waitFor(timeoutSec, TimeUnit.SECONDS);
-            if (!finished) {
-                process.destroyForcibly();
-                throw new NodeExecutionException(node.id(), "脚本执行超时（" + timeoutSec + "秒）");
-            }
-            int exitCode = process.exitValue();
+            ProcessExecutionSupport.Result result = ProcessExecutionSupport.run(pb, Duration.ofSeconds(timeoutSec),
+                    ctx, node.id(), null);
+            int exitCode = result.exitCode();
             if (exitCode != 0) {
-                throw new NodeExecutionException(node.id(), "脚本退出码非零: " + exitCode + "\n" + output);
+                throw new NodeExecutionException(node.id(), "脚本退出码非零: " + exitCode + "\n" + result.output());
             }
-            return Map.of("result", output.toString().trim(), "exitCode", exitCode);
+            return Map.of("result", result.output().trim(), "exitCode", exitCode);
         } catch (NodeExecutionException e) {
             throw e;
         } catch (Exception e) {
             throw new NodeExecutionException(node.id(), "脚本执行失败: " + e.getMessage());
+        }
+    }
+
+    private int integerConfig(Object value, int fallback, String nodeId) throws NodeExecutionException {
+        if (value == null) return fallback;
+        try {
+            int parsed = value instanceof Number number ? number.intValue() : Integer.parseInt(value.toString());
+            if (parsed < 1 || parsed > 3_600) throw new NumberFormatException();
+            return parsed;
+        } catch (NumberFormatException exception) {
+            throw new NodeExecutionException(nodeId, "timeout 必须是 1 到 3600 的整数");
         }
     }
 

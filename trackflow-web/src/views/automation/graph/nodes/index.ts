@@ -27,7 +27,8 @@ export const WorkflowNodeDef = {
 
 // ─── 开始 / 结束节点（紧凑的流程端点，与普通节点保持同一视觉语言） ─────────
 
-class TerminalNodeView extends BaseNodeView {
+abstract class TerminalNodeView extends BaseNodeView {
+  abstract get nodeType(): 'start' | 'end'
   getVueComponent() { return TerminalNode }
 
   getInitialProps(model: any) {
