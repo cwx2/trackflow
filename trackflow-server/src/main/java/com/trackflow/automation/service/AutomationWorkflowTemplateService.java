@@ -109,6 +109,14 @@ public class AutomationWorkflowTemplateService {
         if (template == null) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "模板不存在: " + templateId);
         }
+        Long currentUserId = SecurityUtils.getCurrentUserId();
+        if (currentUserId == null) {
+            throw new BusinessException(ErrorCode.ACCESS_DENIED, "无法识别当前用户，不能创建工作流");
+        }
+        if (!Boolean.TRUE.equals(template.getIsBuiltin())
+                && !currentUserId.equals(template.getCreatedBy())) {
+            throw new BusinessException(ErrorCode.ACCESS_DENIED, "无权使用其他用户的私有模板");
+        }
         validateExecutableTemplate(template.getDefinition());
 
         AutomationWorkflow workflow = new AutomationWorkflow();
@@ -121,6 +129,9 @@ public class AutomationWorkflowTemplateService {
         workflow.setTriggerConfig("{}");
         workflow.setConcurrencyMode("queue");
         workflow.setMaxConcurrent(1);
+        // 模板创建者就是默认执行身份：复制后可直接试运行、发布和启动，
+        // 不需要用户额外填写一个与当前登录用户重复的配置。
+        workflow.setActorUserId(currentUserId);
         workflow.setRuntimeEnabled(false);
         workflowMapper.insert(workflow);
 
