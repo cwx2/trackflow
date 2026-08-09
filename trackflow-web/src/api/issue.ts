@@ -5,8 +5,11 @@ import type {
   IssueTagVO, IssueLinkVO, IssueLinkTypeVO, IssueTrashVO, BatchAvailableStatusVO,
   TransitStatusResultVO, ManualOrderVO, UpdateIssueData, UpdateCommentData
 } from './types'
-import type { AxiosProgressEvent } from 'axios'
+import type { AxiosProgressEvent, AxiosRequestConfig } from 'axios'
 import { validateFile } from '@/utils/attachment'
+
+/** 可选请求配置（支持 _silent403 静默 403） */
+type RequestOptions = AxiosRequestConfig & { _silent403?: boolean }
 
 /**
  * Issue 模块 API
@@ -28,8 +31,8 @@ export const issueApi = {
     excludeDoneBefore?: string
     reportedByMe?: string; assignedToMe?: string
     overdue?: string; dueSoon?: string
-  }, signal?: AbortSignal) {
-    return request.get<any, R<PageResult<IssueVO>>>('/issues', { params, signal })
+  }, signal?: AbortSignal, options?: RequestOptions) {
+    return request.get<any, R<PageResult<IssueVO>>>('/issues', { params, signal, ...options })
   },
 
   /** Issue 详情 */
@@ -119,8 +122,8 @@ export const issueApi = {
   },
 
   /** 状态列表 */
-  listStatuses() {
-    return request.get<any, R<IssueStatusVO[]>>('/issues/statuses')
+  listStatuses(options?: RequestOptions) {
+    return request.get<any, R<IssueStatusVO[]>>('/issues/statuses', { ...options })
   },
 
   /** 更新单个状态节点的画布坐标 */

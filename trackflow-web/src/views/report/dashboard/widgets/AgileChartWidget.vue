@@ -178,10 +178,10 @@ async function loadData(_force = false) {
 
   try {
     if (chartType === 'burndown' && sprintId) {
-      const res = await sprintApi.burndown(sprintId)
+      const res = await sprintApi.burndown(sprintId, undefined, { _silent403: true })
       agileChartData.value = res.data || null
     } else if (chartType === 'cumulative_flow' && projectId) {
-      const res = await reportStatisticsApi.cumulativeFlow(projectId)
+      const res = await reportStatisticsApi.cumulativeFlow(projectId, undefined, undefined, { _silent403: true })
       cumulativeFlowData.value = res.data || null
     }
     emit('loaded')

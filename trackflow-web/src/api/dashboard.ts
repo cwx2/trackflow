@@ -1,5 +1,9 @@
 import request from './request'
 import type { R, IssueVO } from './types'
+import type { AxiosRequestConfig } from 'axios'
+
+/** 可选请求配置（支持 _silent403 静默 403） */
+type RequestOptions = AxiosRequestConfig & { _silent403?: boolean }
 
 export interface DashboardSummaryVO {
   assignedOpen: number
@@ -70,12 +74,12 @@ export const dashboardApi = {
   },
 
   /** Widget 活动流（支持多维筛选） */
-  activityFeed(params?: { projectIds?: string[]; actions?: string[]; userIds?: string[]; limit?: number }) {
-    return request.get<any, R<DashboardActivityVO[]>>('/dashboard/activity-feed', { params })
+  activityFeed(params?: { projectIds?: string[]; actions?: string[]; userIds?: string[]; limit?: number }, options?: RequestOptions) {
+    return request.get<any, R<DashboardActivityVO[]>>('/dashboard/activity-feed', { params, ...options })
   },
 
   /** 项目团队成员数据（用于 Project Team Widget） */
-  projectTeam(params: { projectId: string; limit?: number }) {
-    return request.get<any, R<ProjectTeamMemberVO[]>>('/dashboard/project-team', { params })
+  projectTeam(params: { projectId: string; limit?: number }, options?: RequestOptions) {
+    return request.get<any, R<ProjectTeamMemberVO[]>>('/dashboard/project-team', { params, ...options })
   }
 }

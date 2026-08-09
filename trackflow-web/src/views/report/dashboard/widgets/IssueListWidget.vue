@@ -61,7 +61,7 @@ let statusCache: Array<{ id: string; name: string }> | null = null
 async function resolveStatusNameToId(nameInput: string): Promise<string | null> {
   if (!statusCache) {
     try {
-      const res = await issueApi.listStatuses()
+      const res = await issueApi.listStatuses({ _silent403: true })
       statusCache = (res.data || []).map((s: any) => ({ id: String(s.id), name: s.name }))
     } catch {
       return null
@@ -125,7 +125,7 @@ async function loadData(_force = false) {
       Object.assign(params, filterParams)
     }
 
-    const res = await issueApi.list(params)
+    const res = await issueApi.list(params, undefined, { _silent403: true })
     const issues = res.data?.list || []
     issueListData.value = issues.map(item => ({
       id: item.id,

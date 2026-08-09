@@ -42,8 +42,8 @@ export const sprintApi = {
   },
 
   /** Sprint 详情 */
-  getById(id: string) {
-    return request.get<any, R<SprintVO>>(`/sprints/${id}`)
+  getById(id: string, options?: RequestOptions) {
+    return request.get<any, R<SprintVO>>(`/sprints/${id}`, { ...options })
   },
 
   /** 更新 Sprint（支持清空日期恢复为 unscheduled 状态） */
@@ -88,9 +88,9 @@ export const sprintApi = {
   },
 
   /** 获取 Sprint 燃尽图数据 */
-  burndown(id: string, mode?: 'issue_count' | 'estimation' | 'work_items') {
+  burndown(id: string, mode?: 'issue_count' | 'estimation' | 'work_items', options?: RequestOptions) {
     return request.get<any, R<SprintBurndownVO>>(`/sprints/${id}/burndown`, {
-      params: mode ? { mode } : undefined
+      params: mode ? { mode } : undefined, ...options
     })
   },
 

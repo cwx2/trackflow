@@ -90,7 +90,7 @@ async function loadData(force = false) {
     try {
       const params: Record<string, string> = {}
       if (config.projectId) params.projectId = config.projectId
-      const res = await reportStatisticsApi.dashboard(params)
+      const res = await reportStatisticsApi.dashboard(params, { _silent403: true })
       overviewData.value = res.data?.overview || null
       emit('loaded')
     } catch (e: any) {

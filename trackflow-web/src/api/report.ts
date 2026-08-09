@@ -1,5 +1,9 @@
 import request from './request'
 import type { R } from './types'
+import type { AxiosRequestConfig } from 'axios'
+
+/** 可选请求配置（支持 _silent403 静默 403） */
+type RequestOptions = AxiosRequestConfig & { _silent403?: boolean }
 
 export interface ReportDefinitionVO {
   id: string
@@ -165,10 +169,11 @@ export const reportApi = {
   },
 
   /** 执行报表（获取数据） */
-  execute(id: string, force?: boolean, signal?: AbortSignal) {
+  execute(id: string, force?: boolean, signal?: AbortSignal, options?: RequestOptions) {
     return request.get<any, R<ReportDataVO>>(`/reports/${id}/data`, {
       params: force ? { force: true } : undefined,
-      signal
+      signal,
+      ...options
     })
   },
 

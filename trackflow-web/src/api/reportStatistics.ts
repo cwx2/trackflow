@@ -1,5 +1,9 @@
 import request from './request'
 import type { R } from './types'
+import type { AxiosRequestConfig } from 'axios'
+
+/** 可选请求配置（支持 _silent403 静默 403） */
+type RequestOptions = AxiosRequestConfig & { _silent403?: boolean }
 
 // ─── 类型定义 ─────────────────────────────────────────
 
@@ -244,8 +248,8 @@ export interface DashboardData {
 
 export const reportStatisticsApi = {
   /** 获取仪表盘全量数据 */
-  dashboard(params: DashboardParams) {
-    return request.get<any, R<DashboardData>>('/reports/statistics/dashboard', { params })
+  dashboard(params: DashboardParams, options?: RequestOptions) {
+    return request.get<any, R<DashboardData>>('/reports/statistics/dashboard', { params, ...options })
   },
 
   /** 工单状态分布 */
@@ -291,9 +295,9 @@ export const reportStatisticsApi = {
   },
 
   /** 累积流图 */
-  cumulativeFlow(projectId: string, startDate?: string, endDate?: string) {
+  cumulativeFlow(projectId: string, startDate?: string, endDate?: string, options?: RequestOptions) {
     return request.get<any, R<CumulativeFlowData>>('/reports/statistics/cumulative-flow', {
-      params: { projectId, startDate, endDate }
+      params: { projectId, startDate, endDate }, ...options
     })
   },
 

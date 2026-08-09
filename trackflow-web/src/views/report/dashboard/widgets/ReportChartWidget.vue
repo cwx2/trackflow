@@ -351,7 +351,7 @@ async function loadData(force = false) {
   const timeoutId = setTimeout(() => controller.abort(ABORT_REASON_TIMEOUT), REQUEST_TIMEOUT_MS)
 
   try {
-    const res = await reportApi.execute(reportId, force || undefined, controller.signal)
+    const res = await reportApi.execute(reportId, force || undefined, controller.signal, { _silent403: true })
     reportDataResult.value = res.data || null
     emit('loaded')
   } catch (e: any) {

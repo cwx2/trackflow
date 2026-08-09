@@ -173,7 +173,7 @@ async function loadCalendarData() {
       dueBefore,
       pageSize: 100,
       page: 1
-    })
+    }, undefined, { _silent403: true })
 
     const map = new Map<string, IssueVO[]>()
     const issues = res.data?.list || []

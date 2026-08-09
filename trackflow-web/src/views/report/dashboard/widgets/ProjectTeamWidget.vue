@@ -119,7 +119,7 @@ async function loadData(_force = false) {
     if (props.config.limit && props.config.limit > 0) {
       params.limit = props.config.limit
     }
-    const res = await dashboardApi.projectTeam(params)
+    const res = await dashboardApi.projectTeam(params, { _silent403: true })
     teamMembers.value = res.data || []
     emit('loaded')
   } catch (e: any) {

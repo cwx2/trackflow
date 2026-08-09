@@ -126,7 +126,7 @@ async function loadData(_force = false) {
   }
 
   try {
-    const res = await sprintApi.getById(sprintId)
+    const res = await sprintApi.getById(sprintId, { _silent403: true })
     const sprint = res.data
     if (sprint) {
       boardStatusData.value = {

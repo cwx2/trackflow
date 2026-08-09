@@ -114,7 +114,7 @@ async function loadData(_force = false) {
     if (config.actions && config.actions.length > 0) params.actions = config.actions
     if (config.userIds && config.userIds.length > 0) params.userIds = config.userIds
     params.limit = config.limit || 10
-    const res = await dashboardApi.activityFeed(params)
+    const res = await dashboardApi.activityFeed(params, { _silent403: true })
     activityFeedData.value = res.data || []
     emit('loaded')
   } catch (e: any) {
