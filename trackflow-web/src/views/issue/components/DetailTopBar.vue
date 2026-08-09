@@ -55,8 +55,13 @@
       <button class="icon-btn" @click="$emit('copy')" title="复制"><icon-copy :size="16" /></button>
       <button v-if="showCreate" class="icon-btn" @click="$emit('create')" title="创建工单"><icon-plus :size="16" /></button>
 
-      <!-- 更多操作下拉菜单（包含快捷动作） -->
-      <a-dropdown trigger="click" position="br">
+      <!-- 切换属性面板（只读模式下单独展示，始终可见） -->
+      <button v-if="readonly" class="icon-btn" @click="$emit('toggle-sidebar')" title="切换属性面板">
+        <icon-menu :size="16" />
+      </button>
+
+      <!-- 更多操作下拉菜单（包含快捷动作）——仅对有写权限的用户显示 -->
+      <a-dropdown v-if="!readonly" trigger="click" position="br">
         <button class="icon-btn" title="更多操作">
           <icon-more :size="16" />
         </button>
@@ -125,6 +130,8 @@ const props = defineProps<{
   isRestricted?: boolean
   /** 是否可以执行快捷动作 */
   canQuickActions?: boolean
+  /** 是否为只读模式（观察者等无写权限用户），隐藏写操作按钮 */
+  readonly?: boolean
 }>()
 
 const emit = defineEmits<{

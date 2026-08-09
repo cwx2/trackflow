@@ -31,6 +31,7 @@
       :show-create="canCreateIssue"
       :is-restricted="issue.visibility === 'restricted'"
       :can-quick-actions="!isProjectArchived && canChangeStatusEffective"
+      :readonly="!canEditIssueEffective && !canChangeStatusEffective"
       @copy="copyIssue"
       @create="showCreatePanel = true"
       @toggle-sidebar="toggleSidebar"
