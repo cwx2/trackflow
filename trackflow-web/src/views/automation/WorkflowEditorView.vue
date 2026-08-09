@@ -407,6 +407,81 @@ const settingsModel = computed(() => ({
 // 全局变量和选中节点
 const globalVariables = ref<Record<string, GlobalVariable>>({})
 const selectedNode = ref<any>(null)
+const nodeActionTarget = ref<any>(null)
+const showRenameNodeModal = ref(false)
+const showDeleteNodeModal = ref(false)
+const showNodeHelpModal = ref(false)
+const renameNodeTitle = ref('')
+const nodeHelpDefinition = computed(() => getNodeDefinition(
+  nodeActionTarget.value?.properties?.nodeType || nodeActionTarget.value?.type || ''
+))
+
+function handleNodeMenuAction(event: { action: string; nodeId: string; data?: any }) {
+  if (!lf) return
+  const graphNode = (lf.getGraphData() as { nodes: any[] }).nodes
+    .find(node => node.id === event.nodeId)
+  const target = graphNode || event.data
+  if (!target) return
+  nodeActionTarget.value = JSON.parse(JSON.stringify(target))
+
+  if (event.action === 'rename') {
+    renameNodeTitle.value = target.properties?.nodeMeta?.title || target.text?.value || target.type
+    showRenameNodeModal.value = true
+    return
+  }
+  if (event.action === 'duplicate') {
+    duplicateNode(target)
+    return
+  }
+  if (event.action === 'delete') {
+    showDeleteNodeModal.value = true
+    return
+  }
+  if (event.action === 'help') showNodeHelpModal.value = true
+}
+
+function confirmRenameNode() {
+  const target = nodeActionTarget.value
+  const title = renameNodeTitle.value.trim()
+  if (!lf || !target?.id || !title) {
+    Message.warning('请输入节点名称')
+    return
+  }
+  const properties = {
+    ...(target.properties || {}),
+    nodeMeta: { ...(target.properties?.nodeMeta || {}), title },
+  }
+  lf.setProperties(target.id, properties)
+  if (selectedNode.value?.id === target.id) {
+    selectedNode.value = { ...selectedNode.value, properties }
+  }
+  showRenameNodeModal.value = false
+  Message.success('节点已重命名')
+}
+
+function duplicateNode(source: any) {
+  if (!lf) return
+  const copy = lf.addNode({
+    type: source.type,
+    x: source.x + 36,
+    y: source.y + 36,
+    properties: JSON.parse(JSON.stringify(source.properties || {})),
+  }) as any
+  if (copy?.id) {
+    selectedNode.value = JSON.parse(JSON.stringify(copy))
+    rightPanelOpen.value = true
+  }
+  Message.success('已创建节点副本')
+}
+
+function confirmDeleteNode() {
+  const target = nodeActionTarget.value
+  if (!lf || !target?.id) return
+  lf.deleteNode(target.id)
+  if (selectedNode.value?.id === target.id) selectedNode.value = null
+  showDeleteNodeModal.value = false
+  Message.success('节点已删除')
+}
 
 /**
  * 配置面板是唯一允许回写画布的入口。不能 watch selectedNode 再回写 LogicFlow，
@@ -829,6 +904,10 @@ async function initLogicFlow() {
 
   lf.on('node:test', ({ data }) => {
     void openNodeTest(data)
+  })
+
+  lf.on('node:menu-action', (event: { action: string; nodeId: string; data?: any }) => {
+    handleNodeMenuAction(event)
   })
 
   // 监听空白点击
@@ -1739,6 +1818,36 @@ onUnmounted(() => {
   color: var(--tf-text-secondary);
 }
 .node-test-error { color: var(--tf-danger) !important; }
+.node-action-hint {
+  margin: 8px 0 0;
+  color: var(--tf-text-secondary);
+  font-size: 12px;
+}
+.node-help-description {
+  margin: 0;
+  color: var(--tf-text-secondary);
+  line-height: 1.65;
+}
+.node-help-section {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--tf-border);
+}
+.node-help-section h4 {
+  margin: 0 0 8px;
+  color: var(--tf-text-primary);
+  font-size: 13px;
+}
+.node-help-port {
+  display: grid;
+  grid-template-columns: minmax(90px, auto) auto auto 1fr;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 0;
+  color: var(--tf-text-secondary);
+  font-size: 12px;
+}
+.node-help-port strong { color: var(--tf-text-primary); font-weight: 600; }
 
 /* LogicFlow 的选中态没有传入 Vue 节点属性，在画布层补上可感知的选择反馈。 */
 :deep(.lf-node-selected) .node-card {
