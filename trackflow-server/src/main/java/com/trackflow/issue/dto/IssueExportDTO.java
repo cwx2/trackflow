@@ -28,6 +28,7 @@ public class IssueExportDTO {
     private String assigneeId;
     private Long reporterId;
     private String sprintId;
+    private String sprintStatus;
     private String issueType;
     private String keyword;
 
@@ -70,6 +71,7 @@ public class IssueExportDTO {
         q.setAssigneeId(this.assigneeId);
         q.setReporterId(this.reporterId);
         q.setSprintId(this.sprintId);
+        q.setSprintStatus(this.sprintStatus);
         q.setIssueType(this.issueType);
         q.setKeyword(this.keyword);
         q.setStatusIdNot(this.statusIdNot);

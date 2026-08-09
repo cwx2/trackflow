@@ -18,6 +18,7 @@ public class IssueQuery extends PageQuery {
     private String assigneeName;   // Filter by assignee display name (exact match via sub-query)
     private Long reporterId;
     private String sprintId;       // Supports single ID or comma-separated IDs
+    private String sprintStatus;   // Filter by sprint status (e.g. "completed") — returns issues in sprints with this status, excluding closed issues
     private String issueType;      // Supports single value or comma-separated values
     @Size(max = 100, message = "搜索关键词不能超过100个字符")
     private String keyword;

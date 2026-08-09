@@ -47,6 +47,7 @@ export function useIssueExport(options: ExportOptions) {
         if (fp.priority) payload.priority = fp.priority
         if (fp.assigneeId) payload.assigneeId = fp.assigneeId
         if (fp.sprintId) payload.sprintId = fp.sprintId
+        if (fp.sprintStatus) payload.sprintStatus = fp.sprintStatus
         if (fp.issueType) payload.issueType = fp.issueType
         if (fp.keyword) payload.keyword = fp.keyword
         if (fp.statusIdNot) payload.statusIdNot = fp.statusIdNot

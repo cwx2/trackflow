@@ -18,6 +18,7 @@ export interface IssueListFilters {
   assigneeName?: string
   reporterId?: string
   sprintId?: string
+  sprintStatus?: string
   issueType?: string
   keyword?: string
   queryId?: string | number
@@ -118,6 +119,7 @@ export function useIssueList() {
       if (filters.assigneeName) params.assigneeName = filters.assigneeName
       if (filters.reporterId) params.reporterId = filters.reporterId
       if (filters.sprintId) params.sprintId = filters.sprintId
+      if (filters.sprintStatus) params.sprintStatus = filters.sprintStatus
       if (filters.issueType) params.issueType = filters.issueType
       if (filters.keyword) params.keyword = filters.keyword
       // Negative filters

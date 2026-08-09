@@ -78,6 +78,17 @@ public class IssueQueryService {
         applyFilter(wrapper, "sprint_id", query.getSprintId(), true);
         applyFilter(wrapper, "issue_type", query.getIssueType(), false);
 
+        // Sprint status filter: issues in sprints with specified status, excluding closed issues
+        if (query.getSprintStatus() != null && !query.getSprintStatus().isBlank()) {
+            String sprintStatusValue = query.getSprintStatus().trim();
+            wrapper.apply("sprint_id IN (SELECT id FROM sprint WHERE status = {0})", sprintStatusValue);
+            // Also exclude closed issues — lingering issues are unresolved by definition
+            Set<Long> closedStatusIds = statusCacheHelper.getClosedStatusIds();
+            if (!closedStatusIds.isEmpty()) {
+                wrapper.notIn("status_id", closedStatusIds);
+            }
+        }
+
         // Negative filters
         applyNegativeFilter(wrapper, "status_id", query.getStatusIdNot(), true);
         applyNegativeFilter(wrapper, "priority", query.getPriorityNot(), false);

@@ -179,6 +179,28 @@ export function useDashboardFilter(options: DashboardFilterOptions) {
       })
     }
 
+    // sprintStatus: filter issues by sprint status (e.g. "completed" = lingering issues in completed sprints)
+    if (route.query.sprintStatus) {
+      const sprintStatusVal = String(route.query.sprintStatus)
+      filters.sprintStatus = sprintStatusVal
+      const statusLabelMap: Record<string, string> = {
+        completed: '已完成迭代中的遗留工单',
+        active: '进行中迭代的工单',
+        planned: '计划中迭代的工单'
+      }
+      const displayLabel = statusLabelMap[sprintStatusVal] || `迭代状态: ${sprintStatusVal}`
+      chips.push({
+        fieldKey: 'sprint',
+        operator: 'equals',
+        values: [sprintStatusVal],
+        valueLabels: [displayLabel]
+      })
+      // Set a descriptive query name for display
+      if (!route.query.label) {
+        activeQueryName.value = displayLabel
+      }
+    }
+
     // priority
     if (route.query.priority) {
       const priority = String(route.query.priority)
@@ -288,10 +310,10 @@ export function useDashboardFilter(options: DashboardFilterOptions) {
     return !!(
       route.query.statusId || route.query.statusCode || route.query.statusCategory ||
       route.query.statusName || route.query.status || route.query.overdue ||
-      route.query.dueSoon || route.query.sprint || route.query.reportedByMe ||
-      route.query.assignedToMe || route.query.priority || route.query.issueType ||
-      route.query.assigneeName || route.query.assignee || route.query.reporter ||
-      route.query.projectId || route.query.keyword
+      route.query.dueSoon || route.query.sprint || route.query.sprintStatus ||
+      route.query.reportedByMe || route.query.assignedToMe || route.query.priority ||
+      route.query.issueType || route.query.assigneeName || route.query.assignee ||
+      route.query.reporter || route.query.projectId || route.query.keyword
     )
   }
 
