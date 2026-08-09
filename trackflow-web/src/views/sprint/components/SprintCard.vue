@@ -36,7 +36,7 @@
             </a-tooltip>
           </template>
         </div>
-        <span class="sprint-remaining" v-if="timeInfo">
+        <span class="sprint-remaining" :class="{ 'sprint-remaining-overdue': timeInfo && (timeInfo.type === 'overdue' || timeInfo.type === 'today') }" v-if="timeInfo">
           <template v-if="timeInfo.type === 'not-started'">
             <span class="remaining-icon not-started">📅</span> {{ timeInfo.days }} 天后开始
           </template>
@@ -53,6 +53,10 @@
       </div>
       <div class="sprint-dates" v-if="sprint.startDate">
         {{ formatDate(sprint.startDate) }} — {{ formatDate(sprint.endDate) }}
+      </div>
+      <div class="sprint-dates sprint-dates-missing" v-else-if="isActive">
+        <span class="dates-missing-icon">📅</span> 未设置日期
+        <a-button v-if="canEdit" size="mini" type="text" @click="$emit('editDates', sprint)">设置</a-button>
       </div>
     </div>
 
@@ -483,6 +487,15 @@ function formatDate(dateStr?: string): string {
   gap: 4px;
 }
 
+.sprint-remaining-overdue {
+  color: rgb(var(--danger-6));
+  font-weight: 500;
+}
+
+.sprint-remaining .remaining-icon.overdue,
+.sprint-remaining .remaining-icon.warning {
+  color: rgb(var(--danger-6));
+}
 .remaining-icon {
   font-size: 12px;
 }
@@ -491,6 +504,18 @@ function formatDate(dateStr?: string): string {
   font-size: 12px;
   color: var(--color-text-3);
   white-space: nowrap;
+}
+
+.sprint-dates-missing {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-text-4);
+  font-style: italic;
+}
+
+.dates-missing-icon {
+  font-size: 12px;
 }
 
 /* Status Warning / Hint */
