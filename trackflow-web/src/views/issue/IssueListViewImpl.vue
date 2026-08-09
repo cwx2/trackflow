@@ -668,7 +668,9 @@
           <router-link :to="`/issues/${record.issueKey}`" class="issue-key" @click.stop>{{ record.issueKey }}</router-link>
         </template>
         <template #title-cell="{ record }">
-          <span class="issue-title-text">{{ record.title }}</span>
+          <span v-if="searchKeyword" class="issue-title-text" v-html="highlightKeyword(record.title, searchKeyword)"></span>
+          <span v-else class="issue-title-text">{{ record.title }}</span>
+          <span v-if="searchKeyword && record.matchContext" class="issue-match-context" v-html="highlightKeyword(record.matchContext, searchKeyword)"></span>
           <template v-if="record.tags && record.tags.length > 0">
             <span
               v-for="tag in record.tags.slice(0, 3)"
@@ -1000,7 +1002,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onUnmounted, watch, h, nextTick } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, watch, h, nextTick, provide } from 'vue'
 import { useRouter, useRoute, onBeforeRouteLeave } from 'vue-router'
 import { IconPlus, IconSearch, IconLoading, IconEdit, IconPenFill, IconShareExternal, IconPushpin, IconDelete, IconLock, IconCheckCircle, IconEye, IconLayout, IconExpand, IconDownload, IconFile, IconCode, IconCopy, IconLink, IconCalendar, IconRight, IconSettings, IconMinusCircle, IconExclamationCircleFill } from '@arco-design/web-vue/es/icon'
 import { Message, Modal } from '@arco-design/web-vue'
@@ -1010,6 +1012,7 @@ import type { IssueVO, IssueStatusVO, ProjectMemberVO, SprintVO, CustomFieldValu
 import type { TableData } from '@arco-design/web-vue'
 import { useAuthStore } from '@/stores/auth'
 import { localizeStatusName, localizePriority, queryFieldKeyToLabel } from '@/utils/fieldLabels'
+import { highlightKeyword } from '@/utils/highlight'
 import { DEFAULT_PRIORITY_OPTIONS, DEFAULT_PRIORITY_COLOR } from '@/composables/usePriorityOptions'
 import { DEFAULT_ISSUE_TYPE_OPTIONS, DEFAULT_ISSUE_TYPE_COLOR } from './composables/useIssueTypeOptions'
 import { extractVersion, showActionFeedback } from '@/utils/transition'
@@ -1091,6 +1094,7 @@ const activeProjectId = ref<string | null>(null)
 const filterBarRef = ref<InstanceType<typeof FilterBar> | null>(null)
 const filterProject = ref<string | undefined>(undefined)
 const searchKeyword = ref('')
+provide('searchKeyword', searchKeyword)
 const globalFilterParams = ref<Record<string, any>>({})
 const initialFilterChips = ref<any[]>([])
 const statusCache = ref<IssueStatusVO[]>([])
@@ -1922,6 +1926,9 @@ onBeforeRouteLeave((_to, _from, next) => {
 .issue-key { color: var(--tf-accent); font-weight: 500; font-size: 12px; text-decoration: none; cursor: pointer; }
 .issue-key:hover { text-decoration: underline; }
 .issue-title-text { color: var(--tf-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.issue-title-text :deep(.search-highlight) { background: var(--tf-highlight-bg, rgba(255, 200, 50, 0.35)); color: inherit; border-radius: 2px; padding: 0 1px; }
+.issue-match-context { display: block; font-size: 11px; color: var(--tf-text-tertiary); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.issue-match-context :deep(.search-highlight) { background: var(--tf-highlight-bg, rgba(255, 200, 50, 0.35)); color: inherit; border-radius: 2px; padding: 0 1px; }
 
 /* Tag badges (inline in title cell) */
 .issue-tag-badge {

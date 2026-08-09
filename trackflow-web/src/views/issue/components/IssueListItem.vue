@@ -56,7 +56,9 @@
     >{{ badge.value }}</span>
 
     <!-- Title -->
-    <span class="item-title">{{ issue.title }}</span>
+    <span v-if="searchKeyword" class="item-title" v-html="highlightKeyword(issue.title, searchKeyword)"></span>
+    <span v-else class="item-title">{{ issue.title }}</span>
+    <span v-if="searchKeyword && (issue as any).matchContext" class="item-match-context" v-html="highlightKeyword((issue as any).matchContext, searchKeyword)"></span>
 
     <!-- Tags (colored badges, max 3 shown) -->
     <template v-if="issue.tags && issue.tags.length > 0">
@@ -194,11 +196,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, inject } from 'vue'
+import type { Ref } from 'vue'
 import { IconRight, IconDown, IconLayers, IconDragDotVertical, IconThumbUp, IconLoading } from '@arco-design/web-vue/es/icon'
 import type { IssueVO, CustomFieldValueVO, SprintVO } from '@/api/types'
 import type { DensityLevel } from '../composables'
 import { localizeStatusName } from '@/utils/fieldLabels'
+import { highlightKeyword } from '@/utils/highlight'
 import { IssuePriorityBadge } from '@/components/base'
 import { DEFAULT_BADGE_COLOR } from '@/utils/uiColors'
 import TimeProgressIndicator from './TimeProgressIndicator.vue'
@@ -255,6 +259,9 @@ const emit = defineEmits<{
 
 // Sprint 下拉显示状态
 const sprintDropdownVisible = ref(false)
+
+// Inject search keyword from parent for highlighting
+const searchKeyword = inject<Ref<string>>('searchKeyword', ref(''))
 
 // Sprint 分组（只显示 active/planned）
 const sprintGroups = computed<SprintGroup[]>(() => {
