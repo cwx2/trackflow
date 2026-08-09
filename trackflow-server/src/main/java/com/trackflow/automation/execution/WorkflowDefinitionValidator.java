@@ -50,6 +50,21 @@ public class WorkflowDefinitionValidator {
         validateStructure(definition, true);
     }
 
+    /**
+     * 用于单节点试运行。节点调试不能被同一草稿中无关的旧边或未完成节点阻断，
+     * 但节点自身的类型、端口快照仍必须严格匹配正式注册表。
+     */
+    public void validateNodeForTest(WorkflowNodeModel node) {
+        if (node == null || node.id() == null || node.id().isBlank()) {
+            throw invalid("试运行节点不能为空");
+        }
+        NodeDefinition nodeDefinition = nodeRegistry.getDefinition(node.type());
+        if (nodeDefinition == null || nodeRegistry.getExecutor(node.type()) == null) {
+            throw invalid("节点没有可用实现: " + node.type() + " (" + node.id() + ")");
+        }
+        validateNodeSnapshot(node, nodeDefinition, false);
+    }
+
     private void validateStructure(WorkflowDefinitionModel definition, boolean executable) {
         if (definition == null) {
             throw invalid("工作流定义不能为空");

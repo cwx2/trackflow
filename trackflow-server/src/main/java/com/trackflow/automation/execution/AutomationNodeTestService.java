@@ -35,10 +35,11 @@ public class AutomationNodeTestService {
     private final NodeRegistry nodeRegistry;
     private final ObjectMapper objectMapper;
     private final AutomationActorRunner actorRunner;
+    private final WorkflowDefinitionValidator workflowDefinitionValidator;
 
     public NodeTestResultVO test(Long workflowId, String nodeId, NodeTestDTO request, Long requestedBy) {
         AutomationWorkflow workflow = workflowService.getById(workflowId);
-        WorkflowNodeModel node = findNode(workflow, nodeId);
+        WorkflowNodeModel node = resolveNode(workflow, nodeId, request);
         NodeExecutor executor = nodeRegistry.getExecutor(node.type());
         if (executor == null) {
             throw new BusinessException(ErrorCode.INVALID_STATE, "节点没有可用执行器: " + node.type());
@@ -103,6 +104,22 @@ public class AutomationNodeTestService {
             throw exception;
         } catch (Exception exception) {
             throw new BusinessException(ErrorCode.INVALID_PARAMETER, "工作流定义格式错误，无法试运行节点");
+        }
+    }
+
+    private WorkflowNodeModel resolveNode(AutomationWorkflow workflow, String nodeId, NodeTestDTO request) {
+        WorkflowNodeModel supplied = request != null ? request.getNode() : null;
+        if (supplied == null) {
+            return findNode(workflow, nodeId);
+        }
+        if (!nodeId.equals(supplied.id())) {
+            throw new BusinessException(ErrorCode.INVALID_PARAMETER, "试运行节点与请求路径不一致");
+        }
+        try {
+            workflowDefinitionValidator.validateNodeForTest(supplied);
+            return supplied;
+        } catch (DAGBuilder.InvalidWorkflowException exception) {
+            throw new BusinessException(ErrorCode.INVALID_PARAMETER, "节点结构错误: " + exception.getMessage());
         }
     }
 

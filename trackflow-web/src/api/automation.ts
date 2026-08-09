@@ -333,7 +333,11 @@ export const automationApi = {
   },
 
   /** 试运行工作流中的一个节点；输入只覆盖本次测试，不会保存。 */
-  testNode(id: string, nodeId: string, data: { inputOverrides?: Record<string, unknown>; confirmSideEffects?: boolean }) {
+  testNode(id: string, nodeId: string, data: {
+    inputOverrides?: Record<string, unknown>
+    confirmSideEffects?: boolean
+    node?: WorkflowNode
+  }) {
     return request.post<any, R<NodeTestResultVO>>(`/automation/workflows/${id}/nodes/${nodeId}/test`, data)
   },
 

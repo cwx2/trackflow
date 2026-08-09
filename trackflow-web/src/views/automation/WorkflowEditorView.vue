@@ -351,8 +351,7 @@ function updateSelectedNodeProperties(properties: Record<string, unknown>) {
 
 async function openNodeTest(node: any) {
   if (!workflowId.value || !lf) return
-  // 节点试运行必须基于当前画布；先保存，使后端执行的定义与用户看到的一致。
-  if (!(await handleSave())) return
+  // 单节点试运行必须与整张草稿保存隔离：画布里其他旧边或未完成节点不能阻断当前节点调试。
   nodeTestNode.value = JSON.parse(JSON.stringify(node))
   nodeTestInputText.value = '{}'
   nodeTestConfirmSideEffects.value = false
@@ -383,6 +382,7 @@ async function confirmNodeTest() {
     const res = await automationApi.testNode(workflowId.value, nodeTestNode.value.id, {
       inputOverrides,
       confirmSideEffects: nodeTestConfirmSideEffects.value,
+      node: normalizeCanvasNode(nodeTestNode.value),
     })
     if (res.code === 0) {
       nodeTestResult.value = res.data
