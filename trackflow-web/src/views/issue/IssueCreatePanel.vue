@@ -51,6 +51,13 @@
     </template>
 
     <div class="create-panel">
+      <!-- 提交错误 Banner（API 返回 400 时显示在表单顶部，参考 YouTrack） -->
+      <div v-if="submitError" class="submit-error-banner">
+        <icon-close-circle-fill class="submit-error-icon" />
+        <span class="submit-error-text">{{ submitError }}</span>
+        <icon-close class="submit-error-close" @click="submitError = ''" />
+      </div>
+
       <!-- 标题输入 -->
       <div class="title-bar">
         <a-input
@@ -705,8 +712,9 @@
 import { ref, reactive, computed, onMounted, onBeforeUnmount, onUnmounted, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { Message, Modal } from '@arco-design/web-vue'
+import { showError } from '@/utils/messageThrottle'
 import { useConfirmDelete } from '@/composables/useConfirmDelete'
-import { IconDown, IconAttachment, IconClose, IconPlus, IconUp, IconLink, IconSearch, IconCheck, IconFullscreen, IconFile } from '@arco-design/web-vue/es/icon'
+import { IconDown, IconAttachment, IconClose, IconPlus, IconUp, IconLink, IconSearch, IconCheck, IconFullscreen, IconFile, IconCloseCircleFill } from '@arco-design/web-vue/es/icon'
 import { projectApi, issueApi, sprintApi, customFieldApi, issueTemplateApi, tagApi } from '@/api'
 import { IssuePriorityBadge } from '@/components/base'
 import { useProjectList } from '@/composables/useProjectList'
@@ -746,6 +754,7 @@ const router = useRouter()
 
 const submitting = ref(false)
 const splitMenuVisible = ref(false)
+const submitError = ref('')
 
 // ========== 标题栏草稿数量下拉 ==========
 const draftDropdownVisible = ref(false)
@@ -1695,6 +1704,7 @@ function resetForm() {
   // 重置校验错误
   titleError.value = ''
   cfValidationErrors.value = {}
+  submitError.value = ''
   // 重置附件
   attachmentFiles.value = []
   pasteHint.value = ''
@@ -1871,6 +1881,7 @@ async function doSubmit(): Promise<boolean> {
   // 清空之前的错误状态
   titleError.value = ''
   cfValidationErrors.value = {}
+  submitError.value = ''
 
   // 标题校验
   if (!form.title.trim()) {
@@ -1943,18 +1954,43 @@ async function doSubmit(): Promise<boolean> {
     localStorage.setItem('trackflow:quick-create-project', form.projectId!)
     return true
   } catch (e: any) {
-    const errorMsg: string = e.response?.data?.message || '创建失败'
+    const status = e.response?.status
+    const responseData = e.response?.data
+    const errorMsg: string = responseData?.message || '创建失败，请检查填写内容后重试'
+
     // 解析后端自定义字段验证错误，映射到具体字段的内联提示
     if (errorMsg.includes('自定义字段验证失败')) {
       const mapped = parseCustomFieldError(errorMsg)
       if (mapped) {
-        Message.warning(errorMsg)
+        // 有字段级错误映射时，在 banner 中显示概要
+        submitError.value = errorMsg
+        scrollToFirstError()
       } else {
-        Message.error(errorMsg)
+        submitError.value = errorMsg
+      }
+    } else if (status === 400 || status === 422) {
+      // 400/422 业务校验错误：内联 banner 显示 + 尝试映射字段错误
+      submitError.value = errorMsg
+      // 尝试解析字段级错误（后端可能返回 fields 数组）
+      if (responseData?.fields && Array.isArray(responseData.fields)) {
+        for (const fieldError of responseData.fields) {
+          if (fieldError.field && fieldError.message) {
+            const field = customFields.value.find(f => f.name === fieldError.field)
+            if (field) {
+              cfValidationErrors.value[field.id] = fieldError.message
+            }
+          }
+        }
       }
     } else {
-      Message.error(errorMsg)
+      // 其他错误（网络等）：设置 banner
+      submitError.value = errorMsg
     }
+
+    // 始终尝试弹出 Toast 消息作为双重保障
+    // 使用 showError 直接调用（带 id 绕过去重，确保一定显示）
+    showError(errorMsg, { id: 'issue-create-error', duration: 5000 })
+
     return false
   } finally {
     submitting.value = false
@@ -2072,6 +2108,47 @@ onMounted(() => {
 }
 
 .title-bar { padding: 8px 0; border-bottom: 1px solid var(--color-border); flex-shrink: 0; position: relative; }
+
+/* Submit error banner (YouTrack-style red banner at top of form) */
+.submit-error-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  background: rgba(var(--red-6, 245, 63, 63), 0.08);
+  border: 1px solid rgba(var(--red-6, 245, 63, 63), 0.3);
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--tf-danger, var(--color-danger-6, #f53f3f));
+  line-height: 1.5;
+  flex-shrink: 0;
+  animation: banner-slide-in 200ms ease-out;
+}
+.submit-error-icon {
+  flex-shrink: 0;
+  font-size: 16px;
+  margin-top: 1px;
+}
+.submit-error-text {
+  flex: 1;
+  word-break: break-word;
+}
+.submit-error-close {
+  flex-shrink: 0;
+  font-size: 12px;
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity 120ms;
+  margin-top: 2px;
+}
+.submit-error-close:hover {
+  opacity: 1;
+}
+@keyframes banner-slide-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 .title-input { font-size: 18px; font-weight: 500; }
 .title-input :deep(.arco-input) { font-size: 18px; font-weight: 500; }
 .title-input.title-error :deep(.arco-input) { 
