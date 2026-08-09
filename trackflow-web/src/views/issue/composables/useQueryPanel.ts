@@ -139,7 +139,7 @@ export function useQueryPanel(options: QueryPanelOptions) {
     queryText: ''
   })
 
-  function openCreateQueryModal(buildCurrentFilters: () => SavedQueryFilter[]) {
+  function openCreateQueryModal(buildCurrentFilters?: (() => SavedQueryFilter[]) | unknown) {
     createQueryForm.name = ''
     createQueryForm.pinned = true
     createQueryForm.shared = false
@@ -152,7 +152,7 @@ export function useQueryPanel(options: QueryPanelOptions) {
       } catch {
         preFilters = []
       }
-    } else {
+    } else if (typeof buildCurrentFilters === 'function') {
       preFilters = buildCurrentFilters()
     }
     createQueryForm.queryText = filtersToQueryText(preFilters)
