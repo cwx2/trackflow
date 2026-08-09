@@ -2,6 +2,10 @@
   <div v-if="chartOption" class="widget-chart-container">
     <v-chart :option="chartOption" autoresize class="widget-chart-instance" />
   </div>
+  <div v-else-if="isDataEmpty" class="widget-configure-hint">
+    <icon-bar-chart :size="32" class="hint-icon" />
+    <span class="hint-text">暂无报表数据</span>
+  </div>
   <div v-else class="widget-configure-hint">
     <icon-bar-chart :size="32" class="hint-icon" />
     <span class="hint-text">{{ hintText }}</span>
@@ -57,13 +61,23 @@ const chartOption = computed(() => {
   return buildChartOption(reportDataResult.value)
 })
 
-function buildChartOption(data: ReportDataVO): Record<string, any> {
+// Data was loaded but chart builders returned null (empty labels/dates)
+const isDataEmpty = computed(() => {
+  return reportDataResult.value !== null && chartOption.value === null
+})
+
+function buildChartOption(data: ReportDataVO): Record<string, any> | null {
   // 双维度交叉分析：使用堆叠条形图
   if (data.secondGroupBy && data.matrix && data.secondLabels) {
     return buildStackedBarOption(data)
   }
 
   const chartType = data.chartType || inferChartType(data.groupBy, data.type)
+
+  // 时间序列类型（line / area / stacked_area）：使用 dates + series
+  if (chartType === 'line' || chartType === 'area' || chartType === 'stacked_area') {
+    return buildTimeSeriesOption(data, chartType)
+  }
 
   if (chartType === 'pie') return buildPieOption(data)
   if (chartType === 'bar_horizontal') return buildBarHorizontalOption(data)
@@ -77,10 +91,14 @@ function inferChartType(groupBy: string, type: string): string {
   return 'bar_vertical'
 }
 
-function buildPieOption(data: ReportDataVO): Record<string, any> {
-  const items = data.labels.map((label, idx) => ({
+function buildPieOption(data: ReportDataVO): Record<string, any> | null {
+  const labels = data.labels ?? []
+  const values = data.data ?? []
+  if (labels.length === 0) return null
+
+  const items = labels.map((label, idx) => ({
     name: label,
-    value: data.data[idx],
+    value: values[idx] ?? 0,
     itemStyle: { color: getItemColor(label, data.groupBy, idx) }
   }))
 
@@ -118,8 +136,11 @@ function buildPieOption(data: ReportDataVO): Record<string, any> {
   }
 }
 
-function buildBarHorizontalOption(data: ReportDataVO): Record<string, any> {
-  const labels = data.labels
+function buildBarHorizontalOption(data: ReportDataVO): Record<string, any> | null {
+  const labels = data.labels ?? []
+  const values = data.data ?? []
+  if (labels.length === 0) return null
+
   const colors = labels.map((l, i) => getItemColor(l, data.groupBy, i))
 
   return {
@@ -142,15 +163,18 @@ function buildBarHorizontalOption(data: ReportDataVO): Record<string, any> {
     },
     series: [{
       type: 'bar',
-      data: data.data.map((v, i) => ({ value: v, itemStyle: { color: colors[i] } })),
+      data: values.map((v, i) => ({ value: v, itemStyle: { color: colors[i] } })),
       barMaxWidth: 18,
       itemStyle: { borderRadius: [0, 3, 3, 0] }
     }]
   }
 }
 
-function buildBarVerticalOption(data: ReportDataVO): Record<string, any> {
-  const labels = data.labels
+function buildBarVerticalOption(data: ReportDataVO): Record<string, any> | null {
+  const labels = data.labels ?? []
+  const values = data.data ?? []
+  if (labels.length === 0) return null
+
   const colors = labels.map((l, i) => getItemColor(l, data.groupBy, i))
 
   return {
@@ -173,17 +197,95 @@ function buildBarVerticalOption(data: ReportDataVO): Record<string, any> {
     },
     series: [{
       type: 'bar',
-      data: data.data.map((v, i) => ({ value: v, itemStyle: { color: colors[i] } })),
+      data: values.map((v, i) => ({ value: v, itemStyle: { color: colors[i] } })),
       barMaxWidth: 24,
       itemStyle: { borderRadius: [3, 3, 0, 0] }
     }]
   }
 }
 
-function buildStackedBarOption(data: ReportDataVO): Record<string, any> {
-  const primaryLabels = data.labels
+function buildTimeSeriesOption(data: ReportDataVO, chartType: string): Record<string, any> | null {
+  const dates = data.dates ?? []
+  const seriesList = data.series ?? []
+  if (dates.length === 0 || seriesList.length === 0) return null
+
+  const isStacked = chartType === 'stacked_area'
+
+  const echartsSeries = seriesList.map((s, idx) => {
+    const isArea = s.seriesType === 'area' || isStacked
+    return {
+      name: s.name,
+      type: 'line',
+      data: s.data ?? [],
+      smooth: true,
+      showSymbol: false,
+      lineStyle: { width: 2 },
+      itemStyle: { color: s.color || CHART_PALETTE[idx % CHART_PALETTE.length] },
+      ...(isArea ? { areaStyle: { opacity: isStacked ? 0.6 : 0.15 } } : {}),
+      ...(isStacked ? { stack: 'total' } : {})
+    }
+  })
+
+  // Add ideal line if present (for burndown charts)
+  if (data.idealLine && data.idealLine.length > 0) {
+    echartsSeries.push({
+      name: '理想线',
+      type: 'line',
+      data: data.idealLine as any,
+      smooth: false,
+      showSymbol: false,
+      lineStyle: { width: 1.5, type: 'dashed' } as any,
+      itemStyle: { color: '#6b7280' },
+    } as any)
+  }
+
+  return {
+    backgroundColor: 'transparent',
+    tooltip: {
+      trigger: 'axis',
+      textStyle: { fontSize: 11 },
+      backgroundColor: 'var(--tf-bg-elevated, #22252a)',
+      borderColor: 'var(--tf-border)',
+    },
+    legend: {
+      bottom: 0,
+      textStyle: { color: 'var(--tf-text-secondary)', fontSize: 10 },
+      itemWidth: 12,
+      itemHeight: 2,
+      itemGap: 8
+    },
+    grid: { left: 36, right: 8, top: 8, bottom: 28 },
+    xAxis: {
+      type: 'category',
+      data: dates,
+      boundaryGap: false,
+      axisLine: { show: false },
+      axisTick: { show: false },
+      axisLabel: {
+        fontSize: 10,
+        formatter: (v: string) => {
+          // Show abbreviated date: MM-DD
+          const parts = v.split('-')
+          return parts.length >= 3 ? `${parts[1]}-${parts[2]}` : v
+        }
+      }
+    },
+    yAxis: {
+      type: 'value',
+      minInterval: 1,
+      axisLine: { show: false },
+      axisLabel: { fontSize: 10 },
+      splitLine: { lineStyle: { type: 'dashed', opacity: 0.3 } }
+    },
+    series: echartsSeries
+  }
+}
+
+function buildStackedBarOption(data: ReportDataVO): Record<string, any> | null {
+  const primaryLabels = data.labels ?? []
   const secondaryLabels = data.secondLabels || []
   const matrix = data.matrix || []
+  if (primaryLabels.length === 0 || secondaryLabels.length === 0) return null
 
   const series = secondaryLabels.map((secLabel, colIdx) => ({
     name: secLabel,
