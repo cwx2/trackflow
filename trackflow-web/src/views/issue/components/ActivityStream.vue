@@ -407,10 +407,12 @@ function localizeLinkValue(value?: string): string {
 
 function canModifyComment(item: ActivityItem): boolean {
   if (!props.currentUserId) return false
-  // Author can always edit/delete their own comment
-  if (item.userId === props.currentUserId) return true
-  // Users with manage_comments permission can edit/delete anyone's
-  return !!props.canManageComments
+  // Users with manage_comments permission can edit/delete anyone's comment
+  if (props.canManageComments) return true
+  // Author can edit/delete their own comment only if they have comment permission
+  // (e.g. observers cannot comment, so they also cannot edit/delete their old comments)
+  if (item.userId === props.currentUserId && props.canComment) return true
+  return false
 }
 
 function startEdit(item: ActivityItem) {
