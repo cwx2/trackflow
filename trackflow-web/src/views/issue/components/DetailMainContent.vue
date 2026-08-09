@@ -394,7 +394,7 @@ function commitDesc(content: string) {
 .sticky-header {
   position: sticky;
   top: 0;
-  z-index: 10;
+  z-index: 5;
   background: var(--tf-bg-body);
   padding: 16px 0 8px;
   border-bottom: 1px solid var(--tf-border-light);

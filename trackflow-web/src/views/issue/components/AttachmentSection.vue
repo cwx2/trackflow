@@ -64,12 +64,12 @@
             <div v-else class="att-thumb-loading">
               <a-spin :size="16" />
             </div>
-            <!-- Hover overlay -->
-            <div class="att-overlay" @click.stop>
-              <button class="att-ov-btn" @click="download(att)" title="下载">
+            <!-- Hover overlay: pointer-events: none on container, auto on buttons -->
+            <div class="att-overlay">
+              <button class="att-ov-btn" @click.stop="download(att)" title="下载">
                 <icon-download :size="14" />
               </button>
-              <button v-if="!readonly" class="att-ov-btn att-ov-btn--danger" @click="confirmDelete(att)" title="删除">
+              <button v-if="!readonly" class="att-ov-btn att-ov-btn--danger" @click.stop="confirmDelete(att)" title="删除">
                 <icon-delete :size="14" />
               </button>
             </div>
@@ -95,11 +95,11 @@
                 <icon-eye :size="12" />
               </span>
             </template>
-            <div class="att-overlay" @click.stop>
-              <button class="att-ov-btn" @click="download(att)" title="下载">
+            <div class="att-overlay">
+              <button class="att-ov-btn" @click.stop="download(att)" title="下载">
                 <icon-download :size="14" />
               </button>
-              <button v-if="!readonly" class="att-ov-btn att-ov-btn--danger" @click="confirmDelete(att)" title="删除">
+              <button v-if="!readonly" class="att-ov-btn att-ov-btn--danger" @click.stop="confirmDelete(att)" title="删除">
                 <icon-delete :size="14" />
               </button>
             </div>
@@ -586,6 +586,7 @@ function confirmDeleteAll() {
   background: var(--tf-overlay);
   opacity: 0;
   transition: opacity 150ms;
+  pointer-events: none;
 }
 .att-card:hover .att-overlay,
 .att-list-item:hover .att-list-actions {
@@ -603,6 +604,7 @@ function confirmDeleteAll() {
   color: var(--tf-text-on-accent);
   cursor: pointer;
   transition: background 150ms;
+  pointer-events: auto;
 }
 .att-ov-btn:hover {
   background: var(--tf-fill-heavy);
