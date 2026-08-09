@@ -90,9 +90,18 @@ public class CodeNode implements NodeDefinition, NodeExecutor {
 
     private List<String> buildCommand(String language, String script) {
         List<String> cmd = new ArrayList<>();
+        boolean windows = System.getProperty("os.name", "").toLowerCase().contains("win");
         if ("python".equalsIgnoreCase(language)) {
-            cmd.add("python3");
+            // Windows 默认没有 python3；使用 PATH 中的 python，Linux/macOS 保持 python3。
+            cmd.add(windows ? "python" : "python3");
             cmd.add("-c");
+        } else if (windows) {
+            // 工作流服务当前可部署在 Windows，不能假设 sh 一定存在。
+            cmd.add("powershell.exe");
+            cmd.add("-NoLogo");
+            cmd.add("-NoProfile");
+            cmd.add("-NonInteractive");
+            cmd.add("-Command");
         } else {
             cmd.add("sh");
             cmd.add("-c");

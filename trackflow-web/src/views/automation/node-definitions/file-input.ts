@@ -6,11 +6,11 @@ export const fileInputDefinition: NodeDefinition = {
     title: '文件输入',
     icon: '📁',
     color: '#8b5cf6',
-    description: '读取本地文件内容，输出为字符串',
+    description: '读取有访问权限的工单附件内容，输出为字符串',
     category: '数据处理',
   },
   inputPorts: [
-    { name: 'filePath', label: '文件路径', valueType: 'string', required: true, description: '文件路径，支持变量引用' },
+    { name: 'attachmentId', label: '附件 ID', valueType: 'number', required: true, description: '工单附件 ID，支持变量引用' },
   ],
   outputPorts: [
     { name: 'content', label: '文件内容', valueType: 'string', description: '文件内容' },

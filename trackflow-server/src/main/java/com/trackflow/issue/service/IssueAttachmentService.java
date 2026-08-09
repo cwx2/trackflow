@@ -94,6 +94,21 @@ public class IssueAttachmentService {
     }
 
     /**
+     * 为自动化节点取得当前执行身份可读取的附件。
+     * 调用方必须运行在 AutomationActorRunner 建立的身份上下文内，不能绕过附件可见性规则。
+     */
+    public IssueAttachment requireReadableAttachment(Long attachmentId) {
+        IssueAttachment attachment = attachmentMapper.selectById(attachmentId);
+        if (attachment == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "附件不存在: " + attachmentId);
+        }
+        if (!canAccessAttachment(attachmentId)) {
+            throw new BusinessException(ErrorCode.ACCESS_DENIED, "没有读取该附件的权限");
+        }
+        return attachment;
+    }
+
+    /**
      * 根据文件路径查找附件记录（用于文件下载时的权限校验）
      */
     public IssueAttachment findByFilePath(String filePath) {

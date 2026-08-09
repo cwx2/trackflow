@@ -19,7 +19,7 @@ class WorkflowDefinitionModelJsonTest {
                     "id": "search",
                     "type": "trackflow-issue-search",
                     "position": { "x": 100, "y": 100 },
-                    "nodeMeta": { "title": "查找待办需求", "icon": "🔎", "description": "", "color": "#0ea5e9" },
+                    "nodeMeta": { "title": "查找待办需求", "icon": "🔎", "description": "", "color": "#0ea5e9", "category": "TrackFlow" },
                     "inputs": [{
                       "name": "savedQueryId", "label": "完整筛选", "valueType": "number",
                       "required": false, "optional": true, "description": "", "value": null
@@ -40,6 +40,7 @@ class WorkflowDefinitionModelJsonTest {
         assertEquals(true, definition.nodes().getFirst().inputs().getFirst().optional());
         assertEquals("issues", definition.nodes().getFirst().outputs().getFirst().name());
         assertEquals("需求列表", definition.nodes().getFirst().outputs().getFirst().label());
+        assertEquals("TrackFlow", definition.nodes().getFirst().nodeMeta().category());
     }
 
     @Test
