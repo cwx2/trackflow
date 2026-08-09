@@ -7,6 +7,7 @@ import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.entity.IssueLink;
 import com.trackflow.issue.mapper.IssueActivityMapper;
 import com.trackflow.issue.mapper.IssueLinkMapper;
+import com.trackflow.issue.mapper.IssueMapper;
 import com.trackflow.project.service.ProjectService;
 import com.trackflow.system.mapper.SysUserMapper;
 import com.trackflow.workflow.entity.WorkflowRule;
@@ -31,14 +32,17 @@ import java.util.List;
 public class LinkIssueActionExecutor extends WorkflowActionSupport {
 
     private final IssueLinkMapper issueLinkMapper;
+    private final IssueMapper issueMapper;
 
     public LinkIssueActionExecutor(IssueActivityMapper activityMapper,
                                    SysUserMapper sysUserMapper,
                                    NotificationMapper notificationMapper,
                                    ProjectService projectService,
-                                   IssueLinkMapper issueLinkMapper) {
+                                   IssueLinkMapper issueLinkMapper,
+                                   IssueMapper issueMapper) {
         super(activityMapper, sysUserMapper, notificationMapper, projectService);
         this.issueLinkMapper = issueLinkMapper;
+        this.issueMapper = issueMapper;
     }
 
     @Override
@@ -59,6 +63,7 @@ public class LinkIssueActionExecutor extends WorkflowActionSupport {
         }
 
         Long targetIssueId;
+        String targetIssueKey = null;
         List<Issue> createdIssues = context.getCreatedIssues();
 
         if (targetRef.startsWith("from_block:")) {
@@ -69,7 +74,9 @@ public class LinkIssueActionExecutor extends WorkflowActionSupport {
                             blockIndex, createdIssues.size(), rule.getName());
                     return ActionResult.NONE;
                 }
-                targetIssueId = createdIssues.get(blockIndex).getId();
+                Issue targetIssue = createdIssues.get(blockIndex);
+                targetIssueId = targetIssue.getId();
+                targetIssueKey = targetIssue.getIssueKey();
             } catch (NumberFormatException e) {
                 log.warn("[RuleEngine] link_issue: invalid block reference '{}' in rule '{}'", targetRef, rule.getName());
                 return ActionResult.NONE;
@@ -80,6 +87,14 @@ public class LinkIssueActionExecutor extends WorkflowActionSupport {
             } catch (NumberFormatException e) {
                 log.warn("[RuleEngine] link_issue: invalid target ID '{}' in rule '{}'", targetRef, rule.getName());
                 return ActionResult.NONE;
+            }
+        }
+
+        // Resolve issueKey if not yet available (direct ID reference case)
+        if (targetIssueKey == null) {
+            Issue targetIssue = issueMapper.selectById(targetIssueId);
+            if (targetIssue != null) {
+                targetIssueKey = targetIssue.getIssueKey();
             }
         }
 
@@ -104,8 +119,10 @@ public class LinkIssueActionExecutor extends WorkflowActionSupport {
         link.setCreatedAt(LocalDateTime.now());
         issueLinkMapper.insert(link);
 
+        // Use issueKey for the activity log (fallback to ID if key is unavailable)
+        String targetDisplay = targetIssueKey != null ? targetIssueKey : String.valueOf(targetIssueId);
         logActivity(issue.getId(), rule, "link_added", "link", null,
-                linkType + " → " + targetIssueId);
+                linkType + " " + targetDisplay);
         log.info("[RuleEngine] link_issue: created link {} -> {} (type={}) by rule '{}' (id={})",
                 sourceIssueId, targetIssueId, linkType, rule.getName(), rule.getId());
         return ActionResult.NONE;
