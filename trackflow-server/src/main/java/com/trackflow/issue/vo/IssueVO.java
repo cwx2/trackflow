@@ -80,4 +80,11 @@ public class IssueVO {
 
     /** 工单关联的标签列表（列表查询时批量填充） */
     private List<IssueTagVO> tags;
+
+    /**
+     * 搜索匹配上下文片段（仅关键词搜索时填充）。
+     * 当匹配来自描述/评论等非标题字段时，返回匹配位置的上下文片段，
+     * 帮助用户理解为什么该工单出现在搜索结果中。
+     */
+    private String matchContext;
 }

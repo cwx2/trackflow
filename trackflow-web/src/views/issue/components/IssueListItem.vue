@@ -58,7 +58,7 @@
     <!-- Title -->
     <span v-if="searchKeyword" class="item-title" v-html="highlightKeyword(issue.title, searchKeyword)"></span>
     <span v-else class="item-title">{{ issue.title }}</span>
-    <span v-if="searchKeyword && (issue as any).matchContext" class="item-match-context" v-html="highlightKeyword((issue as any).matchContext, searchKeyword)"></span>
+    <span v-if="searchKeyword && issue.matchContext" class="item-match-context" v-html="highlightKeyword(issue.matchContext, searchKeyword)"></span>
 
     <!-- Tags (colored badges, max 3 shown) -->
     <template v-if="issue.tags && issue.tags.length > 0">
@@ -556,6 +556,33 @@ function truncateDescription(desc?: string): string {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Match context (search result snippet from non-title fields) */
+.item-match-context {
+  width: 100%;
+  display: block;
+  font-size: 11px;
+  color: var(--tf-text-tertiary, var(--color-text-3));
+  margin-top: 2px;
+  padding-left: 46px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.item-match-context :deep(.search-highlight) {
+  background: var(--tf-highlight-bg, rgba(255, 200, 50, 0.35));
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 1px;
+}
+
+.item-title :deep(.search-highlight) {
+  background: var(--tf-highlight-bg, rgba(255, 200, 50, 0.35));
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 1px;
 }
 
 /* Meta badge (child progress) */

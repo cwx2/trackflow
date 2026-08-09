@@ -627,6 +627,13 @@
         <icon-loading v-if="loading" class="realtime-update-icon" />
       </div>
 
+      <!-- Search scope hint (shown when keyword is active) -->
+      <div v-if="searchKeyword" class="search-scope-hint">
+        <icon-search class="search-scope-icon" />
+        <span>搜索范围：标题、描述、工单编号、负责人</span>
+        <span class="search-result-count" v-if="!loading">{{ totalIssues }} 条结果</span>
+      </div>
+
       <div v-if="isTableLayout" class="issue-table-wrapper">
       <a-table
         class="issue-table"
@@ -2088,6 +2095,30 @@ onBeforeRouteLeave((_to, _from, next) => {
 }
 .realtime-update-icon {
   color: var(--tf-accent);
+}
+
+/* Search scope hint */
+.search-scope-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--tf-text-tertiary);
+  background: var(--tf-bg-surface, var(--color-bg-2));
+  border-radius: 4px;
+  border: 1px solid var(--tf-border-subtle, var(--color-border));
+}
+.search-scope-icon {
+  font-size: 13px;
+  color: var(--tf-text-quaternary);
+  flex-shrink: 0;
+}
+.search-result-count {
+  margin-left: auto;
+  color: var(--tf-text-secondary);
+  font-weight: 500;
 }
 
 /* Context menu */

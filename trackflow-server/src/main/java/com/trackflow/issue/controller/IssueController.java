@@ -68,6 +68,10 @@ public class IssueController {
         Page<Issue> page = issueService.listIssuesPage(query);
         List<IssueVO> voList = issueConverter.toVOList(page.getRecords());
         issueVOAssembler.assemble(page.getRecords(), voList);
+        // Populate matchContext when keyword search is active
+        if (query.getKeyword() != null && !query.getKeyword().isBlank()) {
+            fillMatchContext(page.getRecords(), voList, query.getKeyword().trim());
+        }
         return R.ok(new PageResult<>(voList, page.getTotal(),
                 (int) page.getCurrent(), (int) page.getSize()));
     }
@@ -556,5 +560,65 @@ public class IssueController {
     private IssueDetailVO assembleDetailFromRow(IssueDetailRow row) {
         List<ChildIssueRow> children = issueService.listChildrenRows(row.getId());
         return issueDetailVOAssembler.assemble(row, children);
+    }
+
+    /**
+     * 为搜索结果填充 matchContext 字段。
+     * 当关键词匹配来自描述（而非标题）时，提取匹配位置附近的上下文片段，
+     * 帮助用户理解为什么该工单出现在搜索结果中。
+     */
+    private void fillMatchContext(List<Issue> issues, List<IssueVO> voList, String keyword) {
+        String lowerKeyword = keyword.toLowerCase();
+        for (int i = 0; i < issues.size(); i++) {
+            Issue issue = issues.get(i);
+            IssueVO vo = voList.get(i);
+            // Only show matchContext if title does NOT contain the keyword
+            // (if title already contains it, the highlight on title is sufficient)
+            String title = issue.getTitle();
+            if (title != null && title.toLowerCase().contains(lowerKeyword)) {
+                continue;
+            }
+            // Try to extract context from description
+            String description = issue.getDescription();
+            if (description != null && !description.isBlank()) {
+                String context = extractSnippet(description, lowerKeyword, 120);
+                if (context != null) {
+                    vo.setMatchContext("描述: " + context);
+                    continue;
+                }
+            }
+            // If no match in title or description, it might have matched via issue_key or assignee.
+            // Provide a hint for issue_key match
+            String issueKey = issue.getIssueKey();
+            if (issueKey != null && issueKey.toLowerCase().contains(lowerKeyword)) {
+                vo.setMatchContext("工单编号匹配: " + issueKey);
+            }
+            // Note: assignee name match context is not easily extractable here without
+            // an extra query; the highlight on title is the primary UX improvement.
+        }
+    }
+
+    /**
+     * 从文本中提取关键词匹配位置附近的上下文片段。
+     * 先去除 Markdown/HTML 标签简单清理后再匹配。
+     */
+    private String extractSnippet(String text, String lowerKeyword, int maxLength) {
+        // Strip basic markdown/HTML for cleaner snippets
+        String cleaned = text.replaceAll("<[^>]+>", "").replaceAll("[#*_~`>]", "").trim();
+        if (cleaned.isBlank()) return null;
+
+        String lowerCleaned = cleaned.toLowerCase();
+        int idx = lowerCleaned.indexOf(lowerKeyword);
+        if (idx == -1) return null;
+
+        int contextBefore = 30;
+        int start = Math.max(0, idx - contextBefore);
+        int end = Math.min(cleaned.length(), start + maxLength);
+
+        StringBuilder sb = new StringBuilder();
+        if (start > 0) sb.append("...");
+        sb.append(cleaned, start, end);
+        if (end < cleaned.length()) sb.append("...");
+        return sb.toString();
     }
 }

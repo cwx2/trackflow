@@ -63,6 +63,8 @@ export interface IssueVO {
   visibility?: string
   /** 工单关联的标签列表（列表查询时批量填充） */
   tags?: IssueTagVO[]
+  /** 搜索匹配上下文片段（仅关键词搜索时由后端填充） */
+  matchContext?: string
 }
 
 export interface IssueDetailVO extends IssueVO {
