@@ -1995,8 +1995,14 @@ function collapseColumn(statusId: string) {
 }
 
 function priorityIcon(priority: string): string {
-  const map: Record<string, string> = { Critical: '🔴', High: '🟠', Normal: '🔵', Low: '⚪' }
-  return map[priority] || '🔵'
+  switch (priority) {
+    case '阻塞': return '⛔'
+    case '紧急': case 'Critical': return '🔴'
+    case '高': case 'High': return '🟠'
+    case '普通': case 'Normal': return '🔵'
+    case '低': case 'Low': return '🟢'
+    default: return '⚪'
+  }
 }
 
 function typeLabel(type: string): string {
