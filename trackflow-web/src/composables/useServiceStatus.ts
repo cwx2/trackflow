@@ -1,4 +1,5 @@
 import { ref, computed } from 'vue'
+import { markServiceDown as throttleMarkServiceDown, markServiceRecovered as throttleMarkServiceRecovered } from '@/utils/messageThrottle'
 
 /**
  * 全局服务状态追踪器
@@ -34,6 +35,11 @@ export function reportApiFailure(status: number | undefined, message?: string) {
   consecutiveFailures.value++
   lastErrorTime.value = Date.now()
   lastErrorMessage.value = message || getDefaultMessage(status)
+
+  // 当连续失败超过阈值时，通知消息节流器进入服务不可用模式
+  if (consecutiveFailures.value >= FAILURE_THRESHOLD) {
+    throttleMarkServiceDown(lastErrorMessage.value)
+  }
 }
 
 /**
@@ -41,8 +47,13 @@ export function reportApiFailure(status: number | undefined, message?: string) {
  */
 export function reportApiSuccess() {
   if (consecutiveFailures.value > 0) {
+    const wasDown = consecutiveFailures.value >= FAILURE_THRESHOLD
     consecutiveFailures.value = 0
     lastErrorMessage.value = ''
+    // 如果之前处于服务不可用状态，通知消息节流器恢复
+    if (wasDown) {
+      throttleMarkServiceRecovered()
+    }
   }
 }
 

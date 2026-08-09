@@ -13,6 +13,10 @@ import { vPermission } from './directives/permission'
 // 初始化主题（必须在 mount 之前）
 import './composables/useTheme'
 
+// 安装全局消息节流（必须在 mount 之前，覆盖 Message.error/warning）
+import { installMessageThrottle } from './utils/messageThrottle'
+installMessageThrottle()
+
 // 注册内置 Widget 插件（必须在 mount 之前）
 import './widgets/builtin'
 

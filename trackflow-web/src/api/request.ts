@@ -3,6 +3,7 @@ import { useAuthStore } from '@/stores/auth'
 import { decodeBase64Url } from '@/utils/jwt'
 import { emitSessionEvent } from '@/utils/sessionEvents'
 import { reportApiSuccess, reportApiFailure } from '@/composables/useServiceStatus'
+import { showError, showWarning } from '@/utils/messageThrottle'
 
 const request = axios.create({
   baseURL: '/api/v1',
@@ -69,10 +70,8 @@ function handleSessionExpired() {
   // 通知所有组件保存未持久化的数据（如创建工单表单）
   emitSessionEvent('session:expiring')
 
-  // 动态导入避免循环依赖
-  import('@arco-design/web-vue').then(({ Message }) => {
-    Message.error({ content: '会话已过期，正在跳转到登录页...', id: 'session-expired', duration: 3000 })
-  })
+  // 使用全局消息节流器展示，自动去重
+  showError('会话已过期，正在跳转到登录页...', { id: 'session-expired', duration: 3000 })
 
   // 延迟 1.5 秒后执行 logout 跳转，给用户视觉反馈
   setTimeout(() => {
@@ -160,9 +159,7 @@ request.interceptors.response.use(
       const retryAfter = error.response.headers?.['retry-after']
       const seconds = retryAfter ? parseInt(retryAfter, 10) : 60
       const message = error.response.data?.message || `请求过于频繁，请 ${seconds} 秒后重试`
-      import('@arco-design/web-vue').then(({ Message }) => {
-        Message.warning({ content: message, id: 'rate-limited', duration: 5000 })
-      })
+      showWarning(message, { id: 'rate-limited', duration: 5000 })
       return Promise.reject(error)
     }
 
@@ -170,10 +167,7 @@ request.interceptors.response.use(
     if (error.response?.status === 403) {
       if (!originalRequest._silent403) {
         const message = error.response?.data?.message || '权限不足，无法执行此操作'
-        // 使用动态导入避免循环依赖
-        import('@arco-design/web-vue').then(({ Message }) => {
-          Message.warning({ content: message, id: 'permission-denied', duration: 3000 })
-        })
+        showWarning(message, { id: 'permission-denied', duration: 3000 })
       }
 
       // 403 表示权限已变更，自动刷新本地权限缓存
@@ -233,6 +227,21 @@ request.interceptors.response.use(
 
     // 报告服务级错误（500+、网络不可达），用于全局服务状态感知
     reportApiFailure(error.response?.status, error.response?.data?.message)
+
+    // 全局错误消息节流：500+/网络错误统一在拦截器层展示，
+    // 防止组件层 catch 块独立弹出重复错误
+    const status = error.response?.status
+    if (!status || status === 0 || status >= 500) {
+      const errorMsg = error.response?.data?.message || (
+        !status || status === 0
+          ? '无法连接到服务器，请检查网络连接'
+          : '服务暂时不可用，请稍后重试'
+      )
+      showError(errorMsg)
+
+      // 标记已在拦截器层处理，组件层可通过此标志跳过重复提示
+      error._messageHandled = true
+    }
 
     return Promise.reject(error)
   }
