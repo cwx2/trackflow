@@ -7,7 +7,7 @@
   </div>
   <div v-else-if="(config.queryType || config.filterQuery) && dataLoaded" class="widget-configure-hint">
     <icon-check-circle :size="32" class="hint-icon" style="color: var(--tf-text-quaternary)" />
-    <span class="hint-text" style="color: var(--tf-text-tertiary)">暂无匹配的工单</span>
+    <span class="hint-text" style="color: var(--tf-text-tertiary)">{{ emptyStateMessage }}</span>
   </div>
   <div v-else-if="!config.queryType && !config.filterQuery" class="widget-configure-hint">
     <icon-list :size="32" class="hint-icon" />
@@ -16,7 +16,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { IconList, IconCheckCircle } from '@arco-design/web-vue/es/icon'
 import { issueApi } from '@/api/issue'
@@ -36,6 +36,19 @@ const emit = defineEmits<{
 const router = useRouter()
 const issueListData = ref<Array<{ id: string; issueKey: string; title: string }>>([])
 const dataLoaded = ref(false)
+
+/** Compute a helpful empty state message based on the current query scope */
+const emptyStateMessage = computed(() => {
+  const queryType = props.config.queryType as string | undefined
+  if (queryType === 'my_open') {
+    return '您当前没有分配给您的待处理工单'
+  } else if (queryType === 'open') {
+    return '当前范围内没有待处理的工单'
+  } else if (queryType === 'closed') {
+    return '当前范围内没有已关闭的工单'
+  }
+  return '暂无匹配的工单'
+})
 
 // Cache for status name → ID resolution
 let statusCache: Array<{ id: string; name: string }> | null = null

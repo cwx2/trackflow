@@ -10,6 +10,7 @@ export default defineWidget({
   group: 'basic',
   defaultWidth: 3,
   defaultHeight: 2,
+  dataSources: ['projects'],
   configSchema: [
     {
       key: 'queryType',
@@ -26,6 +27,13 @@ export default defineWidget({
         { label: '已逾期工单数', value: 'overdue' },
         { label: '完成率 (%)', value: 'completion_rate' }
       ]
+    },
+    {
+      key: 'projectId',
+      label: '项目筛选',
+      type: 'project-select',
+      placeholder: '留空 = 所有项目',
+      hint: '限定统计范围为特定项目，留空表示统计全部项目'
     },
     {
       key: 'value',
