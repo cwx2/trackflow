@@ -269,7 +269,7 @@ import { computed, ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRoute, onBeforeRouteLeave } from 'vue-router'
 import { Modal } from '@arco-design/web-vue'
 import { IconLock } from '@arco-design/web-vue/es/icon'
-import { renderMarkdown } from '@/utils/markdown'
+import { renderMarkdown, renderHtmlWithMarkdown } from '@/utils/markdown'
 import { UserAvatar } from '@/components/base'
 import { useTimerStore } from '@/stores/timer'
 import { useIssueDetailData } from './composables/useIssueDetailData'
@@ -722,7 +722,7 @@ const activityItems = computed<ActivityItem[]>(() => {
     const isDeleted = !!c.deletedAt
     const content = c.content || ''
     const isHtml = content.trim().startsWith('<')
-    commentItems.push({ id: 'c_' + c.id, type: 'comment', user: c.userName || '用户', userId: c.userId, userAvatar: c.userAvatar || undefined, commentId: c.id, isEdited: c.isEdited || false, isDeleted, rawContent: content, visibleToGroupNames: c.visibleToGroupNames || undefined, html: isDeleted ? '' : (isHtml ? content : renderMarkdown(content)), timeAgo: timeAgo(c.createdAt), ts: new Date(c.createdAt).getTime(), relatedChanges: [] })
+    commentItems.push({ id: 'c_' + c.id, type: 'comment', user: c.userName || '用户', userId: c.userId, userAvatar: c.userAvatar || undefined, commentId: c.id, isEdited: c.isEdited || false, isDeleted, rawContent: content, visibleToGroupNames: c.visibleToGroupNames || undefined, html: isDeleted ? '' : (isHtml ? renderHtmlWithMarkdown(content) : renderMarkdown(content)), timeAgo: timeAgo(c.createdAt), ts: new Date(c.createdAt).getTime(), relatedChanges: [] })
   }
   const mergedActivityIds = new Set<string>()
   for (const a of activities.value) {

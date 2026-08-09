@@ -18,6 +18,55 @@ export function renderMarkdown(content: string): string {
 }
 
 /**
+ * 处理含有内嵌 Markdown 语法的 HTML 内容。
+ *
+ * 某些评论通过 API/seed 数据创建时，内容被简单地包裹在 <p> 标签中，
+ * 但内部文本仍保留 Markdown 语法（如 **bold**）和字面 \n。
+ * 本函数将此类内容还原为纯 Markdown 文本后重新渲染。
+ */
+export function renderHtmlWithMarkdown(html: string): string {
+  if (!html) return ''
+
+  // 检测 HTML 内容中是否存在未渲染的 Markdown 语法
+  // 常见模式：**text**、*text*、```code```、## heading、[link](url)
+  const markdownPatterns = /\*\*[^*]+\*\*|\*[^*]+\*|```[\s\S]*?```|^#{1,6}\s|\[[^\]]+\]\([^)]+\)/m
+
+  // 检测字面 \n（JSON 双转义后在 HTML 中显示为文本 \n）
+  const literalNewline = /\\n/
+
+  const hasMarkdown = markdownPatterns.test(html)
+  const hasLiteralNewline = literalNewline.test(html)
+
+  if (!hasMarkdown && !hasLiteralNewline) {
+    // 纯 HTML 内容，无需处理，直接返回（已由 DOMPurify 清洗）
+    return DOMPurify.sanitize(html)
+  }
+
+  // 将 HTML 结构转换回纯文本/Markdown：
+  // 1. <p>...</p> → 内容 + 双换行
+  // 2. <br> → 换行
+  // 3. 其他标签保留其文本内容
+  let text = html
+    .replace(/<p[^>]*>\s*<\/p>/gi, '\n') // 空 <p> 标签 → 换行
+    .replace(/<\/p>\s*<p[^>]*>/gi, '\n\n') // </p><p> → 双换行
+    .replace(/<p[^>]*>/gi, '') // 移除开始 <p>
+    .replace(/<\/p>/gi, '\n\n') // 结束 </p> → 双换行
+    .replace(/<br\s*\/?>/gi, '\n') // <br> → 换行
+    .replace(/<blockquote[^>]*>/gi, '> ') // blockquote 开始
+    .replace(/<\/blockquote>/gi, '\n') // blockquote 结束
+    .replace(/<[^>]+>/g, '') // 移除所有剩余 HTML 标签
+
+  // 处理字面 \n（数据中存储为 \\n，在页面上显示为文本 \n）
+  text = text.replace(/\\n/g, '\n')
+
+  // 清理多余空行
+  text = text.replace(/\n{3,}/g, '\n\n').trim()
+
+  // 通过 Markdown 渲染管道重新生成 HTML
+  return renderMarkdown(text)
+}
+
+/**
  * 将 Markdown 文本渲染为纯文本（去除所有标签）
  */
 export function renderPlainText(content: string): string {

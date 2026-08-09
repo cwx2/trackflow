@@ -268,7 +268,7 @@ import type { IssueDetailVO, IssueCommentVO, IssueStatusVO } from '@/api/types'
 import { Message, Modal } from '@arco-design/web-vue'
 import TimeProgressIndicator from '@/components/base/TimeProgressIndicator.vue'
 import { localizeStatusName, localizeIssueType, localizePriority } from '@/utils/fieldLabels'
-import { renderMarkdown } from '@/utils/markdown'
+import { renderMarkdown, renderHtmlWithMarkdown } from '@/utils/markdown'
 import { getDueDateInfo } from '@/utils/dueDate'
 import type { DueDateInfo } from '@/utils/dueDate'
 import { IconShareExternal } from '@arco-design/web-vue/es/icon'
@@ -643,7 +643,8 @@ function formatTime(iso: string): string {
 
 function renderCommentContent(content: string): string {
   if (!content) return ''
-  return renderMarkdown(content)
+  const isHtml = content.trim().startsWith('<')
+  return isHtml ? renderHtmlWithMarkdown(content) : renderMarkdown(content)
 }
 </script>
 
