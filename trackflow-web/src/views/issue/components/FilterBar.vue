@@ -299,6 +299,13 @@ const OPERATORS_USER: OperatorDef[] = [
 ]
 
 const OPERATORS_DATE: OperatorDef[] = [
+  { key: 'today', label: '今天' },
+  { key: 'yesterday', label: '昨天' },
+  { key: 'this_week', label: '本周' },
+  { key: 'last_week', label: '上周' },
+  { key: 'last_7_days', label: '最近 7 天' },
+  { key: 'this_month', label: '本月' },
+  { key: 'last_30_days', label: '最近 30 天' },
   { key: 'after', label: '晚于' },
   { key: 'before', label: '早于' },
   { key: 'between', label: '在范围内' },
@@ -524,6 +531,17 @@ function selectField(field: FilterField) {
     values: [],
     valueLabel: ''
   }
+
+  // For date fields with relative shortcut as default, set initial values/label immediately
+  if ((field.key === 'createdAt' || field.key === 'updatedAt') && RELATIVE_DATE_SHORTCUTS.has(defaultOp.key)) {
+    const labelMap: Record<string, string> = {
+      today: '今天', yesterday: '昨天', this_week: '本周',
+      last_week: '上周', last_7_days: '最近 7 天', this_month: '本月', last_30_days: '最近 30 天'
+    }
+    newChip.values = ['_' + defaultOp.key]
+    newChip.valueLabel = labelMap[defaultOp.key] || defaultOp.key
+  }
+
   activeFilters.value.push(newChip)
   showFieldInput.value = false
   fieldSearchText.value = ''
@@ -587,6 +605,16 @@ function selectOperator(op: OperatorDef) {
     }
   }
 
+  // For createdAt/updatedAt relative shortcuts, apply immediately (no value needed)
+  if ((chip.fieldKey === 'createdAt' || chip.fieldKey === 'updatedAt') && RELATIVE_DATE_SHORTCUTS.has(op.key)) {
+    const labelMap: Record<string, string> = {
+      today: '今天', yesterday: '昨天', this_week: '本周',
+      last_week: '上周', last_7_days: '最近 7 天', this_month: '本月', last_30_days: '最近 30 天'
+    }
+    chip.values = ['_' + op.key]
+    chip.valueLabel = labelMap[op.key] || op.key
+  }
+
   showOperatorPopup.value = false
   emitFilters()
 }
@@ -627,6 +655,10 @@ async function openValueSelector(index: number) {
     }
     // For dueDate with shortcut operators (overdue/today/this_week), don't open value popup
     if (chip.fieldKey === 'dueDate' && ['overdue', 'today', 'this_week'].includes(chip.operator)) {
+      return
+    }
+    // For createdAt/updatedAt with relative shortcut operators, don't open value popup
+    if ((chip.fieldKey === 'createdAt' || chip.fieldKey === 'updatedAt') && RELATIVE_DATE_SHORTCUTS.has(chip.operator)) {
       return
     }
     dateInputValue.value = chip.values[0] && !chip.values[0].startsWith('_') ? chip.values[0] : ''
@@ -917,6 +949,66 @@ function removeFilter(index: number) {
   emitFilters()
 }
 
+// ==================== Relative Date Helpers ====================
+
+/** Relative time shortcut operators that don't need user input */
+const RELATIVE_DATE_SHORTCUTS = new Set(['today', 'yesterday', 'this_week', 'last_week', 'last_7_days', 'this_month', 'last_30_days'])
+
+/**
+ * Compute [after, before] date range for relative shortcuts.
+ * Returns null if operator is not a relative shortcut.
+ */
+function computeRelativeDateRange(operator: string): [string, string] | null {
+  const today = new Date()
+  const fmt = (d: Date) => d.toISOString().split('T')[0]
+
+  switch (operator) {
+    case 'today':
+      return [fmt(today), fmt(today)]
+    case 'yesterday': {
+      const d = new Date(today)
+      d.setDate(d.getDate() - 1)
+      return [fmt(d), fmt(d)]
+    }
+    case 'this_week': {
+      // Monday of this week
+      const day = today.getDay() || 7 // Sunday = 7
+      const monday = new Date(today)
+      monday.setDate(today.getDate() - day + 1)
+      const sunday = new Date(monday)
+      sunday.setDate(monday.getDate() + 6)
+      return [fmt(monday), fmt(sunday)]
+    }
+    case 'last_week': {
+      const day = today.getDay() || 7
+      const thisMonday = new Date(today)
+      thisMonday.setDate(today.getDate() - day + 1)
+      const lastMonday = new Date(thisMonday)
+      lastMonday.setDate(thisMonday.getDate() - 7)
+      const lastSunday = new Date(lastMonday)
+      lastSunday.setDate(lastMonday.getDate() + 6)
+      return [fmt(lastMonday), fmt(lastSunday)]
+    }
+    case 'last_7_days': {
+      const start = new Date(today)
+      start.setDate(today.getDate() - 6)
+      return [fmt(start), fmt(today)]
+    }
+    case 'this_month': {
+      const start = new Date(today.getFullYear(), today.getMonth(), 1)
+      const end = new Date(today.getFullYear(), today.getMonth() + 1, 0)
+      return [fmt(start), fmt(end)]
+    }
+    case 'last_30_days': {
+      const start = new Date(today)
+      start.setDate(today.getDate() - 29)
+      return [fmt(start), fmt(today)]
+    }
+    default:
+      return null
+  }
+}
+
 // ==================== Emit Filters ====================
 
 function emitFilters() {
@@ -997,8 +1089,12 @@ function emitFilters() {
           filters.dueBefore = chip.values[1]
         }
         break
-      case 'createdAt':
-        if (chip.operator === 'after' && chip.values[0]) {
+      case 'createdAt': {
+        const range = computeRelativeDateRange(chip.operator)
+        if (range) {
+          filters.createdAfter = range[0]
+          filters.createdBefore = range[1]
+        } else if (chip.operator === 'after' && chip.values[0]) {
           filters.createdAfter = chip.values[0]
         } else if (chip.operator === 'before' && chip.values[0]) {
           filters.createdBefore = chip.values[0]
@@ -1007,8 +1103,13 @@ function emitFilters() {
           filters.createdBefore = chip.values[1]
         }
         break
-      case 'updatedAt':
-        if (chip.operator === 'after' && chip.values[0]) {
+      }
+      case 'updatedAt': {
+        const range = computeRelativeDateRange(chip.operator)
+        if (range) {
+          filters.updatedAfter = range[0]
+          filters.updatedBefore = range[1]
+        } else if (chip.operator === 'after' && chip.values[0]) {
           filters.updatedAfter = chip.values[0]
         } else if (chip.operator === 'before' && chip.values[0]) {
           filters.updatedBefore = chip.values[0]
@@ -1017,6 +1118,7 @@ function emitFilters() {
           filters.updatedBefore = chip.values[1]
         }
         break
+      }
     }
   }
 

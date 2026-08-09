@@ -79,7 +79,7 @@ public class QueryExecutor {
     private static final Set<String> ALLOWED_OPERATORS = Set.of(
             "eq", "neq", "in", "not_in", "is_empty", "is_not_empty",
             "contains", "gt", "gte", "lt", "lte", "between",
-            "open", "closed"
+            "open", "closed", "relative"
     );
 
     /**
@@ -568,24 +568,25 @@ public class QueryExecutor {
                 .toList();
 
         switch (operator) {
-            case "eq" -> {
-                // For relative keywords that represent ranges (e.g. "this week"), use between
+            case "eq", "relative" -> {
+                // For relative keywords that represent ranges (e.g. "this_week"), use ge + le
                 String[] range = resolveRelativeDateRange(values.get(0));
                 if (range != null) {
-                    wrapper.between(column, range[0], range[1]);
+                    wrapper.apply(column + " >= {0}::timestamp", range[0]);
+                    wrapper.apply(column + " <= {0}::timestamp", range[1]);
                 } else {
-                    wrapper.ge(column, resolvedValues.get(0) + " 00:00:00");
-                    wrapper.lt(column, resolvedValues.get(0) + " 23:59:59");
+                    wrapper.apply(column + " >= {0}::timestamp", resolvedValues.get(0) + " 00:00:00");
+                    wrapper.apply(column + " < {0}::timestamp", resolvedValues.get(0) + " 23:59:59");
                 }
             }
-            case "gt" -> wrapper.gt(column, resolvedValues.get(0) + " 23:59:59");
-            case "gte" -> wrapper.ge(column, resolvedValues.get(0) + " 00:00:00");
-            case "lt" -> wrapper.lt(column, resolvedValues.get(0) + " 00:00:00");
-            case "lte" -> wrapper.le(column, resolvedValues.get(0) + " 23:59:59");
+            case "gt" -> wrapper.apply(column + " > {0}::timestamp", resolvedValues.get(0) + " 23:59:59");
+            case "gte" -> wrapper.apply(column + " >= {0}::timestamp", resolvedValues.get(0) + " 00:00:00");
+            case "lt" -> wrapper.apply(column + " < {0}::timestamp", resolvedValues.get(0) + " 00:00:00");
+            case "lte" -> wrapper.apply(column + " <= {0}::timestamp", resolvedValues.get(0) + " 23:59:59");
             case "between" -> {
                 if (resolvedValues.size() >= 2) {
-                    wrapper.ge(column, resolvedValues.get(0) + " 00:00:00");
-                    wrapper.le(column, resolvedValues.get(1) + " 23:59:59");
+                    wrapper.apply(column + " >= {0}::timestamp", resolvedValues.get(0) + " 00:00:00");
+                    wrapper.apply(column + " <= {0}::timestamp", resolvedValues.get(1) + " 23:59:59");
                 }
             }
         }
@@ -601,10 +602,12 @@ public class QueryExecutor {
         return switch (value) {
             case "${today}", "today", "今天" -> today.toString();
             case "yesterday", "昨天" -> today.minusDays(1).toString();
-            case "this week", "本周" -> today.with(java.time.DayOfWeek.MONDAY).toString();
-            case "last week", "上周" -> today.minusWeeks(1).with(java.time.DayOfWeek.MONDAY).toString();
-            case "this month", "本月" -> today.withDayOfMonth(1).toString();
-            case "last month", "上月" -> today.minusMonths(1).withDayOfMonth(1).toString();
+            case "this week", "this_week", "本周" -> today.with(java.time.DayOfWeek.MONDAY).toString();
+            case "last week", "last_week", "上周" -> today.minusWeeks(1).with(java.time.DayOfWeek.MONDAY).toString();
+            case "this month", "this_month", "本月" -> today.withDayOfMonth(1).toString();
+            case "last month", "last_month", "上月" -> today.minusMonths(1).withDayOfMonth(1).toString();
+            case "last_7_days" -> today.minusDays(6).toString();
+            case "last_30_days" -> today.minusDays(29).toString();
             default -> value;
         };
     }
@@ -622,26 +625,34 @@ public class QueryExecutor {
                 var d = today.minusDays(1);
                 yield new String[]{d + " 00:00:00", d + " 23:59:59"};
             }
-            case "this week", "本周" -> {
+            case "this week", "this_week", "本周" -> {
                 var start = today.with(java.time.DayOfWeek.MONDAY);
                 var end = start.plusDays(6);
                 yield new String[]{start + " 00:00:00", end + " 23:59:59"};
             }
-            case "last week", "上周" -> {
+            case "last week", "last_week", "上周" -> {
                 var start = today.minusWeeks(1).with(java.time.DayOfWeek.MONDAY);
                 var end = start.plusDays(6);
                 yield new String[]{start + " 00:00:00", end + " 23:59:59"};
             }
-            case "this month", "本月" -> {
+            case "this month", "this_month", "本月" -> {
                 var start = today.withDayOfMonth(1);
                 var end = today.withDayOfMonth(today.lengthOfMonth());
                 yield new String[]{start + " 00:00:00", end + " 23:59:59"};
             }
-            case "last month", "上月" -> {
+            case "last month", "last_month", "上月" -> {
                 var lastMonth = today.minusMonths(1);
                 var start = lastMonth.withDayOfMonth(1);
                 var end = lastMonth.withDayOfMonth(lastMonth.lengthOfMonth());
                 yield new String[]{start + " 00:00:00", end + " 23:59:59"};
+            }
+            case "last_7_days" -> {
+                var start = today.minusDays(6);
+                yield new String[]{start + " 00:00:00", today + " 23:59:59"};
+            }
+            case "last_30_days" -> {
+                var start = today.minusDays(29);
+                yield new String[]{start + " 00:00:00", today + " 23:59:59"};
             }
             default -> null;
         };
