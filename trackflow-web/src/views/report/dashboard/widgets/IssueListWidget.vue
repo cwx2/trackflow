@@ -90,7 +90,7 @@ async function loadData(_force = false) {
       params.onlyResolved = 'true'
     } else if (queryType === 'my_open') {
       params.hideResolved = 'true'
-      params.assigneeId = 'me'
+      params.assignedToMe = 'true'
     }
     if (config.projectId) params.projectId = config.projectId
     params.sort = config.sort || '-updatedAt'

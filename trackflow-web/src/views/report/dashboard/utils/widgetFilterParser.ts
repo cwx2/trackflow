@@ -5,7 +5,7 @@
  *   priority:Critical         → priority=Critical
  *   priority:Critical,High    → priority=Critical,High
  *   state:Blocked             → statusId 按名称匹配（传到后端作 keyword 搜索）
- *   assignee:me               → assigneeId=me
+ *   assignee:me               → assignedToMe=true
  *   type:Bug                  → issueType=Bug
  *   created:today             → createdAfter=今天零点
  *   created:week              → createdAfter=本周一
@@ -62,7 +62,11 @@ export function parseWidgetFilterQuery(query: string): Record<string, string> {
         params._statusName = value
         break
       case 'assignee':
-        params.assigneeId = value
+        if (value.toLowerCase() === 'me') {
+          params.assignedToMe = 'true'
+        } else {
+          params.assigneeId = value
+        }
         break
       case 'reporter':
         params.reporterId = value
