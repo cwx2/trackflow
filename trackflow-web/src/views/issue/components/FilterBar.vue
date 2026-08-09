@@ -673,8 +673,8 @@ async function loadValueOptions(fieldKey: string) {
           const typeOpts = await loadIssueTypeOptions(typePid)
           valueOptions.value = typeOpts.map(o => ({ id: o.value, label: o.label, color: o.color || undefined }))
         } else {
-          // 回退到静态映射
-          valueOptions.value = Object.entries(issueTypeLabelMap).map(([id, label]) => ({ id, label }))
+          // 回退到静态映射 — 使用中文 label 作为 id，因为 DB 中 issue.issue_type 存储中文值
+          valueOptions.value = Object.values(issueTypeLabelMap).map(label => ({ id: label, label }))
         }
         break
       }

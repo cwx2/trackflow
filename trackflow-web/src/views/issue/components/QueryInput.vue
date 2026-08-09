@@ -118,7 +118,7 @@ function getBuiltinFields(): FieldDef[] {
       key: 'type', label: '类型', queryKey: '类型', valueType: 'enum',
       getValues: () => issueTypeCache.value.length > 0
         ? issueTypeCache.value
-        : Object.entries(issueTypeLabelMap).map(([id, label]) => ({ id, label }))
+        : Object.values(issueTypeLabelMap).map(label => ({ id: label, label }))
     },
     {
       key: 'sprint', label: 'Sprint', queryKey: 'Sprint', valueType: 'enum',
