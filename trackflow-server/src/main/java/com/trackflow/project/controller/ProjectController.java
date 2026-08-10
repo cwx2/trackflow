@@ -92,7 +92,7 @@ public class ProjectController {
     @GetMapping
     public R<PageResult<ProjectVO>> list(ProjectQuery query) {
         Long userId = SecurityUtils.getCurrentUserId();
-        Page<Project> result = projectService.list(query.toPage(), query.getKeyword(), query.getStatus(), userId);
+        Page<Project> result = projectService.list(query.toPage(), query.getKeyword(), query.getStatus(), userId, query.getRequiredPermission());
         List<ProjectVO> voList = projectConverter.toVOList(result.getRecords());
         projectService.populateMemberSummary(voList);
         projectService.populateFavoriteStatus(voList, userId);

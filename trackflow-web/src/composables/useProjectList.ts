@@ -20,7 +20,15 @@ export type ProjectLoadState = 'idle' | 'loading' | 'success' | 'error'
 /** 下拉选择器场景的最大加载数量（后端已按成员关系过滤，实际量远小于此值） */
 const SELECTOR_PAGE_SIZE = 500
 
-export function useProjectList() {
+export interface UseProjectListOptions {
+  /**
+   * 按权限过滤项目列表。传入权限标识后，仅返回用户在该项目中拥有该权限的项目。
+   * 例如 'sprint:view' 表示仅显示有 Sprint 查看权限的项目。
+   */
+  requiredPermission?: string
+}
+
+export function useProjectList(options?: UseProjectListOptions) {
   const projects = ref<ProjectVO[]>([])
   const projectLoadState = ref<ProjectLoadState>('idle')
   const projectStore = useProjectStore()
@@ -35,7 +43,11 @@ export function useProjectList() {
   async function loadProjects(): Promise<ProjectVO[]> {
     projectLoadState.value = 'loading'
     try {
-      const res = await projectApi.list({ pageSize: SELECTOR_PAGE_SIZE })
+      const params: Record<string, any> = { pageSize: SELECTOR_PAGE_SIZE }
+      if (options?.requiredPermission) {
+        params.requiredPermission = options.requiredPermission
+      }
+      const res = await projectApi.list(params)
       const list = res.data?.list || []
       // 收藏项目排前面
       list.sort((a, b) => {

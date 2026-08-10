@@ -283,7 +283,7 @@ function canDeleteSprintItem(sprint: SprintVO): boolean {
   return canDeleteSprintSync(sprint.projectId)
 }
 
-const { projects, projectLoadState, loadProjects } = useProjectList()
+const { projects, projectLoadState, loadProjects } = useProjectList({ requiredPermission: 'sprint:view' })
 const { viewSprintIssues, viewSprintOnBoard, viewIssuesByCategory, viewOverdueIssues } = useSprintNavigation(selectedProject, projects)
 const {
   sprints, loadingState, activeSprints, plannedSprints, completedSprints, archivedSprints,

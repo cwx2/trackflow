@@ -79,4 +79,15 @@ public interface ProjectMemberMapper extends BaseMapper<ProjectMember> {
               )
             """)
     List<Long> selectFormerAssigneeUserIds(@Param("projectId") Long projectId);
+
+    /**
+     * 获取用户拥有指定权限的项目 ID 列表（通过 project_member → sys_role → role_permission 链查询）。
+     * 用于按权限过滤项目列表（如 Sprint 规划页面仅显示有 sprint:view 权限的项目）。
+     */
+    @Select("""
+            SELECT DISTINCT pm.project_id FROM project_member pm
+            JOIN role_permission rp ON rp.role_id = pm.role_id
+            WHERE pm.user_id = #{userId} AND rp.permission = #{permission}
+            """)
+    List<Long> selectProjectIdsWithPermission(@Param("userId") Long userId, @Param("permission") String permission);
 }

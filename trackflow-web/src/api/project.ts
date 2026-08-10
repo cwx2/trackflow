@@ -10,7 +10,7 @@ type RequestOptions = AxiosRequestConfig & { _silent403?: boolean }
  */
 export const projectApi = {
   /** 项目列表 */
-  list(params?: { keyword?: string; status?: string; page?: number; pageSize?: number }) {
+  list(params?: { keyword?: string; status?: string; page?: number; pageSize?: number; requiredPermission?: string }) {
     return request.get<any, R<PageResult<ProjectVO>>>('/projects', { params })
   },
 

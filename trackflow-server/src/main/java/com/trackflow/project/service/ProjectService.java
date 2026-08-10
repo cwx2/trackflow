@@ -235,10 +235,37 @@ public class ProjectService {
      * 包含：成员项目 + internal/public 项目（对已登录非成员可见）
      */
     public Page<Project> list(Page<Project> page, String keyword, String status, Long userId) {
+        return list(page, keyword, status, userId, null);
+    }
+
+    /**
+     * 项目列表（支持按权限过滤）。
+     *
+     * @param requiredPermission 当非空时，仅返回用户拥有该权限的项目（通过 member→role→permission 链判断）。
+     *                           用于 Sprint 规划等场景，只显示有相关管理权限的项目。
+     *                           系统管理员同样受此过滤（Sprint 规划页面不应因全局管理员身份显示无关项目）。
+     */
+    public Page<Project> list(Page<Project> page, String keyword, String status, Long userId, String requiredPermission) {
         LambdaQueryWrapper<Project> wrapper = new LambdaQueryWrapper<>();
 
-        // 非系统管理员：直接成员项目 + 通过用户组获得的项目 + internal/public 项目
-        if (userId != null && !permissionService.isSystemAdmin(userId)) {
+        // 权限过滤模式：严格按 requiredPermission 过滤，不走 internal/public 可见性逻辑
+        if (requiredPermission != null && !requiredPermission.isBlank() && userId != null) {
+            // 通过直接成员角色获得权限的项目
+            List<Long> directPermProjectIds = memberMapper.selectProjectIdsWithPermission(userId, requiredPermission);
+            // 通过用户组角色获得权限的项目
+            List<Long> groupPermProjectIds = userGroupRoleMapper.selectProjectIdsWithPermissionViaGroups(userId, requiredPermission);
+
+            Set<Long> permittedIds = new java.util.LinkedHashSet<>(directPermProjectIds);
+            permittedIds.addAll(groupPermProjectIds);
+
+            if (permittedIds.isEmpty()) {
+                // 无任何项目有此权限，直接返回空结果
+                return new Page<>(page.getCurrent(), page.getSize(), 0);
+            }
+            wrapper.in(Project::getId, permittedIds);
+        }
+        // 默认可见性过滤（无 requiredPermission 时）
+        else if (userId != null && !permissionService.isSystemAdmin(userId)) {
             List<Long> memberProjectIds = memberMapper.selectProjectIdsByUserId(userId);
             List<Long> groupProjectIds = getProjectIdsByUserViaGroups(userId);
 

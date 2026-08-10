@@ -494,7 +494,7 @@ const selectedProject = computed({
   set: (val) => projectStore.selectProject(val)
 })
 
-const { projects, projectLoadState, loadProjects } = useProjectList()
+const { projects, projectLoadState, loadProjects } = useProjectList({ requiredPermission: 'sprint:view' })
 const { canCreateSprint, canEditSprint } = usePermission(() => selectedProject.value)
 
 // ===== Data =====
