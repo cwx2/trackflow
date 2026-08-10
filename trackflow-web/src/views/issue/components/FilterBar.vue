@@ -700,12 +700,18 @@ async function loadValueOptions(fieldKey: string) {
 
       case 'issueType': {
         // 从自定义字段系统动态加载工单类型选项
-        const typePid = props.projectId
+        // 优先使用当前项目ID；如果全部项目模式，尝试从已选的项目筛选条件获取项目ID
+        const typeProjectFilter = activeFilters.value.find(f => f.fieldKey === 'project')
+        const typePid = props.projectId || (typeProjectFilter?.values[0] || '')
         if (typePid) {
           const typeOpts = await loadIssueTypeOptions(typePid)
-          valueOptions.value = typeOpts.map(o => ({ id: o.value, label: o.label, color: o.color || undefined }))
+          // 防止异步竞态：确认当前编辑的仍是 issueType 字段
+          if (editingChip.value && activeFilters.value[editingChip.value.index]?.fieldKey === 'issueType') {
+            valueOptions.value = typeOpts.map(o => ({ id: o.value, label: o.label, color: o.color || undefined }))
+          }
         } else {
-          // 回退到静态映射 — 使用中文 label 作为 id，因为 DB 中 issue.issue_type 存储中文值
+          // 全部项目模式且无项目筛选条件时，回退到静态映射
+          // 使用中文 label 作为 id，因为 DB 中 issue.issue_type 存储中文值
           valueOptions.value = Object.values(issueTypeLabelMap).map(label => ({ id: label, label }))
         }
         break
