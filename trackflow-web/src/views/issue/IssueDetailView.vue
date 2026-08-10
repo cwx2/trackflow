@@ -141,6 +141,7 @@
         :can-add-time="canLogTime"
         @update:visible="spentTimePopoverVisible = $event"
         @add-time="onSpentTimeAddTime"
+        @edit-time="(entry) => { spentTimePopoverVisible = false; openTimeDialog(entry) }"
       />
     </div>
   </div>
@@ -198,66 +199,35 @@
     @confirm="onPrivacyGroupConfirm"
   />
 
-  <!-- Add Time Entry Dialog -->
+  <!-- Add / Edit Time Entry Dialog -->
   <a-modal
     v-model:visible="showTimeDialog"
-    title="添加花费的时间"
+    :title="editingTimeEntry ? '编辑工时' : '添加花费的时间'"
     :width="480"
     :footer="false"
     @cancel="showTimeDialog = false"
   >
-    <a-form :model="timeForm" layout="vertical">
-      <!-- Author field: 仅管理员/具备 time:log_for_others 权限的用户可见且可修改 -->
-      <a-form-item v-if="timeFormCanLogForOthers" label="记录人">
-        <a-select
-          v-model="timeFormAuthorId"
-          placeholder="选择记录人（默认为自己）"
-          allow-search
-          allow-clear
-          style="width: 100%"
-        >
-          <a-option v-for="member in timeFormProjectMembers" :key="member.userId" :value="member.userId">
-            <span class="time-author-option">
-              <UserAvatar :name="member.displayName || member.username || '?'" :size="20" />
-
-              <span class="time-author-name">{{ member.displayName || member.username }}</span>
-              <span v-if="member.userId === currentUserId" class="time-author-self">（我）</span>
-            </span>
-          </a-option>
-        </a-select>
-      </a-form-item>
-      <a-form-item label="日期" required>
-        <a-date-picker v-model="timeForm.workDate" style="width: 100%" />
-      </a-form-item>
-      <a-form-item label="实际用时" required>
-        <a-input v-model="timeForm.durationText" placeholder="例如: 2h30m, 1h, 45m">
-          <template #prefix>⏱</template>
-        </a-input>
-      </a-form-item>
-      <a-form-item label="工作类型">
-        <a-select v-model="timeFormAttrValues['1']" placeholder="选择工作类型" allow-clear>
-          <a-option v-for="val in issueWorkTypeValues" :key="val.id" :value="val.id">
-            <span v-if="val.color" class="attr-value-dot" :style="{ background: val.color }"></span>
-            {{ val.name }}
-          </a-option>
-        </a-select>
-      </a-form-item>
-      <!-- Dynamic work item attributes (excluding built-in Work type) -->
-      <a-form-item v-for="attr in issueExtraAttributes" :key="attr.id" :label="attr.name">
-        <a-select v-model="timeFormAttrValues[attr.id]" :placeholder="`选择${attr.name}`" allow-clear>
-          <a-option v-for="val in attr.values" :key="val.id" :value="val.id">
-            <span v-if="val.color" class="attr-value-dot" :style="{ background: val.color }"></span>
-            {{ val.name }}
-          </a-option>
-        </a-select>
-      </a-form-item>
-      <a-form-item label="描述">
-        <a-textarea v-model="timeForm.description" placeholder="描述这段时间您做了什么" :auto-size="{ minRows: 2 }" />
-      </a-form-item>
-    </a-form>
-    <div style="display:flex;justify-content:flex-end;gap:8px;padding-top:12px;border-top:1px solid var(--tf-border-light)">
-      <a-button @click="showTimeDialog = false">取消</a-button>
-      <a-button type="primary" :loading="timeSaving" @click="submitTimeEntry">保存</a-button>
+    <WorkTimeForm
+      ref="workTimeFormRef"
+      :can-log-for-others="timeFormCanLogForOthers"
+      :project-members="timeFormProjectMembers"
+      :current-user-id="currentUserId"
+      :work-type-values="issueWorkTypeValues"
+      :extra-attributes="issueExtraAttributes"
+    />
+    <div class="time-dialog-footer">
+      <div class="time-dialog-footer-left">
+        <a-button
+          v-if="editingTimeEntry"
+          status="danger"
+          :loading="timeDeleting"
+          @click="deleteTimeEntry"
+        >删除</a-button>
+      </div>
+      <div class="time-dialog-footer-right">
+        <a-button @click="showTimeDialog = false">取消</a-button>
+        <a-button type="primary" :loading="timeSaving" @click="submitTimeEntry">保存</a-button>
+      </div>
     </div>
   </a-modal>
 </template>
@@ -276,7 +246,6 @@ import { useRoute, onBeforeRouteLeave } from 'vue-router'
 import { Modal } from '@arco-design/web-vue'
 import { IconLock } from '@arco-design/web-vue/es/icon'
 import { renderMarkdown, renderHtmlWithMarkdown } from '@/utils/markdown'
-import { UserAvatar } from '@/components/base'
 import { useTimerStore } from '@/stores/timer'
 import { useIssueDetailData } from './composables/useIssueDetailData'
 import { useIssueDetailActions } from './composables/useIssueDetailActions'
@@ -293,6 +262,7 @@ import MoveIssueModal from './components/MoveIssueModal.vue'
 import TransitionCommentModal from './components/TransitionCommentModal.vue'
 import AttachmentPrivacyModal from './components/AttachmentPrivacyModal.vue'
 import AddLinkModal from './components/AddLinkModal.vue'
+import WorkTimeForm from '@/components/WorkTimeForm.vue'
 import type { ActivityItem } from './components/ActivityStream.vue'
 import type { SidebarField, StatusInfo, FieldOption } from './components/DetailSidebar.vue'
 import { localizeFieldName, localizeFieldValue, localizeStatusName, localizePriority, localizeLinkType } from '@/utils/fieldLabels'
@@ -329,6 +299,9 @@ const sidebarCollapsed = ref<boolean>(localStorage.getItem(SIDEBAR_COLLAPSED_KEY
 
 // Comment input ref (for reply functionality)
 const commentInputRef = ref<InstanceType<typeof CommentInput> | null>(null)
+
+// WorkTimeForm ref（工时弹窗）
+const workTimeFormRef = ref<InstanceType<typeof WorkTimeForm> | null>(null)
 
 // ActivityStream component ref (for accessing currentFilter in fixed load-more bar)
 const activityStreamCompRef = ref<InstanceType<typeof ActivityStream> | null>(null)
@@ -371,12 +344,13 @@ const actions = useIssueDetailActions({
   loadIssueProjectAttributes, loadTimeFormPermissions,
   canEditIssueEffective, hasProjectPermission,
   currentUserId, sidebarCollapsed, sidebarRef,
+  workTimeFormRef,
 })
 const {
   showTransitionModal, transitionTarget, transitionRequireComment,
   showCreatePanel, cloneData, createSubtaskParentId,
   showAddLinkModal, showMoveModal, moveModalRef, showPrivacyModal,
-  showTimeDialog, timeSaving, timeForm, timeFormAttrValues, timeFormAuthorId,
+  showTimeDialog, timeSaving, timeDeleting, editingTimeEntry,
   copyIssue, onCopyId, onCloneIssue, onCreateSubtask,
   openAddLinkModal, onLinked, onDeleteLink,
   triggerUpload, onPrivacyGroupConfirm, onDropFiles, onDeleteAttachment, onDeleteAllAttachments,
@@ -387,7 +361,7 @@ const {
   onAddComment, onEditComment, onDeleteComment, onRestoreComment, onPermanentlyDeleteComment,
   onQuickActionExecuted, onTransition, onTransitionConfirm,
   onEditField, onClearField, onAddOption,
-  openTimeDialog, handleStartTimer, handleStopTimerFromDetail, submitTimeEntry,
+  openTimeDialog, handleStartTimer, handleStopTimerFromDetail, submitTimeEntry, deleteTimeEntry,
   onPasteUpload,
 } = actions
 
@@ -866,10 +840,19 @@ onBeforeRouteLeave((_to, _from, next) => {
 
 <style scoped>
 .attr-value-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
-.time-author-option { display: flex; align-items: center; gap: 6px; }
-.time-author-avatar { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 50%; background: var(--tf-accent); color: var(--tf-text-on-accent); font-size: 11px; font-weight: 600; flex-shrink: 0; }
-.time-author-name { flex: 1; font-size: 13px; }
-.time-author-self { font-size: 11px; color: var(--tf-text-tertiary); }
+
+/* 工时弹窗底部按钮栏 */
+.time-dialog-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 12px;
+  margin-top: 4px;
+  border-top: 1px solid var(--tf-border-light);
+}
+.time-dialog-footer-left { display: flex; gap: 8px; }
+.time-dialog-footer-right { display: flex; gap: 8px; }
 
 /* 活动流锚点容器 */
 .activity-stream-anchor {

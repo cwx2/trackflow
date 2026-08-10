@@ -30,6 +30,11 @@
             <div class="stp-item-main">
               <span class="stp-user">{{ entry.userName || '未知用户' }}</span>
               <span class="stp-duration">{{ formatDuration(entry.duration) }}</span>
+              <button v-if="canAddTime" class="stp-edit-btn" title="编辑" @click="$emit('edit-time', entry)">
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+                  <path d="M11.013 1.427a1.75 1.75 0 012.474 0l1.086 1.086a1.75 1.75 0 010 2.474l-8.61 8.61c-.21.21-.47.364-.756.445l-3.251.93a.75.75 0 01-.927-.928l.929-3.25c.081-.286.235-.547.445-.758l8.61-8.61zm1.414 1.06a.25.25 0 00-.354 0L10.811 3.75l1.439 1.44 1.263-1.263a.25.25 0 000-.354l-1.086-1.086zM11.189 6.25L9.75 4.81 3.34 11.22a.25.25 0 00-.065.108l-.568 1.99 1.99-.568a.25.25 0 00.108-.065l6.384-6.435z"/>
+                </svg>
+              </button>
             </div>
             <div class="stp-item-meta">
               <span class="stp-date">{{ formatDate(entry.workDate) }}</span>
@@ -68,6 +73,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   'update:visible': [val: boolean]
   'add-time': []
+  'edit-time': [entry: TimeEntryVO]
 }>()
 
 const loading = ref(false)
@@ -252,7 +258,8 @@ function formatDate(dateStr?: string): string {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 200px;
+  max-width: 180px;
+  flex: 1;
 }
 
 .stp-duration {
@@ -260,6 +267,28 @@ function formatDate(dateStr?: string): string {
   font-weight: 600;
   color: var(--tf-accent);
   white-space: nowrap;
+}
+
+.stp-edit-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: none;
+  color: var(--tf-text-tertiary);
+  border-radius: 3px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.12s, color 0.12s;
+}
+.stp-edit-btn:hover {
+  background: var(--tf-bg-hover);
+  color: var(--tf-text-primary);
+}
+.stp-item:hover .stp-edit-btn {
+  display: flex;
 }
 
 .stp-item-meta {

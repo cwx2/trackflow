@@ -20,6 +20,7 @@ import { useTimerStore } from '@/stores/timer'
 import { useDrafts } from './useDrafts'
 import type { IssueDetailVO, IssueAttachmentVO } from '@/api/types'
 import type { StatusInfo } from '../components/DetailSidebar.vue'
+import type { TimeEntryVO } from '@/api/timeEntry'
 
 interface ActionDeps {
   issue: { value: IssueDetailVO | null }
@@ -34,6 +35,8 @@ interface ActionDeps {
   currentUserId: { value: string }
   sidebarCollapsed: { value: boolean }
   sidebarRef: { value: any }
+  /** WorkTimeForm 组件的 ref，用于获取/填充表单数据 */
+  workTimeFormRef: { value: { validate: () => string | null; getFormData: () => any; fill: (entry: any) => void; reset: () => void } | null }
 }
 
 export function useIssueDetailActions(deps: ActionDeps) {
@@ -75,9 +78,93 @@ export function useIssueDetailActions(deps: ActionDeps) {
   // ============ Time entry dialog ============
   const showTimeDialog = ref(false)
   const timeSaving = ref(false)
-  const timeForm = ref({ workDate: new Date().toISOString().slice(0, 10), durationText: '', description: '' })
-  const timeFormAttrValues = ref<Record<string, string>>({})
-  const timeFormAuthorId = ref<string>('')
+  const timeDeleting = ref(false)
+  /** 当前正在编辑的工时条目，null 表示新增模式 */
+  const editingTimeEntry = ref<TimeEntryVO | null>(null)
+
+  /** 打开工时弹窗
+   * @param entry 传入已有条目时进入编辑模式，不传则新增模式
+   */
+  function openTimeDialog(entry?: TimeEntryVO) {
+    editingTimeEntry.value = entry ?? null
+    showTimeDialog.value = true
+    // 异步等 DOM 渲染后操作 form ref
+    import('vue').then(({ nextTick: nt }) => nt(() => {
+      if (entry) {
+        deps.workTimeFormRef.value?.fill(entry)
+      } else {
+        deps.workTimeFormRef.value?.reset()
+      }
+    }))
+    // 按需加载项目工时属性和权限
+    if (deps.issue.value?.projectId) {
+      deps.loadIssueProjectAttributes(deps.issue.value.projectId)
+      deps.loadTimeFormPermissions(deps.issue.value.projectId)
+    }
+  }
+
+  async function submitTimeEntry() {
+    const formRef = deps.workTimeFormRef.value
+    if (!formRef) return
+    const error = formRef.validate()
+    if (error) { Message.warning(error); return }
+
+    const { workDate, durationText: _dt, description, forUserId, attrValues, duration } = formRef.getFormData()
+
+    const attrValsFiltered = Object.keys(attrValues).length > 0
+      ? Object.fromEntries(Object.entries(attrValues as Record<string, string>).filter(([, v]) => v))
+      : undefined
+
+    const forUserIdFinal = (deps.currentUserId.value && forUserId && forUserId !== deps.currentUserId.value)
+      ? forUserId : undefined
+
+    timeSaving.value = true
+    try {
+      if (editingTimeEntry.value) {
+        await timeEntryApi.update(editingTimeEntry.value.id, {
+          workDate,
+          duration,
+          description: description || undefined,
+          attributeValues: attrValsFiltered,
+        })
+        Message.success('工时已更新')
+      } else {
+        await timeEntryApi.create({
+          issueId: deps.issue.value!.id,
+          workDate,
+          duration,
+          description: description || undefined,
+          forUserId: forUserIdFinal,
+          attributeValues: attrValsFiltered,
+        })
+        Message.success('工时已记录')
+      }
+      showTimeDialog.value = false
+      await deps.loadAll()
+    } catch (e: any) { Message.error(e.response?.data?.message || '操作失败') }
+    finally { timeSaving.value = false }
+  }
+
+  async function deleteTimeEntry() {
+    if (!editingTimeEntry.value) return
+    Modal.warning({
+      title: '删除工时',
+      content: '确定要删除这条工时记录吗？此操作不可撤销。',
+      okText: '删除',
+      cancelText: '取消',
+      hideCancel: false,
+      onOk: async () => {
+        timeDeleting.value = true
+        try {
+          await timeEntryApi.delete(editingTimeEntry.value!.id)
+          Message.success('工时已删除')
+          showTimeDialog.value = false
+          await deps.loadAll()
+        } catch (e: any) { Message.error(e.response?.data?.message || '删除失败') }
+        finally { timeDeleting.value = false }
+      }
+    })
+  }
 
   // ============ Copy / Clone ============
   function copyIssue() {
@@ -452,17 +539,6 @@ export function useIssueDetailActions(deps: ActionDeps) {
   }
 
   // ============ Time entry ============
-  function openTimeDialog() {
-    timeForm.value = { workDate: new Date().toISOString().slice(0, 10), durationText: '', description: '' }
-    timeFormAttrValues.value = {}
-    timeFormAuthorId.value = ''
-    showTimeDialog.value = true
-    // Load time-related project attributes on demand
-    if (deps.issue.value?.projectId) {
-      deps.loadIssueProjectAttributes(deps.issue.value.projectId)
-      deps.loadTimeFormPermissions(deps.issue.value.projectId)
-    }
-  }
 
   async function handleStartTimer() {
     if (!deps.issue.value) return
@@ -476,36 +552,6 @@ export function useIssueDetailActions(deps: ActionDeps) {
     const result = await timerStore.stopTimer()
     if (result.success) { Message.success('计时器已停止'); await deps.loadAll() }
     else { Message.error(result.message || '停止计时器失败') }
-  }
-
-  async function submitTimeEntry() {
-    if (!timeForm.value.durationText) { Message.warning('请输入时长'); return }
-    const duration = parseDurationText(timeForm.value.durationText)
-    if (!duration || duration <= 0) { Message.warning('时长格式无效，请使用如 2h30m, 1h, 45m'); return }
-
-    const attrVals = Object.keys(timeFormAttrValues.value).length > 0
-      ? Object.fromEntries(Object.entries(timeFormAttrValues.value).filter(([, v]) => v))
-      : undefined
-
-    const forUserId = (deps.currentUserId.value && timeFormAuthorId.value && timeFormAuthorId.value !== deps.currentUserId.value)
-      ? timeFormAuthorId.value
-      : undefined
-
-    timeSaving.value = true
-    try {
-      await timeEntryApi.create({
-        issueId: deps.issue.value!.id,
-        workDate: timeForm.value.workDate,
-        duration,
-        description: timeForm.value.description || undefined,
-        forUserId,
-        attributeValues: attrVals
-      })
-      Message.success('工时已记录')
-      showTimeDialog.value = false
-      await deps.loadAll()
-    } catch (e: any) { Message.error(e.response?.data?.message || '记录失败') }
-    finally { timeSaving.value = false }
   }
 
   // ============ Paste upload ============
@@ -539,24 +585,6 @@ export function useIssueDetailActions(deps: ActionDeps) {
     }
   }
 
-  function parseDurationText(text: string): number | null {
-    const cleaned = text.trim().toLowerCase()
-    let total = 0
-    const weekMatch = cleaned.match(/(\d+)\s*w/)
-    const dayMatch = cleaned.match(/(\d+)\s*d/)
-    const hourMatch = cleaned.match(/(\d+)\s*h/)
-    const minMatch = cleaned.match(/(\d+)\s*m/)
-    if (weekMatch) total += parseInt(weekMatch[1]) * 5 * 8 * 60
-    if (dayMatch) total += parseInt(dayMatch[1]) * 8 * 60
-    if (hourMatch) total += parseInt(hourMatch[1]) * 60
-    if (minMatch) total += parseInt(minMatch[1])
-    if (!weekMatch && !dayMatch && !hourMatch && !minMatch) {
-      const num = parseFloat(cleaned)
-      if (!isNaN(num)) total = Math.round(num * 60)
-    }
-    return total > 0 ? total : null
-  }
-
   return {
     // Transition state
     showTransitionModal, transitionTarget, transitionRequireComment,
@@ -565,7 +593,7 @@ export function useIssueDetailActions(deps: ActionDeps) {
     // Modals
     showAddLinkModal, showMoveModal, moveModalRef, showPrivacyModal,
     // Time
-    showTimeDialog, timeSaving, timeForm, timeFormAttrValues, timeFormAuthorId,
+    showTimeDialog, timeSaving, timeDeleting, editingTimeEntry,
 
     // Actions
     copyIssue, onCopyId, onCloneIssue, onCreateSubtask,
@@ -578,7 +606,7 @@ export function useIssueDetailActions(deps: ActionDeps) {
     onAddComment, onEditComment, onDeleteComment, onRestoreComment, onPermanentlyDeleteComment,
     onQuickActionExecuted, onTransition, onTransitionConfirm,
     onEditField, onClearField, onAddOption,
-    openTimeDialog, handleStartTimer, handleStopTimerFromDetail, submitTimeEntry,
+    openTimeDialog, handleStartTimer, handleStopTimerFromDetail, submitTimeEntry, deleteTimeEntry,
     onPasteUpload,
     handleUpdateError,
   }
