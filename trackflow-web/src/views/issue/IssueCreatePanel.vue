@@ -2112,7 +2112,7 @@ onMounted(() => {
   flex-shrink: 0;
 }
 
-.title-bar { padding: 8px 0; border-bottom: 1px solid var(--color-border); flex-shrink: 0; position: relative; }
+.title-bar { padding: 8px 0; border-bottom: 1px solid var(--color-border); flex-shrink: 0; position: relative; z-index: 0; }
 
 /* Submit error banner (YouTrack-style red banner at top of form) */
 .submit-error-banner {
@@ -2225,7 +2225,7 @@ onMounted(() => {
 
 .create-body { flex: 1; display: flex; overflow: hidden; }
 
-.editor-area { flex: 1; display: flex; flex-direction: column; overflow-y: auto; border-right: 1px solid var(--color-border); }
+.editor-area { flex: 1; display: flex; flex-direction: column; overflow-y: auto; overflow-x: hidden; border-right: 1px solid var(--color-border); position: relative; z-index: 0; }
 .editor-area :deep(.rich-editor) { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .editor-area :deep(.editor-content) { flex: 1; max-height: none; min-height: 160px; overflow-y: auto; }
 .editor-area :deep(.md-source) { flex: 1; max-height: none; min-height: 160px; }
@@ -2303,7 +2303,7 @@ onMounted(() => {
   display: inline-block;
 }
 
-.props-panel { width: 200px; flex-shrink: 0; padding: 16px; overflow-y: auto; }
+.props-panel { width: 200px; flex-shrink: 0; padding: 16px; overflow-y: auto; position: relative; z-index: 1; }
 .prop-row { margin-bottom: 14px; }
 .prop-label { display: block; font-size: 12px; color: var(--color-text-3); margin-bottom: 4px; }
 
