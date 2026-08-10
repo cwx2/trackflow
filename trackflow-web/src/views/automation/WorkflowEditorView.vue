@@ -67,6 +67,11 @@
             <IssueContextConfig v-else-if="selectedNode.properties?.nodeType === 'trackflow-issue-context'" :data="selectedNode.properties" @update:data="updateSelectedNodeProperties" />
             <IssueUpdateConfig v-else-if="selectedNode.properties?.nodeType === 'trackflow-issue-update'" :data="selectedNode.properties" @update:data="updateSelectedNodeProperties" />
             <RoleAgentConfig v-else-if="selectedNode.properties?.nodeType === 'role-agent'" :data="selectedNode.properties" @update:data="updateSelectedNodeProperties" />
+            <StartConfig v-else-if="selectedNode.properties?.nodeType === 'start'" :data="selectedNode.properties" @update:data="updateSelectedNodeProperties" />
+            <EndConfig v-else-if="selectedNode.properties?.nodeType === 'end'" :data="selectedNode.properties" @update:data="updateSelectedNodeProperties" />
+            <ApprovalConfig v-else-if="selectedNode.properties?.nodeType === 'approval'" :data="selectedNode.properties" @update:data="updateSelectedNodeProperties" />
+            <IssueGetConfig v-else-if="selectedNode.properties?.nodeType === 'trackflow-issue-get'" :data="selectedNode.properties" @update:data="updateSelectedNodeProperties" />
+            <IssueCommentConfig v-else-if="selectedNode.properties?.nodeType === 'trackflow-issue-comment'" :data="selectedNode.properties" @update:data="updateSelectedNodeProperties" />
             <GenericNodeConfig
               v-else
               :data="selectedNode.properties"
@@ -343,6 +348,11 @@ import IssueTransitionConfig from './components/config/IssueTransitionConfig.vue
 import IssueContextConfig from './components/config/IssueContextConfig.vue'
 import IssueUpdateConfig from './components/config/IssueUpdateConfig.vue'
 import RoleAgentConfig from './components/config/RoleAgentConfig.vue'
+import StartConfig from './components/config/StartConfig.vue'
+import EndConfig from './components/config/EndConfig.vue'
+import ApprovalConfig from './components/config/ApprovalConfig.vue'
+import IssueGetConfig from './components/config/IssueGetConfig.vue'
+import IssueCommentConfig from './components/config/IssueCommentConfig.vue'
 import GenericNodeConfig from './components/config/GenericNodeConfig.vue'
 import GlobalVariablesConfig from './components/config/GlobalVariablesConfig.vue'
 import ExecutionPanel from './components/ExecutionPanel.vue'
