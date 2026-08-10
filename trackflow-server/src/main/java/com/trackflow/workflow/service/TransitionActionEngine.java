@@ -246,8 +246,17 @@ public class TransitionActionEngine {
         if (lastAssignResult != null) {
             return lastAssignResult;
         }
-        return hasError ? ActionExecutionResult.executionError()
-                : ActionExecutionResult.strategyFailed();
+        if (hasError) {
+            return ActionExecutionResult.executionError();
+        }
+        // 如果工单已有负责人，策略未匹配不算"失败"——静默保留现有分配
+        // （YouTrack 标准行为：自动分配仅在无负责人时触发警告）
+        if (issue.getAssigneeId() != null) {
+            String currentAssigneeName = getUserDisplayName(issue.getAssigneeId());
+            return ActionExecutionResult.keptExisting(
+                    issue.getAssigneeId(), currentAssigneeName, "existing_assignee_preserved");
+        }
+        return ActionExecutionResult.strategyFailed();
     }
 
     /**
