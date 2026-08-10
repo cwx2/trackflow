@@ -1160,8 +1160,8 @@ async function quickCreateForBacklog() {
     await issueApi.create({
       projectId: selectedProject.value,
       title,
-      issueType: 'Task',
-      priority: 'Normal'
+      issueType: '任务',
+      priority: '普通'
     })
     Message.success('工单已创建到 Backlog')
     backlogQuickAddTitle.value = ''
@@ -1192,8 +1192,8 @@ async function quickCreateForSprint(sprintId: string) {
     await issueApi.create({
       projectId: selectedProject.value,
       title,
-      issueType: 'Task',
-      priority: 'Normal',
+      issueType: '任务',
+      priority: '普通',
       sprintId
     })
     Message.success('工单已创建到 Sprint')
