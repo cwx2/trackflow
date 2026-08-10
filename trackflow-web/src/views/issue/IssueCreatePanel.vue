@@ -1621,6 +1621,8 @@ function close() {
 /** 真正关闭面板并重置表单 */
 function doClose() {
   resetForm()
+  // 立即移除 beforeunload 监听器，不等待 watch(visible) 的异步时序
+  window.removeEventListener('beforeunload', handleBeforeUnload)
   emit('update:visible', false)
   // 延迟清理可能残留的遮罩层（防御性措施）
   // 需要等待外层 <a-modal> 的关闭动画完成（约 200-300ms）后再执行清理
@@ -1813,7 +1815,8 @@ function discardDraft() {
       // 用户确认丢弃
       shouldDiscard = true
       resetForm()
-      // Arco Modal 会自动触发关闭动画
+      // 立即移除 beforeunload 监听器
+      window.removeEventListener('beforeunload', handleBeforeUnload)
     },
     onCancel: () => {
       // 用户取消丢弃
@@ -1838,6 +1841,9 @@ async function submitAndClose() {
   const success = await doSubmit()
   if (success) {
     resetForm()  // 先重置表单，确保 isDirty 为 false
+    // 立即移除 beforeunload 监听器，不等待 watch(visible) 的异步时序
+    // 解决 emit('update:visible', false) 经过父组件反射回来之前的窗口期问题
+    window.removeEventListener('beforeunload', handleBeforeUnload)
     emit('created')
     emit('update:visible', false)
   }
