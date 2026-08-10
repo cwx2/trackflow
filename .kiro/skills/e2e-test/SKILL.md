@@ -310,6 +310,29 @@ async (page) => {
 - [ ] 数据持久化（刷新后仍正确）
 - [ ] 无 console error/warning
 
+#### 🔴 TypeScript 类型检查（测试开始前必做，前端有改动时）
+
+在执行任何 UI 测试之前，**先运行 TS 类型检查**：
+
+```bash
+cd /d D:\project\YT\trackflow-web && node_modules\.bin\vue-tsc --noEmit > tsc-check.txt 2>&1
+# 读取 tsc-check.txt
+```
+
+**判定**：
+- 文件为空（exit code 0）→ ✅ 继续测试
+- 有任何 TS 错误 → ❌ **立即报告失败，不继续 UI 测试**：
+
+  ```
+  ❌ FAIL - TypeScript 类型检查未通过
+  发现以下错误：
+  {tsc-check.txt 内容}
+
+  结论：前端代码存在类型错误，必须先修复再测试。
+  ```
+
+> 原因：TS 类型错误意味着代码存在潜在运行时问题，继续测试没有意义。TS 检查是 UI 测试的前置门控。
+
 ### 第五步：记录结果
 
 每个测试用例记录：

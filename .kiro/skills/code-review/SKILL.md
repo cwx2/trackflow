@@ -121,6 +121,27 @@ git diff --cached -- <file>
 
 #### 前端（参照 frontend-coding-standards.md）
 
+> **🔴 TypeScript 全量类型检查（前端有改动时，审核第一步）**：
+>
+> ```bash
+> cd /d D:\project\YT\trackflow-web && node_modules\.bin\vue-tsc --noEmit > tsc-check.txt 2>&1
+> # 读取 tsc-check.txt
+> ```
+>
+> - 文件为空（exit code 0）→ ✅ 继续审核
+> - 有任何 TS 错误 → ❌ **MUST 级问题，必须全部修复**
+>
+> 常见错误类型和修复：
+> | 错误码 | 含义 | 修复方式 |
+> |--------|------|----------|
+> | TS2322 | 类型不兼容（最常见） | `null` 赋给不接受 null 的类型用 `?? undefined`；回调参数改为 `(val: any)` |
+> | TS6133 | 变量声明未使用 | 删除或加 `_` 前缀 |
+> | TS6196 | import 了但未使用 | 从 import 语句中删除 |
+> | TS7006 | 参数隐式 any | 显式声明类型或改为 `any` |
+> | TS7053 | string 不能索引 Ref 类型 | 改为 `(ref as unknown as Record<string, T>)[key]` |
+>
+> 不得以"不影响运行"为由忽略 TS 错误——类型错误是潜在运行时 Bug 的信号。
+
 | 检查项 | 规则 |
 |--------|------|
 | API 管理 | 从 `@/api` 统一导入，不在组件写 URL |
