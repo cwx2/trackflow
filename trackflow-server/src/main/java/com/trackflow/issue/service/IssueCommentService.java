@@ -200,6 +200,7 @@ public class IssueCommentService {
         String deletedContent = stripHtmlForActivity(comment.getContent());
         commentMapper.deleteById(commentId);
         activityService.recordActivity(issueId, currentUserId, "comment_deleted", null, deletedContent, null);
+        eventPublisher.publishEvent(new IssueNotificationEvent.CommentDeleted(issue, commentId, currentUserId));
     }
 
     /**
@@ -230,6 +231,7 @@ public class IssueCommentService {
 
         commentMapper.restoreById(commentId);
         activityService.recordActivity(issueId, currentUserId, "comment_restored", null, null, null);
+        eventPublisher.publishEvent(new IssueNotificationEvent.CommentRestored(issue, commentId, currentUserId));
     }
 
     /**

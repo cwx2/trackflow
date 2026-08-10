@@ -35,6 +35,20 @@ public sealed interface IssueNotificationEvent extends NotificationEvent {
     record Commented(Issue issue, Long commenterId, Long commentId) implements IssueNotificationEvent {}
 
     /**
+     * 评论删除通知事件（软删除）
+     *
+     * @param commentId 被删除的评论 ID，前端据此更新 UI
+     */
+    record CommentDeleted(Issue issue, Long commentId, Long operatorId) implements IssueNotificationEvent {}
+
+    /**
+     * 评论还原通知事件
+     *
+     * @param commentId 被还原的评论 ID，前端据此重新显示评论
+     */
+    record CommentRestored(Issue issue, Long commentId, Long operatorId) implements IssueNotificationEvent {}
+
+    /**
      * 工单 @mention 通知事件
      */
     record Mentioned(Issue issue, String commentContent, Long commenterId, Long commentId) implements IssueNotificationEvent {}
