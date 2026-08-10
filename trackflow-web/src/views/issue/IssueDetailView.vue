@@ -1,15 +1,6 @@
 <template>
   <div class="issue-detail-page" v-if="issue">
     <!-- 实时更新提示 banner（活动流不在视口时显示） -->
-    <Transition name="realtime-toast">
-      <div v-if="realtimeUpdateBanner.visible" class="realtime-toast" @click="scrollToActivity">
-        <icon-notification class="realtime-toast-icon" />
-        <span class="realtime-toast-text">{{ realtimeUpdateBanner.message }}</span>
-        <button class="realtime-toast-close" @click.stop="realtimeUpdateBanner.visible = false">
-          <icon-close :size="12" />
-        </button>
-      </div>
-    </Transition>
 
     <!-- 归档项目提示 -->
     <div v-if="isProjectArchived" class="archived-banner">
@@ -283,7 +274,7 @@
 import { computed, ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRoute, onBeforeRouteLeave } from 'vue-router'
 import { Modal } from '@arco-design/web-vue'
-import { IconLock, IconClose, IconNotification } from '@arco-design/web-vue/es/icon'
+import { IconLock } from '@arco-design/web-vue/es/icon'
 import { renderMarkdown, renderHtmlWithMarkdown } from '@/utils/markdown'
 import { UserAvatar } from '@/components/base'
 import { useTimerStore } from '@/stores/timer'
@@ -328,7 +319,7 @@ const {
   canManageComments, canManageCustomFieldsComputed,
   isReporter, isAssignee,
   canEditIssueEffective, canChangeStatusEffective, canCommentEffective, canMoveIssue,
-  activityStreamRef, realtimeUpdateBanner, scrollToActivity, onRemoteCommentAdded,
+  activityStreamRef, scrollToActivity, onRemoteCommentAdded,
   loadAll, loadMoreActivities, loadAttachments, loadLinks,
   loadIssueProjectAttributes, loadTimeFormPermissions,
 } = data
@@ -877,73 +868,6 @@ onBeforeRouteLeave((_to, _from, next) => {
 .time-author-name { flex: 1; font-size: 13px; }
 .time-author-self { font-size: 11px; color: var(--tf-text-tertiary); }
 
-/* 实时更新提示 toast */
-.realtime-toast {
-  position: fixed;
-  bottom: 24px;
-  right: 24px;
-  z-index: 1000;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 14px;
-  background: var(--tf-bg-elevated);
-  border: 1px solid var(--tf-border-subtle);
-  border-left: 3px solid var(--tf-accent);
-  border-radius: 8px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
-  font-size: 13px;
-  color: var(--tf-text-primary);
-  cursor: pointer;
-  max-width: 320px;
-  transition: box-shadow 150ms;
-}
-
-.realtime-toast:hover {
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.28);
-}
-
-.realtime-toast-icon {
-  color: var(--tf-accent);
-  flex-shrink: 0;
-  font-size: 14px;
-}
-
-.realtime-toast-text {
-  flex: 1;
-  font-weight: 500;
-  line-height: 1.4;
-}
-
-.realtime-toast-close {
-  background: none;
-  border: none;
-  color: var(--tf-text-tertiary);
-  cursor: pointer;
-  padding: 2px;
-  display: flex;
-  align-items: center;
-  border-radius: 4px;
-  flex-shrink: 0;
-  transition: color 150ms, background 150ms;
-}
-
-.realtime-toast-close:hover {
-  color: var(--tf-text-primary);
-  background: var(--tf-bg-hover);
-}
-
-/* Toast 滑入/滑出动画 */
-.realtime-toast-enter-active,
-.realtime-toast-leave-active {
-  transition: opacity 200ms, transform 200ms;
-}
-
-.realtime-toast-enter-from,
-.realtime-toast-leave-to {
-  opacity: 0;
-  transform: translateY(12px);
-}
 /* 活动流锚点容器 */
 .activity-stream-anchor {
   display: contents;

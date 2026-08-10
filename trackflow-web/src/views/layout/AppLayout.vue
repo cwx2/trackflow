@@ -285,6 +285,8 @@
       @cancel-with-data="onCreatePanelCancel"
       @expand-to-fullscreen="onCreatePanelExpand"
     />
+    <!-- 全局 Toast 通知 -->
+    <ToastNotification />
   </div>
 </template>
 
@@ -302,7 +304,7 @@ import NotificationPanel from './NotificationPanel.vue'
 import ServiceStatusBanner from './ServiceStatusBanner.vue'
 import IssueCreatePanel from '@/components/IssueCreatePanel.vue'
 import trackflowLogoUrl from '@/assets/trackflow-watermark.svg'
-import { UserAvatar } from '@/components/base'
+import { UserAvatar, ToastNotification } from '@/components/base'
 import trackflowIconUrl from '@/assets/trackflow-icon.svg'
 
 const router = useRouter()

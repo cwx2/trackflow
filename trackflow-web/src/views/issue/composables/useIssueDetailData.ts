@@ -18,6 +18,7 @@ import type { WorkItemAttributeVO } from '@/api/timeEntry'
 import { usePermission, loadProjectPermissions } from '@/composables/usePermission'
 import { useIssueDetailSubscription } from '@/composables/useWebSocket'
 import type { IssueRealtimeEvent } from '@/composables/useWebSocket'
+import { useToast } from '@/composables/useToast'
 import { useAuthStore } from '@/stores/auth'
 import { useTabStore } from '@/stores/tabs'
 import { useRecentIssues } from './useRecentIssues'
@@ -143,22 +144,13 @@ export function useIssueDetailData() {
 
   // ============ WebSocket 实时更新 ============
   const activityStreamRef = ref<HTMLElement | null>(null)
-  const realtimeUpdateBanner = ref<{ visible: boolean; message: string }>({ visible: false, message: '' })
+  const { info: toastInfo } = useToast()
   /** 远端新评论到达并数据刷新完成后的回调，由父组件注册用于触发高亮 */
   const onRemoteCommentAdded = ref<(() => void) | null>(null)
   let inactiveUpdateCount = 0
   const originalTitle = ref('')
 
-  function isActivityStreamVisible(): boolean {
-    const el = activityStreamRef.value
-    if (!el) return true
-    const rect = el.getBoundingClientRect()
-    const viewHeight = window.innerHeight || document.documentElement.clientHeight
-    return rect.top < viewHeight && rect.bottom > 0
-  }
-
   function scrollToActivity() {
-    realtimeUpdateBanner.value.visible = false
     const el = activityStreamRef.value
     if (el) {
       el.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -171,12 +163,10 @@ export function useIssueDetailData() {
       document.title = `(${inactiveUpdateCount}) ${originalTitle.value || document.title.replace(/^\(\d+\)\s*/, '')}`
       return
     }
-    if (isActivityUpdate && !isActivityStreamVisible()) {
-      realtimeUpdateBanner.value = { visible: true, message }
-      setTimeout(() => { realtimeUpdateBanner.value.visible = false }, 10000)
-    } else {
-      Message.info({ content: message, duration: 3000 })
-    }
+    toastInfo(message, {
+      duration: 6000,
+      onClick: isActivityUpdate ? scrollToActivity : undefined
+    })
   }
 
   function onVisibilityChange() {
@@ -464,7 +454,7 @@ export function useIssueDetailData() {
     canEditIssueEffective, canChangeStatusEffective, canCommentEffective, canMoveIssue,
 
     // WebSocket / realtime
-    activityStreamRef, realtimeUpdateBanner, scrollToActivity, onRemoteCommentAdded,
+    activityStreamRef, scrollToActivity, onRemoteCommentAdded,
 
     // Data loading
     loadAll, loadTransitions, loadCommentsAndActivities, loadMoreActivities,
