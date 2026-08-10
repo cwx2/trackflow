@@ -5,7 +5,8 @@
         <icon-left :size="16" />
       </button>
       <nav class="breadcrumb">
-        <a class="crumb" @click="$router.push('/issues')">{{ projectName }}</a>
+        <a v-if="fromQueryName" class="crumb" @click="navigateBack">{{ fromQueryName }}</a>
+        <a v-else class="crumb" @click="$router.push('/issues')">{{ projectName }}</a>
         <span class="sep">/</span>
         <span class="crumb-current">{{ issueKey }}</span>
         <!-- 受限工单锁定图标（对标 YouTrack "Visible to" 锁定标识） -->
@@ -106,6 +107,7 @@
 
 <script setup lang="ts">
 import { ref, watch, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { IconLeft, IconRight, IconCopy, IconPlus, IconMore, IconThumbUp, IconStar, IconStarFill, IconLock, IconMenu, IconThunderbolt } from '@arco-design/web-vue/es/icon'
 import { issueVoteApi, issueWatcherApi, quickActionApi } from '@/api'
 import type { IssueVoteStatusVO } from '@/api/issueVote'
@@ -113,6 +115,8 @@ import type { IssueWatcherStatusVO } from '@/api/issueWatcher'
 import type { QuickActionDefinitionVO } from '@/api/quickAction'
 import { Message } from '@arco-design/web-vue'
 import QuickActionDialog from './QuickActionDialog.vue'
+
+const router = useRouter()
 
 const props = defineProps<{
   issueId: string
@@ -132,6 +136,10 @@ const props = defineProps<{
   canQuickActions?: boolean
   /** 是否为只读模式（观察者等无写权限用户），隐藏写操作按钮 */
   readonly?: boolean
+  /** 来源 Saved Query 的 ID（用于面包屑返回） */
+  fromQueryId?: string
+  /** 来源 Saved Query 的名称（显示在面包屑中） */
+  fromQueryName?: string
 }>()
 
 const emit = defineEmits<{
@@ -142,6 +150,12 @@ const emit = defineEmits<{
   'toggle-sidebar': []
   'quick-action-executed': []
 }>()
+
+// ===== Navigate back to source (Saved Query or issue list) =====
+function navigateBack() {
+  // Navigate to issue list; the query will be restored from localStorage (tf_last_active_query_id)
+  router.push('/issues')
+}
 
 // ===== 快捷动作 =====
 const quickActions = ref<QuickActionDefinitionVO[]>([])

@@ -32,6 +32,8 @@
       :is-restricted="issue.visibility === 'restricted'"
       :can-quick-actions="!isProjectArchived && canChangeStatusEffective"
       :readonly="!canEditIssueEffective && !canChangeStatusEffective"
+      :from-query-id="fromQueryId"
+      :from-query-name="fromQueryName"
       @copy="copyIssue"
       @create="showCreatePanel = true"
       @toggle-sidebar="toggleSidebar"
@@ -305,6 +307,10 @@ import { localizeFieldName, localizeFieldValue, localizeStatusName, localizePrio
 
 const route = useRoute()
 const timerStore = useTimerStore()
+
+// ============ Route query context: Saved Query breadcrumb ============
+const fromQueryId = computed(() => (route.query.fromQuery as string) || undefined)
+const fromQueryName = computed(() => (route.query.fromQueryName as string) || undefined)
 
 // ============ Composables ============
 const data = useIssueDetailData()

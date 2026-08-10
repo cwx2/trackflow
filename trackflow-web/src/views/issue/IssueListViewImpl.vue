@@ -1194,7 +1194,7 @@ function setPreviewMode(mode: PreviewMode) {
 function openPreview(issue: IssueVO, index: number) { previewIssueId.value = issue.id; previewVisible.value = true; activeIssueIndex.value = index }
 function closePreview() { previewVisible.value = false; activeIssueIndex.value = -1 }
 function onPreviewVisibleChange(val: boolean) { previewVisible.value = val; if (!val) activeIssueIndex.value = -1 }
-function onPreviewGoDetail(issueId: string) { previewVisible.value = false; router.push({ name: 'IssueDetail', params: { id: issueId } }) }
+function onPreviewGoDetail(issueId: string) { previewVisible.value = false; const query: Record<string, string> = {}; if (activeQueryId.value && activeQueryName.value && activeQueryName.value !== '所有工单') { query.fromQuery = activeQueryId.value; query.fromQueryName = activeQueryName.value }; router.push({ name: 'IssueDetail', params: { id: issueId }, query }) }
 
 // ===== Keyboard Nav composable =====
 const showCommandDialog = ref(false)
@@ -1207,7 +1207,8 @@ const {
   issues, canCreateIssueGlobal, canBatchOps,
   previewMode, previewVisible, previewIssueId, activeIssueIndex,
   showCommandDialog, showCreatePanel, showShortcutsHelp, selectedCount,
-  toggle, toggleAll, openPreview, closePreview, onPreviewGoDetail
+  toggle, toggleAll, openPreview, closePreview, onPreviewGoDetail,
+  buildDetailRoute: buildIssueDetailRoute
 })
 
 // ===== Context Menu composable =====
@@ -1690,11 +1691,21 @@ function onFilterChange() {
   refreshList()
 }
 
+// ===== Navigation helper: carry Saved Query context to detail page =====
+function buildIssueDetailRoute(issueKey: string) {
+  const query: Record<string, string> = {}
+  if (activeQueryId.value && activeQueryName.value && activeQueryName.value !== '所有工单') {
+    query.fromQuery = activeQueryId.value
+    query.fromQueryName = activeQueryName.value
+  }
+  return { path: `/issues/${issueKey}`, query }
+}
+
 // ===== Table/List event handlers =====
-function onRowClick(record: TableData) { if (previewMode.value === 'sidebar') { const index = issues.value.findIndex(i => i.id === record.id); openPreview(record as unknown as IssueVO, index) } else { router.push(`/issues/${record.issueKey}`) } }
-function onRowDblClick(record: TableData) { router.push(`/issues/${record.issueKey}`) }
-function onListItemClick(issue: IssueVO) { if (previewMode.value === 'sidebar') { const index = issues.value.findIndex(i => i.id === issue.id); openPreview(issue, index) } else { router.push(`/issues/${issue.issueKey}`) } }
-function onListItemDblClick(issue: IssueVO) { router.push(`/issues/${issue.issueKey}`) }
+function onRowClick(record: TableData) { if (previewMode.value === 'sidebar') { const index = issues.value.findIndex(i => i.id === record.id); openPreview(record as unknown as IssueVO, index) } else { router.push(buildIssueDetailRoute(record.issueKey as string)) } }
+function onRowDblClick(record: TableData) { router.push(buildIssueDetailRoute(record.issueKey as string)) }
+function onListItemClick(issue: IssueVO) { if (previewMode.value === 'sidebar') { const index = issues.value.findIndex(i => i.id === issue.id); openPreview(issue, index) } else { router.push(buildIssueDetailRoute(issue.issueKey)) } }
+function onListItemDblClick(issue: IssueVO) { router.push(buildIssueDetailRoute(issue.issueKey)) }
 function onListSortChange(field: string) { if (sortState.value.field !== field) { sortState.value = { field, direction: 'asc' } } else if (sortState.value.direction === 'asc') { sortState.value = { field, direction: 'desc' } } else { sortState.value = { field: null, direction: null } }; currentPage.value = 1; refreshList() }
 function onListItemSelect(issue: IssueVO) { toggle(issue.id) }
 function onSelectionChange(rowKeys: (string | number)[]) { selectedIds.value = new Set(rowKeys.map(String)) }

@@ -19,6 +19,8 @@ export interface KeyboardNavOptions {
   openPreview: (issue: IssueVO, index: number) => void
   closePreview: () => void
   onPreviewGoDetail: (issueId: string) => void
+  /** Optional: build the route location for navigating to issue detail (carries context like saved query) */
+  buildDetailRoute?: (issueKey: string) => { path: string; query?: Record<string, string> }
 }
 
 export function useKeyboardNav(options: KeyboardNavOptions) {
@@ -28,7 +30,8 @@ export function useKeyboardNav(options: KeyboardNavOptions) {
     issues, canCreateIssueGlobal, canBatchOps,
     previewMode, previewVisible, previewIssueId, activeIssueIndex,
     showCommandDialog, showCreatePanel, showShortcutsHelp, selectedCount,
-    toggle, toggleAll, openPreview, closePreview, onPreviewGoDetail
+    toggle, toggleAll, openPreview, closePreview, onPreviewGoDetail,
+    buildDetailRoute
   } = options
 
   /** Index of the keyboard-focused row in the current issues list (-1 = no focus) */
@@ -172,7 +175,7 @@ export function useKeyboardNav(options: KeyboardNavOptions) {
         if (previewMode.value === 'sidebar') {
           openPreview(issue, focusedIndex.value)
         } else {
-          router.push(`/issues/${issue.issueKey}`)
+          router.push(buildDetailRoute ? buildDetailRoute(issue.issueKey) : `/issues/${issue.issueKey}`)
         }
       }
       return
