@@ -134,7 +134,7 @@
       <!-- Planned actions -->
       <template v-if="isPlanned">
         <a-button v-if="canEdit" size="mini" type="text" @click="$emit('edit', sprint)">编辑</a-button>
-        <a-tooltip :content="activateTooltip">
+        <a-tooltip v-if="canEdit" :content="activateTooltip">
           <span class="tooltip-wrapper">
             <a-button type="primary" size="mini" :disabled="!canActivate" @click="$emit('activate', sprint.id)">开始迭代</a-button>
           </span>
