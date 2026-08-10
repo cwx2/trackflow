@@ -182,16 +182,17 @@ public class ReportService {
 
     /**
      * 创建报表（带权限校验）
-     * - projectId 非空：需要 project:edit 权限
+     * - projectId 非空：需要 report:create 权限（项目级）且用户可访问该项目
      * - projectId 为空（全局报表）：需要系统管理员权限
      * 创建后自动添加到创建者的收藏列表（参照 YouTrack 行为）
      */
     @Transactional(rollbackFor = Exception.class)
     public ReportDefinition createWithAccessCheck(CreateReportDTO dto, Long userId) {
         if (dto.getProjectId() != null) {
-            // 项目级报表：需要 project:edit 权限
-            if (!permissionService.hasPermission(userId, dto.getProjectId(), "project:edit")) {
-                throw new BusinessException(ErrorCode.ACCESS_DENIED, "需要项目编辑权限才能创建项目报表");
+            // 项目级报表：需要 report:create 权限并且用户可访问该项目
+            projectService.assertProjectAccessible(userId, dto.getProjectId());
+            if (!permissionService.hasPermission(userId, dto.getProjectId(), "report:create")) {
+                throw new BusinessException(ErrorCode.ACCESS_DENIED, "需要报表创建权限才能创建项目报表");
             }
         } else {
             // 全局报表：需要系统管理员权限
@@ -415,8 +416,8 @@ public class ReportService {
                     // 有 edit 权限，允许修改（但不允许修改共享设置本身）
                     // 共享设置只能由创建者管理
                 } else if (report.getProjectId() != null) {
-                    if (!permissionService.hasPermission(userId, report.getProjectId(), "project:edit")) {
-                        throw new BusinessException(ErrorCode.OWNERSHIP_REQUIRED, "只有报表创建者或项目管理员可以修改此报表");
+                    if (!permissionService.hasPermission(userId, report.getProjectId(), "report:edit")) {
+                        throw new BusinessException(ErrorCode.OWNERSHIP_REQUIRED, "只有报表创建者或有报表编辑权限的用户可以修改此报表");
                     }
                 } else {
                     if (!permissionService.isSystemAdmin(userId)) {
@@ -564,8 +565,8 @@ public class ReportService {
 
         if (!userId.equals(report.getCreatedBy())) {
             if (report.getProjectId() != null) {
-                if (!permissionService.hasPermission(userId, report.getProjectId(), "project:edit")) {
-                    throw new BusinessException(ErrorCode.OWNERSHIP_REQUIRED, "只有报表创建者或项目管理员可以删除此报表");
+                if (!permissionService.hasPermission(userId, report.getProjectId(), "report:edit")) {
+                    throw new BusinessException(ErrorCode.OWNERSHIP_REQUIRED, "只有报表创建者或有报表编辑权限的用户可以删除此报表");
                 }
             } else {
                 if (!permissionService.isSystemAdmin(userId)) {
