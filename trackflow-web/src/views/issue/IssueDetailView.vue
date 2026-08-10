@@ -136,6 +136,17 @@
         @edit-field="onEditField"
         @clear-field="onClearField"
         @add-option="onAddOption"
+        @spent-time-click="onSpentTimeClick"
+      />
+
+      <!-- 工时明细浮层 -->
+      <SpentTimePopover
+        v-if="issue"
+        :issue-id="issue.id"
+        :visible="spentTimePopoverVisible"
+        :can-add-time="canLogTime"
+        @update:visible="spentTimePopoverVisible = $event"
+        @add-time="onSpentTimeAddTime"
       />
     </div>
   </div>
@@ -280,6 +291,7 @@ import type { IssueDetailVO, CustomFieldDefinitionVO, FilterRule } from '@/api/t
 import DetailTopBar from './components/DetailTopBar.vue'
 import DetailMainContent from './components/DetailMainContent.vue'
 import DetailSidebar from './components/DetailSidebar.vue'
+import SpentTimePopover from './components/SpentTimePopover.vue'
 import ActivityStream from './components/ActivityStream.vue'
 import CommentInput from './components/CommentInput.vue'
 import IssueCreatePanel from './IssueCreatePanel.vue'
@@ -349,6 +361,13 @@ function toggleSidebar() {
 const sidebarRef = ref<InstanceType<typeof DetailSidebar> | null>(null)
 const createPanelRef = ref<InstanceType<typeof IssueCreatePanel> | null>(null)
 
+// ============ Spent Time Popover ============
+const spentTimePopoverVisible = ref(false)
+
+function onSpentTimeClick() {
+  spentTimePopoverVisible.value = true
+}
+
 // ============ Actions composable ============
 const actions = useIssueDetailActions({
   issue, attachments, loadAll, loadAttachments, loadLinks,
@@ -374,6 +393,11 @@ const {
   openTimeDialog, handleStartTimer, handleStopTimerFromDetail, submitTimeEntry,
   onPasteUpload,
 } = actions
+
+function onSpentTimeAddTime() {
+  spentTimePopoverVisible.value = false
+  openTimeDialog()
+}
 
 // ============ Comment submit with auto-scroll ============
 /**

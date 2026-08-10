@@ -200,8 +200,8 @@
         </a-trigger>
 
         <!-- 只读字段（无 editType 或被权限限制） -->
-        <a-tooltip v-else :content="field.tooltip || getReadonlyTooltip(field)" position="left" mini>
-          <div class="sb-value readonly-value" :class="{ 'user-link': field.userId, 'readonly-metric': field.readonlyReason === 'computed' || field.readonlyReason === 'derived' }" @click="field.userId ? navigateToUser(field.userId) : onReadonlyFieldClick(field)">
+        <a-tooltip v-else :content="(field.key === 'spentHours' || field.key === 'derivedSpentHours') ? '点击查看工时明细' : (field.tooltip || getReadonlyTooltip(field))" position="left" mini>
+          <div class="sb-value readonly-value" :class="{ 'user-link': field.userId, 'readonly-metric': field.readonlyReason === 'computed' || field.readonlyReason === 'derived', 'clickable-metric': field.key === 'spentHours' || field.key === 'derivedSpentHours' }" @click="field.userId ? navigateToUser(field.userId) : onReadonlyFieldClick(field)">
             <TimeProgressIndicator
               v-if="field.progress && field.progress.estimated > 0"
               :spent="field.progress.spent"
@@ -326,6 +326,7 @@ const emit = defineEmits<{
   'clear-field': [fieldKey: string]
   'add-option': [fieldId: string, value: string]
   'toggle-collapse': []
+  'spent-time-click': [fieldKey: string]
 }>()
 
 // ========== 空值自定义字段折叠控制 ==========
@@ -483,11 +484,15 @@ function getReadonlyTooltip(field: SidebarField): string {
 
 /**
  * 只读字段点击事件处理
- * 可用于未来扩展（如显示更详细的权限说明弹窗）
+ * - spentHours/derivedSpentHours: 展开工时明细列表
+ * - 其他: 当前仅依靠 tooltip 提示
  */
-function onReadonlyFieldClick(_field: SidebarField) {
+function onReadonlyFieldClick(field: SidebarField) {
+  if (field.key === 'spentHours' || field.key === 'derivedSpentHours') {
+    emit('spent-time-click', field.key)
+    return
+  }
   // 当前仅依靠 tooltip 提示，点击不做额外处理
-  // 未来可扩展为显示详细权限说明弹窗
 }
 
 const sidebarRouter = useRouter()
@@ -837,6 +842,21 @@ defineExpose({ highlightField })
   color: var(--tf-text-secondary);
   opacity: 1;
   font-weight: 500;
+}
+
+/* 可点击的计算字段（已花时间 — 点击展开工时明细） */
+.sb-value.readonly-value.clickable-metric {
+  cursor: pointer;
+  color: var(--tf-accent);
+  opacity: 1;
+  font-weight: 500;
+}
+
+.sb-value.readonly-value.clickable-metric:hover {
+  background: var(--tf-bg-active, rgba(255, 255, 255, 0.06));
+  text-decoration: underline;
+  text-decoration-color: var(--tf-accent);
+  text-underline-offset: 2px;
 }
 
 /* 只读字段 hover 效果 - 提示用户此字段不可编辑 */
