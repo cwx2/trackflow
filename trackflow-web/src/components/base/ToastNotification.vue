@@ -70,6 +70,7 @@ function scheduleClose(toast: ToastItem) {
 }
 
 // 监听新增 toast，启动定时器
+// deep: true 确保数组 push 时能检测到变化
 import { watch } from 'vue'
 watch(
   toasts,
@@ -84,7 +85,7 @@ watch(
       }
     })
   },
-  { deep: false, immediate: true }
+  { deep: true, immediate: true }
 )
 
 onUnmounted(() => {
@@ -124,7 +125,7 @@ function handleClick(toast: ToastItem) {
   align-items: center;
   gap: 10px;
   width: 320px;
-  padding: 12px 14px 12px 0;
+  padding: 12px 14px 14px 0;  /* 底部多留 2px 给进度条视觉空间 */
   background: var(--tf-bg-elevated);
   border: 1px solid var(--tf-border-subtle);
   border-radius: 8px;
@@ -203,7 +204,7 @@ function handleClick(toast: ToastItem) {
   bottom: 0;
   left: 0;
   right: 0;
-  height: 2px;
+  height: 3px;
   background: var(--tf-border-subtle);
   transform-origin: left;
   animation: toast-progress linear forwards;
