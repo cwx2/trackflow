@@ -84,24 +84,31 @@
               </div>
               <!-- 单选列表 -->
               <div class="dropdown-list" v-if="field.editType === 'select' || field.editType === 'user-select'">
-                <a-tooltip
+                <template
                   v-for="opt in getFilteredOptions(field)"
-                  :key="opt.value"
-                  :content="opt.description"
-                  :disabled="!opt.description"
-                  position="left"
-                  mini
+                  :key="opt.isGroupLabel ? ('grp_' + opt.label) : opt.value"
                 >
-                  <div
-                    class="dropdown-item"
-                    :class="{ selected: opt.value === (field.rawValue || '') }"
-                    @click="selectOption(field, opt.value)"
+                  <!-- Group header -->
+                  <div v-if="opt.isGroupLabel" class="dropdown-group-label">{{ opt.label }}</div>
+                  <!-- Normal option -->
+                  <a-tooltip
+                    v-else
+                    :content="opt.description"
+                    :disabled="!opt.description"
+                    position="left"
+                    mini
                   >
-                    <span v-if="opt.dot" class="item-dot" :style="{ background: opt.dot }"></span>
-                    <span class="item-text">{{ opt.label }}</span>
-                    <span v-if="opt.badge" class="item-badge" :style="{ background: opt.badgeColor || 'var(--tf-accent)' }">{{ opt.badge }}</span>
-                  </div>
-                </a-tooltip>
+                    <div
+                      class="dropdown-item"
+                      :class="{ selected: opt.value === (field.rawValue || ''), dimmed: opt.dimmed }"
+                      @click="onOptionClick(field, opt)"
+                    >
+                      <span v-if="opt.dot" class="item-dot" :style="{ background: opt.dot }"></span>
+                      <span class="item-text">{{ opt.label }}</span>
+                      <span v-if="opt.badge" class="item-badge" :style="{ background: opt.badgeColor || 'var(--tf-accent)' }">{{ opt.badge }}</span>
+                    </div>
+                  </a-tooltip>
+                </template>
                 <div v-if="getFilteredOptions(field).length === 0 && !addingOption" class="dropdown-empty">无匹配项</div>
                 <!-- 内联添加新选项入口 -->
                 <template v-if="field.canAddOption">
@@ -237,6 +244,7 @@
 <script setup lang="ts">
 import { ref, computed, nextTick, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { Modal } from '@arco-design/web-vue'
 import TimeProgressIndicator from './TimeProgressIndicator.vue'
 
 export interface FieldOption {
@@ -248,6 +256,12 @@ export interface FieldOption {
   dot?: string
   /** 选项描述，用于 tooltip 展示 */
   description?: string
+  /** 标记此项为分组标题（不可选择，仅展示为视觉分隔） */
+  isGroupLabel?: boolean
+  /** 标记此项为弱化/半透明样式（如已完成的 Sprint） */
+  dimmed?: boolean
+  /** 选中此项前需要弹出确认对话框（值为确认文案） */
+  confirmMessage?: string
 }
 
 export interface TimeProgress {
@@ -508,7 +522,30 @@ function getFilteredOptions(field: SidebarField) {
   const opts = field.options || []
   if (!searchText.value) return opts
   const kw = searchText.value.toLowerCase()
-  return opts.filter(o => o.label.toLowerCase().includes(kw))
+  return opts.filter(o => {
+    if (o.isGroupLabel) {
+      // Keep group labels if any item in the group matches
+      const idx = opts.indexOf(o)
+      const nextGroupIdx = opts.findIndex((x, i) => i > idx && x.isGroupLabel)
+      const groupItems = opts.slice(idx + 1, nextGroupIdx === -1 ? undefined : nextGroupIdx)
+      return groupItems.some(gi => gi.label.toLowerCase().includes(kw))
+    }
+    return o.label.toLowerCase().includes(kw)
+  })
+}
+
+function onOptionClick(field: SidebarField, opt: FieldOption) {
+  if (opt.confirmMessage) {
+    Modal.confirm({
+      title: '确认操作',
+      content: opt.confirmMessage,
+      okText: '确认',
+      cancelText: '取消',
+      onOk: () => { selectOption(field, opt.value) },
+    })
+  } else {
+    selectOption(field, opt.value)
+  }
 }
 
 function selectOption(field: SidebarField, value: string) {
@@ -1022,6 +1059,27 @@ defineExpose({ highlightField })
 .dropdown-item.selected {
   background: var(--tf-accent-bg);
   font-weight: 500;
+}
+.dropdown-item.dimmed {
+  opacity: 0.5;
+}
+.dropdown-item.dimmed:hover {
+  opacity: 0.7;
+}
+.dropdown-group-label {
+  padding: 6px 14px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--tf-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  user-select: none;
+  border-top: 1px solid var(--tf-border-light, rgba(128,128,128,0.1));
+  margin-top: 4px;
+}
+.dropdown-group-label:first-child {
+  border-top: none;
+  margin-top: 0;
 }
 .item-text {
   flex: 1;

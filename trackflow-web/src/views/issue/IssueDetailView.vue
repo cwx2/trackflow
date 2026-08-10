@@ -289,7 +289,7 @@ import { useTimerStore } from '@/stores/timer'
 import { useIssueDetailData } from './composables/useIssueDetailData'
 import { useIssueDetailActions } from './composables/useIssueDetailActions'
 import { getPriorityColor } from './composables/usePriorityOptions'
-import type { IssueDetailVO, CustomFieldDefinitionVO, FilterRule } from '@/api/types'
+import type { IssueDetailVO, CustomFieldDefinitionVO, FilterRule, SprintVO } from '@/api/types'
 import DetailTopBar from './components/DetailTopBar.vue'
 import DetailMainContent from './components/DetailMainContent.vue'
 import DetailSidebar from './components/DetailSidebar.vue'
@@ -302,7 +302,7 @@ import TransitionCommentModal from './components/TransitionCommentModal.vue'
 import AttachmentPrivacyModal from './components/AttachmentPrivacyModal.vue'
 import AddLinkModal from './components/AddLinkModal.vue'
 import type { ActivityItem, RelatedChange } from './components/ActivityStream.vue'
-import type { SidebarField, StatusInfo } from './components/DetailSidebar.vue'
+import type { SidebarField, StatusInfo, FieldOption } from './components/DetailSidebar.vue'
 import { localizeFieldName, localizeFieldValue, localizeStatusName, localizePriority, priorityLabelMap, localizeLinkType } from '@/utils/fieldLabels'
 
 const route = useRoute()
@@ -638,6 +638,55 @@ function getFilteredOptions(
   })
 }
 
+/**
+ * 构建迭代选择器的分组选项列表。
+ * 按状态分组：活跃 → 计划中 → 已完成，每组有标题。
+ * 已完成的 Sprint 以弱化样式展示，选择时弹出确认。
+ */
+function buildSprintOptions(allSprints: SprintVO[], projectId: string): FieldOption[] {
+  const projectSprints = allSprints.filter(s => s.projectId === projectId && s.status !== 'archived' && s.status !== 'Archived')
+  const active = projectSprints.filter(s => s.status?.toLowerCase() === 'active')
+  const planned = projectSprints.filter(s => s.status?.toLowerCase() === 'planned')
+  const completed = projectSprints.filter(s => s.status?.toLowerCase() === 'completed')
+
+  const options: FieldOption[] = [{ value: '', label: '未排期' }]
+
+  if (active.length === 0 && planned.length === 0) {
+    // No active/planned sprints - show a hint
+    options.push({ value: '__hint_no_active', label: '暂无活跃或计划中的迭代', isGroupLabel: true })
+  }
+
+  if (active.length > 0) {
+    options.push({ value: '__group_active', label: '进行中', isGroupLabel: true })
+    for (const s of active) {
+      options.push({ value: s.id, label: s.name, badge: '活跃', badgeColor: 'var(--green-6, #00b42a)' })
+    }
+  }
+
+  if (planned.length > 0) {
+    options.push({ value: '__group_planned', label: '计划中', isGroupLabel: true })
+    for (const s of planned) {
+      options.push({ value: s.id, label: s.name })
+    }
+  }
+
+  if (completed.length > 0) {
+    options.push({ value: '__group_completed', label: '已完成', isGroupLabel: true })
+    for (const s of completed) {
+      options.push({
+        value: s.id,
+        label: s.name,
+        badge: '已完成',
+        badgeColor: 'var(--tf-text-quaternary, rgba(128,128,128,0.4))',
+        dimmed: true,
+        confirmMessage: `迭代"${s.name}"已完成，确定要将工单移入已结束的迭代吗？`,
+      })
+    }
+  }
+
+  return options
+}
+
 function buildCustomFieldSidebarEntries(i: IssueDetailVO, canEdit: boolean): SidebarField[] {
   if (!customFieldDefs.value.length) return []
   const valuesMap = new Map<string, { value: string; values?: string[]; displayValue: string; displayValues?: string[]; isMulti?: boolean; color?: string | null; colors?: (string | null)[] }>()
@@ -719,7 +768,7 @@ const sidebarFields = computed<SidebarField[]>(() => {
     ...availableTransitions.value.map(s => ({ value: s.id, label: s.blocked ? `⚠ ${s.transitionName || s.name}` : (s.transitionName || s.name), dot: s.color, badge: s.blocked ? '被阻塞' : undefined, badgeColor: s.blocked ? '#d29922' : undefined }))
   ]
   const userOptions = canAssign ? members.value.map(m => ({ value: m.userId, label: m.displayName })) : []
-  const sprintOptions = canSprint ? [{ value: '', label: '未排期' }, ...sprints.value.filter(s => s.projectId === i.projectId && s.status !== 'archived' && s.status !== 'Archived').map(s => ({ value: s.id, label: s.name }))] : []
+  const sprintOptions = canSprint ? buildSprintOptions(sprints.value, i.projectId) : []
   const sprintDisplayName = i.sprintName || (i.sprintId ? sprints.value.find(s => s.id === i.sprintId)?.name : null) || '未排期'
   return [
     { key: 'project', label: '项目', value: projectName.value, readonly: true, readonlyReason: '工单创建后不可变更项目' },
