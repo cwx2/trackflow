@@ -245,7 +245,7 @@
 import { ref, computed, nextTick, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { Modal } from '@arco-design/web-vue'
-import TimeProgressIndicator from './TimeProgressIndicator.vue'
+import TimeProgressIndicator from '@/components/base/TimeProgressIndicator.vue'
 
 export interface FieldOption {
   value: string

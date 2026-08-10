@@ -205,7 +205,7 @@ import { localizeStatusName } from '@/utils/fieldLabels'
 import { highlightKeyword } from '@/utils/highlight'
 import { IssuePriorityBadge } from '@/components/base'
 import { DEFAULT_BADGE_COLOR } from '@/utils/uiColors'
-import TimeProgressIndicator from './TimeProgressIndicator.vue'
+import TimeProgressIndicator from '@/components/base/TimeProgressIndicator.vue'
 
 interface IssueListItemIssue extends IssueVO {
   description?: string
