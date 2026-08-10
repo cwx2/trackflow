@@ -77,12 +77,18 @@
       <!-- 空状态：无仪表盘 -->
       <div v-else-if="dashboards.length === 0 && !loadingList" class="empty-state">
         <div class="empty-icon">📋</div>
-        <h3 class="empty-title">还没有自定义仪表盘</h3>
-        <p class="empty-desc">创建您的第一个仪表盘，添加微件来跟踪项目进度和团队工作。</p>
-        <a-button type="primary" @click="showCreateModal = true">
-          <template #icon><icon-plus /></template>
-          创建仪表盘
-        </a-button>
+        <h3 class="empty-title">还没有可见的仪表盘</h3>
+        <p class="empty-desc">创建您的第一个仪表盘，或恢复系统默认仪表盘来快速了解项目概况。</p>
+        <div class="empty-actions">
+          <a-button type="primary" @click="showCreateModal = true">
+            <template #icon><icon-plus /></template>
+            创建仪表盘
+          </a-button>
+          <a-button @click="restoreSystemDefault" :loading="restoringDefault">
+            <template #icon><icon-undo /></template>
+            恢复默认仪表盘
+          </a-button>
+        </div>
       </div>
 
       <!-- 仪表盘内容 -->
@@ -349,7 +355,7 @@ import { Message } from '@arco-design/web-vue'
 import { useConfirmDelete } from '@/composables/useConfirmDelete'
 import { GridLayout, GridItem } from 'grid-layout-plus'
 import {
-  IconPlus, IconMore, IconEdit, IconDelete, IconShareAlt, IconStar
+  IconPlus, IconMore, IconEdit, IconDelete, IconShareAlt, IconStar, IconUndo
 } from '@arco-design/web-vue/es/icon'
 import { customDashboardApi } from '@/api'
 import { reportApi } from '@/api/report'
@@ -374,6 +380,7 @@ const loadingList = ref(false)
 const loadingDetail = ref(false)
 const creating = ref(false)
 const updating = ref(false)
+const restoringDefault = ref(false)
 
 const dashboards = ref<DashboardListVO[]>([])
 const activeDashboardId = ref<string | null>(null)
@@ -605,6 +612,28 @@ async function handleCreate() {
     Message.error(e.response?.data?.message || '创建失败')
   } finally {
     creating.value = false
+  }
+}
+
+/**
+ * 恢复系统默认仪表盘：获取系统默认仪表盘 ID 并直接跳转到该仪表盘
+ */
+async function restoreSystemDefault() {
+  restoringDefault.value = true
+  try {
+    const res = await customDashboardApi.getSystemDefault()
+    const systemDefaultId = res.data
+    if (systemDefaultId) {
+      await loadDashboards()
+      await selectDashboard(systemDefaultId)
+      Message.success('已切换到系统默认仪表盘')
+    } else {
+      Message.warning('系统默认仪表盘尚未配置，请联系管理员')
+    }
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '恢复默认仪表盘失败')
+  } finally {
+    restoringDefault.value = false
   }
 }
 
@@ -1199,6 +1228,12 @@ watch(showEditModal, (val) => {
   margin: 0 0 20px;
   max-width: 360px;
   line-height: 1.5;
+}
+
+.empty-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 /* 加载状态 */
