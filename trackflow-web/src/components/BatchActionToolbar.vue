@@ -815,15 +815,281 @@ function confirmBatchDelete() {
 </script>
 
 <style scoped>
+/* ===== 工具栏主体 ===== */
 .batch-toolbar {
   display: flex;
   align-items: center;
-  padding: 8px 16px;
+  padding: 0 16px;
+  height: 44px;
   background: var(--tf-bg-elevated);
   border-bottom: 1px solid var(--tf-border);
-  gap: 12px;
-  animation: slideDown 200ms ease-out;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  gap: 0;
+  animation: slideDown 180ms cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+  z-index: 10;
 }
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ===== 左侧：选中计数 ===== */
+.batch-info {
+  display: flex;
+  align-items: center;
+  padding-right: 16px;
+  border-right: 1px solid var(--tf-border);
+  margin-right: 12px;
+  flex-shrink: 0;
+}
+
+.batch-count {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--tf-accent);
+  background: color-mix(in srgb, var(--tf-accent) 12%, transparent);
+  padding: 2px 10px;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+
+/* ===== 中间：操作按钮组 ===== */
+.batch-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 1;
+}
+
+/* 覆盖 Arco outline 按钮，统一做成更轻的 ghost 风格 */
+.batch-actions :deep(.arco-btn-outline) {
+  border-color: transparent;
+  background: transparent;
+  color: var(--tf-text-secondary);
+  font-size: 12px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 5px;
+  transition: background 0.12s, color 0.12s;
+}
+.batch-actions :deep(.arco-btn-outline:hover) {
+  background: var(--tf-bg-hover);
+  color: var(--tf-text-primary);
+  border-color: transparent;
+}
+.batch-actions :deep(.arco-btn-outline.arco-btn-status-danger) {
+  color: var(--tf-danger);
+}
+.batch-actions :deep(.arco-btn-outline.arco-btn-status-danger:hover) {
+  background: color-mix(in srgb, var(--tf-danger) 10%, transparent);
+  color: var(--tf-danger);
+}
+
+/* 导出下拉（Dropdown 包裹的按钮） */
+.batch-actions :deep(.arco-dropdown > .arco-btn) {
+  border-color: transparent;
+  background: transparent;
+  color: var(--tf-text-secondary);
+  font-size: 12px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 5px;
+}
+.batch-actions :deep(.arco-dropdown > .arco-btn:hover) {
+  background: var(--tf-bg-hover);
+  color: var(--tf-text-primary);
+}
+
+/* ===== 右侧：取消全选 ===== */
+.batch-toolbar > :deep(.arco-btn.arco-btn-text):last-child {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--tf-text-tertiary);
+  height: 28px;
+  padding: 0 8px;
+  border-radius: 5px;
+}
+.batch-toolbar > :deep(.arco-btn.arco-btn-text):last-child:hover {
+  background: var(--tf-bg-hover);
+  color: var(--tf-text-secondary);
+}
+
+/* ===== 下拉菜单 ===== */
+.batch-dropdown {
+  background: var(--tf-bg-elevated);
+  border: 1px solid var(--tf-border);
+  border-radius: 7px;
+  padding: 4px;
+  min-width: 160px;
+  max-height: 300px;
+  overflow-y: auto;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.16);
+}
+
+.member-dropdown { min-width: 200px; }
+.tag-dropdown    { min-width: 200px; }
+.link-dropdown   { min-width: 200px; }
+
+.dropdown-search {
+  padding: 4px;
+  margin-bottom: 2px;
+}
+
+.dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--tf-text-primary);
+  transition: background 0.12s;
+}
+.dropdown-item:hover { background: var(--tf-bg-hover); }
+
+.dropdown-group-label {
+  padding: 6px 8px 2px;
+  font-size: 11px;
+  color: var(--tf-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+}
+
+.dropdown-loading {
+  display: flex;
+  justify-content: center;
+  padding: 14px;
+}
+
+.dropdown-empty {
+  padding: 12px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--tf-text-tertiary);
+}
+
+.dropdown-warning {
+  padding: 7px 10px;
+  font-size: 12px;
+  color: var(--tf-warning);
+  background: color-mix(in srgb, var(--tf-warning) 10%, transparent);
+  border-radius: 5px;
+  margin: 4px;
+}
+
+.dropdown-error {
+  padding: 7px 10px;
+  font-size: 12px;
+  color: var(--tf-danger);
+  background: color-mix(in srgb, var(--tf-danger) 10%, transparent);
+  border-radius: 5px;
+  margin: 4px;
+}
+
+.dropdown-divider {
+  height: 1px;
+  background: var(--tf-border);
+  margin: 4px 8px;
+}
+
+/* ===== 状态下拉 ===== */
+.status-dropdown .status-name { flex: 1; }
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.reachable-hint {
+  font-size: 11px;
+  color: var(--tf-text-tertiary);
+  background: var(--tf-bg-hover);
+  padding: 1px 6px;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+.dropdown-item.partially-reachable { opacity: 0.65; }
+.dropdown-item.partially-reachable:hover { opacity: 1; }
+
+/* ===== 分配下拉 ===== */
+.unassigned-icon {
+  width: 20px;
+  text-align: center;
+  color: var(--tf-text-tertiary);
+}
+
+/* ===== 标签下拉 ===== */
+.tag-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.tag-name { flex: 1; }
+
+.tag-remove-item { color: var(--tf-text-secondary); }
+.tag-remove-item:hover { color: var(--tf-danger); }
+.tag-remove-icon {
+  font-size: 12px;
+  color: var(--tf-text-tertiary);
+  flex-shrink: 0;
+}
+.tag-remove-item:hover .tag-remove-icon { color: var(--tf-danger); }
+
+/* ===== 关联目标弹窗 ===== */
+.link-type-hint {
+  font-size: 12px;
+  color: var(--tf-text-secondary);
+  margin-bottom: 12px;
+  padding: 6px 10px;
+  background: var(--tf-bg-hover);
+  border-radius: 5px;
+}
+
+.link-target-search { margin-bottom: 10px; }
+
+.link-target-loading {
+  display: flex;
+  justify-content: center;
+  padding: 24px;
+}
+
+.link-target-list {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.link-target-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.link-target-item:hover { background: var(--tf-bg-hover); }
+
+.link-target-key {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--tf-text-tertiary);
+  flex-shrink: 0;
+}
+
+.link-target-title {
+  font-size: 13px;
+  color: var(--tf-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+</style>
 
 @keyframes slideDown {
   from {
