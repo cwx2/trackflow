@@ -193,6 +193,18 @@ export function useIssueDetailData() {
           onRemoteCommentAdded.value?.()
         })
         showRealtimeNotification(`${event.operatorName || '其他用户'} 添加了新评论`, true)
+      } else if (event.action === 'COMMENT_DELETED') {
+        // 评论被软删除：重新加载评论和活动流（后端返回已删除状态的评论）
+        loadCommentsAndActivities()
+        showRealtimeNotification(`${event.operatorName || '其他用户'} 删除了一条评论`, true)
+      } else if (event.action === 'COMMENT_RESTORED') {
+        // 评论被还原：重新加载评论和活动流
+        loadCommentsAndActivities()
+        showRealtimeNotification(`${event.operatorName || '其他用户'} 还原了一条评论`, true)
+      } else if (event.action === 'TAG_CHANGED') {
+        // 标签变更：重新加载工单详情（标签数组在 issue 对象里）
+        loadAll()
+        showRealtimeNotification(`${event.operatorName || '其他用户'} 更新了标签`, false)
       } else if (event.action === 'ATTACHMENT_CHANGED') {
         loadAttachments()
         showRealtimeNotification(`${event.operatorName || '其他用户'} 更新了附件`, true)

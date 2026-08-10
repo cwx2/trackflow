@@ -291,7 +291,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useTimerStore } from '@/stores/timer'
@@ -306,6 +306,8 @@ import IssueCreatePanel from '@/components/IssueCreatePanel.vue'
 import trackflowLogoUrl from '@/assets/trackflow-watermark.svg'
 import { UserAvatar, ToastNotification } from '@/components/base'
 import trackflowIconUrl from '@/assets/trackflow-icon.svg'
+import { useWebSocket } from '@/composables/useWebSocket'
+import { useToast } from '@/composables/useToast'
 
 const router = useRouter()
 const route = useRoute()
@@ -313,6 +315,26 @@ const authStore = useAuthStore()
 const timerStore = useTimerStore()
 const { issueBadgeCount, init: initNavBadge } = useNavBadge()
 const { unreadCount, hasUnread, togglePanel: toggleNotificationPanel, init: initNotification } = useNotification()
+const { status: wsStatus } = useWebSocket()
+const toast = useToast()
+
+// WebSocket 断线/恢复 Toast 提示
+let wsDisconnectToastId: number | null = null
+watch(wsStatus, (status, prevStatus) => {
+  if (status === 'error') {
+    // 断线：显示持久提示（不自动消失），等恢复后关闭
+    if (wsDisconnectToastId === null) {
+      wsDisconnectToastId = toast.warning('实时更新连接已断开，数据可能不是最新', { duration: 0 })
+    }
+  } else if (status === 'connected' && prevStatus !== 'connected') {
+    // 恢复：关闭断线提示，弹出恢复提示
+    if (wsDisconnectToastId !== null) {
+      toast.dismiss(wsDisconnectToastId)
+      wsDisconnectToastId = null
+      toast.success('实时更新已恢复', { duration: 3000 })
+    }
+  }
+})
 
 // 侧边栏折叠状态（持久化）
 const SIDEBAR_KEY = 'tf_sidebar_collapsed'

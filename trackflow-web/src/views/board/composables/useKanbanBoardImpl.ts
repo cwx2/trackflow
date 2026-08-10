@@ -24,6 +24,8 @@ import { useManualOrder } from '@/composables/useManualOrder'
 import { localizeStatusName, localizeIssueType, localizePriority } from '@/utils/fieldLabels'
 import { extractVersion, showActionFeedback } from '@/utils/transition'
 import { getDueDateInfo } from '@/utils/dueDate'
+import { useIssueProjectSubscription } from '@/composables/useWebSocket'
+import type { IssueRealtimeEvent } from '@/composables/useWebSocket'
 
 export function useKanbanBoardImpl() {
 
@@ -3382,6 +3384,34 @@ watch(() => route.query, (newQuery, oldQuery) => {
 
 // Note: keyboard listener cleanup is handled by useBoardKeyboard composable
 // Note: debounce timer cleanup is handled by useBoardFilter composable
+
+// ===== WebSocket 实时订阅 =====
+// 订阅当前项目的 Issue 变更，刷新看板数据
+useIssueProjectSubscription(
+  () => selectedProject.value ?? null,
+  (event: IssueRealtimeEvent) => {
+    // 过滤自己的操作
+    const myUserId = authStore.user?.userId
+    if (myUserId && String(event.operatorId) === String(myUserId)) return
+
+    if (event.action === 'FIELD_UPDATED') {
+      // 字段变更（状态/优先级/负责人/Sprint）：局部更新卡片，避免全量刷新
+      const issue = issues.value.find(i => String(i.id) === String(event.issueId))
+      if (issue) {
+        for (const [key, value] of Object.entries(event.changes)) {
+          ;(issue as any)[key] = value
+        }
+      }
+    } else if (
+      event.action === 'CREATED' ||
+      event.action === 'DELETED' ||
+      event.action === 'TAG_CHANGED'
+    ) {
+      // 新建/删除/标签变更：重新加载看板（影响卡片显示）
+      if (selectedProject.value) loadBoard()
+    }
+  }
+)
 
   // Return all state and methods needed by the template
   return {

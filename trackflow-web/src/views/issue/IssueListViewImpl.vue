@@ -1509,14 +1509,35 @@ const hasNewUpdates = ref(false)
 useIssueProjectSubscription(
   () => activeProjectId.value,
   (event: IssueRealtimeEvent) => {
-    const currentUserId = authStore.user?.id
-    if (currentUserId && String(event.operatorId) === String(currentUserId)) return
+    // 过滤自己的操作：优先用数据库 userId（精确），未同步时降级用 Keycloak id（不可靠，保守不过滤）
+    const myUserId = authStore.user?.userId
+    if (myUserId && String(event.operatorId) === String(myUserId)) return
+
     if (event.action === 'FIELD_UPDATED') {
       const idx = issues.value.findIndex(i => String(i.id) === String(event.issueId))
-      if (idx !== -1) { const patch: Partial<IssueVO> = {}; for (const [key, value] of Object.entries(event.changes)) { ;(patch as any)[key] = value }; updateLocalIssue(String(event.issueId), patch) }
-      else { hasNewUpdates.value = true }
-    } else if (event.action === 'CREATED') { hasNewUpdates.value = true }
-    else if (event.action === 'DELETED') { const idx = issues.value.findIndex(i => String(i.id) === String(event.issueId)); if (idx !== -1) { issues.value.splice(idx, 1); totalIssues.value = Math.max(0, totalIssues.value - 1) } }
+      if (idx !== -1) {
+        // 局部更新：只修改变更的字段，避免全量刷新导致列表闪烁
+        const patch: Partial<IssueVO> = {}
+        for (const [key, value] of Object.entries(event.changes)) {
+          ;(patch as any)[key] = value
+        }
+        updateLocalIssue(String(event.issueId), patch)
+      } else {
+        // 不在当前视图中（可能被筛选条件过滤），提示有新内容
+        hasNewUpdates.value = true
+      }
+    } else if (event.action === 'TAG_CHANGED') {
+      // 标签变更需要重新拉取（标签数组结构复杂，不做局部 patch）
+      hasNewUpdates.value = true
+    } else if (event.action === 'CREATED') {
+      hasNewUpdates.value = true
+    } else if (event.action === 'DELETED') {
+      const idx = issues.value.findIndex(i => String(i.id) === String(event.issueId))
+      if (idx !== -1) {
+        issues.value.splice(idx, 1)
+        totalIssues.value = Math.max(0, totalIssues.value - 1)
+      }
+    }
   }
 )
 function onRefreshForUpdates() { hasNewUpdates.value = false; refreshList() }

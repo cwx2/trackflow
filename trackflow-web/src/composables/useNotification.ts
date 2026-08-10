@@ -322,9 +322,14 @@ export function useNotification() {
         }
       })
 
-      // WebSocket 连接成功 — 停止轮询
+      // WebSocket 连接成功 — 停止轮询，立即补拉一次（修复断线期间可能错过的通知）
       wsConnected = true
       stopPolling()
+      fetchUnreadCount()
+      fetchCategoryUnreadCounts()
+      if (panelVisible.value) {
+        fetchNotifications()
+      }
       console.debug('[Notification] WebSocket subscribed, polling stopped')
     }
 

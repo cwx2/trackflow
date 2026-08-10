@@ -254,6 +254,9 @@ import SprintDeleteModal from './components/SprintDeleteModal.vue'
 import SprintFormModal from './components/SprintFormModal.vue'
 import { useSprintNavigation, formatDate, isSprintNotStartable } from '@/composables/useSprintNavigation'
 import { useSprintData } from '@/composables/useSprintData'
+import { useIssueProjectSubscription } from '@/composables/useWebSocket'
+import type { IssueRealtimeEvent } from '@/composables/useWebSocket'
+import { useAuthStore } from '@/stores/auth'
 
 const router = useRouter()
 const route = useRoute()
@@ -490,6 +493,27 @@ async function handleEditModalDelete(sprint: SprintVO) {
   showEdit.value = false
   await handleDeleteSprint(sprint)
 }
+
+// ===== WebSocket 实时订阅 =====
+const authStore = useAuthStore()
+useIssueProjectSubscription(
+  () => selectedProject.value ?? null,
+  (event: IssueRealtimeEvent) => {
+    // 过滤自己的操作
+    const myUserId = authStore.user?.userId
+    if (myUserId && String(event.operatorId) === String(myUserId)) return
+
+    // Sprint 页关注：工单移入/移出 Sprint（sprintId 字段变化）、工单状态变更
+    if (
+      event.action === 'FIELD_UPDATED' &&
+      ('sprintId' in event.changes || 'statusId' in event.changes)
+    ) {
+      loadSprints()
+    } else if (event.action === 'CREATED' || event.action === 'DELETED') {
+      loadSprints()
+    }
+  }
+)
 
 onMounted(async () => {
   await loadProjects()
