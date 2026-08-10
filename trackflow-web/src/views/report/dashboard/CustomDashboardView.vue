@@ -31,6 +31,7 @@
             @click.stop="handleToggleFavorite(d)"
           >★</span>
           <span class="tab-name">{{ d.name }}</span>
+          <span v-if="showOwnerLabel(d)" class="tab-owner" :title="'创建者: ' + d.ownerName">{{ d.ownerName }}</span>
           <span v-if="d.isSystemDefault" class="tab-system-badge" title="系统默认仪表盘">系统</span>
           <span v-else-if="d.isDefault" class="tab-default-badge" title="默认仪表盘">默认</span>
           <span v-if="d.shared" class="tab-shared" title="已共享">
@@ -57,6 +58,7 @@
             @click.stop="handleToggleFavorite(d)"
           >☆</span>
           <span class="tab-name">{{ d.name }}</span>
+          <span v-if="showOwnerLabel(d)" class="tab-owner" :title="'创建者: ' + d.ownerName">{{ d.ownerName }}</span>
           <span v-if="d.isSystemDefault" class="tab-system-badge" title="系统默认仪表盘">系统</span>
           <span v-if="d.shared && !d.isSystemDefault" class="tab-shared" title="已共享">
             <icon-share-alt :size="12" />
@@ -99,6 +101,9 @@
             <h2 class="dashboard-name">{{ currentDashboard.name }}</h2>
             <span v-if="currentDashboard.isSystemDefault" class="system-default-badge">
               系统默认
+            </span>
+            <span v-if="currentDashboard.ownerName && currentDashboard.ownerId !== currentUserId" class="dashboard-owner">
+              by {{ currentDashboard.ownerName }}
             </span>
             <span v-if="currentDashboard.description" class="dashboard-desc">
               {{ currentDashboard.description }}
@@ -463,6 +468,21 @@ const isSystemAdmin = computed(() => {
     return roles.includes('system_admin')
   } catch { return false }
 })
+
+/**
+ * 是否显示创建者标签：当仪表盘不是当前用户自己的，或存在同名仪表盘时显示
+ */
+function showOwnerLabel(d: DashboardListVO): boolean {
+  // 不显示系统默认的 owner（系统仪表盘已有"系统"标记）
+  if (d.isSystemDefault) return false
+  // 如果是自己的仪表盘，只在存在同名条目时显示
+  if (d.ownerId === currentUserId.value) {
+    const sameName = dashboards.value.filter(x => x.name === d.name)
+    return sameName.length > 1
+  }
+  // 不是自己的仪表盘，始终显示创建者
+  return !!d.ownerName
+}
 
 /** 收藏的仪表盘（后端已排序，收藏在前 + 字母序） */
 const favoriteDashboards = computed(() => dashboards.value.filter(d => d.favorited))
@@ -1095,6 +1115,16 @@ watch(showEditModal, (val) => {
   line-height: 1.4;
 }
 
+.tab-owner {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--tf-text-tertiary);
+  max-width: 80px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .tab-system-badge {
   font-size: 10px;
   font-weight: 500;
@@ -1157,6 +1187,13 @@ watch(showEditModal, (val) => {
   color: var(--tf-text-tertiary);
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-owner {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--tf-text-tertiary);
   white-space: nowrap;
 }
 
