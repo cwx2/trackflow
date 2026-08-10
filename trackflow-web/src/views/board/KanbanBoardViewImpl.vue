@@ -80,6 +80,7 @@
         <span v-else-if="selectedProject && sprints.length > 0 && !activeSprint && !selectedSprint" class="sprint-no-active-hint">
           暂无活跃迭代
           <span v-if="nextPlannedSprintHint" class="sprint-next-hint">· {{ nextPlannedSprintHint }}</span>
+          <a class="sprint-create-link" @click="openCreateSprintFromGuidance" title="创建新迭代">+ 创建</a>
         </span>
         <a-divider direction="vertical" style="margin: 0 4px" />
         <!-- Swimlane 分组选择 -->
@@ -268,8 +269,8 @@
         <div class="guidance-content">
           <div class="guidance-title">当前没有活跃迭代</div>
           <div class="guidance-desc">
-            <template v-if="nextPlannedSprint">
-              下一个迭代「{{ nextPlannedSprint.name }}」将于 {{ formatSprintDate(nextPlannedSprint.startDate) }} 开始。
+            <template v-if="plannedSprints.length > 0">
+              有 {{ plannedSprints.length }} 个计划中的迭代可以激活。
             </template>
             <template v-else>
               暂无计划中的迭代。
@@ -278,10 +279,19 @@
           </div>
         </div>
         <div class="guidance-actions">
-          <a-button v-if="nextPlannedSprint" size="mini" type="primary" @click="selectNextPlannedSprint">
-            查看 {{ nextPlannedSprint.name }}
+          <a-button
+            v-if="plannedSprints.length > 0"
+            size="mini"
+            type="primary"
+            :loading="!!activatingSprintId"
+            @click="activatePlannedSprint(plannedSprints[0])"
+          >
+            激活「{{ plannedSprints[0].name }}」
           </a-button>
-          <a-button size="mini" type="outline" @click="dismissGuidance">知道了</a-button>
+          <a-button size="mini" type="outline" @click="openCreateSprintFromGuidance">
+            + 创建新迭代
+          </a-button>
+          <a-button size="mini" type="text" @click="dismissGuidance">知道了</a-button>
         </div>
       </div>
       <!-- 截断提示：工单数超过安全上限 -->
@@ -922,9 +932,25 @@
       <div v-if="showSprintModeNoActiveState" class="empty-state empty-state--sprint">
         <div class="empty-icon">🏃</div>
         <h3 class="empty-title">看板已配置为仅显示当前 Sprint 工单</h3>
-        <p class="empty-desc">当前项目暂无活跃迭代。请前往「迭代」页面激活一个 Sprint，或修改看板设置为「显示所有工单」。</p>
+        <p class="empty-desc">
+          <template v-if="plannedSprints.length > 0">
+            当前项目有 {{ plannedSprints.length }} 个计划中的迭代可以激活。
+          </template>
+          <template v-else>
+            当前项目暂无活跃迭代。请创建一个新迭代，或修改看板设置为「显示所有工单」。
+          </template>
+        </p>
         <div class="empty-actions">
-          <a-button type="primary" size="small" @click="goToSprints">前往迭代页面</a-button>
+          <a-button
+            v-if="plannedSprints.length > 0"
+            type="primary"
+            size="small"
+            :loading="!!activatingSprintId"
+            @click="activatePlannedSprint(plannedSprints[0])"
+          >
+            激活「{{ plannedSprints[0].name }}」
+          </a-button>
+          <a-button size="small" type="outline" @click="openCreateSprintFromGuidance">+ 创建新迭代</a-button>
           <a-button size="small" @click="openSettingsToGeneral">修改看板设置</a-button>
         </div>
       </div>
@@ -1211,7 +1237,8 @@ const {
   handleRestoreArchivedSprint, handleDeleteArchivedSprint, confirmDeleteArchivedSprint,
   // No active sprint guidance
   guidanceDismissed, showSprintModeNoActiveState,
-  nextPlannedSprint, dismissGuidance,
+  nextPlannedSprint, plannedSprints, dismissGuidance,
+  openCreateSprintFromGuidance, activatePlannedSprint, activatingSprintId,
   // Card config
   cardConfig, isCardFieldVisible, getCardFieldDisplayMode,
   getCardColorClass, getCardProjectColorStyle, getCardDueDateClass, getCardDueDateTooltip,

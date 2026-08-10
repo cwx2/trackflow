@@ -1291,6 +1291,11 @@ const showNoActiveSprintGuidance = computed(() => {
   return true
 })
 
+/** 所有计划中的 Sprint（无论是否有日期） */
+const plannedSprints = computed(() => {
+  return sprints.value.filter(s => s.status === 'planned')
+})
+
 /** 关闭引导横幅 */
 function dismissGuidance() {
   guidanceDismissed.value = true
@@ -1306,6 +1311,37 @@ function selectNextPlannedSprint() {
     syncUrlState()
     loadIssuesWithLoading()
     guidanceDismissed.value = true
+  }
+}
+
+/** 从引导横幅打开创建 Sprint 弹窗 */
+function openCreateSprintFromGuidance() {
+  newSprintForm.value = { name: '', goal: '', startDate: undefined, endDate: undefined }
+  newSprintModalVisible.value = true
+}
+
+/** 激活指定的计划 Sprint 并刷新看板 */
+const activatingSprintId = ref<string | null>(null)
+async function activatePlannedSprint(sprint: SprintVO) {
+  activatingSprintId.value = sprint.id
+  try {
+    const res = await sprintApi.activate(sprint.id)
+    if (res.data) {
+      // 更新本地 Sprint 列表中的状态
+      const idx = sprints.value.findIndex(s => s.id === sprint.id)
+      if (idx >= 0) sprints.value[idx] = res.data
+      Message.success(`迭代「${res.data.name}」已激活`)
+      // 自动选中新激活的 Sprint 并刷新看板
+      selectedSprint.value = res.data.id
+      userExplicitlySelectedAll = false
+      syncUrlState()
+      await loadIssuesWithLoading()
+      guidanceDismissed.value = true
+    }
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '激活迭代失败')
+  } finally {
+    activatingSprintId.value = null
   }
 }
 
@@ -3401,7 +3437,8 @@ watch(() => route.query, (newQuery, oldQuery) => {
     handleRestoreArchivedSprint, handleDeleteArchivedSprint, confirmDeleteArchivedSprint,
     // No active sprint guidance
     guidanceDismissed, showSprintModeNoActiveState,
-    nextPlannedSprint, dismissGuidance,
+    nextPlannedSprint, plannedSprints, dismissGuidance,
+    openCreateSprintFromGuidance, activatePlannedSprint, activatingSprintId,
     // Card config
     cardConfig, isCardFieldVisible, getCardFieldDisplayMode,
     getCardColorClass, getCardProjectColorStyle, getCardDueDateClass, getCardDueDateTooltip,

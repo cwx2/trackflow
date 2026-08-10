@@ -233,6 +233,21 @@
   font-weight: 500;
 }
 
+.sprint-create-link {
+  color: var(--tf-accent);
+  font-style: normal;
+  font-weight: 500;
+  cursor: pointer;
+  margin-left: 4px;
+  opacity: 0.8;
+  transition: opacity 150ms;
+}
+
+.sprint-create-link:hover {
+  opacity: 1;
+  text-decoration: underline;
+}
+
 /* ===== Progress Indicator (mini bar chart) ===== */
 .progress-indicator {
   display: flex;
