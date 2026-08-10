@@ -162,10 +162,27 @@ public class SprintStatsService {
         } else {
             BurndownRawData rawData = loadBurndownRawData(sprintId);
             ScopeTimeline scopeTimeline = buildScopeChangeTimeline(rawData, sprintStart);
-            calculateDailyMetrics(vo, scopeTimeline, rawData, sprintStart, sprintEnd, today, totalDays);
-            calculateVelocityAndForecast(vo, scopeTimeline.startScope, today, totalDays);
+
+            // 确定工单数模式的起始范围（与 estimation 模式使用 startScopeHours 的逻辑保持一致）
+            // 用于 ideal line 基线；scope/actual 仍按 timeline 动态追踪
+            long effectiveStartScope;
+            if (sprint.getStartScopeIssues() != null && sprint.getStartScopeIssues() > 0) {
+                // Sprint 启动时快照了工单数，优先使用
+                effectiveStartScope = sprint.getStartScopeIssues();
+            } else if (scopeTimeline.startScope > 0) {
+                // 动态计算的时间线起始值
+                effectiveStartScope = scopeTimeline.startScope;
+            } else if (!rawData.currentIssues.isEmpty()) {
+                // Sprint 启动时无工单且无前期活动，使用当前工单数作为兜底
+                effectiveStartScope = rawData.currentIssues.size();
+            } else {
+                effectiveStartScope = 0;
+            }
+
+            calculateDailyMetrics(vo, scopeTimeline, rawData, sprintStart, sprintEnd, today, totalDays, effectiveStartScope);
+            calculateVelocityAndForecast(vo, effectiveStartScope, today, totalDays);
             vo.setTotalIssues(rawData.currentIssues.size());
-            vo.setStartScopeIssues((int) scopeTimeline.startScope);
+            vo.setStartScopeIssues((int) effectiveStartScope);
         }
 
         return vo;
@@ -430,7 +447,21 @@ public class SprintStatsService {
                                        BurndownRawData rawData,
                                        LocalDate sprintStart, LocalDate sprintEnd,
                                        LocalDate today, long totalDays) {
-        double idealDecrement = timeline.startScope > 0 ? (double) timeline.startScope / totalDays : 0.0;
+        calculateDailyMetrics(vo, timeline, rawData, sprintStart, sprintEnd, today, totalDays, timeline.startScope);
+    }
+
+    /**
+     * 计算燃尽图每日指标。
+     *
+     * @param idealBaseline 理想燃尽线的起始基线值（可能与 timeline.startScope 不同，
+     *                      例如当 Sprint 启动时有快照值时使用快照值作为 ideal 基线）
+     */
+    private void calculateDailyMetrics(BurndownVO vo, ScopeTimeline timeline,
+                                       BurndownRawData rawData,
+                                       LocalDate sprintStart, LocalDate sprintEnd,
+                                       LocalDate today, long totalDays,
+                                       long idealBaseline) {
+        double idealDecrement = idealBaseline > 0 ? (double) idealBaseline / totalDays : 0.0;
 
         List<String> dates = new ArrayList<>();
         List<Double> idealLine = new ArrayList<>();
@@ -439,7 +470,7 @@ public class SprintStatsService {
 
         long scope = timeline.startScope;
         long resolved = calculateResolvedBeforeStart(timeline.resolvedByDay, sprintStart);
-        double idealRemaining = timeline.startScope;
+        double idealRemaining = idealBaseline;
         int todayIndex = -1;
 
         LocalDate endForActual = today.isBefore(sprintEnd) ? today : sprintEnd;
