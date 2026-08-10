@@ -2,7 +2,7 @@ import { ref, computed, watch } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useWebSocket } from '@/composables/useWebSocket'
 import type { StompSubscription } from '@stomp/stompjs'
-import { notificationApi, type NotificationVO, type NotificationCategory, type CategoryUnreadCounts, type MutedThreadVO } from '@/api/notification'
+import { notificationApi, type NotificationVO, type NotificationCategory, type CategoryUnreadCounts } from '@/api/notification'
 
 /**
  * 通知中心 composable

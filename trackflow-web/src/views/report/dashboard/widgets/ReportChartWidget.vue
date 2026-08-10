@@ -22,7 +22,7 @@ import VChart from 'vue-echarts'
 import { IconBarChart } from '@arco-design/web-vue/es/icon'
 import { reportApi } from '@/api/report'
 import { getPriorityColor } from '@/composables/usePriorityOptions'
-import { CHART_PALETTE, STATUS_COLORS, getChartItemColor } from '@/utils/chartColors'
+import { CHART_PALETTE, STATUS_COLORS } from '@/utils/chartColors'
 import type { ReportDataVO } from '@/api/report'
 
 use([CanvasRenderer, PieChart, BarChart, LineChart, TooltipComponent, LegendComponent, GridComponent])

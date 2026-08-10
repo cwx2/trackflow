@@ -96,8 +96,7 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { Message } from '@arco-design/web-vue'
-import { IconPlusCircle, IconMinusCircle, IconHistory } from '@arco-design/web-vue/es/icon'
+import { IconPlusCircle, IconMinusCircle } from '@arco-design/web-vue/es/icon'
 import { workflowApi } from '@/api'
 import { localizeIssueType } from '@/utils/fieldLabels'
 import { AdminPagination } from '@/components/admin'
@@ -110,7 +109,7 @@ const props = defineProps<{
   projectId: string
 }>()
 
-const emit = defineEmits<{
+defineEmits<{
   'update:visible': [value: boolean]
 }>()
 

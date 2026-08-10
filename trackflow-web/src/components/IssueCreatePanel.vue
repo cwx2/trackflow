@@ -352,7 +352,7 @@
                 style="width: 100%"
                 :placeholder="getFieldPlaceholder(cf)"
                 :class="{ 'field-error': cfValidationErrors[cf.id] }"
-                @change="(v: any) => { clearFieldError(cf.id); validateFieldOnBlur(cf) }"
+                @change="() => { clearFieldError(cf.id); validateFieldOnBlur(cf) }"
               />
               <!-- datetime -->
               <a-date-picker
@@ -364,7 +364,7 @@
                 format="YYYY-MM-DDTHH:mm:ss"
                 :placeholder="getFieldPlaceholder(cf)"
                 :class="{ 'field-error': cfValidationErrors[cf.id] }"
-                @change="(v: any) => { clearFieldError(cf.id); validateFieldOnBlur(cf) }"
+                @change="() => { clearFieldError(cf.id); validateFieldOnBlur(cf) }"
               />
               <!-- bool -->
               <a-switch
@@ -386,7 +386,7 @@
                 @blur="validateFieldOnBlur(cf)"
               >
                 <a-option v-for="opt in getFilteredOptionsForField(cf)" :key="opt.id" :value="opt.id">
-                  <a-tooltip :content="opt.description" :disabled="!opt.description" position="left" mini>
+                  <a-tooltip :content="opt.description ?? ''" :disabled="!opt.description" position="left" mini>
                     <span class="cf-option-label">{{ opt.value }}</span>
                   </a-tooltip>
                 </a-option>
@@ -408,10 +408,10 @@
                 :placeholder="getFieldPlaceholder(cf)"
                 :class="{ 'field-error': cfValidationErrors[cf.id] }"
                 allow-clear
-                @change="(v: any) => { clearFieldError(cf.id); validateFieldOnBlur(cf) }"
+                @change="() => { clearFieldError(cf.id); validateFieldOnBlur(cf) }"
               >
                 <a-option v-for="opt in getFilteredOptionsForField(cf)" :key="opt.id" :value="opt.id">
-                  <a-tooltip :content="opt.description" :disabled="!opt.description" position="left" mini>
+                  <a-tooltip :content="opt.description ?? ''" :disabled="!opt.description" position="left" mini>
                     <span class="cf-option-label">{{ opt.value }}</span>
                   </a-tooltip>
                 </a-option>
@@ -433,10 +433,10 @@
                 :placeholder="getFieldPlaceholder(cf)"
                 :class="{ 'field-error': cfValidationErrors[cf.id] }"
                 allow-clear
-                @change="(v: any) => { clearFieldError(cf.id); validateFieldOnBlur(cf) }"
+                @change="() => { clearFieldError(cf.id); validateFieldOnBlur(cf) }"
               >
                 <a-option v-for="opt in getFilteredOptionsForField(cf)" :key="opt.id" :value="opt.id">
-                  <a-tooltip :content="opt.description" :disabled="!opt.description" position="left" mini>
+                  <a-tooltip :content="opt.description ?? ''" :disabled="!opt.description" position="left" mini>
                     <span class="cf-option-label" :style="opt.color ? { color: opt.color } : {}">{{ localizeStatusName(opt.value) }}</span>
                   </a-tooltip>
                 </a-option>
@@ -451,7 +451,7 @@
                 :disabled="!form.projectId"
                 allow-clear
                 allow-search
-                @change="(v: any) => { clearFieldError(cf.id); validateFieldOnBlur(cf) }"
+                @change="() => { clearFieldError(cf.id); validateFieldOnBlur(cf) }"
               >
                 <a-option v-for="m in allProjectMembers" :key="m.userId" :value="m.userId">{{ m.displayName }}</a-option>
               </a-select>
@@ -465,7 +465,7 @@
                 allow-clear
                 allow-search
                 :multiple="cf.isMulti"
-                @change="(v: any) => { clearFieldError(cf.id); validateFieldOnBlur(cf) }"
+                @change="() => { clearFieldError(cf.id); validateFieldOnBlur(cf) }"
               >
                 <a-option v-for="g in allUserGroups" :key="g.id" :value="g.id">{{ g.name }}</a-option>
               </a-select>
@@ -573,7 +573,7 @@
                   allow-clear
                 >
                   <a-option v-for="opt in getFilteredOptionsForField(cf)" :key="opt.id" :value="opt.id">
-                    <a-tooltip :content="opt.description" :disabled="!opt.description" position="left" mini>
+                    <a-tooltip :content="opt.description ?? ''" :disabled="!opt.description" position="left" mini>
                       <span class="cf-option-label">{{ opt.value }}</span>
                     </a-tooltip>
                   </a-option>
@@ -596,7 +596,7 @@
                   allow-clear
                 >
                   <a-option v-for="opt in getFilteredOptionsForField(cf)" :key="opt.id" :value="opt.id">
-                    <a-tooltip :content="opt.description" :disabled="!opt.description" position="left" mini>
+                    <a-tooltip :content="opt.description ?? ''" :disabled="!opt.description" position="left" mini>
                       <span class="cf-option-label">{{ opt.value }}</span>
                     </a-tooltip>
                   </a-option>
@@ -619,7 +619,7 @@
                   allow-clear
                 >
                   <a-option v-for="opt in getFilteredOptionsForField(cf)" :key="opt.id" :value="opt.id">
-                    <a-tooltip :content="opt.description" :disabled="!opt.description" position="left" mini>
+                    <a-tooltip :content="opt.description ?? ''" :disabled="!opt.description" position="left" mini>
                       <span class="cf-option-label" :style="opt.color ? { color: opt.color } : {}">{{ localizeStatusName(opt.value) }}</span>
                     </a-tooltip>
                   </a-option>
@@ -702,10 +702,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onBeforeUnmount, onUnmounted, watch, nextTick } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, reactive, computed, onMounted, onBeforeUnmount, onUnmounted, watch } from 'vue'
 import { Message, Modal } from '@arco-design/web-vue'
-import { useConfirmDelete } from '@/composables/useConfirmDelete'
 import { IconDown, IconAttachment, IconClose, IconPlus, IconUp, IconLink, IconSearch, IconCheck, IconFullscreen, IconFile } from '@arco-design/web-vue/es/icon'
 import { projectApi, issueApi, sprintApi, customFieldApi, issueTemplateApi, tagApi } from '@/api'
 import { PRIORITY_COLORS, ISSUE_TYPE_COLORS, DEFAULT_BADGE_COLOR, DEFAULT_TAG_COLOR, DEFAULT_STATUS_COLOR } from '@/utils/issueColors'
@@ -741,7 +739,6 @@ const emit = defineEmits<{
   'expand-to-fullscreen': [formData: any]
 }>()
 
-const router = useRouter()
 
 const submitting = ref(false)
 const splitMenuVisible = ref(false)
@@ -1040,7 +1037,7 @@ watch(() => form.title, (newTitle) => {
 // 自定义字段集成
 const projectIdRef = computed(() => form.projectId)
 const issueTypeRef = computed(() => form.issueType)
-const { fields: customFields, values: customFieldValues, loading: cfLoading, validateRequired: validateCustomFields, getPayload: getCustomFieldPayload, fetchFields: resetCustomFields } = useCustomFieldForm(
+const { fields: customFields, values: customFieldValues, validateRequired: validateCustomFields, getPayload: getCustomFieldPayload, fetchFields: resetCustomFields } = useCustomFieldForm(
   projectIdRef,
   issueTypeRef
 )
@@ -1116,7 +1113,7 @@ function getFilteredOptionsForField(cf: CustomFieldDefinitionVO): { id: string; 
       const rules: FilterRule[] = JSON.parse(cf.filterRules)
       if (rules && rules.length > 0) {
         // 获取源字段当前值
-        const sourceValue = customFieldValues[cf.filterFieldId] || ''
+        const sourceValue = (customFieldValues as unknown as Record<string, string>)[cf.filterFieldId] || ''
         if (sourceValue) {
           const matchedRule = rules.find(r => r.whenValue === sourceValue)
           if (matchedRule && matchedRule.showOnly && matchedRule.showOnly.length > 0) {
@@ -1307,9 +1304,8 @@ const canSubmit = computed(() => !!form.projectId && !!form.title.trim())
  * 计算自定义字段中的必填字段数量
  * 现在必填字段直接显示在主区域，这个计算主要用于校验逻辑
  */
-const requiredCustomFieldsCount = computed(() => {
-  return requiredCustomFields.value.length
-})
+// requiredCustomFieldsCount 暂未使用，保留注释供后续参考
+// const requiredCustomFieldsCount = computed(() => requiredCustomFields.value.length)
 
 // 移除自动展开折叠区域的逻辑，因为必填字段现在直接显示在主区域，不需要展开"更多字段"
 // 旧逻辑：watch(requiredCustomFieldsCount, ...) 自动展开

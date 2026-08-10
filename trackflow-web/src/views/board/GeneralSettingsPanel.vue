@@ -209,7 +209,7 @@
         >
           <a-checkbox
             :model-value="viewRolesSet.has(role.code)"
-            @change="(val: boolean) => toggleViewRole(role.code, val)"
+            @change="(val: any) => toggleViewRole(role.code, val)"
           />
           <span class="role-label">{{ role.label }}</span>
           <span class="role-desc">{{ role.desc }}</span>
@@ -230,7 +230,7 @@
         >
           <a-checkbox
             :model-value="editRolesSet.has(role.code)"
-            @change="(val: boolean) => toggleEditRole(role.code, val)"
+            @change="(val: any) => toggleEditRole(role.code, val)"
           />
           <span class="role-label">{{ role.label }}</span>
           <span class="role-desc">{{ role.desc }}</span>
@@ -365,7 +365,7 @@ const filteredAvailableProjects = computed(() =>
   props.availableProjects.filter(p => p.id !== props.projectId)
 )
 
-function onLinkedProjectsChange(value: string | string[]) {
+function onLinkedProjectsChange(value: any) {
   const ids = Array.isArray(value) ? value : (value ? [value] : [])
   editableLinkedProjectIds.value = ids
   emit('update:linkedProjectIds', ids)
@@ -376,7 +376,7 @@ watch(() => props.linkedProjectIds, (newIds) => {
   editableLinkedProjectIds.value = [...newIds]
 })
 
-function onColumnFieldChange(value: string) {
+function onColumnFieldChange(value: any) {
   editableColumnField.value = value
   emit('update:columnField', value)
 }
@@ -510,7 +510,7 @@ function onFieldChange(index: number) {
   row.value = ''
 }
 
-function toggleViewRole(code: string, checked: boolean) {
+function toggleViewRole(code: string, checked: any) {
   const newSet = new Set(viewRolesSet.value)
   if (checked) {
     newSet.add(code)
@@ -523,7 +523,7 @@ function toggleViewRole(code: string, checked: boolean) {
   emit('update:canViewRoles', Array.from(newSet))
 }
 
-function toggleEditRole(code: string, checked: boolean) {
+function toggleEditRole(code: string, checked: any) {
   const newSet = new Set(editRolesSet.value)
   if (checked) {
     newSet.add(code)

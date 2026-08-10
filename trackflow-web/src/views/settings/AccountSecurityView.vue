@@ -231,7 +231,7 @@
       :width="420"
       :ok-loading="revoking"
       ok-text="确认撤销"
-      ok-button-props="{ status: 'danger' }"
+      :ok-button-props="{ status: 'danger' }"
       @ok="confirmRevoke"
       @cancel="revokeTarget = null"
     >

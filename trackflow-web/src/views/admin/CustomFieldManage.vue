@@ -104,16 +104,16 @@
                 <template #cell="{ record }">
                   <template v-if="(record.fieldFormat === 'list' || record.fieldFormat === 'state' || record.fieldFormat === 'ownedField' || record.fieldFormat === 'version' || record.fieldFormat === 'build') && record.options && record.options.length > 0">
                     <div class="options-inline">
-                      <template v-for="(opt, idx) in record.options.filter(o => !o.isArchived).slice(0, MAX_INLINE_OPTIONS)" :key="opt.id">
+                      <template v-for="(opt, _idx) in record.options.filter((o: any) => !o.isArchived).slice(0, MAX_INLINE_OPTIONS)" :key="opt.id">
                         <span
                           class="option-inline-tag"
                           :style="opt.color ? { background: opt.color + '26', color: opt.color, borderColor: opt.color + '66' } : {}"
                         >{{ opt.value }}</span>
                       </template>
                       <span
-                        v-if="record.options.filter(o => !o.isArchived).length > MAX_INLINE_OPTIONS"
+                        v-if="record.options.filter((o: any) => !o.isArchived).length > MAX_INLINE_OPTIONS"
                         class="option-more-tag"
-                      >+{{ record.options.filter(o => !o.isArchived).length - MAX_INLINE_OPTIONS }}</span>
+                      >+{{ record.options.filter((o: any) => !o.isArchived).length - MAX_INLINE_OPTIONS }}</span>
                     </div>
                   </template>
                   <span v-else class="text-muted">—</span>
@@ -152,7 +152,7 @@
               <a-table-column title="适用类型" :width="140">
                 <template #cell="{ record }">
                   <span v-if="!record.issueTypes || record.issueTypes.length === 0" class="text-muted">所有类型</span>
-                  <span v-else>{{ record.issueTypes.map(t => localizeIssueType(t)).join(', ') }}</span>
+                  <span v-else>{{ record.issueTypes.map((t: string) => localizeIssueType(t)).join(', ') }}</span>
                 </template>
               </a-table-column>
               <a-table-column title="操作" :width="120" align="center">
@@ -571,7 +571,7 @@
                 <a-button
                   v-if="!opt.isArchived"
                   type="text" size="mini" status="danger"
-                  :disabled="editingId && opt.id && optionUsageMap[opt.id] !== undefined && optionUsageMap[opt.id] > 0"
+                  :disabled="!!(editingId && opt.id && optionUsageMap[opt.id] !== undefined && optionUsageMap[opt.id] > 0)"
                   :title="editingId && opt.id && optionUsageMap[opt.id] > 0 ? `该选项被 ${optionUsageMap[opt.id]} 个工单使用，无法删除` : '删除选项'"
                   @click="handleDeleteOption(opt, idx)"
                 >
@@ -831,7 +831,7 @@ import { IconPlus, IconDelete, IconCheck, IconEye, IconEyeInvisible, IconClose, 
 import { Message, Modal } from '@arco-design/web-vue'
 import { useConfirmDelete } from '@/composables/useConfirmDelete'
 import { customFieldApi, projectApi, workflowApi, userApi } from '@/api'
-import type { CustomFieldDefinitionVO, CustomFieldUsageVO, OptionUsageItemVO, UserVO, AvailableConversionsVO, ConversionOptionVO } from '@/api/types'
+import type { CustomFieldDefinitionVO, CustomFieldUsageVO, UserVO, AvailableConversionsVO, ConversionOptionVO } from '@/api/types'
 import { localizeIssueType } from '@/utils/fieldLabels'
 import FieldsInProjects from './FieldsInProjects.vue'
 import DefaultValueInput from './components/DefaultValueInput.vue'
@@ -1110,7 +1110,7 @@ async function loadEnumFields() {
   }
 }
 
-function onSourceFieldChange(fieldId: string | null) {
+function onSourceFieldChange(fieldId: any) {
   if (!fieldId) {
     previewOptions.value = []
     form.options = []
@@ -1121,7 +1121,7 @@ function onSourceFieldChange(fieldId: string | null) {
   const sourceField = enumFieldList.value.find(f => f.id === fieldId)
   if (sourceField && sourceField.options) {
     const activeOptions = sourceField.options.filter(o => !o.isArchived)
-    previewOptions.value = activeOptions.map(o => ({ value: o.value, color: o.color }))
+    previewOptions.value = activeOptions.map(o => ({ value: o.value, color: o.color ?? undefined }))
     // 预填充到 form.options 以便用户可以在保存前调整
     form.options = activeOptions.map(o => ({
       value: o.value,

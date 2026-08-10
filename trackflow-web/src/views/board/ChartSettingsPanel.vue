@@ -63,7 +63,7 @@
         <div class="field-item">
           <span class="field-item-label">当前估算字段</span>
           <a-select
-            :model-value="estimationFieldId"
+            :model-value="estimationFieldId ?? undefined"
             placeholder="选择估算字段"
             allow-clear
             :style="{ width: '200px' }"
@@ -78,7 +78,7 @@
         <div class="field-item">
           <span class="field-item-label">原始估算字段</span>
           <a-select
-            :model-value="originalEstimationFieldId"
+            :model-value="originalEstimationFieldId ?? undefined"
             placeholder="选择原始估算字段（可选）"
             allow-clear
             :style="{ width: '200px' }"

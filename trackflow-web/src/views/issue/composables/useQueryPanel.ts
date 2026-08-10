@@ -14,8 +14,8 @@ import axios from 'axios'
 export interface QueryPanelOptions {
   statusCache: Ref<IssueStatusVO[]>
   projectList: Ref<Array<{ id: string; name: string; key: string; favorited?: boolean }>>
-  issueTypeOptions: Ref<{ value: string; label: string; color: string }[]>
-  priorityOptions: Ref<{ value: string; label: string; color: string }[]>
+  issueTypeOptions: Ref<{ value: string; label: string; color: string | null; description?: string | null; isDefault?: boolean }[]>
+  priorityOptions: Ref<{ value: string; label: string; color: string | null; description?: string | null; isDefault?: boolean }[]>
   activeProjectId: Ref<string | null>
   hideResolved: Ref<boolean>
   refreshList: () => void

@@ -222,7 +222,6 @@ const {
   loading,
   unreadOnly,
   unreadCount,
-  totalCount,
   hasRead,
   activeCategory,
   categoryUnreadCounts,

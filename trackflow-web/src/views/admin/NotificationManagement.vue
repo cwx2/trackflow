@@ -405,7 +405,7 @@
 import { ref, reactive, onMounted, watch, computed } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { notificationAdminApi } from '@/api/notificationAdmin'
-import type { NotificationSettingsVO, NotificationStatsVO, EmailConfigVO, NotificationOutboxVO, OutboxStats } from '@/api/notificationAdmin'
+import type { NotificationSettingsVO, NotificationStatsVO, NotificationOutboxVO, OutboxStats } from '@/api/notificationAdmin'
 import DataContainer from '@/components/base/DataContainer.vue'
 
 const loading = ref(true)

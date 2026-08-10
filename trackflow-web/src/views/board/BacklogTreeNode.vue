@@ -72,7 +72,7 @@ const props = defineProps<{
   depth: number
 }>()
 
-const emit = defineEmits<{
+defineEmits<{
   'drag-start': [event: DragEvent, issue: IssueVO]
   'drag-end': []
   'open-issue': [issue: IssueVO]

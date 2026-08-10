@@ -4,7 +4,7 @@
     <p class="section-desc">你不会收到这些工单的通知（@提及除外）。取消静音后恢复正常通知推送。</p>
 
     <div v-if="loading" class="muted-loading">
-      <a-spin size="small" />
+      <a-spin />
       <span>加载中...</span>
     </div>
     <div v-else-if="!threads || threads.length === 0" class="muted-empty">

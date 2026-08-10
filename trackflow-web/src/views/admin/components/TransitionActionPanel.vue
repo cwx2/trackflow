@@ -116,7 +116,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import { Message } from '@arco-design/web-vue'
-import { IconPlus, IconThunderbolt, IconExclamationCircleFill } from '@arco-design/web-vue/es/icon'
+import { IconPlus, IconExclamationCircleFill } from '@arco-design/web-vue/es/icon'
 import { transitionActionApi, workflowApi } from '@/api'
 import type { TransitionActionVO } from '@/api/transitionAction'
 import TransitionActionForm from './TransitionActionForm.vue'

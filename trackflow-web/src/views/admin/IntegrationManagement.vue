@@ -28,7 +28,7 @@
                   <a-switch
                     :model-value="adapter.enabled"
                     :loading="togglingAdapter === adapter.adapterType"
-                    @change="(val: boolean) => handleToggle(adapter.adapterType, val)"
+                    @change="(val: any) => handleToggle(adapter.adapterType, val as boolean)"
                   />
                 </div>
 
@@ -178,7 +178,7 @@
           <a-switch
             :model-value="currentConfig.enabled"
             :loading="togglingAdapter === currentConfig.adapterType"
-            @change="(val: boolean) => handleToggle(currentConfig!.adapterType, val)"
+            @change="(val: any) => handleToggle(currentConfig!.adapterType, val as boolean)"
           />
           <span class="config-status-text">{{ currentConfig.enabled ? '已启用' : '已禁用' }}</span>
         </div>
@@ -189,7 +189,7 @@
           <h4 class="config-section-title">适配器配置</h4>
           <a-form :model="editingConfig" layout="vertical">
             <a-form-item
-              v-for="(value, key) in editingConfig"
+              v-for="(_value, key) in editingConfig"
               :key="key"
               :label="String(key)"
             >

@@ -9,7 +9,7 @@
  * - 工单删除/移动/克隆/子任务创建
  * - 工时记录
  */
-import { ref, computed, nextTick } from 'vue'
+import { ref, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { Message, Modal } from '@arco-design/web-vue'
 import { issueApi, tagApi, customFieldApi, timeEntryApi } from '@/api'
@@ -18,7 +18,7 @@ import { ERROR_CODES } from '@/api/error-codes'
 import { useNavBadge } from '@/composables/useNavBadge'
 import { useTimerStore } from '@/stores/timer'
 import { useDrafts } from './useDrafts'
-import type { IssueDetailVO, IssueAttachmentVO, ProjectMemberVO } from '@/api/types'
+import type { IssueDetailVO, IssueAttachmentVO } from '@/api/types'
 import type { StatusInfo } from '../components/DetailSidebar.vue'
 
 interface ActionDeps {
@@ -445,7 +445,7 @@ export function useIssueDetailActions(deps: ActionDeps) {
   async function onUpdateVisibility(visibility: string, userIds: string[] = []) {
     if (!deps.issue.value) return
     try {
-      await issueApi.update(deps.issue.value.id, { visibility, visibilityUserIds: userIds.map(Number), version: deps.issue.value.version })
+      await issueApi.update(deps.issue.value.id, { visibility, visibilityUserIds: userIds, version: deps.issue.value.version })
       await deps.loadAll()
       Message.success('可见性已更新')
     } catch (e: any) { handleUpdateError(e, '更新可见性失败') }

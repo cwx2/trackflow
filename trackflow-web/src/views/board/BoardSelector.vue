@@ -232,7 +232,7 @@ function openCloneModal(board: BoardListItemVO) {
 }
 
 /** 克隆成功后重新加载看板列表 */
-function onBoardCloned(newProjectId: string) {
+function onBoardCloned(_newProjectId: string) {
   loadBoards()
 }
 

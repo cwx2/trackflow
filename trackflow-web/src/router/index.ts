@@ -76,9 +76,9 @@ const routes = [
       {
         path: 'projects/:projectKey/issues',
         name: 'ProjectIssues',
-        redirect: to => ({
+        redirect: (to: any) => ({
           path: '/issues',
-          query: { project: to.params.projectKey }
+          query: { project: String(to.params.projectKey) }
         })
       },
       {

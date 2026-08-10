@@ -24,7 +24,7 @@
           >
             <span class="month-entry-key" :class="{ deleted: entry.issueDeleted }">{{ entry.issueDeleted ? '[已删除]' : entry.issueKey }}</span>
             <span v-if="entry.ongoing" class="month-entry-dur month-entry-ongoing">⏱</span>
-            <span v-else class="month-entry-dur">{{ formatDuration(entry.duration) }}</span>
+            <span v-else class="month-entry-dur">{{ formatDuration(entry.duration ?? 0) }}</span>
           </div>
           <div v-if="getDayEntries(day.date).length > 2" class="month-entry-more">
             +{{ getDayEntries(day.date).length - 2 }} 更多

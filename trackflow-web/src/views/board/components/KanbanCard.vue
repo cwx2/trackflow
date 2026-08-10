@@ -191,7 +191,7 @@ const showMetaFields = computed(() => {
 const dueDateClass = computed(() => {
   if (!props.issue.dueDate) return null
   const info = getDueDateInfo(props.issue.dueDate)
-  return info?.className || null
+  return info?.status || null
 })
 
 const dueDateTooltip = computed(() => {

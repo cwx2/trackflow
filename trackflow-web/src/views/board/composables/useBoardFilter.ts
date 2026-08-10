@@ -1,4 +1,4 @@
-import { ref, computed, onUnmounted } from 'vue'
+import { computed, onUnmounted } from 'vue'
 import type { Ref } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import type { BoardIssue } from './useKanbanBoard'

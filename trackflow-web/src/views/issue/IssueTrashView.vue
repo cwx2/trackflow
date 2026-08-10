@@ -245,8 +245,8 @@ async function setRetention(days: number) {
   }
 }
 
-function onSelectionChange(keys: string[]) {
-  selectedIds.value = keys
+function onSelectionChange(keys: (string | number)[]) {
+  selectedIds.value = keys.map(String)
 }
 
 async function handleRestore(record: IssueTrashVO) {

@@ -312,7 +312,7 @@
         <div class="hidden-issues-tags">
           <button
             v-for="col in hiddenIssueColumns"
-            :key="col.fieldValue || col.statusId"
+            :key="col.fieldValue || col.statusId || ''"
             class="hidden-status-tag"
             :style="col.statusColor ? { '--tag-color': col.statusColor } : {}"
             :title="`查看「${localizeStatusName(col.statusName)}」状态下的 ${col.issueCount || 0} 个工单`"
@@ -572,7 +572,7 @@
                   class="add-card-form"
                 >
                   <input
-                    :ref="(el) => setAddCardInputRef(el, getDropTargetStatusId(col), '')"
+                    :ref="(el) => setAddCardInputRef(el as HTMLElement | null, getDropTargetStatusId(col), '')"
                     v-model="addCardTitle"
                     class="add-card-input"
                     placeholder="输入工单标题，回车创建"
@@ -879,7 +879,7 @@
                         class="add-card-form"
                       >
                         <input
-                          :ref="(el) => setAddCardInputRef(el, getDropTargetStatusId(col), lane.key)"
+                          :ref="(el) => setAddCardInputRef(el as HTMLElement | null, getDropTargetStatusId(col), lane.key)"
                           v-model="addCardTitle"
                           class="add-card-input"
                           placeholder="输入标题，回车创建"
@@ -951,7 +951,7 @@
             激活「{{ plannedSprints[0].name }}」
           </a-button>
           <a-button size="small" type="outline" @click="openCreateSprintFromGuidance">+ 创建新迭代</a-button>
-          <a-button size="small" @click="openSettingsToGeneral">修改看板设置</a-button>
+          <a-button size="small" @click="showSettings = true">修改看板设置</a-button>
         </div>
       </div>
 
@@ -968,7 +968,7 @@
         <div class="empty-icon">⚠️</div>
         <h3 class="empty-title">项目列表加载失败</h3>
         <p class="empty-desc">无法获取可用项目，请检查网络后重试</p>
-        <a-button type="primary" size="small" @click="loadProjects">重试</a-button>
+        <a-button type="primary" size="small" @click="onProjectChange">重试</a-button>
       </div>
       <div v-else-if="!selectedProject && projectLoadState === 'success' && projects.length === 0" class="empty-state">
         <div class="empty-icon">📁</div>
@@ -1007,7 +1007,7 @@
       v-if="selectedProject && showCloneModal"
       v-model="showCloneModal"
       :source-project-id="selectedProject"
-      :source-board-name="currentBoardDisplayName"
+      :source-board-name="displayBoardName"
       :source-project-key="currentProjectKey || ''"
       @cloned="onBoardCloned"
     />
@@ -1018,11 +1018,11 @@
       <div v-if="selectedCount > 0" class="batch-toolbar-wrapper" key="batch">
         <BatchActionToolbar
           :selected-count="selectedCount"
-          :selected-issues="selectedIssues"
+          :selected-issues="(selectedIssues as any)"
           :can-delete="canDeleteIssue"
           :active-project-id="selectedProject"
           @deselect-all="clearSelection"
-          @batch-state="onBatchState"
+          @batch-state="onBatchAssign"
           @batch-assign="onBatchAssign"
           @batch-sprint="onBatchSprint"
           @batch-priority="onBatchPriority"
@@ -1186,7 +1186,7 @@ import { IconSettings, IconSearch, IconList, IconBarChart, IconPlus, IconFile, I
 
 const {
   // Core state
-  selectedProject, selectedSprint, keyword, loading, issues, statuses, sprints,
+  selectedProject, selectedSprint, keyword, loading, issues, sprints,
   projects, projectLoadState,
   // Card size
   cardSize, cardSizeOptions, setCardSize,
@@ -1197,31 +1197,28 @@ const {
   // Column config
   allColumnConfigs, showSettings, effectiveColumns, visibleStatuses,
   hiddenIssueColumns, showAllColumns,
-  boardColumnField, isMultiProjectBoard,
+  isMultiProjectBoard,
   getColumnIssues, getEffectiveColumnIssues,
   getSwimlaneEffectiveColumnIssues, isEffectiveColumnClosed,
   getEffectiveColumnWipClass, getEffectiveColumnWipMax, getEffectiveColumnWipWarning,
   getEffectiveColumnEstimation,
-  getWipTooltip, getColumnConfig, getWipWarning,
-  isColumnCollapsed, toggleColumnCollapse, expandedEmptyColumns,
+  getWipTooltip,
+  isColumnCollapsed, toggleColumnCollapse,
   collapsedColumns,
   // Board behavior
-  boardFilterMode, boardFilterQuery, boardDoneRetentionDays, boardName,
+  boardFilterMode, boardDoneRetentionDays,
   canEditBoard, displayBoardName,
   isBehaviorFilterActive, isSmartDefaultDoneRetentionActive,
-  allowMultipleSprints, boardLinkedProjectIds,
   // Backlog
-  showBacklog, toggleBacklog, backlogPanelRef, backlogDraggingIssue, backlogViewMode, backlogSavedQueryId,
+  showBacklog, toggleBacklog, backlogPanelRef, backlogViewMode, backlogSavedQueryId,
   boardStatusIdsForBacklog,
   onBacklogDragStart, onBacklogDragEnd,
   // Preview
-  previewVisible, previewIssueId, openPreview, closePreview,
+  previewVisible, previewIssueId,
   onPreviewGoDetail, onPreviewIssueUpdated,
   // Swimlane
-  swimlaneGroupBy, onSwimlaneChange, swimlanes, orderedSwimlanes,
+  swimlaneGroupBy, onSwimlaneChange, orderedSwimlanes,
   collapsedSwimlanes, toggleSwimlane,
-  swimlaneSelectedValues, swimlaneShowUncategorized, swimlaneUncategorizedPosition, swimlaneIssueType,
-  getSwimlaneColumnIssues,
   dragOverSwimlaneKey, onDragOverSwimlane, onDragLeaveSwimlane,
   // Swimlane row drag
   swimlaneDraggingKey, swimlaneDragOverKey,
@@ -1236,8 +1233,8 @@ const {
   deleteArchivedSprintMoveOption, deleteArchivedSprintTargetId,
   handleRestoreArchivedSprint, handleDeleteArchivedSprint, confirmDeleteArchivedSprint,
   // No active sprint guidance
-  guidanceDismissed, showSprintModeNoActiveState,
-  nextPlannedSprint, plannedSprints, dismissGuidance,
+  showSprintModeNoActiveState,
+  plannedSprints, dismissGuidance,
   openCreateSprintFromGuidance, activatePlannedSprint, activatingSprintId,
   // Card config
   cardConfig, isCardFieldVisible, getCardFieldDisplayMode,
@@ -1247,44 +1244,35 @@ const {
   onCardClick, onCardDblClick, onCardKeydown, onCardSetAssignee,
   // Drag
   draggingIssue, dragOverColumnId, isDragging,
-  allowedTargetStatuses, transitioningIssueIds,
+  transitioningIssueIds,
   isCardDraggable, onDragStart, onDragEnd, onDragOver, onDragLeave, onDrop,
-  isDropAllowed, isEffectiveColumnDropAllowed, getDropTargetStatusId,
+  isEffectiveColumnDropAllowed, getDropTargetStatusId,
   // Selection
-  selectedIds, selectedCount, selectedIssues, toggleCardSelection, clearSelection,
-  // Manual order
-  boardManualSorted, isManualSortDisabled,
-  // Batch operations
-  batchTransitStatus, batchAssign, batchUpdateSprint, batchUpdatePriority,
-  batchTagAdd, batchTagRemove, batchAddLink, batchDelete,
+  selectedIds, selectedCount, selectedIssues, clearSelection,
   // Search
   isSearchActive, onSearchInput, onSearchClear, clearSearch,
   showNoSearchResults,
   // Assignee filter
-  assigneeFilter, effectiveAssigneeId, projectMembers,
+  assigneeFilter, projectMembers,
   toggleMyIssues, onAssigneeFilterChange,
   // Permission
-  canChangeStatus, canCreateIssue, canDeleteIssue, canEditSprint, canDeleteSprint,
+  canCreateIssue, canDeleteIssue, canEditSprint, canDeleteSprint,
   // Project helpers
   currentProjectName, currentProjectKey, onProjectChange, onSprintChange,
   // Navigation
   openIssue, goToSprintDetail, buildOpenInListUrl,
   // Extra template-referenced names
-  showNoActiveSprintGuidance, selectNextPlannedSprint, formatSprintDate,
+  showNoActiveSprintGuidance,
   effectiveDoneRetentionDays, hiddenIssueTotalCount, openCloneModal,
-  // New card/sprint
   newCardModalVisible, newCardPrefilledSprintId, onNewCardCreated, onNewCardExpandFullscreen,
   newSprintModalVisible, newSprintSubmitting, newSprintForm, onNewMenuSelect, submitNewSprintModal,
   // Inline add card
   addingCardColumnId, addingCardSwimlaneKey, addCardTitle, addCardType, addCardSubmitting,
   startAddCard, cancelAddCard, onAddCardBlur, submitAddCard, setAddCardInputRef,
-  isClosedStatus,
   // Board chart
   showChart, boardChartType, boardBurndownCalculation,
   // Clone board
   showCloneModal,
-  // Undo
-  undoStack,
   // Progress
   activeStatuses, closedIssueCount, closedIssueDetail,
   progressIndicatorAriaLabel, getProgressBarHeight, getClosedProgressBarHeight,
@@ -1297,13 +1285,18 @@ const {
   boardTruncated, boardTotalCount, boardTotalEstimation,
   // Helper functions
   getSprintName,
-  priorityIcon, typeLabel, typeInitial, getActiveSprintId,
+  priorityIcon, typeLabel, typeInitial,
   // onBatch handlers
-  onBatchTransit, onBatchAssign, onBatchSprint, onBatchPriority,
+  onBatchAssign, onBatchSprint, onBatchPriority,
   onBatchTagAdd, onBatchTagRemove, onBatchLink, onBatchDelete,
   // Load
-  loadBoard, loadIssuesWithLoading,
+  loadIssuesWithLoading,
+  nextPlannedSprintHint,
 } = useKanbanBoard()
+
+function onBoardCloned() {
+  loadIssuesWithLoading()
+}
 </script>
 
 <style scoped>

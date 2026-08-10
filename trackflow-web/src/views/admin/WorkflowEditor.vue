@@ -482,7 +482,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onBeforeUnmount, h } from 'vue'
-import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
+import { onBeforeRouteLeave, useRoute } from 'vue-router'
 import { Message, Modal } from '@arco-design/web-vue'
 import { IconSettings, IconInfoCircle, IconHistory, IconSearch, IconRefresh, IconExclamationCircle, IconUser, IconUserGroup, IconLeft } from '@arco-design/web-vue/es/icon'
 import { issueApi, projectApi, workflowApi, transitionActionApi } from '@/api'
@@ -497,7 +497,6 @@ import AdminPageLayout from '@/components/admin/AdminPageLayout.vue'
 import { localizeStatusName, localizeCategoryName } from '@/utils/fieldLabels'
 
 const route = useRoute()
-const router = useRouter()
 
 const activeMainTab = ref('matrix')
 const activeRuleSubTab = ref('on_change')
@@ -888,7 +887,7 @@ function onActionRefresh() {
   loadActionPaths()
 }
 
-function onTransitionNameUpdated(transitionId: string, newName: string | null) {
+function onTransitionNameUpdated(_transitionId: string, newName: string | null) {
   // 更新本地缓存
   const key = `${actionPanelFrom.value}-${actionPanelTo.value}`
   if (newName) {
@@ -1171,11 +1170,9 @@ async function saveMatrix() {
   // 获取影响分析数据（仅在有删除转换时）
   let impactData: Record<string, number> | null = null
   let totalAffected = 0
-  let impactLoading = false
 
   if (removed.length > 0) {
     try {
-      impactLoading = true
       // 取出删除转换的源状态 ID（去重）
       const affectedStatusIds = [...new Set(removed.map(r => Number(r.fromId)))]
       const projectIdNum = selectedProject.value ? Number(selectedProject.value) : 0
@@ -1190,8 +1187,6 @@ async function saveMatrix() {
       }
     } catch {
       // 影响分析失败不阻断保存流程，仅展示变更摘要
-    } finally {
-      impactLoading = false
     }
   }
 

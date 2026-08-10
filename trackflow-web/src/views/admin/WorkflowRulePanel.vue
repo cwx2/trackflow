@@ -182,7 +182,7 @@
               label="监听字段"
               field="triggerField"
             >
-              <a-select v-model="formData.triggerField" placeholder="全部字段" allow-clear>
+              <a-select :model-value="formData.triggerField ?? undefined" @update:model-value="formData.triggerField = ($event as string) ?? null" placeholder="全部字段" allow-clear>
                 <a-option value="status_id">状态</a-option>
                 <a-option value="issue_type">工单类型</a-option>
                 <a-option value="priority">优先级</a-option>
@@ -305,7 +305,7 @@
                   <a-option value="greater_than_or_equals">≥</a-option>
                   <a-option value="less_than_or_equals">≤</a-option>
                 </a-select>
-                <a-input-number v-model="cond.value" style="width: 80px" placeholder="数量" :min="0" />
+                <a-input-number :model-value="Number(cond.value)" @update:model-value="cond.value = String($event)" style="width: 80px" placeholder="数量" :min="0" />
               </template>
 
               <!-- issue_created_within / issue_updated_within: 天数 -->

@@ -128,7 +128,7 @@ export interface EffectiveColumn {
   isMerged: boolean
 }
 
-const props = defineProps<{
+defineProps<{
   /** 列配置（id, name, color, statusIds, isMerged） */
   column: EffectiveColumn
   /** 该列包含的工单列表 */

@@ -69,7 +69,8 @@
         其子工单（parent_id 指向该工单的工单）显示在对应泳道内。
       </div>
       <a-select
-        :model-value="swimlaneIssueType"
+        :model-value="swimlaneIssueType ?? undefined"
+        @update:model-value="$emit('update:swimlaneIssueType', $event as string ?? null)"
         placeholder="选择 Issue 类型（如 Epic、Feature）"
         allow-clear
         @change="onSwimlaneIssueTypeChange"
@@ -270,10 +271,10 @@
             >
               <a-option
                 v-for="s in getAvailableStatusesForGroup(gIdx)"
-                :key="s.statusId"
-                :value="s.statusId"
+                :key="s.statusId ?? ''"
+                :value="s.statusId ?? ''"
               >
-                {{ getStatusName(s.statusId) }}
+                {{ getStatusName(s.statusId ?? '') }}
               </a-option>
             </a-select>
           </div>
@@ -303,7 +304,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import type { BoardColumnVO, BoardColumnMergeGroupVO } from '@/api/types'
+import type { BoardColumnVO } from '@/api/types'
 import { localizeStatusName } from '@/utils/fieldLabels'
 import { projectApi, sprintApi, tagApi } from '@/api'
 
@@ -392,9 +393,9 @@ async function loadAvailableValues() {
         break
       }
       case 'sprint': {
-        const res = await sprintApi.list(props.projectId)
+        const res = await sprintApi.listAll({ projectId: props.projectId })
         if (res.data) {
-          availableValues.value = (res.data as any[]).map((s: any) => ({
+          availableValues.value = (res.data.list || []).map((s: any) => ({
             key: s.id,
             label: s.name
           }))
@@ -506,7 +507,7 @@ function getAvailableStatusesForGroup(groupIdx: number): BoardColumnVO[] {
   for (const sid of props.mergeGroups[groupIdx].statusIds) {
     usedIds.delete(sid)
   }
-  return props.columns.filter(c => !usedIds.has(c.statusId))
+  return props.columns.filter(c => c.statusId != null && !usedIds.has(c.statusId))
 }
 
 function filterStatusOption(inputValue: string, option: any) {

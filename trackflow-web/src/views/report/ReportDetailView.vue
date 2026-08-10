@@ -503,16 +503,6 @@ function reportTypeLabel(type: string) {
   return map[type] || type
 }
 
-function groupByLabel(groupBy: string) {
-  const map: Record<string, string> = {
-    status: '状态',
-    assignee: '负责人',
-    priority: '优先级',
-    type: '工单类型',
-    project: '项目'
-  }
-  return map[groupBy] || groupBy
-}
 
 function formatRelativeTime(time?: string) {
   if (!time) return ''

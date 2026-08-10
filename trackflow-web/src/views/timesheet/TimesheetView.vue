@@ -437,7 +437,7 @@ import { UserAvatar } from '@/components/base'
 const authStore = useAuthStore()
 const route = useRoute()
 const router = useRouter()
-const { settings: ttSettings, loadSettings: loadTTSettings, minutesPerDay, minutesPerWeek, isWorkingDay, quotaText } = useTimeTrackingSettings()
+const { loadSettings: loadTTSettings, minutesPerDay, minutesPerWeek, isWorkingDay, quotaText } = useTimeTrackingSettings()
 
 // State
 const activeTab = ref<'people' | 'projects' | 'workgroups'>((route.query.view as any) || 'people')
@@ -853,7 +853,7 @@ async function searchIssues(keyword: string) {
 async function loadAttributesForIssue(issueId: string) {
   try {
     // 获取 issue 详情以确定 projectId
-    const issueRes = await issueApi.getDetail(issueId)
+    const issueRes = await issueApi.getById(issueId)
     if (issueRes.code === 0 && issueRes.data?.projectId) {
       const projectId = issueRes.data.projectId
       if (loadedAttributeProjectId.value === projectId) return // 已加载
@@ -958,9 +958,10 @@ function openEditDialog(entry: TimeEntryVO) {
     issueId: entry.issueId,
     workDate: entry.workDate,
     dateRange: undefined,
-    durationText: formatDurationInput(entry.duration),
+    durationText: formatDurationInput(entry.duration ?? 0),
     startTimeStr: entry.startTime != null ? `${String(Math.floor(entry.startTime / 60)).padStart(2, '0')}:${String(entry.startTime % 60).padStart(2, '0')}` : undefined,
-    description: entry.description || ''
+    description: entry.description || '',
+    forUserId: undefined
   }
   // Ensure current issue is in options
   if (entry.issueKey) {

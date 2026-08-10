@@ -15,7 +15,7 @@
       <!-- 通知渠道 + 静音时段 -->
       <NotificationChannelSettings
         :form="form"
-        :email-status="emailStatus"
+        :email-status="emailStatus ?? null"
         :email-available="emailAvailable"
         :email-status-desc="emailStatusDesc"
         :email-status-reason="emailStatusReason"

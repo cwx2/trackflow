@@ -77,10 +77,10 @@ export function useMentionSuggestion(projectId: () => string | undefined) {
 
           if (!props.clientRect) return
 
-          popup = tippy('body', {
+          popup = [tippy(document.body, {
             getReferenceClientRect: props.clientRect as () => DOMRect,
             appendTo: () => document.body,
-            content: component.element,
+            content: component.element as Element,
             showOnCreate: true,
             interactive: true,
             trigger: 'manual',
@@ -88,7 +88,7 @@ export function useMentionSuggestion(projectId: () => string | undefined) {
             theme: 'mention',
             animation: 'shift-away',
             maxWidth: 'none'
-          })
+          })]
         },
 
         onUpdate: (props: SuggestionProps<MentionItem>) => {

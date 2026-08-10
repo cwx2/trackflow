@@ -83,7 +83,7 @@ const emit = defineEmits<{
   'download': [att: AttachmentItem]
 }>()
 
-const { getAuthenticatedBlobUrl, downloadFile } = useAuthenticatedFile()
+const { getAuthenticatedBlobUrl } = useAuthenticatedFile()
 
 // ========== State ==========
 const modalVisible = computed({

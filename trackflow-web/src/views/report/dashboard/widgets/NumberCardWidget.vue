@@ -76,7 +76,7 @@ const numberColor = computed(() => {
 
 const numberSubtext = computed(() => props.config.subtext || null)
 
-async function loadData(force = false) {
+async function loadData(_force = false) {
   const config = props.config
 
   // Hardcoded value, no fetch needed

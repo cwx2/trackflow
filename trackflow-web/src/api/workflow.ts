@@ -1,5 +1,5 @@
 import request from './request'
-import type { R, PageResult, RoleVO, WorkflowTransitionVO, WorkflowMatrixVO, WorkflowActivityVO, UpdateWorkflowDTO, WorkflowImpactAnalysisVO, WorkflowInitialStatusVO } from './types'
+import type { R, PageResult, RoleVO, WorkflowMatrixVO, WorkflowActivityVO, UpdateWorkflowDTO, WorkflowImpactAnalysisVO, WorkflowInitialStatusVO } from './types'
 
 /** 守卫条件项类型 */
 export interface TransitionConditionItem {

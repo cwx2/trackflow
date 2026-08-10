@@ -76,7 +76,7 @@
 import { IconSettings, IconList, IconMenu, IconMinus, IconBranch } from '@arco-design/web-vue/es/icon'
 import type { LayoutMode, DensityLevel, StructureMode } from '../composables'
 
-const props = defineProps<{
+defineProps<{
   layout: LayoutMode
   density: DensityLevel
   structure: StructureMode

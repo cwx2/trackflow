@@ -297,7 +297,7 @@
                 label="监听字段"
                 field="triggerField"
               >
-                <a-select v-model="ruleForm.triggerField" placeholder="全部字段" allow-clear>
+                <a-select :model-value="ruleForm.triggerField ?? undefined" @update:model-value="ruleForm.triggerField = ($event as string) ?? null" placeholder="全部字段" allow-clear>
                   <a-option value="status_id">状态</a-option>
                   <a-option value="issue_type">工单类型</a-option>
                   <a-option value="priority">优先级</a-option>
@@ -482,7 +482,7 @@
         <p>暂无可附加的工作流定义。</p>
         <a-link href="/workflow" target="_blank">前往全局工作流管理页创建</a-link>
       </div>
-      <a-form v-else layout="vertical">
+      <a-form v-else :model="{}" layout="vertical">
         <a-form-item label="选择工作流定义" required>
           <a-select
             v-model="selectedWorkflowId"
@@ -507,7 +507,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
 import { IconLock, IconSettings, IconPlus, IconThunderbolt, IconInfoCircle, IconDelete, IconPlayArrow, IconMinus, IconBranch } from '@arco-design/web-vue/es/icon'

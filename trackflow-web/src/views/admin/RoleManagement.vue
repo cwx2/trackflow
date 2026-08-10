@@ -229,7 +229,7 @@ import { Message } from '@arco-design/web-vue'
 import { useConfirmDelete } from '@/composables/useConfirmDelete'
 import { roleApi } from '@/api'
 import type { RoleVO, RoleUsersVO } from '@/api/types'
-import type { PermissionItem, PermissionGroup } from '@/api/role'
+import type { PermissionGroup } from '@/api/role'
 import AdminPageLayout from '@/components/admin/AdminPageLayout.vue'
 import { UserAvatar } from '@/components/base'
 

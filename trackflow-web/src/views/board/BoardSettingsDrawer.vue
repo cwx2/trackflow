@@ -114,7 +114,8 @@
                     </div>
                     <div class="col-wip-cell">
                       <a-input-number
-                        v-model="col.wipMin"
+                        :model-value="col.wipMin ?? undefined"
+                        @update:model-value="col.wipMin = ($event as number | undefined) ?? undefined"
                         placeholder="Min"
                         size="mini"
                         :min="0"
@@ -126,7 +127,8 @@
                       />
                       <span class="wip-separator">–</span>
                       <a-input-number
-                        v-model="col.wipMax"
+                        :model-value="col.wipMax ?? undefined"
+                        @update:model-value="col.wipMax = ($event as number | undefined) ?? undefined"
                         placeholder="Max"
                         size="mini"
                         :min="0"
@@ -181,7 +183,8 @@
                 </div>
                 <div class="col-wip-cell">
                   <a-input-number
-                    v-model="pWip.wipMin"
+                    :model-value="pWip.wipMin ?? undefined"
+                    @update:model-value="pWip.wipMin = ($event as number | undefined) ?? undefined"
                     placeholder="Min"
                     size="mini"
                     :min="0"
@@ -192,7 +195,8 @@
                   />
                   <span class="wip-separator">–</span>
                   <a-input-number
-                    v-model="pWip.wipMax"
+                    :model-value="pWip.wipMax ?? undefined"
+                    @update:model-value="pWip.wipMax = ($event as number | undefined) ?? undefined"
                     placeholder="Max"
                     size="mini"
                     :min="0"
@@ -238,7 +242,7 @@
           :show-uncategorized="editableSwimlaneShowUncategorized"
           :uncategorized-position="editableSwimlaneUncategorizedPosition"
           :merge-groups="editableMergeGroups"
-          :columns="editableColumns"
+          :columns="(editableColumns as any)"
           :project-id="projectId"
           :swimlane-issue-type="editableSwimlaneIssueType"
           @update:group-by-field="editableSwimlaneGroupBy = $event"
@@ -298,7 +302,8 @@
               <p>选择一个保存的搜索来确定 Backlog 显示哪些工单。未选择时，Backlog 显示不在看板上的所有未解决工单。</p>
             </div>
             <a-select
-              v-model="editableBacklogSavedQueryId"
+              :model-value="editableBacklogSavedQueryId ?? undefined"
+              @update:model-value="editableBacklogSavedQueryId = ($event as string) ?? null"
               placeholder="使用默认过滤（未在看板上的工单）"
               :loading="loadingSavedQueries"
               allow-clear
@@ -325,9 +330,9 @@
 import { ref, watch, computed } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { boardApi, queryApi, projectApi } from '@/api'
-import type { BoardColumnVO, BoardColumnItem, SavedQueryVO, ProjectVO } from '@/api/types'
+import type { BoardColumnVO, BoardColumnItem, ProjectVO } from '@/api/types'
 import { localizeStatusName, localizePriority } from '@/utils/fieldLabels'
-import { PRIORITY_COLORS, getPriorityColor } from '@/utils/issueColors'
+import { getPriorityColor } from '@/utils/issueColors'
 import CardSettingsPanel from './CardSettingsPanel.vue'
 import ChartSettingsPanel from './ChartSettingsPanel.vue'
 import GeneralSettingsPanel from './GeneralSettingsPanel.vue'
@@ -485,6 +490,7 @@ watch(() => props.visible, async (newVisible) => {
     if (statusColumns.length > 0) {
       editableColumns.value = statusColumns.map(c => ({
         ...c,
+        statusId: c.statusId ?? '',
         wipMin: c.wipMin ?? undefined,
         wipMax: c.wipMax ?? undefined,
         issueCount: c.issueCount ?? 0,
@@ -499,6 +505,7 @@ watch(() => props.visible, async (newVisible) => {
         const statusColData = statusColRes.data || []
         editableColumns.value = statusColData.map(c => ({
           ...c,
+          statusId: c.statusId ?? '',
           wipMin: c.wipMin ?? undefined,
           wipMax: c.wipMax ?? undefined,
           issueCount: c.issueCount ?? 0,
@@ -516,6 +523,7 @@ watch(() => props.visible, async (newVisible) => {
         const initialized = res.data || []
         editableColumns.value = initialized.map(c => ({
           ...c,
+          statusId: c.statusId ?? '',
           wipMin: c.wipMin ?? undefined,
           wipMax: c.wipMax ?? undefined,
           issueCount: c.issueCount ?? 0,
@@ -663,6 +671,7 @@ watch(() => props.columns, () => {
     if (statusColumns.length > 0) {
       editableColumns.value = statusColumns.map(c => ({
         ...c,
+        statusId: c.statusId ?? '',
         wipMin: c.wipMin ?? undefined,
         wipMax: c.wipMax ?? undefined,
         issueCount: c.issueCount ?? 0,
@@ -680,16 +689,6 @@ watch(() => props.columns, () => {
     })
   }
 })
-
-function categoryLabel(category: string): string {
-  const map: Record<string, string> = {
-    open: '待办',
-    in_progress: '进行中',
-    done: '已完成',
-    cancelled: '已取消'
-  }
-  return map[category] || category
-}
 
 // 分组折叠状态
 const collapsedGroups = ref<Set<string>>(new Set())
@@ -871,6 +870,7 @@ async function reloadAllConfigs() {
       if (statusColData.length > 0) {
         editableColumns.value = statusColData.map(c => ({
           ...c,
+          statusId: c.statusId ?? '',
           wipMin: c.wipMin ?? undefined,
           wipMax: c.wipMax ?? undefined,
           issueCount: c.issueCount ?? 0,
@@ -1015,8 +1015,7 @@ async function handleSave() {
         groupByField: editableSwimlaneGroupBy.value,
         selectedValues: editableSwimlaneSelectedValues.value,
         showUncategorized: editableSwimlaneShowUncategorized.value,
-        uncategorizedPosition: editableSwimlaneUncategorizedPosition.value,
-        swimlaneIssueType: editableSwimlaneIssueType.value
+        uncategorizedPosition: editableSwimlaneUncategorizedPosition.value
       },
       columnMerges: {
         mergeGroups: validMergeGroups.map(g => ({

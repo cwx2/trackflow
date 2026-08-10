@@ -317,13 +317,6 @@ function cancelTagPicker() {
   selectedTagIds.value = new Set()
 }
 
-function selectTag(tag: TagItem) {
-  emit('add-tag', tag)
-  showTagPicker.value = false
-  tagSearch.value = ''
-  selectedTagIds.value = new Set()
-}
-
 function createNewTag() {
   if (!tagSearch.value.trim()) return
   emit('create-tag', tagSearch.value.trim())

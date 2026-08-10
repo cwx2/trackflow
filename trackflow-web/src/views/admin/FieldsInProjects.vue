@@ -110,7 +110,8 @@
                 <div class="editor-row">
                   <span class="editor-label">必填性</span>
                   <a-select
-                    v-model="editForm.isRequired"
+                    :model-value="editForm.isRequired ?? undefined"
+                    @update:model-value="editForm.isRequired = ($event as boolean | null) ?? null"
                     size="small"
                     style="width: 160px"
                     placeholder="继承全局设置"
@@ -126,7 +127,8 @@
                 <div class="editor-row">
                   <span class="editor-label">允许为空</span>
                   <a-select
-                    v-model="editForm.canBeEmpty"
+                    :model-value="editForm.canBeEmpty ?? undefined"
+                    @update:model-value="editForm.canBeEmpty = ($event as boolean | null) ?? null"
                     size="small"
                     style="width: 160px"
                     placeholder="继承全局设置(允许)"
@@ -142,7 +144,8 @@
                 <div class="editor-row">
                   <span class="editor-label">默认值</span>
                   <a-input
-                    v-model="editForm.defaultValue"
+                    :model-value="editForm.defaultValue ?? undefined"
+                    @update:model-value="editForm.defaultValue = $event ?? null"
                     size="small"
                     style="width: 160px"
                     placeholder="继承全局设置"
@@ -236,7 +239,8 @@
                   <div class="editor-row">
                     <span class="editor-label">必填性</span>
                     <a-select
-                      v-model="editForm.isRequired"
+                      :model-value="editForm.isRequired ?? undefined"
+                      @update:model-value="editForm.isRequired = ($event as boolean | null) ?? null"
                       size="small"
                       style="width: 160px"
                       placeholder="继承全局设置"
@@ -252,7 +256,8 @@
                   <div class="editor-row">
                     <span class="editor-label">允许为空</span>
                     <a-select
-                      v-model="editForm.canBeEmpty"
+                      :model-value="editForm.canBeEmpty ?? undefined"
+                      @update:model-value="editForm.canBeEmpty = ($event as boolean | null) ?? null"
                       size="small"
                       style="width: 160px"
                       placeholder="继承全局设置(允许)"
@@ -268,7 +273,8 @@
                   <div class="editor-row">
                     <span class="editor-label">默认值</span>
                     <a-input
-                      v-model="editForm.defaultValue"
+                      :model-value="editForm.defaultValue ?? undefined"
+                      @update:model-value="editForm.defaultValue = $event ?? null"
                       size="small"
                       style="width: 160px"
                       placeholder="继承全局设置"
@@ -337,7 +343,8 @@
                   <div class="editor-row">
                     <span class="editor-label">必填性</span>
                     <a-select
-                      v-model="editForm.isRequired"
+                      :model-value="editForm.isRequired ?? undefined"
+                      @update:model-value="editForm.isRequired = ($event as boolean | null) ?? null"
                       size="small"
                       style="width: 160px"
                       placeholder="继承全局设置"
@@ -353,7 +360,8 @@
                   <div class="editor-row">
                     <span class="editor-label">允许为空</span>
                     <a-select
-                      v-model="editForm.canBeEmpty"
+                      :model-value="editForm.canBeEmpty ?? undefined"
+                      @update:model-value="editForm.canBeEmpty = ($event as boolean | null) ?? null"
                       size="small"
                       style="width: 160px"
                       placeholder="继承全局设置(允许)"
@@ -369,7 +377,8 @@
                   <div class="editor-row">
                     <span class="editor-label">默认值</span>
                     <a-input
-                      v-model="editForm.defaultValue"
+                      :model-value="editForm.defaultValue ?? undefined"
+                      @update:model-value="editForm.defaultValue = $event ?? null"
                       size="small"
                       style="width: 160px"
                       placeholder="继承全局设置"

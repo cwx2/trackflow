@@ -13,7 +13,7 @@
 
     <!-- 订阅列表 -->
     <div v-if="loading" class="sub-loading">
-      <a-spin size="small" />
+      <a-spin />
       <span>加载中...</span>
     </div>
 
@@ -323,7 +323,9 @@ function resetForm() {
     onResolved: true,
     onCommented: true,
     onTagAdded: true,
-    onTagRemoved: true
+    onTagRemoved: true,
+    onVoted: false,
+    onSpentTime: false
   }
 }
 </script>

@@ -162,7 +162,7 @@ const dateRange = computed(() => {
   return undefined
 })
 
-function onDateRangeChange(val: (string | undefined)[] | undefined) {
+function onDateRangeChange(val: any[] | undefined) {
   if (val && val.length === 2) {
     filters.startDate = val[0] || ''
     filters.endDate = val[1] || ''

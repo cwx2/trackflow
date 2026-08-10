@@ -176,3 +176,42 @@ mcp_trackflow_test_check_compilation_batch(java_files=["com/trackflow/issue/serv
 3. **加超时**：任何不确定执行时长的命令必须设 `timeout`（建议 10000ms）。
 4. **加 ErrorAction**：可能失败的命令统一加 `-ErrorAction SilentlyContinue`。
 5. **优先用 Kiro 原生工具**：`list_directory`、`read_file`、`grep_search` 等工具不会阻塞，能完成的事就不要用 PowerShell。
+
+## 前端 TypeScript 类型检查工具
+
+项目已配置 `type-check` 脚本，可随时检查整个前端项目的类型错误和警告。
+
+### 使用方式
+
+```bash
+# 在 trackflow-web 目录下运行
+npm run type-check
+```
+
+或通过 shell 工具调用：
+
+```
+shell("cd /d D:\\project\\YT\\trackflow-web && node_modules\\.bin\\vue-tsc --noEmit > tsc-out.txt 2>&1")
+read("D:\\project\\YT\\trackflow-web\\tsc-out.txt")
+```
+
+### 输出格式
+
+```
+src/components/Foo.vue(行号,列号): error TSxxxx: 错误描述
+```
+
+### 常见错误类型
+
+| 错误码 | 含义 |
+|--------|------|
+| TS2322 | 类型不兼容（最常见，null/undefined 赋值问题） |
+| TS6133 | 变量声明了但未使用 |
+| TS7006 | 参数隐式 any 类型 |
+| TS6196 | import 了但未使用 |
+
+### 何时使用
+
+- 修复完一批 TS 类型错误后，验证是否清零
+- 发现 IDEA 报红但不确定影响范围时，全量扫描
+- 代码提交前检查类型健康度

@@ -209,7 +209,7 @@
       :ok-loading="saving"
       ok-text="克隆"
     >
-      <a-form layout="vertical">
+      <a-form :model="{}" layout="vertical">
         <a-form-item label="源工作流">
           <a-input :model-value="cloneSource?.name" disabled />
         </a-form-item>

@@ -34,7 +34,7 @@
 import { ref } from 'vue'
 import { TiptapEditor } from '@/components/base'
 
-const props = withDefaults(defineProps<{
+withDefaults(defineProps<{
   modelValue: string
   placeholder?: string
   /** 'edit' = 显示保存/取消按钮（详情页编辑）；'inline' = 实时同步（创建表单） */

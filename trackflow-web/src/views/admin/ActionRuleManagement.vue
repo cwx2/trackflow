@@ -233,7 +233,7 @@
             />
           </a-form-item>
           <a-form-item label="执行后目标状态" field="statusTransitionTo">
-            <a-select v-model="form.statusTransitionTo" allow-clear placeholder="不变更状态">
+            <a-select :model-value="form.statusTransitionTo ?? undefined" @update:model-value="form.statusTransitionTo = ($event as string) ?? null" allow-clear placeholder="不变更状态">
               <a-option v-for="s in availableStatuses" :key="s" :value="s">{{ s }}</a-option>
             </a-select>
           </a-form-item>

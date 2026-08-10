@@ -121,7 +121,8 @@
               <div class="condition-row">
                 <label class="condition-label">Show only when</label>
                 <a-select
-                  v-model="conditionForm.conditionFieldId"
+                  :model-value="conditionForm.conditionFieldId ?? undefined"
+                  @update:model-value="conditionForm.conditionFieldId = ($event as string) ?? null"
                   placeholder="选择条件字段..."
                   allow-clear
                   size="small"
@@ -371,13 +372,13 @@
               <h5 class="condition-title">高级操作</h5>
 
               <!-- 数字徽章配置（仅整数字段显示） -->
-              <div v-if="selectedField && (selectedField.fieldFormat === 'int' || selectedField.fieldFormat === 'integer')" class="advanced-action-row badge-config-section">
+              <div v-if="selectedField && (selectedField.fieldFormat === 'int' || (selectedField.fieldFormat as any) === 'integer')" class="advanced-action-row badge-config-section">
                 <div class="condition-row">
                   <label class="condition-label">列表数字徽章</label>
                   <a-switch
                     :model-value="badgeForm.showAsBadge"
                     size="small"
-                    @change="(val: boolean) => { badgeForm.showAsBadge = val; saveBadgeConfig() }"
+                    @change="(val: any) => { badgeForm.showAsBadge = val as boolean; saveBadgeConfig() }"
                   />
                   <span class="visibility-hint">在工单列表标题左侧显示数字徽章</span>
                 </div>
@@ -386,7 +387,8 @@
                   <div v-for="(rule, idx) in badgeForm.colorRules" :key="idx" class="badge-rule-row">
                     <span class="badge-rule-prefix">≤</span>
                     <a-input-number
-                      v-model="rule.max"
+                      :model-value="rule.max ?? undefined"
+                      @update:model-value="rule.max = ($event as number | undefined) ?? undefined"
                       :min="0"
                       :precision="0"
                       placeholder="空=默认"
@@ -701,7 +703,7 @@ const badgeForm = reactive({
 })
 
 function initBadgeForm(field: CustomFieldDefinitionVO | null) {
-  if (!field || (field.fieldFormat !== 'int' && field.fieldFormat !== 'integer')) {
+  if (!field || (field.fieldFormat !== 'int' && (field.fieldFormat as any) !== 'integer')) {
     badgeForm.showAsBadge = false
     badgeForm.colorRules = []
     return
@@ -876,7 +878,7 @@ function onDragLeave() {
   dragOverIndex.value = null
 }
 
-async function onDrop(event: DragEvent, targetIndex: number) {
+async function onDrop(_event: DragEvent, targetIndex: number) {
   if (dragIndex.value === null || dragIndex.value === targetIndex) {
     onDragEnd()
     return
@@ -1330,9 +1332,10 @@ async function submitDetach() {
   try {
     await customFieldApi.detachFromProject(props.project.id, detachTarget.value.id)
     Message.success(`字段「${detachTarget.value.name}」已从项目移除`)
+    const detachedId = detachTarget.value.id
     showDetachDialog.value = false
     detachTarget.value = null
-    if (selectedField.value?.id === detachTarget.value?.id) {
+    if (selectedField.value?.id === detachedId) {
       selectedField.value = null
     }
     await loadFields()

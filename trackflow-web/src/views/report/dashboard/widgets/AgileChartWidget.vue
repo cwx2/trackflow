@@ -18,7 +18,7 @@ import VChart from 'vue-echarts'
 import { IconBarChart } from '@arco-design/web-vue/es/icon'
 import { sprintApi } from '@/api/sprint'
 import { reportStatisticsApi } from '@/api/reportStatistics'
-import { SERIES_ACCENT, SERIES_TERTIARY, SERIES_WARNING, SERIES_PURPLE, SERIES_MARKER } from '@/utils/chartColors'
+import { SERIES_ACCENT, SERIES_TERTIARY, SERIES_PURPLE, SERIES_MARKER } from '@/utils/chartColors'
 import type { SprintBurndownVO } from '@/api/types'
 
 use([CanvasRenderer, LineChart, TooltipComponent, LegendComponent, GridComponent, MarkLineComponent])

@@ -159,7 +159,7 @@ async function confirmComplete() {
     const res = await sprintApi.complete(props.sprint!.id, body)
     const result = res.data
 
-    const spName = result.sprint?.name ?? result.name ?? sprintName.value
+    const spName = result.sprint?.name ?? sprintName.value
     const totalIssueCount = result.totalIssues ?? 0
     const completedCount = result.completedIssues ?? 0
     let toastMessage = `迭代「${spName}」已完成`

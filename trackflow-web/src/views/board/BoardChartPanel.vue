@@ -57,7 +57,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
 import { LineChart } from 'echarts/charts'
@@ -70,7 +70,7 @@ import {
 import VChart from 'vue-echarts'
 import { reportStatisticsApi } from '@/api'
 import type { BurndownData, CumulativeFlowData } from '@/api/reportStatistics'
-import { readChartThemeColors, SERIES_ACCENT, SERIES_TERTIARY, SERIES_DANGER } from '@/utils/chartColors'
+import { readChartThemeColors, SERIES_ACCENT, SERIES_TERTIARY } from '@/utils/chartColors'
 
 // 注册 ECharts 组件
 use([CanvasRenderer, LineChart, TooltipComponent, LegendComponent, GridComponent, MarkLineComponent])
@@ -84,7 +84,7 @@ const props = defineProps<{
   estimationFieldId?: string | null // REQ-486: custom estimation field ID for estimation mode
 }>()
 
-const emit = defineEmits<{
+defineEmits<{
   close: []
 }>()
 
@@ -152,7 +152,6 @@ function buildBurndownOption(data: BurndownData) {
 
   // Y-axis unit based on calculation mode
   const mode = data.mode || 'issue_count'
-  const yUnit = mode === 'issue_count' ? '工单' : 'min'
   const yAxisName = mode === 'issue_count' ? '' : '(分钟)'
 
   // Find today index (actual line may end before the full dates range)

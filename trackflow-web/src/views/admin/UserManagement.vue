@@ -310,7 +310,7 @@
                   style="width: 110px"
                   :disabled="pr.source === 'group'"
                   :title="pr.source === 'group' ? '通过用户组继承的角色不可直接修改' : ''"
-                  @change="(val: string) => changeProjectRole(pr, val)"
+                  @change="(val: any) => changeProjectRole(pr, val as string)"
                 >
                   <a-option v-for="r in projectRoles" :key="r.id" :value="r.code">{{ r.name }}</a-option>
                 </a-select>

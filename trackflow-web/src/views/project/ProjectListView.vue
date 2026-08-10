@@ -186,7 +186,7 @@
 
         <div v-if="showArchived" class="archived-list">
           <div v-if="archivedLoading" class="archived-loading">
-            <a-spin size="16" />
+            <a-spin :size="16" />
             <span>加载中...</span>
           </div>
           <template v-else>
@@ -476,7 +476,7 @@
             <li>📋 {{ deleteTarget.issueCount }} 个工单<span v-if="deleteTarget.openIssueCount > 0" class="impact-warn">（其中 {{ deleteTarget.openIssueCount }} 个未关闭）</span></li>
             <li>🏃 {{ deleteTarget.sprintCount }} 个 Sprint</li>
             <li>👥 {{ deleteTarget.memberCount }} 名成员</li>
-            <li v-if="deleteTarget.timeEntryCount > 0">⏱️ {{ deleteTarget.timeEntryCount }} 条工时记录</li>
+            <li v-if="(deleteTarget as any).timeEntryCount > 0">⏱️ {{ (deleteTarget as any).timeEntryCount }} 条工时记录</li>
           </ul>
         </div>
         <div class="delete-confirm-input">
@@ -568,7 +568,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, watch, h } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { Message, Modal } from '@arco-design/web-vue'
 import { useConfirmDelete } from '@/composables/useConfirmDelete'

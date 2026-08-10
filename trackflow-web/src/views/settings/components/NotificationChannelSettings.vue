@@ -88,7 +88,8 @@
       </div>
       <div v-if="quietHoursEnabled" class="quiet-hours-range">
         <a-time-picker
-          v-model="form.quietHoursStart"
+          :model-value="form.quietHoursStart ?? undefined"
+          @update:model-value="form.quietHoursStart = ($event as string) ?? null"
           format="HH:mm"
           placeholder="开始时间"
           size="small"
@@ -97,7 +98,8 @@
         />
         <span class="quiet-separator">至</span>
         <a-time-picker
-          v-model="form.quietHoursEnd"
+          :model-value="form.quietHoursEnd ?? undefined"
+          @update:model-value="form.quietHoursEnd = ($event as string) ?? null"
           format="HH:mm"
           placeholder="结束时间"
           size="small"

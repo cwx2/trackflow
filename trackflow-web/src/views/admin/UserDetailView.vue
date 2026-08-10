@@ -226,7 +226,7 @@
       @cancel="closeAssignDialog"
     >
       <template #title>赋予项目角色 — {{ profile?.displayName }}</template>
-      <a-form layout="vertical" size="small">
+      <a-form :model="{}" layout="vertical" size="small">
         <a-form-item label="选择项目">
           <a-select v-model="assignProjectId" placeholder="请选择项目" allow-clear>
             <a-option v-for="p in allProjects" :key="p.id" :value="p.id">
@@ -259,7 +259,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, h } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import { Modal, Message } from '@arco-design/web-vue'
 import { useConfirmDelete } from '@/composables/useConfirmDelete'
 import { userApi, projectApi, roleApi } from '@/api'
@@ -269,7 +269,6 @@ import { UserAvatar, IssueStatusTag } from '@/components/base'
 import DataContainer from '@/components/base/DataContainer.vue'
 
 const route = useRoute()
-const router = useRouter()
 
 const profile = ref<UserProfileVO | null>(null)
 const loading = ref(true)

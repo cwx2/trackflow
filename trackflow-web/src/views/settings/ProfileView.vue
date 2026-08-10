@@ -245,7 +245,7 @@ function cancelEditName() {
   editingName.value = false
 }
 
-function onThemeChange(val: string) {
+function onThemeChange(val: any) {
   setTheme(val as 'dark' | 'light')
 }
 

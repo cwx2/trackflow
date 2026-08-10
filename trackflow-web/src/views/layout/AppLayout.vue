@@ -496,7 +496,7 @@ function onCreatePanelCreated() {
   createPanelDraftId.value = null
 }
 
-function onCreatePanelCancel(formData: any) {
+function onCreatePanelCancel(_formData: any) {
   // 有内容时自动保存为草稿（IssueCreatePanel 内部已处理 Message 提示）
   // 此处只需关闭面板
   showCreatePanel.value = false

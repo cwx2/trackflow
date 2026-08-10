@@ -26,7 +26,7 @@
           <div v-if="entry.ongoing" class="entry-duration entry-ongoing">
             <span class="ongoing-dot"></span> 计时中
           </div>
-          <div v-else class="entry-duration">{{ formatDuration(entry.duration) }}</div>
+          <div v-else class="entry-duration">{{ formatDuration(entry.duration ?? 0) }}</div>
           <div v-if="entry.userName && showUser" class="entry-user">{{ entry.userName }}</div>
           <div v-if="entry.loggedByName" class="entry-logged-by">由 {{ entry.loggedByName }} 代录</div>
           <div v-if="entry.description && !showUser" class="entry-desc">{{ entry.description }}</div>

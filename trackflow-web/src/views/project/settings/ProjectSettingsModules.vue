@@ -39,7 +39,7 @@
           <a-switch
             :model-value="mod.enabled"
             :disabled="mod.isCore || !canManage || isArchived || saving"
-            @change="(val: boolean) => handleModuleToggle(mod.name, val)"
+            @change="(val: any) => handleModuleToggle(mod.name, val as boolean)"
           />
         </div>
       </div>

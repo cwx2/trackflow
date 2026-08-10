@@ -322,7 +322,7 @@ function toggleMyIssues() {
 }
 
 /** 负责人下拉变化 */
-function onAssigneeFilterChange(val: string | undefined) {
+function onAssigneeFilterChange(val: any) {
   assigneeFilter.value = val || undefined
   if (val) {
     localStorage.setItem(ASSIGNEE_FILTER_KEY, val)
@@ -3536,6 +3536,7 @@ useIssueProjectSubscription(
     handleKeydown,
     // Load
     loadBoard, loadIssuesWithLoading, loadProjects,
+    nextPlannedSprintHint,
   }
 }
 

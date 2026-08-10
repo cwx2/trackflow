@@ -160,7 +160,7 @@ watch(() => props.modelValue, async (val) => {
   }
 }, { immediate: true })
 
-async function loadInitialUser(userId: string) {
+async function loadInitialUser(_userId: string) {
   try {
     const res = await userApi.list({ pageSize: 50 })
     userOptions.value = res.data?.list || []
@@ -182,7 +182,7 @@ async function handleUserSearch(keyword: string) {
   }
 }
 
-function handleUserChange(val: string | undefined) {
+function handleUserChange(val: any) {
   emit('update:modelValue', val || '')
 }
 

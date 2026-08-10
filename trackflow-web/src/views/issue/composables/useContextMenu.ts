@@ -78,9 +78,9 @@ export function useContextMenu(options: ContextMenuOptions) {
   }
 
   // Table row-contextmenu event from Arco Design
-  function onTableRowContextMenu(record: IssueVO, event: MouseEvent) {
+  function onTableRowContextMenu(record: any, event: Event) {
     event.preventDefault()
-    openContextMenu(record, event)
+    openContextMenu(record, event as MouseEvent)
   }
 
   function ctxCopyIssueKey() {

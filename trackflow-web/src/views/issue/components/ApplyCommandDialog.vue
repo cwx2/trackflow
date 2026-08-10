@@ -101,7 +101,7 @@
 import { ref, computed, watch, nextTick } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import type { IssueVO } from '@/api/types'
-import { useApplyCommand, type ParsedCommand, type CommandSuggestion } from '../composables/useApplyCommand'
+import { useApplyCommand, type CommandSuggestion } from '../composables/useApplyCommand'
 
 const props = defineProps<{
   visible: boolean
@@ -213,8 +213,6 @@ function onKeydown(e: KeyboardEvent) {
 }
 
 function applySuggestion(suggestion: CommandSuggestion) {
-  const tokens = commandText.value.trim().split(/\s+/)
-
   if (suggestion.type === 'field') {
     // Replace the last partial token (or append if empty)
     // Find where the user started typing the field

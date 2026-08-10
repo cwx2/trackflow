@@ -1,5 +1,5 @@
-import { ref, reactive, computed, type Ref } from 'vue'
-import type { IssueVO, IssueStatusVO } from '@/api/types'
+import { reactive, computed, type Ref } from 'vue'
+import type { IssueStatusVO } from '@/api/types'
 import type { TableData } from '@arco-design/web-vue'
 import { localizeStatusName } from '@/utils/fieldLabels'
 

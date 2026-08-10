@@ -47,7 +47,7 @@
 
     <!-- 已配置的项目列表 -->
     <div v-if="loading" class="project-loading">
-      <a-spin size="small" />
+      <a-spin />
       <span>加载项目偏好...</span>
     </div>
 

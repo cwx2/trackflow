@@ -3,7 +3,6 @@ import type { IssueVO, IssueStatusVO, ProjectMemberVO, SprintVO, IssueTagVO } fr
 import { issueApi, projectApi, sprintApi, tagApi } from '@/api'
 import { localizeStatusName, localizePriority, statusLabelMap } from '@/utils/fieldLabels'
 import type { BatchResult } from './useBatchOps'
-import { useBatchOps } from './useBatchOps'
 
 /**
  * 命令类型定义
@@ -81,8 +80,6 @@ const PRIORITY_ALIASES: Record<string, string> = {
 }
 
 export function useApplyCommand(selectedIssues: Ref<IssueVO[]>) {
-  const { batchTransitStatus, batchAssign, batchUpdateSprint, batchUpdatePriority } = useBatchOps()
-
   // Loaded context data
   const statuses = ref<IssueStatusVO[]>([])
   const members = ref<ProjectMemberVO[]>([])
@@ -311,7 +308,6 @@ export function useApplyCommand(selectedIssues: Ref<IssueVO[]>) {
    * 获取自动补全建议
    */
   function getSuggestions(input: string): CommandSuggestion[] {
-    const suggestions: CommandSuggestion[] = []
     if (!input.trim()) {
       // 空输入时显示所有可用字段
       return getFieldSuggestions('')

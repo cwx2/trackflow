@@ -332,7 +332,7 @@
               v-model="createQueryForm.queryText"
               placeholder="输入查询条件... (如 状态: 未关闭  负责人: 我)"
               :status-list="statusCache"
-              :project-list="projectList"
+              :project-list="(projectList as any)"
               :project-id="activeProjectId"
             />
           </a-form-item>
@@ -381,7 +381,7 @@
               v-model="editQueryForm.queryText"
               placeholder="输入查询条件... (如 状态: 未关闭  负责人: 我)"
               :status-list="statusCache"
-              :project-list="projectList"
+              :project-list="(projectList as any)"
               :project-id="activeProjectId"
             />
           </a-form-item>
@@ -465,7 +465,7 @@
         ref="filterBarRef"
         :project-id="activeProjectId"
         :status-list="statusCache"
-        :project-list="projectList"
+        :project-list="(projectList as any)"
         :initial-filters="initialFilterChips"
         :active-query-name="activeQueryId ? activeQueryName : null"
         :is-owned-query="activeQueryOwned"
@@ -611,7 +611,7 @@
           </a-select>
           <a-select v-model="quickForm.priority" size="small" style="width: 80px">
             <a-option v-for="p in priorityOptions" :key="p.value" :value="p.value">
-              <IssuePriorityBadge :priority="p.value" :color="p.color" mode="dot" :show-label="true" />
+              <IssuePriorityBadge :priority="p.value" :color="p.color ?? undefined" mode="dot" :show-label="true" />
             </a-option>
           </a-select>
           <a-button type="primary" size="small" :loading="quickCreating" :disabled="!quickForm.projectId || !quickForm.title" @click="quickCreate">
@@ -776,7 +776,7 @@
               <template #content>
                 <div class="inline-dropdown">
                   <div v-for="p in priorityOptions" :key="p.value" class="dropdown-item" @click="selectPriority(record, p.value)">
-                    <IssuePriorityBadge :priority="p.value" :color="p.color" mode="dot" :show-label="true" />
+                    <IssuePriorityBadge :priority="p.value" :color="p.color ?? undefined" mode="dot" :show-label="true" />
                   </div>
                 </div>
               </template>
@@ -1011,7 +1011,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted, watch, h, nextTick, provide } from 'vue'
 import { useRouter, useRoute, onBeforeRouteLeave } from 'vue-router'
-import { IconPlus, IconSearch, IconLoading, IconEdit, IconPenFill, IconShareExternal, IconPushpin, IconDelete, IconLock, IconCheckCircle, IconEye, IconLayout, IconExpand, IconDownload, IconFile, IconCode, IconCopy, IconLink, IconCalendar, IconRight, IconSettings, IconMinusCircle, IconExclamationCircleFill } from '@arco-design/web-vue/es/icon'
+import { IconPlus, IconSearch, IconLoading, IconEdit, IconPenFill, IconShareExternal, IconPushpin, IconDelete, IconCheckCircle, IconEye, IconLayout, IconExpand, IconDownload, IconFile, IconCode, IconCopy, IconLink, IconCalendar, IconRight, IconSettings, IconMinusCircle, IconExclamationCircleFill } from '@arco-design/web-vue/es/icon'
 import { Message, Modal } from '@arco-design/web-vue'
 import { useConfirmDelete } from '@/composables/useConfirmDelete'
 import { projectApi, issueApi, sprintApi, customFieldApi } from '@/api'
@@ -1071,7 +1071,7 @@ const { loadPermissions, canEditIssue, canDeleteIssue } = usePermission(issues)
 
 const {
   layout, density, structure,
-  isTreeMode, isListLayout, isTableLayout,
+  isListLayout, isTableLayout,
   setLayout, setDensity, setStructure
 } = useViewSettings()
 
@@ -1108,8 +1108,8 @@ const statusCache = ref<IssueStatusVO[]>([])
 const sprintOptionsCache = reactive<Record<string, SprintVO[]>>({})
 
 // Priority & issue type options
-const priorityOptions = ref(DEFAULT_PRIORITY_OPTIONS.map(o => ({ ...o })))
-const issueTypeOptions = ref(DEFAULT_ISSUE_TYPE_OPTIONS.map(o => ({ ...o })))
+const priorityOptions = ref<{ value: string; label: string; color: string | null; description: string | null; isDefault: boolean }[]>(DEFAULT_PRIORITY_OPTIONS.map(o => ({ ...o, description: null, isDefault: false })))
+const issueTypeOptions = ref<{ value: string; label: string; color: string | null; description: string | null; isDefault: boolean }[]>(DEFAULT_ISSUE_TYPE_OPTIONS.map(o => ({ ...o, description: null, isDefault: false })))
 
 // Column config
 const {
@@ -1154,7 +1154,6 @@ const {
   openManageQueriesModal, toggleFavorite, handleRemoveFavorite,
   triggerContextMenu, startPanelResize, togglePanelCollapse,
   selectTag: queryPanelSelectTag,
-  filtersToQueryText, queryTextToFilters, resolveValueToId
 } = useQueryPanel({
   statusCache,
   projectList,
@@ -1165,6 +1164,14 @@ const {
   refreshList,
   getIssueTypeLabelForRecord
 })
+
+function toggleGroup(group: string) {
+  if (expandedGroups.has(group)) {
+    expandedGroups.delete(group)
+  } else {
+    expandedGroups.add(group)
+  }
+}
 
 // ===== Export composable =====
 const { exportLoading, handleExport, onBatchExport } = useIssueExport({
@@ -1202,7 +1209,7 @@ const showShortcutsHelp = ref(false)
 const showCreatePanel = ref(false)
 
 const {
-  focusedIndex, focusedIssueId, handleKeyboardNav, navigateIssue
+  focusedIndex, focusedIssueId, handleKeyboardNav,
 } = useKeyboardNav({
   issues, canCreateIssueGlobal, canBatchOps,
   previewMode, previewVisible, previewIssueId, activeIssueIndex,
@@ -1215,7 +1222,7 @@ const {
 const {
   contextMenu, ctxTransitions, ctxTransitionsLoading,
   ctxSprintsLoading, ctxSprintSubVisible, ctxSprintGroups,
-  openContextMenu, closeContextMenu,
+  closeContextMenu,
   onListItemContextMenu, onTableRowContextMenu,
   ctxCopyIssueKey, ctxCopyLink, ctxOpenNewTab,
   ctxSetStatus, ctxLoadSprints, ctxMoveSprint, ctxSelectSprint,
@@ -1224,10 +1231,10 @@ const {
 
 // ===== Table Config composable =====
 const {
-  columnWidths, tableMinWidth, tableColumns, rowSelection,
+  tableMinWidth, tableColumns, rowSelection,
   onColumnResize, onHeaderSort, onHeaderRemove, onHeaderDragDrop,
   getColumnSortDir, isColumnFixed, isColumnSortable,
-  isResolved, getStatusName, getStatusColor, getSprintName,
+  getStatusName, getStatusColor, getSprintName,
   getDueDateStatus, getDueDateTooltip, getRowClass,
   formatHoursCell, formatRemainingCell, getSpentHoursClass, getRemainingClass
 } = useTableConfig({
@@ -1237,7 +1244,7 @@ const {
 })
 
 // ===== Drafts =====
-const { draftList, draftCount, hasDrafts, saveDraft, deleteDraft, deleteAllDrafts, getDraft } = useDrafts()
+const { draftList, draftCount, hasDrafts, saveDraft, deleteDraft, deleteAllDrafts } = useDrafts()
 const activeDraftId = ref<string | null>(null)
 const recoveredDraftId = ref<string | null>(null)
 
@@ -1314,9 +1321,9 @@ function loadBadgeFieldsForIssues() {
 watch(activeProjectId, async (projectId) => {
   if (projectId) {
     const loaded = await loadPriorityOptions(projectId)
-    priorityOptions.value = loaded.map(o => ({ value: o.value, label: o.label, color: o.color || DEFAULT_PRIORITY_COLOR }))
+    priorityOptions.value = loaded.map(o => ({ value: o.value, label: o.label, color: o.color || DEFAULT_PRIORITY_COLOR, description: o.description ?? null, isDefault: o.isDefault ?? false }))
     const loadedTypes = await loadIssueTypeOptions(projectId)
-    issueTypeOptions.value = loadedTypes.map(o => ({ value: o.value, label: o.label, color: o.color || DEFAULT_ISSUE_TYPE_COLOR }))
+    issueTypeOptions.value = loadedTypes.map(o => ({ value: o.value, label: o.label, color: o.color || DEFAULT_ISSUE_TYPE_COLOR, description: o.description ?? null, isDefault: o.isDefault ?? false }))
   }
 }, { immediate: true })
 
@@ -1662,7 +1669,7 @@ function syncFiltersToUrl(filters: Record<string, any>) {
 function onClearQuery() {
   activeQueryId.value = null; activeQueryName.value = '所有工单'; activeQueryObj.value = null; searchKeyword.value = ''; globalFilterParams.value = {}; currentPage.value = 1
   skipRouteQueryWatch = true
-  const { project, ...rest } = route.query; router.replace({ query: project ? { project } : {} })
+  const { project } = route.query; router.replace({ query: project ? { project } : {} })
   nextTick(() => { skipRouteQueryWatch = false })
   filterBarRef.value?.clearAll()
   localStorage.setItem('tf_last_active_query_all', 'true'); localStorage.removeItem('tf_last_active_query_id')
@@ -1698,7 +1705,7 @@ function selectProject(p: any) {
   refreshList(); loadPanel(); loadTags()
 }
 function selectTag(tag: any) {
-  queryPanelSelectTag(tag); activeProjectId.value = null; filterProject.value = undefined; currentPage.value = 1
+  queryPanelSelectTag(tag, globalFilterParams, currentPage); activeProjectId.value = null; filterProject.value = undefined; currentPage.value = 1
   globalFilterParams.value = tag.id ? { tagId: tag.id } : {}
   syncFiltersToUrl(globalFilterParams.value)
   refreshList()

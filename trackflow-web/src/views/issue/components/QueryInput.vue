@@ -34,7 +34,7 @@
 import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { projectApi, customFieldApi } from '@/api'
 import type { IssueStatusVO, ProjectVO } from '@/api/types'
-import { localizeStatusName, issueTypeLabelMap, priorityLabelMap } from '@/utils/fieldLabels'
+import { localizeStatusName, issueTypeLabelMap } from '@/utils/fieldLabels'
 import { loadIssueTypeOptions } from '../composables/useIssueTypeOptions'
 
 // ==================== Types ====================

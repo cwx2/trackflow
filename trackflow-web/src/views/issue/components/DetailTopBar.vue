@@ -106,7 +106,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted } from 'vue'
+import { ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { IconLeft, IconRight, IconCopy, IconPlus, IconMore, IconThumbUp, IconStar, IconStarFill, IconLock, IconMenu, IconThunderbolt } from '@arco-design/web-vue/es/icon'
 import { issueVoteApi, issueWatcherApi, quickActionApi } from '@/api'

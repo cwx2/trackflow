@@ -18,7 +18,7 @@
         >
           <a-checkbox
             :model-value="selectedFields.has(field.key)"
-            @change="(val: boolean) => toggleField(field.key, val)"
+            @change="(val: any) => toggleField(field.key, val as boolean)"
           />
           <span class="field-icon">{{ field.icon }}</span>
           <span class="field-label">{{ field.label }}</span>
@@ -31,7 +31,7 @@
               :model-value="getFieldDisplayMode(field.key)"
               size="mini"
               type="button"
-              @change="(val: string) => setFieldDisplayMode(field.key, val as 'full_name' | 'initial')"
+              @change="(val: any) => setFieldDisplayMode(field.key, val as 'full_name' | 'initial')"
             >
               <a-radio value="full_name" title="显示完整名称">Full name</a-radio>
               <a-radio value="initial" title="仅显示首字母缩写">Initial</a-radio>
@@ -52,7 +52,7 @@
         >
           <a-checkbox
             :model-value="selectedFields.has(field.key)"
-            @change="(val: boolean) => toggleField(field.key, val)"
+            @change="(val: any) => toggleField(field.key, val as boolean)"
           />
           <span class="field-icon">{{ field.icon }}</span>
           <span class="field-label">{{ field.label }}</span>
@@ -64,7 +64,7 @@
               :model-value="getFieldDisplayMode(field.key)"
               size="mini"
               type="button"
-              @change="(val: string) => setFieldDisplayMode(field.key, val as 'full_name' | 'initial')"
+              @change="(val: any) => setFieldDisplayMode(field.key, val as 'full_name' | 'initial')"
             >
               <a-radio value="full_name" title="显示完整名称">Full name</a-radio>
               <a-radio value="initial" title="仅显示首字母缩写">Initial</a-radio>
@@ -88,7 +88,8 @@
             <span class="estimation-field-hint">Sprint 期间可编辑的当前估算值</span>
           </div>
           <a-select
-            v-model="selectedCurrentEstimationFieldId"
+            :model-value="selectedCurrentEstimationFieldId ?? undefined"
+            @update:model-value="selectedCurrentEstimationFieldId = ($event as string) ?? null"
             placeholder="不配置"
             allow-clear
             :loading="fieldsLoading"
@@ -113,7 +114,8 @@
             <span class="estimation-field-hint">Sprint 开始时快照的原始估算值（只读基线）</span>
           </div>
           <a-select
-            v-model="selectedOriginalEstimationFieldId"
+            :model-value="selectedOriginalEstimationFieldId ?? undefined"
+            @update:model-value="selectedOriginalEstimationFieldId = ($event as string) ?? null"
             placeholder="不配置"
             allow-clear
             :loading="fieldsLoading"
@@ -283,11 +285,6 @@ const builtInFields: FieldOption[] = [
 /** 适合在卡片上展示的自定义字段格式（枚举/布尔/用户 等有限值类型） */
 const CARD_VISUAL_FORMATS = new Set(['list', 'user', 'bool', 'date'])
 
-/** 可选字段列表（内置 + 项目自定义字段） */
-const availableFields = computed<FieldOption[]>(() => {
-  return [...builtInFields, ...customFieldOptions.value]
-})
-
 /** 项目自定义字段选项列表（过滤出适合卡片展示的类型） */
 const customFieldOptions = computed<FieldOption[]>(() => {
   return projectFields.value
@@ -431,11 +428,11 @@ function onOriginalEstimationFieldChange(val: string | number | boolean | Record
   emit('update:originalEstimationFieldId', (val as string) ?? null)
 }
 
-function onShowCustomFieldColorsChange(val: boolean) {
+function onShowCustomFieldColorsChange(val: any) {
   emit('update:showCustomFieldColors', val)
 }
 
-function onAllowMultipleSprintsChange(val: boolean) {
+function onAllowMultipleSprintsChange(val: any) {
   selectedAllowMultipleSprints.value = val
   emit('update:allowMultipleSprints', val)
 }

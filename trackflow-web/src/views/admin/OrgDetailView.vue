@@ -218,7 +218,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, nextTick } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
 import { useConfirmDelete } from '@/composables/useConfirmDelete'
 import type { TableColumnData } from '@arco-design/web-vue'
@@ -227,7 +227,7 @@ import type { OrgDetailVO, OrgProjectVO, OrgAccessVO } from '@/api/organization'
 import DataContainer from '@/components/base/DataContainer.vue'
 
 const route = useRoute()
-const router = useRouter()
+
 
 // Basic state
 const loading = ref(true)

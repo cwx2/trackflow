@@ -83,7 +83,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { computed } from 'vue'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
 import { PieChart, BarChart, LineChart } from 'echarts/charts'
@@ -91,7 +91,7 @@ import { TooltipComponent, LegendComponent, GridComponent } from 'echarts/compon
 import VChart from 'vue-echarts'
 import { localizeStatusName, priorityLabelMap } from '@/utils/fieldLabels'
 import { getPriorityColor } from '@/composables/usePriorityOptions'
-import { useChartColors, STATUS_COLORS, CHART_PALETTE, SERIES_ACCENT, SERIES_SUCCESS, SERIES_DANGER, SERIES_TERTIARY, areaGradient } from '@/utils/chartColors'
+import { useChartColors, STATUS_COLORS, CHART_PALETTE } from '@/utils/chartColors'
 import type { ReportDataVO } from '@/api/report'
 
 // 注册 ECharts 组件（按需引入）

@@ -218,7 +218,7 @@ import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { IconFilter, IconSearch, IconPlus } from '@arco-design/web-vue/es/icon'
 import { projectApi, sprintApi, tagApi } from '@/api'
 import type { IssueStatusVO, IssueTagVO, ProjectVO, SprintVO } from '@/api/types'
-import { localizeStatusName, issueTypeLabelMap, priorityLabelMap } from '@/utils/fieldLabels'
+import { localizeStatusName, issueTypeLabelMap } from '@/utils/fieldLabels'
 import { PRIORITY_COLORS } from '@/utils/issueColors'
 import { loadIssueTypeOptions } from '../composables/useIssueTypeOptions'
 import QueryInput from './QueryInput.vue'
@@ -463,10 +463,6 @@ function emitSearch() {
   emit('search', searchKeyword.value.trim())
 }
 
-function clearSearch() {
-  searchKeyword.value = ''
-  emit('search', '')
-}
 
 function handleClearQuery() {
   emit('clear-query')

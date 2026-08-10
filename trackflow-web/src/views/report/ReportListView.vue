@@ -443,15 +443,6 @@ const canCreateReport = computed(() => {
 const showShareModal = ref(false)
 const shareReportId = ref('')
 
-/** 是否可管理指定报表（显示编辑/删除菜单） */
-function canManageReport(report: ReportDefinitionVO): boolean {
-  // 系统报表只有系统管理员可编辑
-  if (report.isSystem) {
-    return authStore.hasGlobalPermission('system:admin')
-  }
-  return canCreateReport.value
-}
-
 /** 是否显示「⋯」菜单（所有已认证用户都能看到克隆/导出） */
 function canShowMenu(_report: ReportDefinitionVO): boolean {
   return true
@@ -902,7 +893,7 @@ async function exportReport(report: ReportDefinitionVO, format: 'csv' | 'xlsx' =
 
 function printReportCard(report: ReportDefinitionVO) {
   // 先确保报表数据已加载
-  if (!reportData[report.id]) {
+  if (!reportData.value[report.id]) {
     Message.info('请先点击报表加载数据，然后再打印')
     return
   }
@@ -924,20 +915,6 @@ function resetForm() {
   form.movingPeriod = 7
 }
 
-function groupByLabel(groupBy: string) {
-  // First check dynamic dimensions from API
-  const dim = allDimensions.value.find(d => d.value === groupBy)
-  if (dim) return dim.label
-  // Fallback for built-in
-  const map: Record<string, string> = {
-    status: '状态',
-    assignee: '负责人',
-    priority: '优先级',
-    type: '工单类型',
-    project: '项目'
-  }
-  return map[groupBy] || groupBy
-}
 
 function formatTime(time: string) {
   if (!time) return ''

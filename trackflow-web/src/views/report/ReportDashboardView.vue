@@ -368,10 +368,10 @@ import VChart from 'vue-echarts'
 import { IconDownload, IconFile, IconPrinter, IconInfoCircle } from '@arco-design/web-vue/es/icon'
 import { reportStatisticsApi } from '@/api/reportStatistics'
 import { projectApi, sprintApi } from '@/api'
-import type { DashboardData, ProjectComparisonData, CumulativeFlowData, ResolutionTimeData } from '@/api/reportStatistics'
+import type { DashboardData } from '@/api/reportStatistics'
 import type { ProjectVO } from '@/api/types'
 import { localizeStatusName, priorityLabelMap } from '@/utils/fieldLabels'
-import { useChartColors, SERIES_ACCENT, SERIES_ACCENT_LIGHT, SERIES_SUCCESS, SERIES_DANGER, SERIES_TERTIARY, SERIES_PURPLE, SERIES_MARKER, areaGradient, getChartDownloadBgColor } from '@/utils/chartColors'
+import { useChartColors, SERIES_ACCENT, SERIES_ACCENT_LIGHT, SERIES_SUCCESS, SERIES_DANGER, SERIES_TERTIARY, areaGradient, getChartDownloadBgColor } from '@/utils/chartColors'
 
 // 注册 ECharts 组件
 use([CanvasRenderer, PieChart, BarChart, LineChart, TitleComponent, TooltipComponent, LegendComponent, GridComponent])
@@ -675,7 +675,7 @@ const trendChartOption = computed(() => {
 
 const burndownChartOption = computed(() => {
   if (!dashboardData.value?.burndown) return {}
-  const { dates, ideal, actual, sprintName } = dashboardData.value.burndown
+  const { dates, ideal, actual } = dashboardData.value.burndown
   const shortDates = dates.map(d => d.substring(5))
   const c = chartColors.value
   return {

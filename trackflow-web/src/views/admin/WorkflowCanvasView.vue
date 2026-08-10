@@ -72,8 +72,6 @@ const zoomPercent = ref(100)
 let lf: LogicFlow | null = null
 // 防止连线添加事件重复触发的锁
 let edgeAddLock = false
-// 标记是否已完成首次 fitView（避免重复触发）
-let initialFitDone = false
 // 用于在容器尺寸稳定后执行 fitView
 let resizeObserver: ResizeObserver | null = null
 
@@ -188,7 +186,6 @@ function waitForContainerReady() {
           if (lf) {
             lf.resize()
             lf.fitView()
-            initialFitDone = true
           }
         })
         // 只需要首次触发，之后断开 observer
@@ -323,7 +320,7 @@ function handleNodeClick({ data }: { data: any }) {
   }
 }
 
-function handleConnectionNotAllowed({ msg }: { msg: string }) {
+function handleConnectionNotAllowed({ msg }: { msg?: string }) {
   if (msg) {
     Message.warning(msg)
   }

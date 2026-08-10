@@ -183,7 +183,7 @@
           v-for="project in allProjects"
           :key="project.id"
           :model-value="selectedProjectIds.includes(project.id)"
-          @change="(checked: boolean) => toggleProject(project.id, checked)"
+          @change="(checked: any) => toggleProject(project.id, checked as boolean)"
           class="project-checkbox-item"
         >
           <span class="project-key">{{ project.key }}</span>
@@ -234,7 +234,7 @@ import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { Message, Modal } from '@arco-design/web-vue'
 import { useConfirmDelete } from '@/composables/useConfirmDelete'
 import { workItemAttributeApi } from '@/api/timeEntry'
-import type { WorkItemAttributeVO, AttributeValueVO, AttributeProjectVO } from '@/api/timeEntry'
+import type { WorkItemAttributeVO } from '@/api/timeEntry'
 import AdminPageLayout from '@/components/admin/AdminPageLayout.vue'
 import DataContainer from '@/components/base/DataContainer.vue'
 import { projectApi } from '@/api'

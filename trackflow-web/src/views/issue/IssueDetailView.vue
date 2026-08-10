@@ -293,9 +293,9 @@ import MoveIssueModal from './components/MoveIssueModal.vue'
 import TransitionCommentModal from './components/TransitionCommentModal.vue'
 import AttachmentPrivacyModal from './components/AttachmentPrivacyModal.vue'
 import AddLinkModal from './components/AddLinkModal.vue'
-import type { ActivityItem, RelatedChange } from './components/ActivityStream.vue'
+import type { ActivityItem } from './components/ActivityStream.vue'
 import type { SidebarField, StatusInfo, FieldOption } from './components/DetailSidebar.vue'
-import { localizeFieldName, localizeFieldValue, localizeStatusName, localizePriority, priorityLabelMap, localizeLinkType } from '@/utils/fieldLabels'
+import { localizeFieldName, localizeFieldValue, localizeStatusName, localizePriority, localizeLinkType } from '@/utils/fieldLabels'
 
 const route = useRoute()
 const timerStore = useTimerStore()
@@ -311,15 +311,14 @@ const {
   transitions, comments, activities, activityTotal, activityHasMore, activityLoadingMore,
   attachments, links, projectTagList, members, allProjectMembers, sprints, customFieldDefs,
   dynamicPriorityOptions, dynamicIssueTypeOptions,
-  projectTimeTrackingEnabled, issueProjectAttributes, issueWorkTypeValues, issueExtraAttributes,
+  projectTimeTrackingEnabled, issueWorkTypeValues, issueExtraAttributes,
   timeFormCanLogForOthers, timeFormProjectMembers,
   isProjectArchived, currentUserId,
-  canCreateIssue, canEditIssue, canDeleteIssue, canChangeStatus, canComment,
+  canCreateIssue, canEditIssue, canDeleteIssue,
   canAssignIssue, canEditSprint, canLogTime, hasProjectPermission,
   canManageComments, canManageCustomFieldsComputed,
-  isReporter, isAssignee,
   canEditIssueEffective, canChangeStatusEffective, canCommentEffective, canMoveIssue,
-  activityStreamRef, scrollToActivity, onRemoteCommentAdded,
+  activityStreamRef, onRemoteCommentAdded,
   loadAll, loadMoreActivities, loadAttachments, loadLinks,
   loadIssueProjectAttributes, loadTimeFormPermissions,
 } = data
@@ -728,7 +727,7 @@ function buildCustomFieldSidebarEntries(i: IssueDetailVO, canEdit: boolean): Sid
       case 'datetime': editType = 'datetime'; break
       case 'int': case 'float': editType = 'number'; break
       case 'bool': editType = 'select'; options = [{ value: 'true', label: '是' }, { value: 'false', label: '否' }]; break
-      case 'period': editType = 'period'; break
+      case 'period' as any: editType = 'period'; break
       default: editType = 'text'; break
     }
     let fieldColor: string | undefined
@@ -813,12 +812,16 @@ const activityItems = computed<ActivityItem[]>(() => {
       const candidateTs = new Date(candidate.createdAt).getTime()
       if (candidateTs - anchorTs > CHANGE_GROUP_WINDOW_MS) break
       if (mergedChangeIds.has(candidate.id)) continue
-      groupedChanges.push({ field: localizeFieldName(candidate.fieldName) || candidate.fieldName, from: localizeFieldValue(candidate.fieldName, candidate.oldValue) || undefined, to: localizeFieldValue(candidate.fieldName, candidate.newValue) || undefined })
+      const fromVal = localizeFieldValue(candidate.fieldName, candidate.oldValue)
+      const toVal: string = localizeFieldValue(candidate.fieldName, candidate.newValue) ?? ''
+      groupedChanges.push({ field: (localizeFieldName(candidate.fieldName) || candidate.fieldName) as string, ...(fromVal !== undefined && { from: fromVal }), to: toVal })
       mergedChangeIds.add(candidate.id)
     }
     let detail: Record<string, any> | undefined
     if (anchor.detail) { try { detail = JSON.parse(anchor.detail) } catch { detail = undefined } }
-    const item: ActivityItem = { id: 'a_' + anchor.id, type: 'change', user: anchor.userName || '用户', userId: anchor.userId, userAvatar: anchor.userAvatar || undefined, action: anchor.action, field: localizeFieldName(anchor.fieldName), from: localizeFieldValue(anchor.fieldName, anchor.oldValue) || undefined, to: localizeFieldValue(anchor.fieldName, anchor.newValue) || undefined, detail, timeAgo: timeAgo(anchor.createdAt), ts: anchorTs }
+    const anchorFrom = localizeFieldValue(anchor.fieldName, anchor.oldValue)
+    const anchorTo = localizeFieldValue(anchor.fieldName, anchor.newValue)
+    const item: ActivityItem = { id: 'a_' + anchor.id, type: 'change', user: anchor.userName || '用户', userId: anchor.userId, userAvatar: anchor.userAvatar || undefined, action: anchor.action, field: localizeFieldName(anchor.fieldName), ...(anchorFrom !== undefined && { from: anchorFrom }), ...(anchorTo !== undefined && { to: anchorTo }), detail, timeAgo: timeAgo(anchor.createdAt), ts: anchorTs }
     if (groupedChanges.length > 0) {
       item.relatedChanges = groupedChanges
     }

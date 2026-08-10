@@ -167,7 +167,7 @@
       @ok="submitAddMembers"
       @cancel="showAddMemberDialog = false"
     >
-      <a-form layout="vertical">
+      <a-form :model="{}" layout="vertical">
         <a-form-item label="搜索用户">
           <a-input v-model="memberSearchKeyword" placeholder="输入用户名或姓名..." @input="searchUsers" allow-clear />
         </a-form-item>
@@ -367,8 +367,9 @@ async function submitForm() {
   }
 }
 
-async function openDetail(record: UserGroupVO) {
-  currentGroupId.value = record.id
+async function openDetail(record: any) {
+  const group = record as UserGroupVO
+  currentGroupId.value = group.id
   try {
     const res = await groupApi.getDetail(record.id)
     if (res.code === 0) {
@@ -534,6 +535,8 @@ onMounted(async () => {
   await loadGroups()
   await loadRolesAndProjects()
 })
+
+
 </script>
 
 <style scoped>

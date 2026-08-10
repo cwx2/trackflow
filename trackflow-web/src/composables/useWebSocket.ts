@@ -92,7 +92,7 @@ export function useWebSocket() {
         globalStatus.value = 'error'
         console.error('[WebSocket] STOMP error:', frame.headers['message'])
       },
-      onWebSocketError: (event) => {
+      onWebSocketError: (_event) => {
         globalStatus.value = 'error'
         console.warn('[WebSocket] Connection error')
       },
