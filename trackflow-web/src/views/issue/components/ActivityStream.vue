@@ -94,15 +94,6 @@
           <template v-else>
             <!-- 评论 -->
             <div v-if="item.type === 'comment' && !item.isDeleted && !hideCommentText(item)" class="comment-text" :class="{ collapsed: !expandComments }" v-html="item.html" @click="handleCommentTextClick($event, item)"></div>
-            <!-- 评论关联的字段变更块（YouTrack 风格：评论后 1 分钟内的变更合并展示） -->
-            <div v-if="item.type === 'comment' && !item.isDeleted && item.relatedChanges && item.relatedChanges.length > 0" class="related-changes-block">
-              <div v-for="(change, idx) in item.relatedChanges" :key="idx" class="related-change-row">
-                <span class="rc-field">{{ change.field }}:</span>
-                <span class="rc-old">{{ change.from || '未设置' }}</span>
-                <span class="rc-arrow">→</span>
-                <span class="rc-new">{{ change.to || '未设置' }}</span>
-              </div>
-            </div>
             <div v-else-if="item.type !== 'comment'" class="change-text">
               <template v-if="item.action === 'created'">创建了此工单</template>
               <template v-else-if="item.action === 'deleted'">删除了此工单</template>
@@ -193,6 +184,15 @@
               </template>
               <template v-else>{{ localizeAction(item.action) }}</template>
             </div>
+            <!-- Grouped field changes block (same user within 5s, rendered under the primary change) -->
+            <div v-if="item.type === 'change' && item.relatedChanges && item.relatedChanges.length > 0" class="related-changes-block">
+              <div v-for="(change, idx) in item.relatedChanges" :key="idx" class="related-change-row">
+                <span class="rc-field">{{ change.field }}:</span>
+                <span class="rc-old">{{ change.from || '未设置' }}</span>
+                <span class="rc-arrow">→</span>
+                <span class="rc-new">{{ change.to || '未设置' }}</span>
+              </div>
+            </div>
           </template>
         </div>
       </div>
@@ -235,7 +235,7 @@ import { ReplyBlockquote } from '../extensions/ReplyBlockquote'
 import UserHoverCard from './UserHoverCard.vue'
 import { UserAvatar, TiptapEditor } from '@/components/base'
 
-/** 评论关联的字段变更（1分钟内的变更合并到评论条目展示） */
+/** 同一用户在短时间内（5秒内）的多个字段变更，合并为一组展示 */
 export interface RelatedChange {
   field: string
   from?: string
@@ -266,8 +266,8 @@ export interface ActivityItem {
    */
   detail?: Record<string, any>
   /**
-   * 评论关联的字段变更列表（评论创建后 1 分钟内的字段变更）。
-   * 仅对 type === 'comment' 的条目有效。
+   * 同一用户短时间内（5秒内）的附加字段变更列表。
+   * 仅对 type === 'change' 的条目有效，用于将多个字段变更合并展示。
    */
   relatedChanges?: RelatedChange[]
 }
@@ -348,10 +348,9 @@ const filtered = computed(() => {
   if (current.value === 'comments') return props.items.filter(i => i.type === 'comment')
   if (current.value === 'time') return props.items.filter(i => i.action === 'time_logged' || i.action === 'time_removed' || i.action === 'time_updated')
   if (current.value === 'changes') {
-    // Show standalone change items + comments that have relatedChanges (to display their merged changes)
+    // Show standalone change items (field changes and grouped changes)
     return props.items.filter(i =>
-      (i.type === 'change' && i.action !== 'time_logged' && i.action !== 'time_removed' && i.action !== 'time_updated') ||
-      (i.type === 'comment' && i.relatedChanges && i.relatedChanges.length > 0)
+      (i.type === 'change' && i.action !== 'time_logged' && i.action !== 'time_removed' && i.action !== 'time_updated')
     )
   }
   return props.items
@@ -792,7 +791,7 @@ defineExpose({
   border-color: var(--tf-accent-hover, var(--tf-accent));
 }
 
-/* Related changes block (YouTrack style: field changes within 1 minute of a comment) */
+/* Related changes block (grouped field changes from same user within 5 seconds) */
 .related-changes-block {
   margin-top: 8px;
   padding: 8px 12px;

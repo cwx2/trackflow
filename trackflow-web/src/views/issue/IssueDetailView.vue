@@ -717,33 +717,46 @@ const sidebarFields = computed<SidebarField[]>(() => {
 // ============ Activity items ============
 const activityItems = computed<ActivityItem[]>(() => {
   const items: ActivityItem[] = []
-  const MERGE_WINDOW_MS = 60_000
-  const commentItems: ActivityItem[] = []
+  // Build comment items (no longer merge field changes into comments)
   for (const c of comments.value) {
     const isDeleted = !!c.deletedAt
     const content = c.content || ''
     const isHtml = content.trim().startsWith('<')
-    commentItems.push({ id: 'c_' + c.id, type: 'comment', user: c.userName || '用户', userId: c.userId, userAvatar: c.userAvatar || undefined, commentId: c.id, isEdited: c.isEdited || false, isDeleted, rawContent: content, visibleToGroupNames: c.visibleToGroupNames || undefined, html: isDeleted ? '' : (isHtml ? renderHtmlWithMarkdown(content) : renderMarkdown(content)), timeAgo: timeAgo(c.createdAt), ts: new Date(c.createdAt).getTime(), relatedChanges: [] })
+    items.push({ id: 'c_' + c.id, type: 'comment', user: c.userName || '用户', userId: c.userId, userAvatar: c.userAvatar || undefined, commentId: c.id, isEdited: c.isEdited || false, isDeleted, rawContent: content, visibleToGroupNames: c.visibleToGroupNames || undefined, html: isDeleted ? '' : (isHtml ? renderHtmlWithMarkdown(content) : renderMarkdown(content)), timeAgo: timeAgo(c.createdAt), ts: new Date(c.createdAt).getTime() })
   }
-  const mergedActivityIds = new Set<string>()
-  for (const a of activities.value) {
-    if (a.action === 'commented' || !a.fieldName) continue
-    const activityTs = new Date(a.createdAt).getTime()
-    let bestComment: ActivityItem | null = null
-    let bestTimeDiff = Infinity
-    for (const ci of commentItems) {
-      if (ci.userId !== a.userId || ci.isDeleted) continue
-      const timeDiff = activityTs - ci.ts
-      if (timeDiff >= 0 && timeDiff <= MERGE_WINDOW_MS && timeDiff < bestTimeDiff) { bestComment = ci; bestTimeDiff = timeDiff }
+  // Build field change items, grouping consecutive changes from the same user within 5 seconds
+  const CHANGE_GROUP_WINDOW_MS = 5_000
+  const fieldChanges = activities.value.filter(a => a.action !== 'commented' && a.fieldName)
+  // Sort by timestamp ascending for grouping
+  const sortedChanges = [...fieldChanges].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+  const mergedChangeIds = new Set<string>()
+  for (let i = 0; i < sortedChanges.length; i++) {
+    if (mergedChangeIds.has(sortedChanges[i].id)) continue
+    const anchor = sortedChanges[i]
+    const anchorTs = new Date(anchor.createdAt).getTime()
+    const groupedChanges: { field: string; from?: string; to?: string }[] = []
+    // Find all subsequent changes from same user within the window
+    for (let j = i + 1; j < sortedChanges.length; j++) {
+      const candidate = sortedChanges[j]
+      if (candidate.userId !== anchor.userId) continue
+      const candidateTs = new Date(candidate.createdAt).getTime()
+      if (candidateTs - anchorTs > CHANGE_GROUP_WINDOW_MS) break
+      if (mergedChangeIds.has(candidate.id)) continue
+      groupedChanges.push({ field: localizeFieldName(candidate.fieldName) || candidate.fieldName, from: localizeFieldValue(candidate.fieldName, candidate.oldValue) || undefined, to: localizeFieldValue(candidate.fieldName, candidate.newValue) || undefined })
+      mergedChangeIds.add(candidate.id)
     }
-    if (bestComment) {
-      bestComment.relatedChanges!.push({ field: localizeFieldName(a.fieldName) || a.fieldName, from: localizeFieldValue(a.fieldName, a.oldValue) || undefined, to: localizeFieldValue(a.fieldName, a.newValue) || undefined })
-      mergedActivityIds.add(a.id)
+    let detail: Record<string, any> | undefined
+    if (anchor.detail) { try { detail = JSON.parse(anchor.detail) } catch { detail = undefined } }
+    const item: ActivityItem = { id: 'a_' + anchor.id, type: 'change', user: anchor.userName || '用户', userId: anchor.userId, userAvatar: anchor.userAvatar || undefined, action: anchor.action, field: localizeFieldName(anchor.fieldName), from: localizeFieldValue(anchor.fieldName, anchor.oldValue) || undefined, to: localizeFieldValue(anchor.fieldName, anchor.newValue) || undefined, detail, timeAgo: timeAgo(anchor.createdAt), ts: anchorTs }
+    if (groupedChanges.length > 0) {
+      item.relatedChanges = groupedChanges
     }
+    items.push(item)
   }
-  items.push(...commentItems)
+  // Add non-field-change activities (created, deleted, etc.)
   for (const a of activities.value) {
-    if (a.action === 'commented' || mergedActivityIds.has(a.id)) continue
+    if (a.action === 'commented') continue
+    if (a.fieldName) continue // already handled above
     let detail: Record<string, any> | undefined
     if (a.detail) { try { detail = JSON.parse(a.detail) } catch { detail = undefined } }
     items.push({ id: 'a_' + a.id, type: 'change', user: a.userName || '用户', userId: a.userId, userAvatar: a.userAvatar || undefined, action: a.action, field: localizeFieldName(a.fieldName), from: localizeFieldValue(a.fieldName, a.oldValue) || undefined, to: localizeFieldValue(a.fieldName, a.newValue) || undefined, detail, timeAgo: timeAgo(a.createdAt), ts: new Date(a.createdAt).getTime() })
