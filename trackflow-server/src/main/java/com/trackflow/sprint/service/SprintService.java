@@ -951,9 +951,20 @@ public class SprintService {
 
         CompletionPreviewVO vo = new CompletionPreviewVO();
 
+        // 统计 Sprint 中总工单数（未删除）
+        long totalCount = issueMapper.selectCount(
+                new LambdaQueryWrapper<Issue>()
+                        .eq(Issue::getSprintId, sprintId)
+                        .isNull(Issue::getDeletedAt)
+        );
+        vo.setTotalIssues((int) totalCount);
+
         // 查询未关闭工单（typed resultMap 直接映射为 OpenIssueItem）
         List<CompletionPreviewVO.OpenIssueItem> openIssues = sprintMapper.selectOpenIssuesForCompletion(sprintId);
         vo.setOpenIssues(openIssues);
+
+        // 已完成工单数 = 总数 - 未关闭数
+        vo.setCompletedIssues((int) totalCount - openIssues.size());
 
         // 查询同项目中可迁移的目标 Sprint（planned/active，排除自身）
         List<Sprint> candidateSprints = sprintMapper.selectList(

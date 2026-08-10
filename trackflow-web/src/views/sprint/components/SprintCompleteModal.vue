@@ -4,21 +4,29 @@
     :title="`完成迭代：${sprintName}`"
     :width="560"
     :ok-loading="completing"
-    ok-text="确认完成"
+    :ok-text="okButtonText"
     @ok="confirmComplete"
     @cancel="localVisible = false"
   >
-    <!-- 无未完成工单 -->
-    <div v-if="preview && preview.openIssues.length === 0" class="complete-no-issues">
+    <!-- Sprint 中无工单 -->
+    <div v-if="preview && preview.totalIssues === 0" class="complete-no-issues">
+      <div class="complete-icon warning-state">⚠️</div>
+      <p class="complete-desc">此迭代中没有任何工单，是否仍要完成？</p>
+    </div>
+
+    <!-- 所有工单已完成 -->
+    <div v-else-if="preview && preview.openIssues.length === 0" class="complete-no-issues">
       <div class="complete-icon">✅</div>
-      <p class="complete-desc">该迭代中所有工单已完成，确认关闭迭代？</p>
+      <p class="complete-desc">
+        该迭代中 <strong>{{ preview.totalIssues }}</strong> 个工单全部已完成
+      </p>
     </div>
 
     <!-- 有未完成工单 -->
     <div v-else-if="preview" class="complete-with-issues">
       <div class="complete-warning">
         <span class="warning-icon">⚠️</span>
-        <span>该迭代中仍有 <strong>{{ preview.openIssues.length }}</strong> 个未完成工单</span>
+        <span>该迭代中共 <strong>{{ preview.totalIssues }}</strong> 个工单，已完成 <strong>{{ preview.completedIssues }}</strong> 个，仍有 <strong>{{ preview.openIssues.length }}</strong> 个未完成</span>
       </div>
 
       <!-- 未完成工单列表 -->
@@ -109,6 +117,13 @@ const targetSprintId = ref('')
 
 const sprintName = computed(() => props.sprint?.name || '')
 
+const okButtonText = computed(() => {
+  if (!preview.value) return '确认完成'
+  if (preview.value.totalIssues === 0) return '仍然完成'
+  if (preview.value.openIssues.length > 0) return '处理并完成'
+  return '确认完成'
+})
+
 watch(() => props.visible, async (val) => {
   if (val && props.sprint) {
     preview.value = null
@@ -178,6 +193,7 @@ async function confirmComplete() {
   text-align: center;
 }
 .complete-icon { font-size: 36px; margin-bottom: 12px; }
+.complete-icon.warning-state { opacity: 0.9; }
 .complete-desc { font-size: 14px; color: var(--color-text-2); }
 
 .complete-with-issues { display: flex; flex-direction: column; gap: 16px; }

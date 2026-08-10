@@ -10,6 +10,12 @@ import java.util.List;
 @Data
 public class CompletionPreviewVO {
 
+    /** Sprint 中的工单总数（未删除） */
+    private int totalIssues;
+
+    /** 已完成（已关闭）的工单数 */
+    private int completedIssues;
+
     /** 未完成工单列表 */
     private List<OpenIssueItem> openIssues;
 

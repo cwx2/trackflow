@@ -124,6 +124,8 @@ export interface SprintVelocityItem {
 
 // ========== Sprint 完成预览 ==========
 export interface CompletionPreviewVO {
+  totalIssues: number
+  completedIssues: number
   openIssues: CompletionPreviewIssue[]
   targetSprints: CompletionPreviewTarget[]
 }
