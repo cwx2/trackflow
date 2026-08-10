@@ -1229,7 +1229,7 @@ const {
   onSwimlaneRowDragLeave, onSwimlaneRowDrop,
   // Sprint
   currentSelectedSprint, activeSprint, currentSprintGoal, sprintRemainingDays,
-  isActiveSprint, formatSprintDateRange,
+  isActiveSprint, formatSprintDateRange, boardOwnerName,
   // Sprint archived footer
   restoringArchivedSprint, deletingArchivedSprint,
   showDeleteArchivedSprintModal, deleteArchivedSprintPreview,
