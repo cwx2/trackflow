@@ -16,7 +16,7 @@
 import { ref, computed } from 'vue'
 import { useRouter, useRoute, onBeforeRouteLeave } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
-import IssueCreatePanel from './IssueCreatePanel.vue'
+import IssueCreatePanel from '@/components/IssueCreatePanel.vue'
 import { useDrafts } from './composables/useDrafts'
 
 const router = useRouter()

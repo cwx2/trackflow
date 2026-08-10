@@ -51,6 +51,13 @@
     </template>
 
     <div class="create-panel">
+      <!-- 提交错误 Banner（API 返回 400 时显示在表单顶部，参考 YouTrack） -->
+      <div v-if="submitError" class="submit-error-banner">
+        <icon-close-circle-fill class="submit-error-icon" />
+        <span class="submit-error-text">{{ submitError }}</span>
+        <icon-close class="submit-error-close" @click="submitError = ''" />
+      </div>
+
       <!-- 标题输入 -->
       <div class="title-bar">
         <a-input
@@ -233,7 +240,7 @@
             <span class="prop-label">优先级</span>
             <a-select v-model="form.priority" size="small">
               <a-option v-for="p in prioritySelectOptions" :key="p.value" :value="p.value">
-                <IssuePriorityBadge :priority="p.value" :color="p.color" mode="dot" :show-label="true" />
+                <IssuePriorityBadge :priority="p.value" :color="p.color ?? undefined" mode="dot" :show-label="true" />
               </a-option>
             </a-select>
           </div>
@@ -241,7 +248,7 @@
             <span class="prop-label">状态</span>
             <a-select v-model="form.statusId" size="small" allow-clear placeholder="默认初始状态">
               <a-option v-for="s in statuses" :key="s.id" :value="s.id">
-                <span class="status-dot" :style="{ backgroundColor: s.color || DEFAULT_STATUS_COLOR }"></span>{{ s.displayName || localizeStatusName(s.name) }}
+                <span class="status-dot" :style="{ backgroundColor: s.color || '#6b7280' }"></span>{{ s.displayName || localizeStatusName(s.name) }}
               </a-option>
             </a-select>
           </div>
@@ -269,7 +276,7 @@
               :disabled="!form.projectId"
             >
               <a-option v-for="tag in projectTags" :key="tag.id" :value="tag.id">
-                <span class="tag-color-dot" :style="{ backgroundColor: tag.color || DEFAULT_TAG_COLOR }"></span>{{ tag.name }}
+                <span class="tag-color-dot" :style="{ backgroundColor: tag.color || '#808080' }"></span>{{ tag.name }}
               </a-option>
             </a-select>
           </div>
@@ -704,19 +711,20 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onBeforeUnmount, onUnmounted, watch } from 'vue'
 import { Message, Modal } from '@arco-design/web-vue'
-import { IconDown, IconAttachment, IconClose, IconPlus, IconUp, IconLink, IconSearch, IconCheck, IconFullscreen, IconFile } from '@arco-design/web-vue/es/icon'
+import { IconDown, IconAttachment, IconClose, IconPlus, IconUp, IconLink, IconSearch, IconCheck, IconFullscreen, IconFile, IconCloseCircleFill } from '@arco-design/web-vue/es/icon'
 import { projectApi, issueApi, sprintApi, customFieldApi, issueTemplateApi, tagApi } from '@/api'
-import { PRIORITY_COLORS, ISSUE_TYPE_COLORS, DEFAULT_BADGE_COLOR, DEFAULT_TAG_COLOR, DEFAULT_STATUS_COLOR } from '@/utils/issueColors'
 import { IssuePriorityBadge } from '@/components/base'
 import { useProjectList } from '@/composables/useProjectList'
 import { usePermission } from '@/composables/usePermission'
 import { useCustomFieldForm } from '@/views/issue/composables/useCustomFieldForm'
-import { useDrafts, type IssueDraft } from '@/composables/useDrafts'
-import { loadPriorityOptions } from '@/composables/usePriorityOptions'
+import { useDrafts, type IssueDraft } from '@/views/issue/composables/useDrafts'
+import { loadPriorityOptions } from '@/views/issue/composables/usePriorityOptions'
 import { loadIssueTypeOptions } from '@/views/issue/composables/useIssueTypeOptions'
 import { onSessionEvent, saveSessionRecoveryDraft } from '@/utils/sessionEvents'
 import RichEditor from '@/components/RichEditor.vue'
 import { localizeLinkType, localizeStatusName } from '@/utils/fieldLabels'
+import { DEFAULT_PRIORITY_OPTIONS, DEFAULT_PRIORITY_COLOR } from '@/composables/usePriorityOptions'
+import { DEFAULT_ISSUE_TYPE_OPTIONS, DEFAULT_ISSUE_TYPE_COLOR } from '@/views/issue/composables/useIssueTypeOptions'
 import type { CustomFieldDefinitionVO, IssueTemplateVO, FilterRule, IssueStatusVO, IssueVO as SimilarIssue } from '@/api/types'
 
 const props = defineProps<{
@@ -739,9 +747,9 @@ const emit = defineEmits<{
   'expand-to-fullscreen': [formData: any]
 }>()
 
-
 const submitting = ref(false)
 const splitMenuVisible = ref(false)
+const submitError = ref('')
 
 // ========== 标题栏草稿数量下拉 ==========
 const draftDropdownVisible = ref(false)
@@ -995,22 +1003,10 @@ const statuses = ref<IssueStatusVO[]>([])
 const projectTags = ref<any[]>([])
 
 // 优先级选项（从自定义字段系统动态加载）
-const prioritySelectOptions = ref([
-  { value: '阻塞', label: '阻塞', color: PRIORITY_COLORS['阻塞'] },
-  { value: '紧急', label: '紧急', color: PRIORITY_COLORS['紧急'] },
-  { value: '高', label: '高', color: PRIORITY_COLORS['高'] },
-  { value: '普通', label: '普通', color: PRIORITY_COLORS['普通'] },
-  { value: '低', label: '低', color: PRIORITY_COLORS['低'] },
-])
+const prioritySelectOptions = ref(DEFAULT_PRIORITY_OPTIONS.map(o => ({ ...o })))
 
 // 工单类型选项（从自定义字段系统动态加载）
-const issueTypeSelectOptions = ref([
-  { value: '缺陷', label: '缺陷', color: ISSUE_TYPE_COLORS['Bug'] },
-  { value: '任务', label: '任务', color: ISSUE_TYPE_COLORS['Task'] },
-  { value: '需求', label: '需求', color: ISSUE_TYPE_COLORS['Feature'] },
-  { value: '史诗', label: '史诗', color: ISSUE_TYPE_COLORS['Epic'] },
-  { value: '故事', label: '故事', color: ISSUE_TYPE_COLORS['Story'] },
-])
+const issueTypeSelectOptions = ref(DEFAULT_ISSUE_TYPE_OPTIONS.map(o => ({ ...o })))
 
 // 工单模板
 const templates = ref<IssueTemplateVO[]>([])
@@ -1301,11 +1297,11 @@ function parseCustomFieldError(message: string): boolean {
 const canSubmit = computed(() => !!form.projectId && !!form.title.trim())
 
 /**
- * 计算自定义字段中的必填字段数量
- * 现在必填字段直接显示在主区域，这个计算主要用于校验逻辑
+ * 计算自定义字段中的必填字段数量 — 暂未使用
  */
-// requiredCustomFieldsCount 暂未使用，保留注释供后续参考
-// const requiredCustomFieldsCount = computed(() => requiredCustomFields.value.length)
+// const requiredCustomFieldsCount = computed(() => {
+//   return requiredCustomFields.value.length
+// })
 
 // 移除自动展开折叠区域的逻辑，因为必填字段现在直接显示在主区域，不需要展开"更多字段"
 // 旧逻辑：watch(requiredCustomFieldsCount, ...) 自动展开
@@ -1515,11 +1511,11 @@ async function onProjectChange(val: any) {
   try { const res = await issueTemplateApi.list(pid); templates.value = res.data || [] } catch { templates.value = [] }
   // 加载优先级选项（从自定义字段系统）
   loadPriorityOptions(pid).then(opts => {
-    prioritySelectOptions.value = opts.map(o => ({ value: o.value, label: o.label, color: o.color || DEFAULT_BADGE_COLOR }))
+    prioritySelectOptions.value = opts.map(o => ({ value: o.value, label: o.label, color: o.color || DEFAULT_PRIORITY_COLOR, description: o.description ?? null, isDefault: o.isDefault ?? false }))
   })
   // 加载工单类型选项（从自定义字段系统）
   loadIssueTypeOptions(pid).then(opts => {
-    issueTypeSelectOptions.value = opts.map(o => ({ value: o.value, label: o.label, color: o.color || DEFAULT_BADGE_COLOR }))
+    issueTypeSelectOptions.value = opts.map(o => ({ value: o.value, label: o.label, color: o.color || DEFAULT_ISSUE_TYPE_COLOR, description: o.description ?? null, isDefault: o.isDefault ?? false }))
   })
   selectedTemplateId.value = null
   // Apply sprintId prop after sprints are loaded (ensures select shows correct label)
@@ -1709,6 +1705,7 @@ function resetForm() {
   // 重置校验错误
   titleError.value = ''
   cfValidationErrors.value = {}
+  submitError.value = ''
   // 重置附件
   attachmentFiles.value = []
   pasteHint.value = ''
@@ -1889,6 +1886,7 @@ async function doSubmit(): Promise<boolean> {
   // 清空之前的错误状态
   titleError.value = ''
   cfValidationErrors.value = {}
+  submitError.value = ''
 
   // 标题校验
   if (!form.title.trim()) {
@@ -1961,18 +1959,42 @@ async function doSubmit(): Promise<boolean> {
     localStorage.setItem('trackflow:quick-create-project', form.projectId!)
     return true
   } catch (e: any) {
-    const errorMsg: string = e.response?.data?.message || '创建失败'
+    const status = e.response?.status
+    const responseData = e.response?.data
+    const errorMsg: string = responseData?.message || '创建失败，请检查填写内容后重试'
+
     // 解析后端自定义字段验证错误，映射到具体字段的内联提示
     if (errorMsg.includes('自定义字段验证失败')) {
       const mapped = parseCustomFieldError(errorMsg)
       if (mapped) {
-        Message.warning(errorMsg)
+        // 有字段级错误映射时，在 banner 中显示概要
+        submitError.value = errorMsg
+        scrollToFirstError()
       } else {
-        Message.error(errorMsg)
+        submitError.value = errorMsg
+      }
+    } else if (status === 400 || status === 422) {
+      // 400/422 业务校验错误：内联 banner 显示 + 尝试映射字段错误
+      submitError.value = errorMsg
+      // 尝试解析字段级错误（后端可能返回 fields 数组）
+      if (responseData?.fields && Array.isArray(responseData.fields)) {
+        for (const fieldError of responseData.fields) {
+          if (fieldError.field && fieldError.message) {
+            const field = customFields.value.find(f => f.name === fieldError.field)
+            if (field) {
+              cfValidationErrors.value[field.id] = fieldError.message
+            }
+          }
+        }
       }
     } else {
-      Message.error(errorMsg)
+      // 其他错误（网络等）：设置 banner
+      submitError.value = errorMsg
     }
+
+    // 使用 Message.error 显示错误
+    Message.error(errorMsg)
+
     return false
   } finally {
     submitting.value = false
@@ -2034,16 +2056,16 @@ onMounted(() => {
   vertical-align: middle;
 }
 .draft-count-badge:hover {
-  color: var(--tf-accent, rgb(var(--primary-6)));
-  border-color: var(--tf-accent, rgb(var(--primary-6)));
-  background: var(--color-primary-light-1, rgba(var(--primary-6), 0.06));
+  color: var(--tf-accent);
+  border-color: var(--tf-accent);
+  background: var(--tf-accent-subtle);
 }
 
 /* 草稿下拉面板 */
 .draft-dropdown-panel {
   width: 320px;
   max-height: 360px;
-  background: var(--color-bg-popup, var(--color-bg-2));
+  background: var(--tf-popup-bg);
   border-radius: 8px;
   box-shadow: var(--tf-shadow-xl);
   overflow: hidden;
@@ -2090,6 +2112,47 @@ onMounted(() => {
 }
 
 .title-bar { padding: 8px 0; border-bottom: 1px solid var(--color-border); flex-shrink: 0; position: relative; z-index: 0; }
+
+/* Submit error banner (YouTrack-style red banner at top of form) */
+.submit-error-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  background: rgba(var(--red-6, 245, 63, 63), 0.08);
+  border: 1px solid rgba(var(--red-6, 245, 63, 63), 0.3);
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--tf-danger, var(--color-danger-6, #f53f3f));
+  line-height: 1.5;
+  flex-shrink: 0;
+  animation: banner-slide-in 200ms ease-out;
+}
+.submit-error-icon {
+  flex-shrink: 0;
+  font-size: 16px;
+  margin-top: 1px;
+}
+.submit-error-text {
+  flex: 1;
+  word-break: break-word;
+}
+.submit-error-close {
+  flex-shrink: 0;
+  font-size: 12px;
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity 120ms;
+  margin-top: 2px;
+}
+.submit-error-close:hover {
+  opacity: 1;
+}
+@keyframes banner-slide-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 .title-input { font-size: 18px; font-weight: 500; }
 .title-input :deep(.arco-input) { font-size: 18px; font-weight: 500; }
 .title-input.title-error :deep(.arco-input) { 
@@ -2140,13 +2203,13 @@ onMounted(() => {
   user-select: none;
 }
 .template-chip:hover {
-  border-color: var(--tf-accent, rgb(var(--primary-6)));
-  color: var(--tf-accent, rgb(var(--primary-6)));
-  background: var(--color-primary-light-1, rgba(var(--primary-6), 0.06));
+  border-color: var(--tf-accent);
+  color: var(--tf-accent);
+  background: var(--tf-accent-subtle);
 }
 .template-chip.active {
-  border-color: var(--tf-accent, rgb(var(--primary-6)));
-  background: var(--tf-accent, rgb(var(--primary-6)));
+  border-color: var(--tf-accent);
+  background: var(--tf-accent);
   color: var(--tf-text-on-accent);
 }
 .template-chip-clear {
@@ -2243,12 +2306,6 @@ onMounted(() => {
 .prop-row { margin-bottom: 14px; }
 .prop-label { display: block; font-size: 12px; color: var(--color-text-3); margin-bottom: 4px; }
 
-.priority-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
-.priority-dot.critical { background: var(--tf-danger); }
-.priority-dot.high { background: var(--tf-warning); }
-.priority-dot.normal { background: var(--tf-purple); }
-.priority-dot.low { background: var(--tf-text-tertiary); }
-
 .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; flex-shrink: 0; }
 
 .prop-section-divider { height: 1px; background: var(--color-border); margin: 8px 0 12px; }
@@ -2266,7 +2323,7 @@ onMounted(() => {
   transition: color 150ms;
 }
 .prop-section-header:hover {
-  color: var(--tf-accent, rgb(var(--primary-6)));
+  color: var(--tf-accent);
 }
 .section-title {
   font-size: 12px;
@@ -2282,7 +2339,7 @@ onMounted(() => {
   transition: transform 200ms, color 150ms;
 }
 .prop-section-header:hover .section-toggle {
-  color: var(--tf-accent, rgb(var(--primary-6)));
+  color: var(--tf-accent);
 }
 
 .required-mark { 
@@ -2295,7 +2352,7 @@ onMounted(() => {
 
 /* "设置值"标记 — 无默认值但必填字段的醒目提示 */
 .required-mark.set-value-mark {
-  color: var(--tf-warning, #d29922);
+  color: var(--tf-warning);
 }
 
 /* 必填自定义字段：在主区域直接显示，添加顶部分隔线作为视觉分隔 */
@@ -2342,19 +2399,19 @@ onMounted(() => {
   border-top-left-radius: 0;
   border-bottom-left-radius: 0;
   border-left: 1px solid var(--tf-fill-heavy);
-  background: rgb(var(--primary-6, 22, 93, 255));
+  background: var(--tf-accent);
   color: var(--tf-text-on-accent);
   cursor: pointer;
   transition: background-color 100ms;
   font-size: 12px;
 }
-.split-arrow-trigger:hover { background: rgb(var(--primary-5, 14, 66, 210)); }
-.split-arrow-trigger:active { background: rgb(var(--primary-7, 14, 66, 210)); }
+.split-arrow-trigger:hover { background: var(--tf-accent-hover); }
+.split-arrow-trigger:active { background: var(--tf-accent); }
 .split-arrow-trigger:disabled { opacity: 0.4; cursor: not-allowed; }
 .split-arrow-trigger :deep(.arco-icon) { font-size: 12px; }
 
 .split-menu {
-  background: var(--color-bg-popup, var(--tf-popup-bg));
+  background: var(--tf-popup-bg);
   border-radius: 4px;
   box-shadow: var(--tf-shadow);
   padding: 4px 0;
@@ -2370,8 +2427,8 @@ onMounted(() => {
   align-items: center;
   gap: 6px;
 }
-.split-menu-item:hover { background: var(--color-fill-2, var(--tf-bg-hover)); }
-.split-menu-item.active { color: var(--tf-accent, rgb(var(--primary-6))); font-weight: 500; }
+.split-menu-item:hover { background: var(--tf-fill-medium); }
+.split-menu-item.active { color: var(--tf-accent); font-weight: 500; }
 .split-menu-check { font-size: 12px; }
 
 /* Inline add option in select footer */
@@ -2382,7 +2439,7 @@ onMounted(() => {
   padding: 6px 12px;
   cursor: pointer;
   font-size: 12px;
-  color: var(--tf-accent, rgb(var(--primary-6)));
+  color: var(--tf-accent);
   border-top: 1px solid var(--color-border-2, var(--tf-border-light));
   transition: background 120ms;
 }
@@ -2405,12 +2462,12 @@ onMounted(() => {
   font-size: 12px;
   outline: none;
 }
-.add-opt-field:focus { border-color: var(--tf-accent, rgb(var(--primary-6))); }
+.add-opt-field:focus { border-color: var(--tf-accent); }
 .add-opt-btn {
   padding: 3px 8px;
   border: none;
   border-radius: 4px;
-  background: var(--tf-accent, rgb(var(--primary-6)));
+  background: var(--tf-accent);
   color: var(--tf-text-on-accent);
   font-size: 11px;
   font-weight: 500;
@@ -2454,7 +2511,7 @@ onMounted(() => {
 }
 .linked-issue-key {
   font-weight: 500;
-  color: var(--tf-accent, rgb(var(--primary-6)));
+  color: var(--tf-accent);
 }
 .linked-issue-title {
   flex: 1;
@@ -2522,7 +2579,7 @@ onMounted(() => {
 .similar-issue-key {
   font-size: 12px;
   font-weight: 500;
-  color: var(--tf-accent, rgb(var(--primary-6)));
+  color: var(--tf-accent);
   flex-shrink: 0;
 }
 .similar-issue-title {
