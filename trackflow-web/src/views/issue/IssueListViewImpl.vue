@@ -1600,15 +1600,48 @@ async function preloadSprintNames() {
 }
 
 // ===== Search & Filter =====
-function onGlobalSearch(keyword: string) { searchKeyword.value = keyword; globalFilterParams.value = {}; currentPage.value = 1; refreshList() }
+function onGlobalSearch(keyword: string) {
+  searchKeyword.value = keyword; globalFilterParams.value = {}; currentPage.value = 1
+  // Sync keyword to URL (preserve project param)
+  const newQuery: Record<string, string> = {}
+  if (route.query.project) newQuery.project = String(route.query.project)
+  if (keyword.trim()) newQuery.keyword = keyword.trim()
+  skipRouteQueryWatch = true
+  router.replace({ query: newQuery })
+  nextTick(() => { skipRouteQueryWatch = false })
+  refreshList()
+}
 function onGlobalFilter(filters: Record<string, any>) {
   searchKeyword.value = ''; globalFilterParams.value = filters
   if (activeQueryId.value) { activeQueryId.value = null; activeQueryName.value = '所有工单'; activeQueryObj.value = null }
-  currentPage.value = 1; refreshList()
+  currentPage.value = 1
+  // Sync filter params to URL (preserve project param)
+  syncFiltersToUrl(filters)
+  refreshList()
+}
+
+/**
+ * Sync the current filter params to URL query string.
+ * This enables page refresh persistence and URL sharing.
+ */
+function syncFiltersToUrl(filters: Record<string, any>) {
+  const newQuery: Record<string, string> = {}
+  if (route.query.project) newQuery.project = String(route.query.project)
+  // Write all non-empty filter values to URL
+  for (const [key, value] of Object.entries(filters)) {
+    if (value != null && value !== '' && value !== undefined) {
+      newQuery[key] = String(value)
+    }
+  }
+  skipRouteQueryWatch = true
+  router.replace({ query: newQuery })
+  nextTick(() => { skipRouteQueryWatch = false })
 }
 function onClearQuery() {
   activeQueryId.value = null; activeQueryName.value = '所有工单'; activeQueryObj.value = null; searchKeyword.value = ''; globalFilterParams.value = {}; currentPage.value = 1
+  skipRouteQueryWatch = true
   const { project, ...rest } = route.query; router.replace({ query: project ? { project } : {} })
+  nextTick(() => { skipRouteQueryWatch = false })
   filterBarRef.value?.clearAll()
   localStorage.setItem('tf_last_active_query_all', 'true'); localStorage.removeItem('tf_last_active_query_id')
   refreshList()
@@ -1617,7 +1650,9 @@ function onQueryChipClick() { if (activeQueryObj.value && isOwnQuery(activeQuery
 
 function selectQuery(q: any) {
   activeQueryId.value = q.id; activeQueryName.value = q.name; activeQueryObj.value = q; activeProjectId.value = null; activeTagId.value = null; filterProject.value = undefined; searchKeyword.value = ''; globalFilterParams.value = {}; currentPage.value = 1
+  skipRouteQueryWatch = true
   const { project, ...rest } = route.query; router.replace({ query: rest })
+  nextTick(() => { skipRouteQueryWatch = false })
   // Apply saved query sort criteria
   if (q.sortCriteria) { try { const criteria = typeof q.sortCriteria === 'string' ? JSON.parse(q.sortCriteria) : q.sortCriteria; if (Array.isArray(criteria) && criteria.length > 0 && criteria[0].field) { sortState.value = { field: criteria[0].field, direction: criteria[0].direction === 'desc' ? 'desc' : 'asc' } } else { sortState.value = { field: null, direction: null } } } catch { sortState.value = { field: null, direction: null } } } else { sortState.value = { field: null, direction: null } }
   localStorage.setItem('tf_last_active_query_id', q.id); localStorage.removeItem('tf_last_active_query_all')
@@ -1626,20 +1661,32 @@ function selectQuery(q: any) {
 function selectAllProjects() {
   if (activeProjectId.value === null && activeTagId.value === null && activeQueryId.value === null && searchKeyword.value === '') return
   activeProjectId.value = null; activeQueryId.value = null; activeTagId.value = null; activeQueryName.value = '所有工单'; activeQueryObj.value = null; filterProject.value = undefined; searchKeyword.value = ''; globalFilterParams.value = {}; currentPage.value = 1
+  skipRouteQueryWatch = true
   sortState.value = { field: null, direction: null }; const { project, ...rest } = route.query; router.replace({ query: rest })
+  nextTick(() => { skipRouteQueryWatch = false })
   filterBarRef.value?.clearAll(); localStorage.setItem('tf_last_active_query_all', 'true'); localStorage.removeItem('tf_last_active_query_id')
   refreshList(); loadPanel(); loadTags()
 }
 function selectProject(p: any) {
   if (activeProjectId.value === p.id) { selectAllProjects(); return }
   activeProjectId.value = p.id; activeQueryId.value = null; activeTagId.value = null; activeQueryName.value = p.name; activeQueryObj.value = null; filterProject.value = p.id; globalFilterParams.value = {}; currentPage.value = 1
-  router.replace({ query: { ...route.query, project: p.key } }); refreshList(); loadPanel(); loadTags()
+  skipRouteQueryWatch = true
+  router.replace({ query: { ...route.query, project: p.key } })
+  nextTick(() => { skipRouteQueryWatch = false })
+  refreshList(); loadPanel(); loadTags()
 }
-function selectTag(tag: any) { queryPanelSelectTag(tag); activeProjectId.value = null; filterProject.value = undefined; currentPage.value = 1; globalFilterParams.value = tag.id ? { tagId: tag.id } : {}; refreshList() }
+function selectTag(tag: any) {
+  queryPanelSelectTag(tag); activeProjectId.value = null; filterProject.value = undefined; currentPage.value = 1
+  globalFilterParams.value = tag.id ? { tagId: tag.id } : {}
+  syncFiltersToUrl(globalFilterParams.value)
+  refreshList()
+}
 function onFilterChange() {
   currentPage.value = 1
+  skipRouteQueryWatch = true
   if (filterProject.value) { const matched = projectList.value.find(p => p.id === filterProject.value); activeProjectId.value = filterProject.value; activeQueryName.value = matched?.name || '所有工单'; router.replace({ query: { ...route.query, project: matched?.key || filterProject.value } }) }
   else { activeProjectId.value = null; activeQueryName.value = '所有工单'; const { project, ...rest } = route.query; router.replace({ query: rest }) }
+  nextTick(() => { skipRouteQueryWatch = false })
   refreshList()
 }
 
@@ -1663,6 +1710,25 @@ watch(pageSize, () => refreshList())
 watch(sortState, () => refreshList(), { deep: true })
 watch(issues, () => { focusedIndex.value = -1 })
 watch([activeProjectId, activeQueryId], () => { if (activeProjectId.value) loadManualOrder({ type: 'project', id: activeProjectId.value }); else if (activeQueryId.value) loadManualOrder({ type: 'query', id: activeQueryId.value }); else resetManualOrder() })
+
+// Watch for popstate (browser back/forward) to restore filter state from URL
+let skipRouteQueryWatch = false
+watch(() => route.query, () => {
+  // Skip changes triggered by our own router.replace calls
+  if (skipRouteQueryWatch) return
+  if (route.name !== 'Issues') return
+  // Browser back/forward detected — restore state from URL
+  if (hasDashboardFilterParams()) {
+    applyDashboardFilter()
+  } else if (!activeQueryId.value) {
+    // URL cleared — reset to default view
+    globalFilterParams.value = {}
+    searchKeyword.value = ''
+    filterBarRef.value?.clearAll()
+    currentPage.value = 1
+    refreshList()
+  }
+}, { deep: true })
 
 // ===== Lifecycle =====
 onMounted(async () => {

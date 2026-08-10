@@ -295,6 +295,50 @@ export function useDashboardFilter(options: DashboardFilterOptions) {
       }
     }
 
+    // ---- Filter-mode params (written by syncFiltersToUrl) ----
+    // These are direct backend filter params synced from the FilterBar.
+    // Restore them into filters so buildFilters() picks them up.
+    const FILTER_MODE_KEYS = [
+      'sprintId', 'tagId', 'parentId', 'hasParent', 'assigneeId',
+      'statusIdNot', 'priorityNot', 'assigneeIdNot', 'sprintIdNot', 'issueTypeNot',
+      'createdAfter', 'createdBefore', 'updatedAfter', 'updatedBefore',
+      'dueAfter', 'dueBefore', 'reporterId', 'hideResolved'
+    ]
+    for (const key of FILTER_MODE_KEYS) {
+      if (route.query[key]) {
+        filters[key] = String(route.query[key])
+      }
+    }
+
+    // Build filter chips for FilterBar visual display from URL params
+    // (supplement chips already built above from dashboard-style params)
+    if (route.query.issueType && !chips.find(c => c.fieldKey === 'issueType' || c.fieldKey === 'type')) {
+      const val = String(route.query.issueType)
+      chips.push({ fieldKey: 'issueType', operator: 'is', values: val.split(','), valueLabels: val.split(',') })
+    }
+    if (route.query.sprintId && !chips.find(c => c.fieldKey === 'sprint')) {
+      const val = String(route.query.sprintId)
+      chips.push({ fieldKey: 'sprint', operator: 'is', values: val.split(','), valueLabels: val.split(',') })
+    }
+    if (route.query.tagId && !chips.find(c => c.fieldKey === 'tag')) {
+      const val = String(route.query.tagId)
+      chips.push({ fieldKey: 'tag', operator: 'is', values: val.split(','), valueLabels: val.split(',') })
+    }
+    if (route.query.assigneeId && !chips.find(c => c.fieldKey === 'assignee')) {
+      const val = String(route.query.assigneeId)
+      const label = val === 'none' ? '未分配' : val
+      chips.push({ fieldKey: 'assignee', operator: 'is', values: [val], valueLabels: [label] })
+    }
+    if (route.query.statusIdNot) {
+      chips.push({ fieldKey: 'status', operator: 'is_not', values: String(route.query.statusIdNot).split(','), valueLabels: String(route.query.statusIdNot).split(',') })
+    }
+    if (route.query.priorityNot) {
+      chips.push({ fieldKey: 'priority', operator: 'is_not', values: String(route.query.priorityNot).split(','), valueLabels: String(route.query.priorityNot).split(',') })
+    }
+    if (route.query.issueTypeNot) {
+      chips.push({ fieldKey: 'issueType', operator: 'is_not', values: String(route.query.issueTypeNot).split(','), valueLabels: String(route.query.issueTypeNot).split(',') })
+    }
+
     // Set display label
     if (route.query.label) {
       activeQueryName.value = String(route.query.label)
@@ -313,7 +357,16 @@ export function useDashboardFilter(options: DashboardFilterOptions) {
       route.query.dueSoon || route.query.sprint || route.query.sprintStatus ||
       route.query.reportedByMe || route.query.assignedToMe || route.query.priority ||
       route.query.issueType || route.query.assigneeName || route.query.assignee ||
-      route.query.reporter || route.query.projectId || route.query.keyword
+      route.query.reporter || route.query.projectId || route.query.keyword ||
+      // Filter-mode params (written by syncFiltersToUrl when user uses the filter bar)
+      route.query.sprintId || route.query.tagId || route.query.parentId ||
+      route.query.hasParent || route.query.assigneeId ||
+      route.query.statusIdNot || route.query.priorityNot || route.query.assigneeIdNot ||
+      route.query.sprintIdNot || route.query.issueTypeNot ||
+      route.query.createdAfter || route.query.createdBefore ||
+      route.query.updatedAfter || route.query.updatedBefore ||
+      route.query.dueAfter || route.query.dueBefore ||
+      route.query.reporterId || route.query.hideResolved
     )
   }
 
