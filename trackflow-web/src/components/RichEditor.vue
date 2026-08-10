@@ -79,7 +79,7 @@ function onFileSelect(e: Event) {
   display: flex; align-items: center; gap: 8px; padding: 8px 10px;
   border-top: 1px solid var(--tf-border); background: var(--tf-bg-elevated);
 }
-.btn-save { font-size: 12px; padding: 4px 14px; border-radius: 3px; border: none; background: var(--tf-accent); color: #fff; font-weight: 500; cursor: pointer; }
+.btn-save { font-size: 12px; padding: 4px 14px; border-radius: 3px; border: none; background: var(--tf-accent); color: var(--tf-text-on-accent); font-weight: 500; cursor: pointer; }
 .btn-save:hover { background: var(--tf-accent-hover); }
 .btn-cancel { font-size: 12px; padding: 4px 14px; border-radius: 3px; background: var(--tf-bg-code); border: 1px solid var(--tf-border); color: var(--tf-text-secondary); cursor: pointer; }
 .footer-spacer { flex: 1; }

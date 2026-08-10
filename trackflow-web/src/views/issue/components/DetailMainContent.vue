@@ -213,7 +213,7 @@ import { IconCopy, IconDelete, IconBranch, IconSwap, IconPrinter, IconClockCircl
 import { renderMarkdown } from '@/utils/markdown'
 import { localizeIssueType } from '@/utils/fieldLabels'
 import { IssuePriorityBadge } from '@/components/base'
-import RichEditor from './RichEditor.vue'
+import RichEditor from '@/components/RichEditor.vue'
 import ChildIssuesList from './ChildIssuesList.vue'
 import AttachmentSection from './AttachmentSection.vue'
 import type { AttachmentItem } from './AttachmentSection.vue'
