@@ -46,11 +46,6 @@ export const usePermissionStore = defineStore('permission', () => {
         const res = await authApi.getMyGlobalPermissions()
         globalPermissions.value = new Set(res.data || [])
         permissionsLoaded.value = true
-
-        // 同时获取数据库用户 ID（用于资源级权限判断）
-        if (authStore.user && !authStore.user.userId) {
-          await fetchDbUserId()
-        }
       } catch (e) {
         console.warn('[permission] Failed to load global permissions, will retry on next navigation', e)
         // 不设置 permissionsLoaded = true，确保下次导航时重试
@@ -60,21 +55,6 @@ export const usePermissionStore = defineStore('permission', () => {
     })()
 
     return _permissionLoadPromise
-  }
-
-  /**
-   * 从 /me 接口获取当前用户的数据库 ID，用于前端资源级权限判断
-   * （Issue 的 reporterId/assigneeId 是数据库 ID，需要与当前用户比对）
-   */
-  async function fetchDbUserId(): Promise<void> {
-    try {
-      const res = await authApi.me()
-      if (res.code === 0 && res.data?.userId && authStore.user) {
-        authStore.user.userId = res.data.userId
-      }
-    } catch {
-      // 非关键功能，获取失败不影响主流程
-    }
   }
 
   /**

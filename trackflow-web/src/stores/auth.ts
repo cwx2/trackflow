@@ -208,6 +208,26 @@ export const useAuthStore = defineStore('auth', () => {
 
   // ===== 认证流程 =====
 
+  /**
+   * 身份初始化 — 从后端获取数据库用户 ID，补全登录后的用户身份信息。
+   *
+   * JWT 只包含 Keycloak 信息（sub/username/email 等），不包含数据库主键。
+   * 数据库 userId 是前端资源级权限判断（如 WebSocket 事件过滤）的必要字段，
+   * 必须在用户进入应用前确保已获取。
+   */
+  async function fetchUserProfile(): Promise<void> {
+    if (!user.value) return
+    try {
+      const res = await authApi.me()
+      if (res.code === 0 && res.data?.userId && user.value) {
+        user.value.userId = res.data.userId
+      }
+    } catch (e) {
+      console.warn('[auth] Failed to fetch user profile:', e)
+      throw e // 身份初始化失败应向上抛出，不能静默忽略
+    }
+  }
+
   async function login() {
     const { url, codeVerifier, state } = await buildLoginUrl()
     sessionStorage.setItem('pkce_code_verifier', codeVerifier)
@@ -226,9 +246,15 @@ export const useAuthStore = defineStore('auth', () => {
     const codeVerifier = sessionStorage.getItem('pkce_code_verifier') || ''
     const data = await exchangeCodeForToken(code, codeVerifier)
 
+    // 第 1 步：认证 — 存 token，从 JWT 解析基础用户信息
     accessToken.value = data.access_token
     refreshToken.value = data.refresh_token
     user.value = parseJwtPayload(data.access_token)
+
+    // 第 2 步：身份初始化 — 获取数据库用户 ID，完善用户身份信息
+    // 必须在此处 await 完成，确保登录流程结束时 userId 已有值
+    // 后续依赖 userId 的模块（WebSocket 事件过滤等）才能正确工作
+    await fetchUserProfile()
 
     sessionStorage.removeItem('pkce_code_verifier')
     sessionStorage.removeItem('oauth_state')
