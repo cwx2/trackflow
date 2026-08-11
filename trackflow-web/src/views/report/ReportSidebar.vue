@@ -492,6 +492,4 @@ async function handleToggleFavorite(report: ReportDefinitionVO) {
   color: var(--tf-text-tertiary);
   transform: scale(1.15);
 }
-
-/* Empty */
-.sidebar-empty .sidebar-empty </style>
+</style>
