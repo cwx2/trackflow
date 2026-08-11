@@ -67,6 +67,10 @@ function handleSessionExpired() {
   if (sessionExpiredHandled) return
   sessionExpiredHandled = true
 
+  // 立即标记登出进行中，防止后续 403 拦截器触发 refreshGlobalPermissions() 级联
+  const authStore = useAuthStore()
+  authStore.isLoggingOut = true
+
   // 通知所有组件保存未持久化的数据（如创建工单表单）
   emitSessionEvent('session:expiring')
 
@@ -75,7 +79,6 @@ function handleSessionExpired() {
 
   // 延迟 1.5 秒后执行 logout 跳转，给用户视觉反馈
   setTimeout(() => {
-    const authStore = useAuthStore()
     authStore.logout('会话已过期，请重新登录')
   }, 1500)
 }
@@ -171,7 +174,8 @@ request.interceptors.response.use(
       }
 
       // 403 表示权限已变更，自动刷新本地权限缓存
-      if (!originalRequest._permissionRefreshed) {
+      // 登出进行中时跳过，避免触发无意义的 API 调用和级联失败
+      if (!originalRequest._permissionRefreshed && !authStore.isLoggingOut) {
         originalRequest._permissionRefreshed = true
         // 刷新全局权限
         authStore.refreshGlobalPermissions()

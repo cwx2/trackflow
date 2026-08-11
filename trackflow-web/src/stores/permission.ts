@@ -63,6 +63,8 @@ export const usePermissionStore = defineStore('permission', () => {
    */
   async function refreshGlobalPermissions(): Promise<void> {
     if (!authStore.isAuthenticated) return
+    // 登出进行中时不刷新，避免在 token 已清除后触发无意义请求
+    if (authStore.isLoggingOut) return
 
     // 去重：复用正在进行的请求
     if (_permissionLoadPromise) return _permissionLoadPromise

@@ -346,6 +346,13 @@ const router = createRouter({
 router.beforeEach(async (to, _from, next) => {
   const authStore = useAuthStore()
 
+  // 登出进行中时，跳过所有权限检查，避免在 clearPermissions() 之后、
+  // window.location.href 生效之前的短暂窗口内误跳 /403
+  if (authStore.isLoggingOut) {
+    next()
+    return
+  }
+
   if (to.meta.requiresAuth && !authStore.isAuthenticated) {
     // 保存原始目标 URL，登录成功后跳回
     next({ name: 'Login', query: { returnUrl: to.fullPath } })

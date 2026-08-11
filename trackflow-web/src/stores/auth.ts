@@ -66,6 +66,13 @@ export const useAuthStore = defineStore('auth', () => {
   // 是否正在执行主动刷新
   let isProactiveRefreshing = false
 
+  /**
+   * 登出进行中标志。
+   * 在 logout() 开始时设为 true，防止 clearPermissions() → permissionsLoaded=false
+   * 导致路由守卫在 window.location.href 生效前错误地跳转到 /403。
+   */
+  const isLoggingOut = ref(false)
+
   const isAuthenticated = computed(() => !!accessToken.value)
 
   // 监听 token 变化，同步到 localStorage
@@ -147,6 +154,9 @@ export const useAuthStore = defineStore('auth', () => {
   function showSessionExpiredNotification() {
     if (sessionExpiredNotified) return
     sessionExpiredNotified = true
+
+    // 立即标记登出进行中，防止后续权限刷新触发路由守卫误跳 /403
+    isLoggingOut.value = true
 
     import('@/utils/sessionEvents').then(({ emitSessionEvent }) => {
       emitSessionEvent('session:expiring')
@@ -276,6 +286,9 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   function logout(reason?: string) {
+    // 标记登出进行中，防止 clearPermissions() 触发路由守卫误跳 /403
+    isLoggingOut.value = true
+
     if (!reason && accessToken.value) {
       authApi.notifyLogout().catch(() => { /* ignore */ })
     }
@@ -349,6 +362,7 @@ export const useAuthStore = defineStore('auth', () => {
     refreshToken,
     user,
     isAuthenticated,
+    isLoggingOut,
     login,
     handleCallback,
     refresh,
