@@ -5,458 +5,126 @@
       <h1 class="page-title">时间表</h1>
     </div>
 
-    <!-- ===================== Tab 导航 ===================== -->
+    <!-- Tab 导航 -->
     <a-tabs v-model:active-key="activeTab" class="timesheet-tabs" @change="(key) => switchTab(key as 'people' | 'projects' | 'workgroups')">
 
-    <!-- ===================== 人员视图 ===================== -->
-    <a-tab-pane key="people" title="人员">
-      <!-- Date range & navigation -->
-      <div class="timesheet-datebar">
-        <div class="date-info">
-          <span class="date-range">{{ dateRangeLabel }}</span>
-          <span class="total-time">{{ totalTimeLabel }}</span>
-        </div>
-        <div class="date-nav">
-          <a-button size="small" @click="navigate(-1)">←</a-button>
-          <a-button size="small" @click="goToday">今天</a-button>
-          <a-button size="small" @click="navigate(1)">→</a-button>
-          <a-radio-group v-model="viewMode" type="button" size="small" @change="onViewModeChange">
-            <a-radio value="week">周</a-radio>
-            <a-radio value="month">月</a-radio>
-          </a-radio-group>
-          <a-button type="primary" size="small" @click="openAddDialog()">添加已花费时间</a-button>
-        </div>
-      </div>
-
-      <!-- User selector & filters -->
-      <div class="timesheet-controls">
-        <div class="controls-left">
-          <div class="user-selector-area">
-            <template v-if="canViewOthers">
-              <a-select
-                v-model="selectedUserId"
-                placeholder="选择用户"
-                allow-search
-                allow-clear
-                style="width: 220px"
-                :filter-option="false"
-                @search="searchUsers"
-                @change="onUserChange"
-                @clear="onUserChange(undefined)"
-              >
-                <a-option v-for="u in selectableUsers" :key="u.id" :value="u.id" :label="u.displayName || u.username">
-                  <div class="user-option">
-                    <UserAvatar :name="u.displayName || u.username" :size="20" />
-                    <span class="user-option-name">{{ u.displayName || u.username }}</span>
-                    <span v-if="u.id === authStore.user?.id" class="user-option-self">(我)</span>
-                  </div>
-                </a-option>
-              </a-select>
-            </template>
-            <template v-else>
-              <div class="user-selector-static">
-                <UserAvatar :name="currentUserName" :size="12" />
-                <span class="user-name">{{ currentUserName }}</span>
-              </div>
-            </template>
-          </div>
-          <div class="filters">
-            <span class="filter-label">项目:</span>
-            <a-select
-              v-model="filterProjectId"
-              placeholder="全部"
-              allow-clear
-              allow-search
-              :style="{ width: '160px' }"
-              size="small"
-              @change="onFilterChange"
-            >
-              <a-option v-for="p in filterProjects" :key="p.id" :value="p.id">
-                {{ p.key }} - {{ p.name }}
-              </a-option>
-            </a-select>
-            <span class="filter-label">工作类型:</span>
-            <a-select
-              v-model="filterWorkType"
-              placeholder="全部"
-              allow-clear
-              :style="{ width: '140px' }"
-              size="small"
-              @change="onFilterChange"
-            >
-              <a-option v-for="wt in filterWorkTypes" :key="wt.id" :value="wt.id">
-                <span v-if="wt.color" class="attr-value-dot" :style="{ background: wt.color }"></span>
-                {{ wt.name }}
-              </a-option>
-            </a-select>
-            <a v-if="filterProjectId || filterWorkType" class="filter-reset" @click="resetFilters">重置</a>
-          </div>
-        </div>
-      </div>
-
-
-      <!-- Week View -->
-      <WeekGrid
-        v-if="viewMode === 'week'"
-        :week-days="weekDays"
-        :entries="timeEntries"
-        :show-quota="true"
-        :quota-minutes="minutesPerDay()"
-        :quota-text="quotaText()"
-        @day-click="openAddDialog"
-        @entry-click="openEditDialog"
-        @issue-click="(entry) => { if (!entry.issueDeleted) $router.push(`/issues/${entry.issueKey || entry.issueId}`) }"
-      />
-
-      <!-- Month View -->
-      <MonthGrid
-        v-else
-        :month-days="monthDays"
-        :entries="timeEntries"
-        @day-click="openAddDialog"
-        @entry-click="openEditDialog"
-      />
-
-      <!-- Loading overlay（人员视图） -->
-      <div v-if="loading" class="loading-overlay"><a-spin :size="24" /></div>
-    </a-tab-pane>
-
-    <!-- ===================== 项目视图 ===================== -->
-    <a-tab-pane key="projects" title="项目">
-      <!-- Date range & navigation -->
-      <div class="timesheet-datebar">
-        <div class="date-info">
-          <span class="date-range">{{ dateRangeLabel }}</span>
-          <span class="total-time">{{ totalTimeLabel }}</span>
-        </div>
-        <div class="date-nav">
-          <a-button size="small" @click="navigate(-1)">←</a-button>
-          <a-button size="small" @click="goToday">今天</a-button>
-          <a-button size="small" @click="navigate(1)">→</a-button>
-          <a-radio-group v-model="viewMode" type="button" size="small" @change="onViewModeChange">
-            <a-radio value="week">周</a-radio>
-            <a-radio value="month">月</a-radio>
-          </a-radio-group>
-        </div>
-      </div>
-
-      <!-- Project selector & filters -->
-      <div class="timesheet-controls">
-        <div class="controls-left">
-          <div class="project-selector">
-            <a-select
-              v-model="selectedProjectId"
-              placeholder="选择项目查看明细"
-              allow-clear
-              allow-search
-              style="width: 260px"
-              @change="onProjectChange"
-            >
-              <a-option v-for="p in projectSummaries" :key="p.projectId" :value="p.projectId">
-                {{ p.projectKey }} - {{ p.projectName }}
-              </a-option>
-            </a-select>
-          </div>
-          <div class="filters">
-            <span class="filter-label">汇总范围:</span>
-            <span class="filter-value">{{ selectedProjectId ? '项目明细' : '所有可见项目' }}</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- 加载失败 -->
-      <EmptyState
-        v-if="loadError && !loading"
-        type="error"
-        icon="exclamation-circle"
-        title="加载失败"
-        :description="loadError"
-      >
-        <template #action>
-          <a-button type="primary" size="small" @click="refresh">重试</a-button>
-        </template>
-      </EmptyState>
-
-      <!-- Project Overview (no project selected) -->
-      <div v-if="!selectedProjectId" class="project-overview">
-        <EmptyState
-          v-if="projectSummaries.length === 0 && !loading"
-          icon="bar-chart"
-          title="暂无项目工时数据"
-          description="当前日期范围内您可见的项目没有工时记录"
-        />
-        <div v-else class="project-summary-list">
-          <div
-            v-for="p in projectSummaries"
-            :key="p.projectId"
-            class="project-summary-card"
-            @click="onProjectChange(p.projectId)"
-          >
-            <div class="project-summary-left">
-              <span class="project-key-badge">{{ p.projectKey }}</span>
-              <span class="project-name-text">{{ p.projectName }}</span>
-            </div>
-            <div class="project-summary-right">
-              <span class="project-total-dur">{{ formatDuration(p.totalDuration) }}</span>
-              <span class="project-entry-count">{{ p.entries.length }} 条记录</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Project Detail (project selected) -->
-      <div v-else class="project-detail-view">
-        <WeekGrid
-          v-if="viewMode === 'week'"
+      <!-- ===== 人员视图 ===== -->
+      <a-tab-pane key="people" title="人员">
+        <PeopleTab
+          :date-range-label="dateRangeLabel"
+          :total-time-label="totalTimeLabel"
+          :view-mode="viewMode"
           :week-days="weekDays"
-          :entries="projectEntries"
-          :show-user="true"
-        />
-        <MonthGrid
-          v-else
           :month-days="monthDays"
-          :entries="projectEntries"
+          :entries="timeEntries"
+          :quota-minutes="minutesPerDay()"
+          :quota-text="quotaText()"
+          :loading="loading"
+          :current-user-id="authStore.user?.id"
+          :current-user-name="currentUserName"
+          :can-view-others="canViewOthers"
+          :selected-user-id="selectedUserId"
+          :selectable-users="selectableUsers"
+          :filter-project-id="filterProjectId"
+          :filter-work-type="filterWorkType"
+          :filter-projects="filterProjects"
+          :filter-work-types="filterWorkTypes"
+          @navigate="navigate"
+          @go-today="goToday"
+          @update:view-mode="viewMode = $event; onViewModeChange()"
+          @open-add="openAddDialog"
+          @open-edit="openEditDialog"
+          @search-users="searchUsers"
+          @user-change="onUserChange"
+          @filter-change="onFilterChangeFromTab"
+          @reset-filters="resetFilters"
         />
-      </div>
+      </a-tab-pane>
 
-      <!-- Loading overlay（项目视图） -->
-      <div v-if="loading" class="loading-overlay"><a-spin :size="24" /></div>
-    </a-tab-pane>
+      <!-- ===== 项目视图 ===== -->
+      <a-tab-pane key="projects" title="项目">
+        <ProjectsTab
+          :date-range-label="dateRangeLabel"
+          :total-time-label="totalTimeLabel"
+          :view-mode="viewMode"
+          :week-days="weekDays"
+          :month-days="monthDays"
+          :project-entries="projectEntries"
+          :project-summaries="projectSummaries"
+          :selected-project-id="selectedProjectId"
+          :loading="loading"
+          :load-error="loadError"
+          @navigate="navigate"
+          @go-today="goToday"
+          @update:view-mode="viewMode = $event; onViewModeChange()"
+          @project-change="onProjectChange"
+          @refresh="refresh"
+        />
+      </a-tab-pane>
 
-    <!-- ===================== 工作群组视图 ===================== -->
-    <a-tab-pane key="workgroups" title="工作群组">
-      <!-- Date range & navigation -->
-      <div class="timesheet-datebar">
-        <div class="date-info">
-          <span class="date-range">{{ dateRangeLabel }}</span>
-          <span class="total-time">{{ totalTimeLabel }}</span>
-        </div>
-        <div class="date-nav">
-          <a-button size="small" @click="navigate(-1)">←</a-button>
-          <a-button size="small" @click="goToday">今天</a-button>
-          <a-button size="small" @click="navigate(1)">→</a-button>
-          <a-radio-group v-model="viewMode" type="button" size="small" @change="onViewModeChange">
-            <a-radio value="week">周</a-radio>
-            <a-radio value="month">月</a-radio>
-          </a-radio-group>
-        </div>
-      </div>
-
-      <!-- 无数据空状态 -->
-      <EmptyState
-        v-if="groupSummaries.length === 0 && !loading"
-        icon="user-group"
-        title="暂无工作组数据"
-        description="当前系统中没有工作组，或工作组内尚无成员。管理员可在「系统管理 → 用户组」中创建工作组并分配成员。"
-      />
-
-      <!-- 工作组列表（展开/折叠） -->
-      <div v-else class="group-overview">
-        <div v-for="group in groupSummaries" :key="group.groupId" class="group-block">
-          <!-- 工作组标题行（可点击展开） -->
-          <div
-            class="group-header"
-            :class="{ expanded: expandedGroups.has(group.groupId) }"
-            @click="toggleGroupExpand(group.groupId)"
-          >
-            <div class="group-header-left">
-              <span class="group-expand-icon">{{ expandedGroups.has(group.groupId) ? '▼' : '▶' }}</span>
-              <span class="group-icon">👥</span>
-              <span class="group-name">{{ group.groupName }}</span>
-              <span class="group-member-count">{{ group.memberCount }} 人</span>
-            </div>
-            <div class="group-header-right">
-              <span class="group-total-dur">{{ formatDuration(group.totalDuration) }}</span>
-            </div>
-          </div>
-
-          <!-- 展开后的成员列表 -->
-          <div v-if="expandedGroups.has(group.groupId)" class="group-members">
-            <div
-              v-for="member in group.members"
-              :key="member.userId"
-              class="member-row"
-            >
-              <div class="member-info">
-                <UserAvatar :name="member.displayName || member.username || '?'" :size="24" />
-                <span class="member-name">{{ member.displayName || member.username }}</span>
-              </div>
-              <div class="member-bar-area">
-                <div class="member-entries" v-if="member.entries && member.entries.length > 0">
-                  <span
-                    v-for="entry in member.entries"
-                    :key="entry.id"
-                    class="member-entry-chip"
-                    :title="`${entry.issueKey || entry.issueId} ${entry.workDate} ${formatDuration(entry.duration || 0)}${entry.description ? ' - ' + entry.description : ''}`"
-                    @click="openEditDialog(entry)"
-                  >
-                    {{ entry.issueKey || '?' }} {{ formatDuration(entry.duration || 0) }}
-                  </span>
-                </div>
-                <span v-else class="member-no-entries">无工时记录</span>
-              </div>
-              <div class="member-total">
-                <span :class="member.totalDuration > 0 ? 'member-total-dur' : 'member-total-zero'">
-                  {{ formatDuration(member.totalDuration) }}
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Loading overlay（工作群组视图） -->
-      <div v-if="loading" class="loading-overlay"><a-spin :size="24" /></div>
-    </a-tab-pane>
+      <!-- ===== 工作群组视图 ===== -->
+      <a-tab-pane key="workgroups" title="工作群组">
+        <WorkgroupsTab
+          :date-range-label="dateRangeLabel"
+          :total-time-label="totalTimeLabel"
+          :view-mode="viewMode"
+          :group-summaries="groupSummaries"
+          :expanded-groups="expandedGroups"
+          :loading="loading"
+          @navigate="navigate"
+          @go-today="goToday"
+          @update:view-mode="viewMode = $event; onViewModeChange()"
+          @toggle-expand="toggleGroupExpand"
+          @open-edit="openEditDialog"
+        />
+      </a-tab-pane>
 
     </a-tabs>
 
-    <!-- Add/Edit Dialog -->
-    <a-modal
-      v-model:visible="showDialog"
-      :title="editingEntry ? '编辑工时' : '添加花费的时间'"
-      :width="560"
-      :footer="false"
-      @cancel="closeDialog"
-    >
-      <div class="time-dialog">
-        <!-- 问题 -->
-        <div class="dialog-field">
-          <label class="dialog-label">问题</label>
-          <a-select
-            v-model="form.issueId"
-            placeholder="Select an option"
-            allow-search
-            :options="issueOptions"
-            @search="searchIssues"
-          />
-        </div>
-
-        <!-- 作者 -->
-        <div class="dialog-field">
-          <label class="dialog-label">作者</label>
-          <template v-if="canLogForOthers && !editingEntry">
-            <a-select
-              v-model="form.forUserId"
-              placeholder="选择用户（默认为自己）"
-              allow-search
-              allow-clear
-              :filter-option="false"
-              @search="searchUsersForDialog"
-              @clear="form.forUserId = undefined"
-            >
-              <a-option v-for="u in dialogSelectableUsers" :key="u.id" :value="u.id" :label="u.displayName || u.username">
-                <div class="user-option">
-                  <UserAvatar :name="u.displayName || u.username" :size="20" />
-                  <span class="user-option-name">{{ u.displayName || u.username }}</span>
-                  <span v-if="u.id === authStore.user?.id" class="user-option-self">(我)</span>
-                </div>
-              </a-option>
-            </a-select>
-          </template>
-          <template v-else>
-            <div class="author-display">
-              <UserAvatar :name="currentUserName" :size="24" shape="square" />
-              <span class="author-name">{{ currentUserName }}</span>
-            </div>
-          </template>
-        </div>
-
-        <!-- 单一日期 / 日期范围 切换 -->
-        <div class="dialog-field">
-          <div class="date-mode-toggle">
-            <button class="date-mode-btn" :class="{ active: dateMode === 'single' }" @click="dateMode = 'single'">单一日期</button>
-            <button class="date-mode-btn" :class="{ active: dateMode === 'range' }" @click="dateMode = 'range'">日期范围</button>
-          </div>
-        </div>
-
-        <!-- 日期 + 实际用时 -->
-        <div class="dialog-row">
-          <div class="dialog-field flex-1">
-            <label class="dialog-label">日期</label>
-            <a-date-picker v-if="dateMode === 'single'" v-model="form.workDate" style="width: 100%" />
-            <a-range-picker v-else v-model="form.dateRange" style="width: 100%" />
-          </div>
-          <div class="dialog-field flex-1">
-            <label class="dialog-label">实际用时</label>
-            <a-input v-model="form.durationText" placeholder="1周 1天 1时 1分">
-              <template #prefix>⏱</template>
-            </a-input>
-          </div>
-        </div>
-
-        <!-- 添加另一个记录 -->
-        <div class="add-another" v-if="!editingEntry">
-          <a class="add-another-link" @click="addAnotherRecord">+ 添加另一个记录</a>
-        </div>
-
-        <!-- 额外记录列表 -->
-        <div v-if="extraRecords.length > 0" class="extra-records">
-          <div v-for="(rec, idx) in extraRecords" :key="idx" class="extra-record-row">
-            <a-date-picker v-model="rec.workDate" style="width: 45%" size="small" />
-            <a-input v-model="rec.durationText" placeholder="时长" style="width: 40%" size="small" />
-            <button class="remove-record-btn" @click="extraRecords.splice(idx, 1)">✕</button>
-          </div>
-        </div>
-
-        <!-- 工作项属性（动态加载） -->
-        <div v-for="attr in projectAttributes" :key="attr.id" class="dialog-field">
-          <label class="dialog-label">{{ attr.name }}</label>
-          <a-select v-model="formAttributeValues[attr.id]" :placeholder="`选择${attr.name}`" allow-clear>
-            <a-option v-for="val in attr.values" :key="val.id" :value="val.id">
-              <span v-if="val.color" class="attr-value-dot" :style="{ background: val.color }"></span>
-              {{ val.name }}
-            </a-option>
-          </a-select>
-        </div>
-
-        <!-- 描述 -->
-        <div class="dialog-field">
-          <label class="dialog-label">描述</label>
-          <a-textarea
-            v-model="form.description"
-            placeholder="描述这段时间您做了什么"
-            :auto-size="{ minRows: 3, maxRows: 6 }"
-          />
-        </div>
-
-        <!-- 底部按钮 -->
-        <div class="dialog-actions">
-          <div class="actions-left">
-            <a-button v-if="editingEntry" status="danger" @click="deleteEntry" :loading="deleting">删除</a-button>
-          </div>
-          <div class="actions-right">
-            <a-button @click="closeDialog">取消</a-button>
-            <a-button type="primary" @click="saveEntry" :loading="saving">
-              {{ editingEntry ? '保存' : '保存' }}
-            </a-button>
-          </div>
-        </div>
-      </div>
-    </a-modal>
+    <!-- 添加/编辑工时弹窗 -->
+    <TimeEntryDialog
+      ref="timeEntryDialogRef"
+      :current-user-id="authStore.user?.id"
+      :current-user-name="currentUserName"
+      :can-log-for-others="canLogForOthers"
+      :can-edit-others="canEditOthers"
+      :minutes-per-day="minutesPerDay()"
+      @saved="reloadCurrentTab"
+      @deleted="reloadCurrentTab"
+    />
   </div>
 </template>
-
 <script setup lang="ts">
 import { formatDuration } from '@/utils/duration'
-import { toDateKey, formatDateDisplay, startOfWeek, addWeeks, addMonths, getWorkingDaysInRange, getWeekDays, getMonthDays, parseDuration, parseTimeToMinutes, formatDurationCompact } from '@/utils/timesheet'
+import { toDateKey, formatDateDisplay, startOfWeek, addWeeks, addMonths, getWeekDays, getMonthDays } from '@/utils/timesheet'
 import { ref, computed, onMounted, watch } from 'vue'
-import { Message, Modal } from '@arco-design/web-vue'
+import { Message } from '@arco-design/web-vue'
 import { useAuthStore } from '@/stores/auth'
 import { useRoute, useRouter } from 'vue-router'
-import { timeEntryApi, issueApi, projectApi } from '@/api'
-import type { TimeEntryVO, ProjectTimeSummaryVO, TimeEntryUserVO, WorkItemAttributeVO, GroupTimeSummaryVO } from '@/api/timeEntry'
+import { timeEntryApi, projectApi } from '@/api'
+import type { TimeEntryVO, ProjectTimeSummaryVO, TimeEntryUserVO, GroupTimeSummaryVO } from '@/api/timeEntry'
 import { workItemAttributeApi } from '@/api/timeEntry'
 import { useTimeTrackingSettings } from '@/composables/useTimeTrackingSettings'
-import { EmptyState } from '@/components/base'
-import WeekGrid from './WeekGrid.vue'
-import MonthGrid from './MonthGrid.vue'
-import { UserAvatar } from '@/components/base'
+import PeopleTab from './components/PeopleTab.vue'
+import ProjectsTab from './components/ProjectsTab.vue'
+import WorkgroupsTab from './components/WorkgroupsTab.vue'
+import TimeEntryDialog from './components/TimeEntryDialog.vue'
 
 const authStore = useAuthStore()
 const route = useRoute()
 const router = useRouter()
 const { loadSettings: loadTTSettings, minutesPerDay, isWorkingDay, quotaText } = useTimeTrackingSettings()
+
+// ===== 工时弹窗 ref =====
+const timeEntryDialogRef = ref<InstanceType<typeof TimeEntryDialog> | null>(null)
+
+function openAddDialog(date?: string) {
+  timeEntryDialogRef.value?.open(date)
+}
+
+function openEditDialog(entry: TimeEntryVO) {
+  timeEntryDialogRef.value?.openEdit(entry)
+}
 
 // State
 const activeTab = ref<'people' | 'projects' | 'workgroups'>((route.query.view as any) || 'people')
@@ -465,12 +133,7 @@ const currentWeekStart = ref(startOfWeek(new Date()))
 const currentMonthDate = ref(new Date().toISOString().slice(0, 7)) // YYYY-MM
 const loading = ref(false)
 const loadError = ref<string | null>(null)
-const showDialog = ref(false)
-const editingEntry = ref<TimeEntryVO | null>(null)
-const saving = ref(false)
-const deleting = ref(false)
 const timeEntries = ref<TimeEntryVO[]>([])
-const issueOptions = ref<{ value: string; label: string }[]>([])
 
 // User selector state
 const canViewOthers = ref(false)
@@ -478,8 +141,6 @@ const canEditOthers = ref(false)
 const canLogForOthers = ref(false)
 const selectableUsers = ref<TimeEntryUserVO[]>([])
 const selectedUserId = ref<string | undefined>(undefined)
-// Dialog user selector state (for log-for-others)
-const dialogSelectableUsers = ref<TimeEntryUserVO[]>([])
 
 // Project view state
 const projectSummaries = ref<ProjectTimeSummaryVO[]>([])
@@ -495,22 +156,6 @@ const filterProjectId = ref<string | undefined>(undefined)
 const filterWorkType = ref<string | undefined>(undefined)
 const filterProjects = ref<{ id: string; name: string; key: string }[]>([])
 const filterWorkTypes = ref<{ id: string; name: string; color?: string }[]>([])
-// Work item attributes (dynamically loaded per project)
-const projectAttributes = ref<WorkItemAttributeVO[]>([])
-const formAttributeValues = ref<Record<string, string>>({})
-const loadedAttributeProjectId = ref<string | null>(null)
-// Form
-const dateMode = ref<'single' | 'range'>('single')
-const extraRecords = ref<{ workDate: string; durationText: string }[]>([])
-const form = ref({
-  issueId: undefined as string | undefined,
-  workDate: '',
-  dateRange: undefined as [string, string] | undefined,
-  durationText: '',
-  startTimeStr: undefined as string | undefined,
-  description: '',
-  forUserId: undefined as string | undefined
-})
 
 // Computed
 const currentUserName = computed(() => authStore.user?.displayName || authStore.user?.username || 'Test User')
@@ -739,138 +384,11 @@ function searchUsers(keyword: string) {
   loadSelectableUsers(keyword)
 }
 
-async function searchUsersForDialog(keyword: string) {
-  try {
-    const params = keyword ? { keyword } : undefined
-    const res = await timeEntryApi.listSelectableUsers(params)
-    if (res.code === 0 && res.data) {
-      dialogSelectableUsers.value = res.data
-    }
-  } catch (e) {
-    console.error('[Timesheet] 搜索用户失败:', e)
-  }
-}
-
-function onUserChange(val: string | number | boolean | Record<string, any> | (string | number | boolean | Record<string, any>)[] | undefined) {
+function onUserChange(val: any) {
   selectedUserId.value = (val as string) || undefined
   loadEntries()
 }
 
-// Filter functions
-function onFilterChange() {
-  loadEntries()
-  // Persist filters to URL
-  const query: Record<string, string> = { ...route.query as Record<string, string> }
-  if (filterProjectId.value) {
-    query.projectId = filterProjectId.value
-  } else {
-    delete query.projectId
-  }
-  if (filterWorkType.value) {
-    query.activityId = filterWorkType.value
-  } else {
-    delete query.activityId
-  }
-  // Clean up legacy param
-  delete query.workType
-  router.replace({ query })
-}
-
-function resetFilters() {
-  filterProjectId.value = undefined
-  filterWorkType.value = undefined
-  onFilterChange()
-}
-
-async function loadFilterProjects() {
-  try {
-    const res = await projectApi.list({ pageSize: 100 })
-    if (res.code === 0 && res.data) {
-      filterProjects.value = res.data.list.map(p => ({
-        id: p.id,
-        name: p.name,
-        key: p.key
-      }))
-    }
-  } catch (e) {
-    console.error('[Timesheet] 加载筛选项目列表失败:', e)
-  }
-}
-
-async function loadFilterWorkTypes() {
-  try {
-    const res = await workItemAttributeApi.list()
-    if (res.code === 0 && res.data) {
-      // Find the "Work type" attribute and use its values
-      const workTypeAttr = res.data.find(a => a.name === 'Work type' || a.name === '工作类型')
-      if (workTypeAttr && workTypeAttr.values) {
-        filterWorkTypes.value = workTypeAttr.values.map(v => ({
-          id: v.id,
-          name: v.name,
-          color: v.color
-        }))
-      }
-    }
-  } catch (e) {
-    console.error('[Timesheet] 加载工作类型失败:', e)
-  }
-}
-
-function getDateRange(): { startDate: string; endDate: string } {
-  if (viewMode.value === 'week') {
-    const startDate = currentWeekStart.value
-    const end = new Date(currentWeekStart.value)
-    end.setDate(end.getDate() + 6)
-    return { startDate, endDate: toDateKey(end) }
-  } else {
-    const [year, month] = currentMonthDate.value.split('-').map(Number)
-    const startDate = `${year}-${String(month).padStart(2, '0')}-01`
-    const lastDay = new Date(year, month, 0)
-    return { startDate, endDate: toDateKey(lastDay) }
-  }
-}
-
-async function searchIssues(keyword: string) {
-  try {
-    const params: Record<string, any> = { pageSize: 15 }
-    if (keyword && keyword.length >= 1) params.keyword = keyword
-    const res = await issueApi.list(params)
-    if (res.code === 0 && res.data) {
-      issueOptions.value = res.data.list.map(i => ({
-        value: i.id,
-        label: `${i.issueKey} - ${i.title}`
-      }))
-    }
-  } catch (e) {
-    console.error('[Timesheet] 搜索工单失败:', e)
-  }
-}
-
-/**
- * 根据 issue 获取其所属项目的工作项属性
- */
-async function loadAttributesForIssue(issueId: string) {
-  try {
-    // 获取 issue 详情以确定 projectId
-    const issueRes = await issueApi.getById(issueId)
-    if (issueRes.code === 0 && issueRes.data?.projectId) {
-      const projectId = issueRes.data.projectId
-      if (loadedAttributeProjectId.value === projectId) return // 已加载
-      loadedAttributeProjectId.value = projectId
-      const attrRes = await workItemAttributeApi.listByProject(projectId)
-      if (attrRes.code === 0 && attrRes.data) {
-        projectAttributes.value = attrRes.data
-      }
-    }
-  } catch (e) {
-    console.error('[Timesheet] 加载工单项目属性失败:', e)
-  }
-}
-
-// People view helpers — kept for future use if needed
-// (Grid rendering delegated to WeekGrid / MonthGrid sub-components)
-
-// Project view helpers — delegated to sub-components
 
 function navigate(delta: number) {
   if (viewMode.value === 'week') {
@@ -904,221 +422,66 @@ function reloadCurrentTab() {
     loadGroupSummaries()
   }
 }
-
-function openAddDialog(date?: string) {
-  editingEntry.value = null
-  dateMode.value = 'single'
-  extraRecords.value = []
-  formAttributeValues.value = {}
-  form.value = {
-    issueId: undefined,
-    workDate: date || toDateKey(new Date()),
-    dateRange: undefined,
-    durationText: '',
-    startTimeStr: undefined,
-    description: '',
-    forUserId: undefined
-  }
-  showDialog.value = true
-  searchIssues('')
-  // Pre-load dialog selectable users if user can log for others
-  if (canLogForOthers.value && dialogSelectableUsers.value.length === 0) {
-    searchUsersForDialog('')
-  }
-}
-
-function addAnotherRecord() {
-  extraRecords.value.push({ workDate: form.value.workDate, durationText: '' })
-}
-
-function openEditDialog(entry: TimeEntryVO) {
-  // Check if this is someone else's entry and whether user has edit permission
-  const isOwnEntry = entry.userId === authStore.user?.id
-  if (!isOwnEntry && !canEditOthers.value) {
-    Message.warning('无权编辑他人工时记录')
-    return
-  }
-
-  editingEntry.value = entry
-  dateMode.value = 'single'
-  extraRecords.value = []
-  formAttributeValues.value = {}
-  // Populate attribute values from entry
-  if (entry.attributeValues) {
-    for (const av of entry.attributeValues) {
-      formAttributeValues.value[av.attributeId] = av.valueId
-    }
-  }
-  form.value = {
-    issueId: entry.issueId,
-    workDate: entry.workDate,
-    dateRange: undefined,
-    durationText: formatDurationCompact(entry.duration ?? 0),
-    startTimeStr: entry.startTime != null ? `${String(Math.floor(entry.startTime / 60)).padStart(2, '0')}:${String(entry.startTime % 60).padStart(2, '0')}` : undefined,
-    description: entry.description || '',
-    forUserId: undefined
-  }
-  // Ensure current issue is in options
-  if (entry.issueKey) {
-    const existing = issueOptions.value.find(o => o.value === entry.issueId)
-    if (!existing) {
-      const label = entry.issueDeleted
-        ? `[已删除] ${entry.issueKey} - ${entry.issueTitle || ''}`
-        : `${entry.issueKey} - ${entry.issueTitle || ''}`
-      issueOptions.value = [{ value: entry.issueId, label }, ...issueOptions.value]
-    }
-  } else if (entry.issueDeleted) {
-    // Issue key is null (issue fully deleted), show placeholder
-    const existing = issueOptions.value.find(o => o.value === entry.issueId)
-    if (!existing) {
-      issueOptions.value = [{ value: entry.issueId, label: '[已删除工单]' }, ...issueOptions.value]
-    }
-  }
-  // Load attributes for the issue's project
-  loadAttributesForIssue(entry.issueId)
-  showDialog.value = true
-}
-
-function closeDialog() {
-  showDialog.value = false
-  editingEntry.value = null
-}
-
-async function saveEntry() {
-  // 根据 dateMode 分支校验日期字段
-  if (dateMode.value === 'single') {
-    if (!form.value.issueId || !form.value.workDate || !form.value.durationText) {
-      Message.warning('请填写工单、日期和时长')
-      return
-    }
-  } else {
-    // 日期范围模式
-    if (!form.value.issueId || !form.value.dateRange || !form.value.dateRange[0] || !form.value.dateRange[1] || !form.value.durationText) {
-      Message.warning('请填写工单、日期范围和时长')
-      return
-    }
-  }
-
-  const totalDuration = parseDuration(form.value.durationText, minutesPerDay())
-  if (!totalDuration || totalDuration <= 0) {
-    Message.warning('时长格式无效，请使用如 2h30m, 1h, 45m')
-    return
-  }
-
-  const startTime = form.value.startTimeStr ? parseTimeToMinutes(form.value.startTimeStr) : undefined
-
-  saving.value = true
-  try {
-    if (dateMode.value === 'single') {
-      // 单一日期模式 - 使用现有逻辑
-      if (editingEntry.value) {
-        await timeEntryApi.update(editingEntry.value.id, {
-          issueId: form.value.issueId,
-          workDate: form.value.workDate,
-          duration: totalDuration,
-          startTime,
-          description: form.value.description || undefined,
-          attributeValues: Object.keys(formAttributeValues.value).length > 0
-            ? Object.fromEntries(Object.entries(formAttributeValues.value).filter(([, v]) => v))
-            : undefined
-        })
-        Message.success('工时已更新')
-      } else {
-        await timeEntryApi.create({
-          issueId: form.value.issueId,
-          workDate: form.value.workDate,
-          duration: totalDuration,
-          startTime,
-          description: form.value.description || undefined,
-          forUserId: form.value.forUserId || undefined,
-          attributeValues: Object.keys(formAttributeValues.value).length > 0
-            ? Object.fromEntries(Object.entries(formAttributeValues.value).filter(([, v]) => v))
-            : undefined
-        })
-        Message.success('工时已添加')
-      }
-    } else {
-      // 日期范围模式 - 按工作日拆分创建独立记录
-      const workingDays = getWorkingDaysInRange(form.value.dateRange![0], form.value.dateRange![1])
-      if (workingDays.length === 0) {
-        Message.warning('所选日期范围内没有工作日')
-        return
-      }
-      // 将总时长按工作日数平均分配（取整到分钟）
-      const durationPerDay = Math.round(totalDuration / workingDays.length)
-      if (durationPerDay <= 0) {
-        Message.warning('每日分配时长过小，请增加总时长或缩小日期范围')
-        return
-      }
-      // 为每个工作日创建一条工时记录
-      for (const day of workingDays) {
-        await timeEntryApi.create({
-          issueId: form.value.issueId,
-          workDate: day,
-          duration: durationPerDay,
-          startTime,
-          description: form.value.description || undefined,
-          forUserId: form.value.forUserId || undefined,
-          attributeValues: Object.keys(formAttributeValues.value).length > 0
-            ? Object.fromEntries(Object.entries(formAttributeValues.value).filter(([, v]) => v))
-            : undefined
-        })
-      }
-      Message.success(`已为 ${workingDays.length} 个工作日分别创建工时记录`)
-    }
-    closeDialog()
-    reloadCurrentTab()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '操作失败')
-  } finally {
-    saving.value = false
-  }
-}
-
-/**
- * 获取日期范围内的工作日列表（排除周六和周日）
- */
-async function deleteEntry() {
-  if (!editingEntry.value) return
-
-  Modal.warning({
-    title: '确认删除',
-    content: '确定要删除这条工时记录吗？此操作不可撤销。',
-    okText: '删除',
-    cancelText: '取消',
-    hideCancel: false,
-    onOk: async () => {
-      deleting.value = true
-      try {
-        await timeEntryApi.delete(editingEntry.value!.id)
-        Message.success('工时已删除')
-        closeDialog()
-        reloadCurrentTab()
-      } catch (e: any) {
-        Message.error(e.response?.data?.message || '删除失败')
-      } finally {
-        deleting.value = false
-      }
-    }
-  })
-}
-
 // Helpers
+
+function getDateRange(): { startDate: string; endDate: string } {
+  if (viewMode.value === 'week') {
+    const end = new Date(currentWeekStart.value)
+    end.setDate(end.getDate() + 6)
+    return { startDate: currentWeekStart.value, endDate: toDateKey(end) }
+  } else {
+    const [year, month] = currentMonthDate.value.split('-').map(Number)
+    const startDate = `${year}-${String(month).padStart(2, '0')}-01`
+    const lastDay = new Date(year, month, 0)
+    return { startDate, endDate: toDateKey(lastDay) }
+  }
+}
+
+async function loadFilterProjects() {
+  try {
+    const res = await projectApi.list({ pageSize: 100 })
+    if (res.code === 0 && res.data) {
+      filterProjects.value = res.data.list.map(p => ({ id: p.id, name: p.name, key: p.key }))
+    }
+  } catch (e) {
+    console.error('[Timesheet] 加载筛选项目失败:', e)
+  }
+}
+
+async function loadFilterWorkTypes() {
+  try {
+    const res = await workItemAttributeApi.list()
+    if (res.code === 0 && res.data) {
+      const workTypeAttr = res.data.find((a: any) => a.name === 'Work type' || a.name === '工作类型')
+      if (workTypeAttr?.values) {
+        filterWorkTypes.value = workTypeAttr.values.map((v: any) => ({ id: v.id, name: v.name, color: v.color }))
+      }
+    }
+  } catch (e) {
+    console.error('[Timesheet] 加载工作类型失败:', e)
+  }
+}
+
+function onFilterChange() {
+  loadEntries()
+}
+
+// PeopleTab emit 的筛选变更
+function onFilterChangeFromTab(filters: { projectId?: string; workType?: string }) {
+  filterProjectId.value = filters.projectId
+  filterWorkType.value = filters.workType
+  onFilterChange()
+}
+
+function resetFilters() {
+  filterProjectId.value = undefined
+  filterWorkType.value = undefined
+  onFilterChange()
+}
 
 // Watchers - reload data on date navigation
 watch(currentWeekStart, () => { if (viewMode.value === 'week') reloadCurrentTab() })
 watch(currentMonthDate, () => { if (viewMode.value === 'month') reloadCurrentTab() })
-
-// Watch issue selection to load project-specific attributes
-watch(() => form.value.issueId, (newId) => {
-  if (newId) {
-    loadAttributesForIssue(newId)
-  } else {
-    projectAttributes.value = []
-    formAttributeValues.value = {}
-    loadedAttributeProjectId.value = null
-  }
-})
 
 // Init
 onMounted(async () => {
@@ -1152,8 +515,6 @@ onMounted(async () => {
   } else if (activeTab.value === 'workgroups') {
     loadGroupSummaries()
   }
-  // Preload some issues for the add dialog
-  searchIssues('')
 })
 </script>
 
