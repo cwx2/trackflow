@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <!--
     ===== WorkgroupsTab — 工作群组视图 =====
     展示所有工作群组的成员工时，支持展开/折叠查看成员明细。
@@ -131,5 +131,4 @@ defineEmits<{
 .member-total { min-width: 48px; text-align: right; }
 .member-total-dur { font-size: 13px; font-weight: 600; color: var(--tf-text-primary); }
 .member-total-zero { font-size: 13px; color: var(--tf-text-tertiary); }
-.loading-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: var(--tf-fill-light); z-index: 10; pointer-events: none; }
 </style>

@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <!--
     ===== PeopleTab — 人员视图 =====
     显示当前用户（或选中用户）的周/月工时日历。
@@ -174,8 +174,6 @@ function onIssueClick(entry: TimeEntryVO) {
 </script>
 
 <style scoped>
-.timesheet-controls { padding: 12px 24px; display: flex; align-items: center; }
-.controls-left { display: flex; flex-direction: column; gap: 6px; }
 .user-selector-area { display: flex; align-items: center; }
 .user-selector-static { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 500; color: var(--tf-text-primary); }
 .user-option { display: flex; align-items: center; gap: 8px; }
@@ -184,6 +182,4 @@ function onIssueClick(entry: TimeEntryVO) {
 .filters { display: flex; align-items: center; gap: 8px; font-size: 12px; }
 .filter-label { color: var(--tf-text-tertiary); white-space: nowrap; }
 .filter-reset { font-size: 12px; color: var(--tf-accent); cursor: pointer; }
-.attr-value-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
-.loading-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: var(--tf-fill-light); z-index: 10; pointer-events: none; }
 </style>

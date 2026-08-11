@@ -51,7 +51,7 @@
           <template v-if="selectedNode">
             <div class="panel-header inspector-header">
               <div>
-                <span class="panel-title">{{ getNodeTitle(selectedNode.properties?.nodeType) }}</span>
+                <span class="panel-title">{{ getWorkflowNodeTitle(selectedNode.properties?.nodeType) }}</span>
                 <div class="inspector-tabs">
                   <button :class="{ active: inspectorTab === 'config' }" @click="inspectorTab = 'config'">配置</button>
                   <button :class="{ active: inspectorTab === 'debug' }" @click="inspectorTab = 'debug'">调试</button>
@@ -61,7 +61,7 @@
             </div>
             <NodeDebugInspector
               v-if="inspectorTab === 'debug'"
-              :node-name="selectedNode.properties?.nodeMeta?.title || getNodeTitle(selectedNode.properties?.nodeType)"
+              :node-name="selectedNode.properties?.nodeMeta?.title || getWorkflowNodeTitle(selectedNode.properties?.nodeType)"
               :node-type="selectedNode.properties?.nodeType"
               :status="nodeStatusMap[selectedNode.id] || 'idle'"
               :detail="nodeExecutionDetails[selectedNode.id]"
@@ -235,138 +235,43 @@
       </a-form>
     </a-modal>
 
-    <a-modal
+    <WorkflowRunModal
       v-model:visible="showRunInputModal"
-      :title="`试运行「${workflowName || '工作流'}」`"
-      ok-text="开始试运行"
-      :ok-loading="isRunning"
-      @ok="confirmRun"
-    >
-      <a-alert type="info" :show-icon="true" class="run-input-guide">
-        <template #title>{{ runInputGuideTitle }}</template>
-        {{ runInputGuideDescription }}
-      </a-alert>
-      <div v-if="runInputRequirements.length" class="run-input-fields">
-        <span class="run-input-fields-label">{{ runInputRequirements.every(field => !field.required) ? '可选输入' : '需要提供的输入' }}</span>
-        <div class="run-input-field-tags">
-          <a-tag v-for="field in runInputRequirements" :key="field.path" :color="field.required ? 'red' : 'arcoblue'">
-            {{ field.path }}{{ field.required ? '（必填）' : '（可选）' }}
-          </a-tag>
-        </div>
-        <p v-for="field in runInputRequirements" :key="`${field.path}-description`" class="run-input-field-description">
-          <code>{{ field.path }}</code>：{{ field.description || '来自开始节点的触发数据' }}
-        </p>
-      </div>
-      <p class="run-input-hint">输入仅用于本次试运行，不会保存到工作流。</p>
-      <a-textarea
-        v-model="runInputText"
-        :auto-size="{ minRows: 7, maxRows: 14 }"
-        :placeholder="runInputPlaceholder"
-      />
-    </a-modal>
+      v-model:input-text="runInputText"
+      :workflow-name="workflowName"
+      :loading="isRunning"
+      :requirements="runInputRequirements"
+      :guide-title="runInputGuideTitle"
+      :guide-description="runInputGuideDescription"
+      :placeholder="runInputPlaceholder"
+      @run="confirmRun"
+    />
 
-    <a-modal
+    <NodeTestModal
       v-model:visible="showNodeTestModal"
-      :title="`试运行节点：${nodeTestNode?.properties?.nodeMeta?.title || nodeTestNode?.properties?.nodeType || ''}`"
-      ok-text="运行节点"
-      :ok-loading="nodeTestLoading"
-      @ok="confirmNodeTest"
-    >
-      <a-alert v-if="nodeTestHasSideEffects" type="warning" class="node-test-warning">
-        此节点会执行真实写操作、外部请求或脚本。确认后才会实际运行；测试输入不会保存到工作流。
-      </a-alert>
-      <a-checkbox v-if="nodeTestHasSideEffects" v-model="nodeTestConfirmSideEffects" class="node-test-confirm">
-        我确认允许本次节点试运行产生真实副作用
-      </a-checkbox>
-      <a-alert v-else-if="nodeTestIsSimulation" type="info" :show-icon="true" class="run-input-guide">
-        <template #title>此节点将进行安全预演</template>
-        审批、循环和子工作流依赖完整编排上下文。这里会检查配置和输入是否可用，不会真正创建审批、循环或启动子流程。
-      </a-alert>
-      <a-alert v-else type="info" :show-icon="true" class="run-input-guide">
-        <template #title>{{ nodeTestInputFields.length ? '可直接运行，无需填写输入' : '此节点无需额外输入，可直接运行' }}</template>
-        {{ nodeTestInputFields.length
-          ? '系统会使用节点当前配置。只有想临时替换某个输入时，才需要填写下方的覆盖值。'
-          : '本次试运行将使用节点当前配置；结果不会修改工作流。' }}
-      </a-alert>
-      <div v-if="nodeTestInputFields.length" class="run-input-fields">
-        <span class="run-input-fields-label">可临时覆盖的输入（可选）</span>
-        <div class="run-input-field-tags">
-          <a-tag v-for="field in nodeTestInputFields" :key="field.name" color="arcoblue">
-            {{ field.label }}{{ field.required ? '（必填）' : '（可选）' }}
-          </a-tag>
-        </div>
-        <p v-for="field in nodeTestInputFields" :key="`${field.name}-description`" class="run-input-field-description">
-          <code>{{ field.name }}</code>：{{ field.description || `${field.valueType} 类型输入` }}
-        </p>
-      </div>
-      <div class="node-test-json-heading">
-        <span>临时覆盖值（高级，可选）</span>
-        <a-button v-if="nodeTestInputFields.length" type="text" size="mini" @click="nodeTestInputText = nodeTestInputExample">填入示例</a-button>
-      </div>
-      <p class="run-input-hint">保持 <code>{}</code> 即使用当前配置；填写内容仅作用于本次运行，不会保存到工作流。</p>
-      <a-textarea
-        v-model="nodeTestInputText"
-        :auto-size="{ minRows: 6, maxRows: 12 }"
-        :placeholder="nodeTestInputExample"
-      />
-    </a-modal>
+      v-model:input-text="nodeTestInputText"
+      v-model:confirm-side-effects="nodeTestConfirmSideEffects"
+      :node-name="nodeTestNode?.properties?.nodeMeta?.title || nodeTestNode?.properties?.nodeType || ''"
+      :loading="nodeTestLoading"
+      :has-side-effects="nodeTestHasSideEffects"
+      :is-simulation="nodeTestIsSimulation"
+      :input-fields="nodeTestInputFields"
+      :input-example="nodeTestInputExample"
+      @fill-example="nodeTestInputText = nodeTestInputExample"
+      @run="confirmNodeTest"
+    />
 
-    <a-modal
-      v-model:visible="showRenameNodeModal"
-      title="重命名节点"
-      ok-text="保存名称"
-      @ok="confirmRenameNode"
-    >
-      <a-form-item label="节点名称" required>
-        <a-input v-model="renameNodeTitle" :max-length="80" placeholder="请输入节点名称" @press-enter="confirmRenameNode" />
-      </a-form-item>
-      <p class="node-action-hint">仅修改画布中的显示名称，不会改变节点类型、配置或数据流。</p>
-    </a-modal>
-
-    <a-modal
-      v-model:visible="showDeleteNodeModal"
-      title="删除节点"
-      ok-text="删除节点"
-      :ok-button-props="{ status: 'danger' }"
-      @ok="confirmDeleteNode"
-    >
-      <a-alert type="warning" :show-icon="true">
-        将删除“{{ nodeActionTarget?.properties?.nodeMeta?.title || '此节点' }}”以及与它相连的线。此操作在保存前可通过工具栏“上一步”撤销。
-      </a-alert>
-    </a-modal>
-
-    <a-modal
-      v-model:visible="showNodeHelpModal"
-      :title="`${nodeHelpDefinition?.meta.title || nodeActionTarget?.properties?.nodeMeta?.title || '节点'}使用说明`"
-      :footer="false"
-      width="560px"
-    >
-      <p class="node-help-description">{{ nodeHelpDefinition?.meta.description || nodeActionTarget?.properties?.nodeMeta?.description || '该节点暂无补充说明。' }}</p>
-      <section v-if="nodeHelpDefinition?.inputPorts.length" class="node-help-section">
-        <h4>输入</h4>
-        <div v-for="port in nodeHelpDefinition.inputPorts" :key="port.name" class="node-help-port">
-          <strong>{{ port.label || port.name }}</strong>
-          <a-tag size="small">{{ port.valueType }}</a-tag>
-          <a-tag v-if="port.required" size="small" color="red">必填</a-tag>
-          <span>{{ port.description || '未提供说明' }}</span>
-        </div>
-      </section>
-      <section v-if="nodeHelpDefinition?.outputPorts.length" class="node-help-section">
-        <h4>输出</h4>
-        <div v-for="port in nodeHelpDefinition.outputPorts" :key="port.name" class="node-help-port">
-          <strong>{{ port.label || port.name }}</strong>
-          <a-tag size="small">{{ port.valueType }}</a-tag>
-          <span>{{ port.description || '未提供说明' }}</span>
-        </div>
-      </section>
-      <section v-if="nodeHelpDefinition?.configFields.length" class="node-help-section">
-        <h4>配置项</h4>
-        <div v-for="field in nodeHelpDefinition.configFields" :key="field.key" class="node-help-port">
-          <strong>{{ field.label }}</strong>
-          <span>{{ field.description || field.placeholder || '在右侧配置面板中设置。' }}</span>
-        </div>
-      </section>
-    </a-modal>
+    <NodeActionModals
+      v-model:rename-visible="showRenameNodeModal"
+      v-model:rename-title="renameNodeTitle"
+      v-model:delete-visible="showDeleteNodeModal"
+      v-model:help-visible="showNodeHelpModal"
+      :target-title="nodeActionTarget?.properties?.nodeMeta?.title || ''"
+      :target-description="nodeActionTarget?.properties?.nodeMeta?.description"
+      :definition="nodeHelpDefinition"
+      @rename="confirmRenameNode"
+      @delete="confirmDeleteNode"
+    />
   </div>
 </template>
 
@@ -377,9 +282,10 @@ import { useRoute, useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
 import LogicFlow from '@logicflow/core'
 import { Control, MiniMap, Snapshot } from '@logicflow/extension'
-import { automationApi, type WorkflowDefinition, type WorkflowNode, type NodeType, type GlobalVariable, type ExecutionDetailVO } from '@/api'
+import { automationApi, type WorkflowDefinition, type GlobalVariable, type ExecutionDetailVO } from '@/api'
 import { DRAGGABLE_NODES, findNodeContractDrift, getNodeDefinition } from './node-definitions'
 import { validateExecutableWorkflow } from './workflow-validator'
+import { buildWorkflowDefinition, getWorkflowNodeTitle, migrateWorkflowDefinition, normalizeCanvasNode } from './workflow-definition'
 import { FlowEdge } from './graph/edges/FlowEdge'
 import { ExecutionFlowAnimator, type WorkflowCanvasEdge } from './graph/edges/ExecutionFlowAnimator'
 import { registerAllNodes } from './graph/nodes/index'
@@ -405,6 +311,9 @@ import IssueCommentConfig from './components/config/IssueCommentConfig.vue'
 import GenericNodeConfig from './components/config/GenericNodeConfig.vue'
 import GlobalVariablesConfig from './components/config/GlobalVariablesConfig.vue'
 import ExecutionPanel from './components/ExecutionPanel.vue'
+import WorkflowRunModal, { type WorkflowRunInputRequirement } from './components/WorkflowRunModal.vue'
+import NodeTestModal, { type NodeTestInputField } from './components/NodeTestModal.vue'
+import NodeActionModals from './components/NodeActionModals.vue'
 import NodeDebugInspector from './components/NodeDebugInspector.vue'
 import BottomToolbar from './components/BottomToolbar.vue'
 import EditorTopbar from './components/EditorTopbar.vue'
@@ -688,13 +597,6 @@ type NodeDebugRecord = {
   inputText: string
   confirmSideEffects: boolean
 }
-type NodeTestInputField = {
-  name: string
-  label: string
-  valueType: string
-  description?: string
-  required: boolean
-}
 const nodeStatusMap = ref<Record<string, CanvasNodeStatus>>({})
 const nodeExecutionDetails = ref<Record<string, {
   input?: unknown
@@ -713,13 +615,7 @@ const isRunning = ref(false)
 const currentExecutionId = ref<string | null>(null)
 const showRunInputModal = ref(false)
 const runInputText = ref('{}')
-type RunInputRequirement = {
-  path: string
-  required: boolean
-  valueType: string
-  description: string
-}
-const runInputRequirements = ref<RunInputRequirement[]>([])
+const runInputRequirements = ref<WorkflowRunInputRequirement[]>([])
 const runInputGuideTitle = computed(() => {
   if (runInputRequirements.value.length === 0) return '此流程无需额外输入，可直接开始试运行。'
   return runInputRequirements.value.every(field => !field.required)
@@ -1141,7 +1037,7 @@ async function loadWorkflow() {
       const raw = JSON.parse(res.data.definition || '{}')
 
       // ── 兼容旧格式（variables/nodes[].data/edges[].source）和新格式（globalVariables/nodes[].inputs/edges[].sourceNodeId）
-      const def: WorkflowDefinition = migrateDefinition(raw)
+      const def: WorkflowDefinition = migrateWorkflowDefinition(raw)
       globalVariables.value = def.globalVariables || {}
       
       // 转换为 LogicFlow 数据格式
@@ -1177,105 +1073,6 @@ async function loadWorkflow() {
   }
 }
 
-/**
- * 兼容旧格式迁移：
- * 旧格式: { variables: {}, nodes: [{..., label, data:{}}], edges: [{source, target}] }
- * 新格式: { globalVariables: {}, nodes: [{..., nodeMeta, inputs, outputs, config}], edges: [{sourceNodeId, sourcePortName, ...}] }
- */
-function migrateDefinition(raw: any): WorkflowDefinition {
-  // 已经是新格式：按当前节点注册表重建端口快照。保存时会把旧工作流升级为当前正式契约，
-  // 不在运行时猜测或兼容缺失端口。
-  if (raw.globalVariables !== undefined) {
-    return {
-      ...raw,
-      nodes: (raw.nodes || []).map((node: any) => upgradeNodeContract(node)),
-    } as WorkflowDefinition
-  }
-
-  // 旧格式迁移
-  return {
-    globalVariables: Object.fromEntries(
-      Object.entries(raw.variables || {}).map(([k, v]) => [k, { type: 'string' as const, defaultValue: v }])
-    ),
-    nodes: (raw.nodes || []).map((n: any) => {
-      const def = getNodeDefinition(n.type)
-      return {
-        id: n.id,
-        type: n.type,
-        position: n.position,
-        nodeMeta: {
-          title: n.label || def?.meta.title || n.type,
-          icon: def?.meta.icon || '⬡',
-          description: def?.meta.description || '',
-          color: def?.meta.color || '#6366f1',
-        },
-        inputs: (def?.inputPorts || []).map(p => ({
-          name: p.name,
-          valueType: p.valueType,
-          required: p.required,
-          optional: p.optional,
-          description: p.description,
-          value: n.data?.[p.name] != null
-            ? { type: 'literal' as const, value: n.data[p.name] }
-            : null,
-        })),
-        outputs: def?.outputPorts || [],
-        config: n.data || {},
-      }
-    }),
-    edges: (raw.edges || []).map((e: any) => ({
-      id: e.id,
-      sourceNodeId: e.source || e.sourceNodeId,
-      sourcePortName: e.sourceHandle || e.sourcePortName || 'output',
-      targetNodeId: e.target || e.targetNodeId,
-      targetPortName: e.targetHandle || e.targetPortName || 'input',
-    })),
-  }
-}
-
-function upgradeNodeContract(node: any) {
-  const def = getNodeDefinition(node.type)
-  if (!def) return node
-  const existingInputs = new Map<string, any>((node.inputs || []).map((input: any) => [input.name, input]))
-  return {
-    ...node,
-    // 分类属于节点类型契约；其余展示信息可保留用户在画布中的修改。
-    nodeMeta: { ...def.meta, ...(node.nodeMeta || {}), category: def.meta.category },
-    inputs: def.inputPorts.map(port => {
-      const existing = existingInputs.get(port.name)
-      return {
-        name: port.name,
-        label: port.label,
-        valueType: port.valueType,
-        // 端口契约中的布尔字段必须是确定值。节点定义允许省略 optional，
-        // 但传输给服务端时不能把 undefined 交给请求层变成 null。
-        required: port.required === true,
-        optional: port.optional === true,
-        description: port.description,
-        value: existing?.value ?? port.defaultValue ?? null,
-      }
-    }),
-    outputs: def.outputPorts,
-  }
-}
-
-/** 保存和试运行前从节点注册表重建快照，杜绝过期模板端口重新写回服务端。 */
-function normalizeCanvasNode(canvasNode: any): WorkflowNode {
-  const type = (canvasNode.properties?.nodeType || canvasNode.type) as NodeType
-  return upgradeNodeContract({
-    id: canvasNode.id,
-    type,
-    position: { x: canvasNode.x - 100, y: canvasNode.y - 30 },
-    nodeMeta: canvasNode.properties?.nodeMeta || {
-      title: canvasNode.text?.value || canvasNode.text || getNodeTitle(type),
-      icon: '⬡', description: '', color: '#6366f1',
-    },
-    inputs: canvasNode.properties?.inputs || [],
-    outputs: canvasNode.properties?.outputs || [],
-    config: extractNodeConfig(canvasNode.properties || {}),
-  }) as WorkflowNode
-}
-
 // 保存工作流
 async function handleSave() {
   if (!lf) return false
@@ -1284,17 +1081,7 @@ async function handleSave() {
   try {
     const graphData = lf.getGraphData() as { nodes: any[]; edges: any[] }
     
-    const definition: WorkflowDefinition = {
-      globalVariables: globalVariables.value,
-      nodes: graphData.nodes.map((n: any) => normalizeCanvasNode(n)),
-      edges: graphData.edges.map((e: any) => ({
-        id: e.id,
-        sourceNodeId:  e.sourceNodeId,
-        sourcePortName: e.properties?.sourcePortName || 'output',
-        targetNodeId:  e.targetNodeId,
-        targetPortName: e.properties?.targetPortName || 'input',
-      }))
-    }
+    const definition = buildWorkflowDefinition(globalVariables.value, graphData)
     
     const res = await automationApi.update(workflowId.value, {
       name: workflowName.value,
@@ -1438,14 +1225,6 @@ async function handleStopRuntime() {
   }
 }
 
-function extractNodeConfig(properties: Record<string, any>) {
-  const reserved = new Set(['nodeType', 'nodeMeta', 'inputs', 'outputs', 'runStatus', 'label'])
-  const legacyConfig = Object.fromEntries(
-    Object.entries(properties).filter(([key]) => !reserved.has(key) && key !== 'config')
-  )
-  return { ...legacyConfig, ...(properties.config || {}) }
-}
-
 // 返回列表
 function goBack() {
   router.push('/automation')
@@ -1479,11 +1258,11 @@ function onDragStart(_e: MouseEvent, node: { type: string; label: string; icon: 
 }
 
 // ── 试运行 ────────────────────────────────────────────────
-function getRunInputRequirements(definition: WorkflowDefinition): RunInputRequirement[] {
+function getRunInputRequirements(definition: WorkflowDefinition): WorkflowRunInputRequirement[] {
   const startNode = definition.nodes.find(node => node.type === 'start')
   if (!startNode) return []
 
-  const fields = new Map<string, RunInputRequirement>()
+  const fields = new Map<string, WorkflowRunInputRequirement>()
   for (const node of definition.nodes) {
     for (const input of node.inputs) {
       const value = input.value
@@ -1502,7 +1281,7 @@ function getRunInputRequirements(definition: WorkflowDefinition): RunInputRequir
   return [...fields.values()]
 }
 
-function createRunInputExample(fields: RunInputRequirement[]): string {
+function createRunInputExample(fields: WorkflowRunInputRequirement[]): string {
   const example: Record<string, unknown> = {}
   for (const field of fields) {
     const segments = field.path.split('.').filter(Boolean)
@@ -1539,17 +1318,7 @@ function createNodeTestInputExample(fields: NodeTestInputField[]): string {
 async function handleRun() {
   if (isRunning.value || !lf) return
   const graphData = lf.getGraphData() as { nodes: any[]; edges: any[] }
-  const runDefinition: WorkflowDefinition = {
-    globalVariables: globalVariables.value,
-    nodes: graphData.nodes.map((n: any) => normalizeCanvasNode(n)),
-    edges: graphData.edges.map((e: any) => ({
-      id: e.id,
-      sourceNodeId: e.sourceNodeId,
-      sourcePortName: e.properties?.sourcePortName || 'output',
-      targetNodeId: e.targetNodeId,
-      targetPortName: e.properties?.targetPortName || 'input',
-    })),
-  }
+  const runDefinition = buildWorkflowDefinition(globalVariables.value, graphData)
   const validationError = validateExecutableWorkflow(runDefinition)
   if (validationError) {
     Message.error(`无法试运行：${validationError}`)
@@ -1732,19 +1501,6 @@ function deleteSelectedNode() {
 }
 
 // 获取节点标题
-function getNodeTitle(type: string): string {
-  const def = getNodeDefinition(type)
-  if (def) return def.meta.title
-  switch (type) {
-    case 'cli-agent': return 'CLI Agent'
-    case 'variables': return '变量设置'
-    case 'condition': return '条件判断'
-    case 'loop': return '重试循环'
-    case 'file-input': return '文件输入'
-    case 'delay': return '延时等待'
-    default: return '节点'
-  }
-}
 
 onMounted(() => {
   setTimeout(() => {
@@ -2006,45 +1762,6 @@ onUnmounted(() => {
   border-radius: 6px;
 }
 
-.run-input-hint {
-  margin: 0 0 12px;
-  color: var(--tf-text-secondary);
-  font-size: 13px;
-}
-
-.run-input-guide { margin: 0 0 14px; }
-.run-input-fields {
-  margin: 0 0 14px;
-  padding: 10px 12px;
-  border: 1px solid var(--tf-border);
-  border-radius: 8px;
-  background: var(--tf-bg-body);
-}
-.run-input-fields-label {
-  display: block;
-  margin-bottom: 8px;
-  color: var(--tf-text-primary);
-  font-size: 13px;
-  font-weight: 600;
-}
-.run-input-field-tags { display: flex; flex-wrap: wrap; gap: 6px; }
-.run-input-field-description {
-  margin: 7px 0 0;
-  color: var(--tf-text-secondary);
-  font-size: 12px;
-}
-
-.node-test-warning { margin-bottom: 12px; }
-.node-test-confirm { display: flex; margin: 0 0 12px; }
-.node-test-json-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-top: 14px;
-  color: var(--tf-text-primary);
-  font-size: 13px;
-  font-weight: 600;
-}
 .node-test-result {
   margin-top: 14px;
   padding: 12px;
@@ -2065,37 +1782,6 @@ onUnmounted(() => {
   color: var(--tf-text-secondary);
 }
 .node-test-error { color: var(--tf-danger) !important; }
-.node-action-hint {
-  margin: 8px 0 0;
-  color: var(--tf-text-secondary);
-  font-size: 12px;
-}
-.node-help-description {
-  margin: 0;
-  color: var(--tf-text-secondary);
-  line-height: 1.65;
-}
-.node-help-section {
-  margin-top: 18px;
-  padding-top: 14px;
-  border-top: 1px solid var(--tf-border);
-}
-.node-help-section h4 {
-  margin: 0 0 8px;
-  color: var(--tf-text-primary);
-  font-size: 13px;
-}
-.node-help-port {
-  display: grid;
-  grid-template-columns: minmax(90px, auto) auto auto 1fr;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 0;
-  color: var(--tf-text-secondary);
-  font-size: 12px;
-}
-.node-help-port strong { color: var(--tf-text-primary); font-weight: 600; }
-
 /* LogicFlow 的选中态没有传入 Vue 节点属性，在画布层补上可感知的选择反馈。 */
 :deep(.lf-node-selected) .node-card {
   border-color: color-mix(in srgb, var(--node-color) 76%, var(--wf-node-border));

@@ -519,12 +519,10 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+/* 页面容器 — TimesheetView 自身布局 */
 .timesheet-page { height: 100%; display: flex; flex-direction: column; overflow: hidden; position: relative; }
 .timesheet-header { padding: 16px 24px 0; }
 .page-title { font-size: 18px; font-weight: 600; color: var(--tf-text-primary); margin: 0; }
-
-/* Attribute value dot */
-.attr-value-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
 
 /* Tabs — 让 a-tabs 紧贴 header，去掉默认内边距 */
 .timesheet-tabs { margin: 0; flex: 1; min-height: 0; display: flex; flex-direction: column; }
@@ -533,105 +531,12 @@ onMounted(async () => {
 .timesheet-tabs :deep(.arco-tabs-content-list) { height: 100%; }
 .timesheet-tabs :deep(.arco-tabs-pane) { height: 100%; display: flex; flex-direction: column; overflow: hidden; }
 
-/* Controls */
-.timesheet-controls { padding: 12px 24px; display: flex; align-items: center; justify-content: space-between; }
-.controls-left { display: flex; flex-direction: column; gap: 6px; }
-.user-selector-area { display: flex; align-items: center; }
-.user-selector-static { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 500; color: var(--tf-text-primary); }
-.user-option { display: flex; align-items: center; gap: 8px; }
-.user-option-name { font-size: 13px; color: var(--tf-text-primary); }
-.user-option-self { font-size: 11px; color: var(--tf-text-tertiary); }
-.project-selector { display: flex; align-items: center; gap: 8px; }
-.filters { display: flex; align-items: center; gap: 8px; font-size: 12px; margin-top: 4px; }
-.filter-label { color: var(--tf-text-tertiary); white-space: nowrap; }
-.filter-value { color: var(--tf-text-secondary); }
-.filter-reset { font-size: 12px; color: var(--tf-accent); cursor: pointer; white-space: nowrap; margin-left: 4px; text-decoration: none; }
-.filter-reset:hover { text-decoration: underline; }
-
-/* Date bar */
-.timesheet-datebar { padding: 8px 24px 12px; display: flex; align-items: center; justify-content: space-between; }
-.date-info { display: flex; flex-direction: column; gap: 2px; }
-.date-range { font-size: 15px; font-weight: 500; color: var(--tf-text-primary); }
-.total-time { font-size: 12px; color: var(--tf-text-tertiary); }
-.date-nav { display: flex; align-items: center; gap: 8px; }
-
-/* Week Grid - styles moved to WeekGrid.vue */
-
-/* Month Grid - styles moved to MonthGrid.vue */
-
-/* Project Overview */
-.project-overview { flex: 1; overflow-y: auto; padding: 0 24px 24px; }
-.project-summary-list { display: flex; flex-direction: column; gap: 8px; }
-.project-summary-card { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-radius: var(--tf-radius-md); background: var(--tf-bg-elevated); border: 1px solid var(--tf-border-light); cursor: pointer; transition: border-color 0.15s, background 0.1s; }
-.project-summary-card:hover { border-color: var(--tf-accent); background: var(--tf-bg-hover); }
-.project-summary-left { display: flex; align-items: center; gap: 10px; }
-.project-key-badge { font-size: 11px; font-weight: 600; color: var(--tf-accent); background: var(--tf-accent-bg); padding: 2px 8px; border-radius: var(--tf-radius-sm); }
-.project-name-text { font-size: 14px; font-weight: 500; color: var(--tf-text-primary); }
-.project-summary-right { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
-.project-total-dur { font-size: 14px; font-weight: 600; color: var(--tf-text-primary); }
-.project-entry-count { font-size: 11px; color: var(--tf-text-tertiary); }
-
-/* Project detail */
-.project-detail-view { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-
-/* Workgroup empty state */
-.workgroup-empty { flex: 1; display: flex; align-items: center; justify-content: center; padding: 48px 24px; }
-
-/* Work Groups view */
-.group-overview { flex: 1; overflow-y: auto; padding: 0 24px 24px; display: flex; flex-direction: column; gap: 8px; }
-.group-block { border: 1px solid var(--tf-border-light); border-radius: var(--tf-radius-md); overflow: hidden; }
-.group-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: var(--tf-bg-elevated); cursor: pointer; transition: background 0.15s; user-select: none; }
-.group-header:hover { background: var(--tf-bg-hover); }
-.group-header.expanded { border-bottom: 1px solid var(--tf-border-light); }
-.group-header-left { display: flex; align-items: center; gap: 8px; }
-.group-expand-icon { font-size: 10px; color: var(--tf-text-tertiary); width: 12px; }
-.group-icon { font-size: 14px; }
-.group-name { font-size: 14px; font-weight: 600; color: var(--tf-text-primary); }
-.group-member-count { font-size: 11px; color: var(--tf-text-tertiary); background: var(--tf-bg-surface); padding: 1px 6px; border-radius: 10px; }
-.group-header-right { display: flex; align-items: center; }
-.group-total-dur { font-size: 14px; font-weight: 600; color: var(--tf-accent); }
-.group-members { display: flex; flex-direction: column; }
-.member-row { display: flex; align-items: center; gap: 12px; padding: 8px 16px; border-bottom: 1px solid var(--tf-border-light); }
-.member-row:last-child { border-bottom: none; }
-.member-info { display: flex; align-items: center; gap: 8px; min-width: 140px; max-width: 140px; }
-.member-name { font-size: 13px; color: var(--tf-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.member-bar-area { flex: 1; display: flex; flex-wrap: wrap; gap: 4px; min-height: 24px; align-items: center; }
-.member-entries { display: flex; flex-wrap: wrap; gap: 4px; }
-.member-entry-chip { font-size: 11px; padding: 2px 8px; border-radius: 10px; background: var(--tf-accent-bg); color: var(--tf-accent); cursor: pointer; transition: opacity 0.15s; white-space: nowrap; }
-.member-entry-chip:hover { opacity: 0.8; }
-.member-no-entries { font-size: 12px; color: var(--tf-text-tertiary); font-style: italic; }
-.member-total { min-width: 48px; text-align: right; }
-.member-total-dur { font-size: 13px; font-weight: 600; color: var(--tf-text-primary); }
-.member-total-zero { font-size: 13px; color: var(--tf-text-tertiary); }
-
-/* Loading */
-.loading-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: center; background: var(--tf-fill-light); z-index: 10; pointer-events: none; }
-
-/* Dialog */
-.time-dialog { padding: 4px 0; }
-.dialog-field { margin-bottom: 16px; }
-.dialog-label { display: block; font-size: 12px; color: var(--tf-text-tertiary); margin-bottom: 6px; font-weight: 500; }
-.dialog-row { display: flex; gap: 12px; }
-.flex-1 { flex: 1; }
-
-.author-display { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--tf-bg-surface); border: 1px solid var(--tf-border-light); border-radius: var(--tf-radius-md); }
-.author-name { font-size: 13px; color: var(--tf-text-primary); }
-
-.date-mode-toggle { display: inline-flex; border: 1px solid var(--tf-border); border-radius: var(--tf-radius-md); overflow: hidden; }
-.date-mode-btn { padding: 6px 14px; font-size: 12px; border: none; background: transparent; color: var(--tf-text-secondary); cursor: pointer; transition: background 0.15s, color 0.15s; }
-.date-mode-btn.active { background: var(--tf-bg-elevated); color: var(--tf-text-primary); font-weight: 500; }
-.date-mode-btn + .date-mode-btn { border-left: 1px solid var(--tf-border); }
-
-.add-another { margin-bottom: 16px; }
-.add-another-link { font-size: 13px; color: var(--tf-accent); cursor: pointer; text-decoration: none; }
-.add-another-link:hover { text-decoration: underline; }
-
-.extra-records { margin-bottom: 16px; display: flex; flex-direction: column; gap: 8px; }
-.extra-record-row { display: flex; align-items: center; gap: 8px; }
-.remove-record-btn { width: 24px; height: 24px; border: none; background: transparent; color: var(--tf-text-tertiary); cursor: pointer; font-size: 14px; border-radius: 4px; display: flex; align-items: center; justify-content: center; }
-.remove-record-btn:hover { background: var(--tf-bg-hover); color: var(--tf-text-primary); }
-
-.dialog-actions { display: flex; justify-content: space-between; align-items: center; padding-top: 16px; border-top: 1px solid var(--tf-border-light); }
-.actions-left { display: flex; gap: 8px; }
-.actions-right { display: flex; gap: 8px; }
+/*
+  :deep 穿透子组件，统一 PeopleTab / ProjectsTab 的控制栏布局。
+  避免两个组件各自重复同一份 CSS。
+*/
+.timesheet-tabs :deep(.timesheet-controls) { padding: 12px 24px; display: flex; align-items: center; }
+.timesheet-tabs :deep(.controls-left) { display: flex; flex-direction: column; gap: 6px; }
+.timesheet-tabs :deep(.loading-overlay) { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: var(--tf-fill-light); z-index: 10; pointer-events: none; }
+.timesheet-tabs :deep(.attr-value-dot) { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
 </style>

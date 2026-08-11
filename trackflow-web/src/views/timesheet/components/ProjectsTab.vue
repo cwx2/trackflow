@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <!--
     ===== ProjectsTab — 项目视图 =====
     展示所有可见项目的工时汇总，或选中某个项目后显示明细日历。
@@ -134,8 +134,6 @@ defineEmits<{
 </script>
 
 <style scoped>
-.timesheet-controls { padding: 12px 24px; display: flex; align-items: center; }
-.controls-left { display: flex; flex-direction: column; gap: 6px; }
 .project-selector { display: flex; align-items: center; gap: 8px; }
 .filters { display: flex; align-items: center; gap: 8px; font-size: 12px; }
 .filter-label { color: var(--tf-text-tertiary); white-space: nowrap; }
@@ -152,5 +150,4 @@ defineEmits<{
 .project-total-dur { font-size: 14px; font-weight: 600; color: var(--tf-text-primary); }
 .project-entry-count { font-size: 11px; color: var(--tf-text-tertiary); }
 .project-detail-view { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-.loading-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: var(--tf-fill-light); z-index: 10; pointer-events: none; }
 </style>
