@@ -149,6 +149,10 @@
                     <IssuePriorityBadge :priority="issue.priority" mode="dot" size="small" />
                   </div>
                   <div class="card-title">{{ issue.title }}</div>
+                  <div v-if="issue.dueDate" class="card-due" :class="'card-due--' + getDueDateStatus(issue.dueDate)">
+                    <icon-clock-circle class="card-due-icon" />
+                    <span class="card-due-text">{{ formatDueDate(issue.dueDate) }}</span>
+                  </div>
                   <div class="card-meta">
                     <span class="card-type">{{ localizeIssueType(issue.issueType) }}</span>
                     <span v-if="issue.estimatedHours" class="card-estimation">⏱ {{ issue.estimatedHours }}h</span>
@@ -328,6 +332,10 @@
                     <IssuePriorityBadge :priority="issue.priority" mode="dot" size="small" />
                   </div>
                   <div class="card-title">{{ issue.title }}</div>
+                  <div v-if="issue.dueDate" class="card-due" :class="'card-due--' + getDueDateStatus(issue.dueDate)">
+                    <icon-clock-circle class="card-due-icon" />
+                    <span class="card-due-text">{{ formatDueDate(issue.dueDate) }}</span>
+                  </div>
                   <div class="card-meta">
                     <span class="card-type">{{ localizeIssueType(issue.issueType) }}</span>
                     <span v-if="issue.estimatedHours" class="card-estimation">⏱ {{ issue.estimatedHours }}h</span>
@@ -473,11 +481,11 @@
 </template>
 
 <script setup lang="ts">
-import { formatDate } from '@/utils/date'
+import { formatDate, formatDueDate, getDueDateStatus } from '@/utils/date'
 import { ref, computed, watch, reactive, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { Message, Modal } from '@arco-design/web-vue'
-import { IconSearch, IconPlus, IconList, IconFilter, IconDown, IconUp } from '@arco-design/web-vue/es/icon'
+import { IconSearch, IconPlus, IconList, IconFilter, IconDown, IconUp, IconClockCircle } from '@arco-design/web-vue/es/icon'
 import { issueApi, sprintApi, projectApi } from '@/api'
 import { ERROR_CODES } from '@/api/error-codes'
 import { useProjectStore } from '@/stores/project'
@@ -1625,6 +1633,45 @@ onMounted(async () => {
   background: var(--color-fill-2);
   padding: 1px 4px;
   border-radius: 3px;
+}
+
+/* ===== Card Due Date ===== */
+.card-due {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  font-size: 10px;
+  line-height: 1;
+  padding: 2px 0;
+}
+
+.card-due-icon {
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.card-due-text {
+  font-weight: 500;
+}
+
+/* 已逾期：红色醒目 */
+.card-due--overdue {
+  color: var(--tf-danger);
+}
+
+.card-due--overdue .card-due-text {
+  font-weight: 600;
+}
+
+/* 即将到期（≤3天）：警告色 */
+.card-due--due-soon {
+  color: var(--color-warning-6, #f59e0b);
+}
+
+/* 正常未来日期：三级文字色 */
+.card-due--normal {
+  color: var(--color-text-3);
 }
 .sprint-total-hours {
   font-size: 11px;

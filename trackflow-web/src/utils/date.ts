@@ -165,3 +165,50 @@ export function formatDateDisplay(input: DateInput): string {
   if (!d) return ''
   return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`
 }
+
+// ─── 截止日期相关（Sprint 规划卡片等场景） ───────────────────────────────────
+
+export type DueDateStatus = 'overdue' | 'due-soon' | 'normal' | 'none'
+
+/**
+ * 判断截止日期状态。
+ * - overdue：已过期
+ * - due-soon：3 天内到期（含今天）
+ * - normal：超过 3 天
+ * - none：无截止日期
+ */
+export function getDueDateStatus(input: DateInput): DueDateStatus {
+  const d = toDate(input)
+  if (!d) return 'none'
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const due = new Date(d)
+  due.setHours(0, 0, 0, 0)
+  const diffMs = due.getTime() - today.getTime()
+  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
+  if (diffDays < 0) return 'overdue'
+  if (diffDays <= 3) return 'due-soon'
+  return 'normal'
+}
+
+/**
+ * 格式化截止日期的紧凑显示文本。
+ * - 已过期：返回 "逾期 N天"
+ * - 今天到期：返回 "今天到期"
+ * - 3 天内：返回 "N天后到期"
+ * - 更远：返回 "M/D"（不含年）
+ */
+export function formatDueDate(input: DateInput): string {
+  const d = toDate(input)
+  if (!d) return ''
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const due = new Date(d)
+  due.setHours(0, 0, 0, 0)
+  const diffMs = due.getTime() - today.getTime()
+  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
+  if (diffDays < 0) return `逾期 ${Math.abs(diffDays)}天`
+  if (diffDays === 0) return '今天到期'
+  if (diffDays <= 3) return `${diffDays}天后到期`
+  return `${due.getMonth() + 1}/${due.getDate()}`
+}
