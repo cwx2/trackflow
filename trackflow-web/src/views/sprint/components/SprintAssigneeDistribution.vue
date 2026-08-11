@@ -88,11 +88,6 @@
           </div>
         </div>
 
-        <!-- 空状态：用 EmptyState 替代手写 div -->
-        <EmptyState
-          v-if="distribution.assignees.length === 0 && distribution.unassignedCount === 0"
-          icon="user-group"
-          title="暂无工单数据"
         </div>
       </DataContainer>
     </div>
@@ -207,8 +202,7 @@ function handleClickAssignee(userId: string | null) {
 
 .distribution-content { margin-top: 4px; }
 
-.distribution-loading,
-.distribution-error {
+.distribution-loading {
   display: flex;
   align-items: center;
   gap: 8px;
