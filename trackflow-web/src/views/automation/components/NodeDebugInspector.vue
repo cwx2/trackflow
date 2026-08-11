@@ -106,6 +106,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatJson } from '@/utils/automation'
 import { copyToClipboard } from '@/utils/clipboard'
 import { computed, ref } from 'vue'
 import JsonDataViewer from './JsonDataViewer.vue'
@@ -161,10 +162,7 @@ function findCollection(value: unknown): OutputCollection | null {
   return match ? { label: match[0], items: match[1] as unknown[] } : null
 }
 
-function formatJson(value: unknown) {
-  if (value == null) return '—'
-  try { return JSON.stringify(value, null, 2) } catch { return String(value) }
-}
+
 
 function valueSummary(value: unknown) {
   if (conditionResult.value) return conditionResult.value.passed ? '命中成立分支' : '命中不成立分支'

@@ -11,8 +11,8 @@
       <div v-if="detail" class="detail-layout">
         <!-- 顶部概览 -->
         <div class="overview-bar">
-          <a-tag :color="statusColor(detail.status)" size="medium">
-            {{ statusLabel(detail.status) }}
+          <a-tag :color="executionStatusColor(detail.status)" size="medium">
+            {{ executionStatusLabel(detail.status) }}
           </a-tag>
           <span class="overview-item">
             <span class="overview-label">开始：</span>{{ formatDateTime(detail.startedAt) }}
@@ -41,7 +41,7 @@
               <div class="node-item-info">
                 <div class="node-item-name">{{ ne.nodeName || ne.nodeType }}</div>
                 <div class="node-item-meta">
-                  <a-tag :color="statusColor(ne.status)" size="small">{{ statusLabel(ne.status) }}</a-tag>
+                  <a-tag :color="executionStatusColor(ne.status)" size="small">{{ executionStatusLabel(ne.status) }}</a-tag>
                   <span v-if="ne.durationMs" class="node-duration">{{ formatDurationMs(ne.durationMs) }}</span>
                 </div>
               </div>
@@ -76,6 +76,7 @@
 </template>
 
 <script setup lang="ts">
+import { executionStatusColor, executionStatusLabel, formatJson } from '@/utils/automation'
 import { formatDurationMs } from '@/utils/duration'
 import { formatDateTime } from '@/utils/date'
 import { ref, watch, computed } from 'vue'
@@ -103,26 +104,15 @@ function selectNode(nodeId: string) {
   selectedNodeId.value = nodeId
 }
 
-function statusColor(status: string) {
-  return { running: 'blue', success: 'green', failed: 'red', cancelled: 'gray', skipped: 'orange' }[status] || 'gray'
-}
-
-function statusLabel(status: string) {
-  return { running: '运行中', success: '成功', failed: '失败', cancelled: '已取消', skipped: '已跳过' }[status] || status
-}
 
 
 
 
 
-function formatJson(val: unknown): string {
-  if (val === null || val === undefined) return '(空)'
-  try {
-    return JSON.stringify(val, null, 2)
-  } catch {
-    return String(val)
-  }
-}
+
+
+
+
 
 async function loadDetail() {
   if (!props.executionId) return

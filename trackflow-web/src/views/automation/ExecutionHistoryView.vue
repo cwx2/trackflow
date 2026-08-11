@@ -40,8 +40,8 @@
           @page-size-change="handlePageSizeChange"
         >
           <template #status="{ record }">
-            <a-tag :color="statusColor(record.status)" size="small">
-              {{ statusLabel(record.status) }}
+            <a-tag :color="executionStatusColor(record.status)" size="small">
+              {{ executionStatusLabel(record.status) }}
             </a-tag>
           </template>
           <template #startedAt="{ record }">
@@ -71,6 +71,7 @@
 </template>
 
 <script setup lang="ts">
+import { executionStatusColor, executionStatusLabel } from '@/utils/automation'
 import { formatDurationMs } from '@/utils/duration'
 import { formatDateTime } from '@/utils/date'
 import { ref, onMounted, computed } from 'vue'
@@ -104,19 +105,9 @@ const columns = [
   { title: '操作',     slotName: 'actions',    width: 100 },
 ]
 
-function statusColor(status: string) {
-  const map: Record<string, string> = {
-    running: 'blue', success: 'green', failed: 'red', cancelled: 'gray'
-  }
-  return map[status] || 'gray'
-}
 
-function statusLabel(status: string) {
-  const map: Record<string, string> = {
-    running: '运行中', success: '成功', failed: '失败', cancelled: '已取消'
-  }
-  return map[status] || status
-}
+
+
 
 
 
