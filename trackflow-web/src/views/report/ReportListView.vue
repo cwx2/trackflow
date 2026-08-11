@@ -52,12 +52,25 @@
       </a-select>
     </div>
 
-    <!-- 加载状态 -->
+    <!-- 加载状态（skeleton） -->
     <div v-if="loading" class="report-loading">
       <a-skeleton :animation="true" v-for="i in 3" :key="i" style="margin-bottom: 16px">
         <a-skeleton-line :rows="3" :widths="['50%', '80%', '30%']" />
       </a-skeleton>
     </div>
+
+    <!-- 加载失败 -->
+    <EmptyState
+      v-else-if="loadError"
+      type="error"
+      icon="exclamation-circle"
+      title="加载失败"
+      :description="loadError"
+    >
+      <template #action>
+        <a-button type="primary" size="small" @click="loadReports">重试</a-button>
+      </template>
+    </EmptyState>
 
     <!-- 空状态 -->
     <EmptyState
@@ -341,6 +354,7 @@ import type { ProjectVO } from '@/api/types'
 const authStore = useAuthStore()
 
 const loading = ref(true)
+const loadError = ref<string | null>(null)
 const reports = ref<ReportDefinitionVO[]>([])
 const projects = ref<ProjectVO[]>([])
 const selectedProjectId = ref<string | undefined>(undefined)
@@ -553,11 +567,12 @@ watch(() => form.groupBy, (newGroupBy) => {
 
 async function loadReports() {
   loading.value = true
+  loadError.value = null
   try {
     const res = await reportApi.list(selectedProjectId.value)
     reports.value = res.data || []
   } catch (e: any) {
-    Message.error(e.response?.data?.message || '加载报表失败')
+    loadError.value = e.response?.data?.message || '加载报表失败'
   } finally {
     loading.value = false
   }
