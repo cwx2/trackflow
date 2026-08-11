@@ -1,5 +1,6 @@
 import type { InputParameter, OutputPort, WorkflowDefinition } from '@/api/automation'
 import { getNodeDefinition } from './node-definitions'
+import { FLOW_PORT } from './graph/connection-semantics'
 
 /** 与后端 WorkflowDefinitionValidator 对齐的运行前检查，避免用户等待一次 400 才知道画布无效。 */
 export function validateExecutableWorkflow(definition: WorkflowDefinition): string | null {
@@ -36,6 +37,14 @@ export function validateExecutableWorkflow(definition: WorkflowDefinition): stri
     const source = byId.get(edge.sourceNodeId)
     const target = byId.get(edge.targetNodeId)
     if (!source || !target) return `连线 ${edge.id} 引用了不存在的节点`
+    const isControlEdge = edge.sourcePortName === FLOW_PORT || edge.targetPortName === FLOW_PORT
+    if (isControlEdge) {
+      if (edge.sourcePortName !== FLOW_PORT || edge.targetPortName !== FLOW_PORT) {
+        return `流程线必须从流程出口连接到流程入口：${edge.id}`
+      }
+      // 流程端口是画布运行时提供的虚拟端口，不属于节点的数据端口契约。
+      continue
+    }
     const sourcePort = getNodeDefinition(source.type)?.outputPorts.find(port => port.name === edge.sourcePortName)
     const targetPort = getNodeDefinition(target.type)?.inputPorts.find(port => port.name === edge.targetPortName)
     if (!sourcePort) return `连线来源端口不存在：${edge.sourcePortName}`
