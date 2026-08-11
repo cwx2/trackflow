@@ -5,29 +5,29 @@
       <h1 class="page-title">时间表</h1>
     </div>
 
-    <!-- ===================== 统一日期栏（所有视图共用） ===================== -->
-    <div class="timesheet-datebar">
-      <div class="date-info">
-        <span class="date-range">{{ dateRangeLabel }}</span>
-        <span class="total-time">{{ totalTimeLabel }}</span>
-      </div>
-      <div class="date-nav">
-        <a-button size="small" @click="navigate(-1)">←</a-button>
-        <a-button size="small" @click="goToday">今天</a-button>
-        <a-button size="small" @click="navigate(1)">→</a-button>
-        <a-radio-group v-model="viewMode" type="button" size="small" @change="onViewModeChange">
-          <a-radio value="week">周</a-radio>
-          <a-radio value="month">月</a-radio>
-        </a-radio-group>
-        <a-button v-if="activeTab === 'people'" type="primary" size="small" @click="openAddDialog()">添加已花费时间</a-button>
-      </div>
-    </div>
-
     <!-- ===================== Tab 导航 ===================== -->
     <a-tabs v-model:active-key="activeTab" class="timesheet-tabs" @change="(key) => switchTab(key as 'people' | 'projects' | 'workgroups')">
 
     <!-- ===================== 人员视图 ===================== -->
     <a-tab-pane key="people" title="人员">
+      <!-- Date range & navigation -->
+      <div class="timesheet-datebar">
+        <div class="date-info">
+          <span class="date-range">{{ dateRangeLabel }}</span>
+          <span class="total-time">{{ totalTimeLabel }}</span>
+        </div>
+        <div class="date-nav">
+          <a-button size="small" @click="navigate(-1)">←</a-button>
+          <a-button size="small" @click="goToday">今天</a-button>
+          <a-button size="small" @click="navigate(1)">→</a-button>
+          <a-radio-group v-model="viewMode" type="button" size="small" @change="onViewModeChange">
+            <a-radio value="week">周</a-radio>
+            <a-radio value="month">月</a-radio>
+          </a-radio-group>
+          <a-button type="primary" size="small" @click="openAddDialog()">添加已花费时间</a-button>
+        </div>
+      </div>
+
       <!-- User selector & filters -->
       <div class="timesheet-controls">
         <div class="controls-left">
@@ -123,6 +123,23 @@
 
     <!-- ===================== 项目视图 ===================== -->
     <a-tab-pane key="projects" title="项目">
+      <!-- Date range & navigation -->
+      <div class="timesheet-datebar">
+        <div class="date-info">
+          <span class="date-range">{{ dateRangeLabel }}</span>
+          <span class="total-time">{{ totalTimeLabel }}</span>
+        </div>
+        <div class="date-nav">
+          <a-button size="small" @click="navigate(-1)">←</a-button>
+          <a-button size="small" @click="goToday">今天</a-button>
+          <a-button size="small" @click="navigate(1)">→</a-button>
+          <a-radio-group v-model="viewMode" type="button" size="small" @change="onViewModeChange">
+            <a-radio value="week">周</a-radio>
+            <a-radio value="month">月</a-radio>
+          </a-radio-group>
+        </div>
+      </div>
+
       <!-- Project selector & filters -->
       <div class="timesheet-controls">
         <div class="controls-left">
@@ -208,6 +225,22 @@
 
     <!-- ===================== 工作群组视图 ===================== -->
     <a-tab-pane key="workgroups" title="工作群组">
+      <!-- Date range & navigation -->
+      <div class="timesheet-datebar">
+        <div class="date-info">
+          <span class="date-range">{{ dateRangeLabel }}</span>
+          <span class="total-time">{{ totalTimeLabel }}</span>
+        </div>
+        <div class="date-nav">
+          <a-button size="small" @click="navigate(-1)">←</a-button>
+          <a-button size="small" @click="goToday">今天</a-button>
+          <a-button size="small" @click="navigate(1)">→</a-button>
+          <a-radio-group v-model="viewMode" type="button" size="small" @change="onViewModeChange">
+            <a-radio value="week">周</a-radio>
+            <a-radio value="month">月</a-radio>
+          </a-radio-group>
+        </div>
+      </div>
 
       <!-- 无数据空状态 -->
       <EmptyState
