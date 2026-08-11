@@ -285,7 +285,7 @@
         v-else-if="!loading && statuses.length > 0 && filteredStatuses.length === 0"
         icon="search"
         title="没有匹配的状态"
-        description="尝试修改搜索关键词或关闭"只显示已配置"筛选。"
+        description="尝试修改搜索关键词或关闭「只显示已配置」筛选。"
       >
         <template #action>
           <a-button type="primary" @click="resetFilters">重置筛选</a-button>
