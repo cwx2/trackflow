@@ -1,7 +1,9 @@
 <template>
   <div class="assignee-distribution" v-if="visible">
     <div class="distribution-header" @click="toggleExpand">
-      <span class="toggle-icon">{{ expanded ? '▾' : '▸' }}</span>
+      <!-- 折叠箭头：用 Arco 图标替代 ▾/▸ 字符 -->
+      <icon-down v-if="expanded" class="toggle-icon" />
+      <icon-right v-else class="toggle-icon" />
       <span class="distribution-title">负责人分布</span>
       <span class="distribution-summary" v-if="!expanded && distribution">
         {{ distribution.assignees.length }} 人
@@ -26,14 +28,14 @@
 
       <!-- 分布数据 -->
       <div v-else-if="distribution" class="distribution-body">
-        <!-- 未分配行（视觉突出） -->
+        <!-- 未分配行：用 UserAvatar 替代手写 ? 头像 -->
         <div
           v-if="distribution.unassignedCount > 0"
           class="assignee-row unassigned"
           @click="handleClickAssignee(null)"
         >
           <div class="assignee-info">
-            <span class="assignee-avatar-placeholder">?</span>
+            <UserAvatar name="未分配" :size="22" />
             <span class="assignee-name">未分配</span>
           </div>
           <div class="assignee-stats">
@@ -82,10 +84,13 @@
           </div>
         </div>
 
-        <!-- 空状态（所有工单都未分配） -->
-        <div v-if="distribution.assignees.length === 0 && distribution.unassignedCount === 0" class="distribution-empty">
-          暂无工单数据
-        </div>
+        <!-- 空状态：用 EmptyState 替代手写 div -->
+        <EmptyState
+          v-if="distribution.assignees.length === 0 && distribution.unassignedCount === 0"
+          icon="user-group"
+          title="暂无工单数据"
+          :compact="true"
+        />
       </div>
     </div>
   </div>
@@ -95,7 +100,8 @@
 import { ref, watch } from 'vue'
 import { sprintApi } from '@/api'
 import type { SprintAssigneeDistributionVO } from '@/api/types'
-import { UserAvatar } from '@/components/base'
+import { UserAvatar, EmptyState } from '@/components/base'
+import { IconDown, IconRight } from '@arco-design/web-vue/es/icon'
 
 const props = defineProps<{
   sprintId: string
@@ -113,7 +119,6 @@ const loading = ref(false)
 const error = ref(false)
 const distribution = ref<SprintAssigneeDistributionVO | null>(null)
 
-// 只有展开时才加载数据（按需加载）
 watch(expanded, (val) => {
   if (val && !distribution.value && !loading.value) {
     loadDistribution()
@@ -155,12 +160,7 @@ function formatHours(hours: number): string {
 }
 
 function handleClickAssignee(userId: string | null) {
-  // 发出事件，让父组件决定如何展示（Drawer 或路由跳转）
-  if (userId === null) {
-    emit('view-issues', 'unassigned')
-  } else {
-    emit('view-issues', userId)
-  }
+  emit('view-issues', userId === null ? 'unassigned' : userId)
 }
 </script>
 
@@ -181,15 +181,13 @@ function handleClickAssignee(userId: string | null) {
   user-select: none;
   transition: background 0.15s;
 }
-.distribution-header:hover {
-  background: var(--color-fill-1);
-}
+.distribution-header:hover { background: var(--color-fill-1); }
 
 .toggle-icon {
   font-size: 11px;
   color: var(--color-text-3);
   width: 12px;
-  text-align: center;
+  flex-shrink: 0;
 }
 
 .distribution-title {
@@ -204,9 +202,7 @@ function handleClickAssignee(userId: string | null) {
   margin-left: auto;
 }
 
-.distribution-content {
-  margin-top: 4px;
-}
+.distribution-content { margin-top: 4px; }
 
 .distribution-loading,
 .distribution-error {
@@ -233,37 +229,18 @@ function handleClickAssignee(userId: string | null) {
   cursor: pointer;
   transition: background 0.15s;
 }
-.assignee-row:hover {
-  background: var(--color-fill-1);
-}
-
+.assignee-row:hover { background: var(--color-fill-1); }
 .assignee-row.unassigned {
   background: var(--tf-warning-bg);
   border: 1px solid rgba(var(--warning-6), 0.12);
 }
-.assignee-row.unassigned:hover {
-  background: var(--tf-warning-bg);
-}
+.assignee-row.unassigned:hover { background: var(--tf-warning-bg); }
 
 .assignee-info {
   display: flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
-  flex-shrink: 0;
-}
-
-.assignee-avatar-placeholder {
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background: rgba(var(--warning-6), 0.15);
-  color: rgb(var(--warning-6));
-  font-size: 11px;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   flex-shrink: 0;
 }
 
@@ -314,23 +291,8 @@ function handleClickAssignee(userId: string | null) {
   border-radius: 3px;
 }
 
-.mini-bar-segment {
-  height: 100%;
-}
-.mini-bar-segment.done {
-  background: var(--tf-success);
-}
-.mini-bar-segment.in-progress {
-  background: var(--tf-accent);
-}
-.mini-bar-segment.todo {
-  background: var(--color-fill-3);
-}
-
-.distribution-empty {
-  padding: 12px 4px;
-  font-size: 12px;
-  color: var(--color-text-3);
-  font-style: italic;
-}
+.mini-bar-segment { height: 100%; }
+.mini-bar-segment.done { background: var(--tf-success); }
+.mini-bar-segment.in-progress { background: var(--tf-accent); }
+.mini-bar-segment.todo { background: var(--color-fill-3); }
 </style>
