@@ -591,6 +591,7 @@
 </template>
 
 <script setup lang="ts">
+
 import { ref, reactive, computed, onMounted, onActivated, onUnmounted, watch, h, nextTick, provide } from 'vue'
 import { useRouter, useRoute, onBeforeRouteLeave } from 'vue-router'
 import { IconLoading, IconCheckCircle, IconEye, IconLayout, IconExpand, IconDownload, IconFile, IconCode, IconCopy, IconLink, IconCalendar, IconRight } from '@arco-design/web-vue/es/icon'
@@ -708,8 +709,16 @@ const activeQueryName = ref('所有工单')
 const activeQueryObj = ref<any | null>(null)
 const activeTagId = ref<string | null>(null)
 // projectList 供 FilterBar / useDashboardFilter 使用，从 queryPanelRef 同步
+// 注意：Vue 3 template ref proxy 会自动 unwrap 被 defineExpose 暴露的 Ref，
+// 因此直接访问 .projectList 即可获取数组值，无需再 .value
 const projectList = computed<Array<{ id: string; name: string; key: string; favorited?: boolean }>>(
-  () => (queryPanelRef.value as any)?.projectList?.value ?? []
+  () => {
+    const panel = queryPanelRef.value as any
+    if (!panel) return []
+    const list = panel.projectList
+    // 兼容：如果拿到的仍是 Ref 对象（极端时序下未被代理 unwrap），取 .value
+    return Array.isArray(list) ? list : (list?.value ?? [])
+  }
 )
 
 // Hide resolved toggle（仍在父级，同时传给 QueryPanel 和 useIssueExport）
