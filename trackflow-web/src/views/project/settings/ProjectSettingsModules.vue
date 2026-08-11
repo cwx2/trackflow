@@ -6,12 +6,12 @@
       <span>项目已归档，设置为只读状态</span>
     </div>
 
-    <!-- 加载状态 -->
-    <div v-if="loading" class="loading-state">
-      <a-spin :size="24" />
-    </div>
-
-    <template v-else>
+    <!-- 三态容器：loading / error / 内容 -->
+    <DataContainer
+      :loading="loading"
+      :error="loadError"
+      :retry="loadModules"
+    >
       <!-- 说明 -->
       <div class="settings-section">
         <h3 class="section-title">功能模块</h3>
@@ -52,7 +52,7 @@
           <a-button type="primary" :loading="saving" @click="saveChanges">保存变更</a-button>
         </div>
       </div>
-    </template>
+    </DataContainer>
   </div>
 </template>
 
@@ -71,6 +71,7 @@ import {
 } from '@arco-design/web-vue/es/icon'
 import { projectApi } from '@/api'
 import type { ProjectDetailVO } from '@/api/types'
+import { DataContainer } from '@/components/base'
 
 const props = defineProps<{
   project: ProjectDetailVO
@@ -118,6 +119,7 @@ const MODULE_META: Record<string, { label: string; icon: any; description: strin
 }
 
 const loading = ref(true)
+const loadError = ref<string | null>(null)
 const saving = ref(false)
 const allModules = ref<string[]>([])
 const coreModules = ref<string[]>([])
@@ -177,6 +179,7 @@ async function saveChanges() {
 
 async function loadModules() {
   loading.value = true
+  loadError.value = null
   try {
     const res = await projectApi.getEnabledModules(props.project.id)
     if (res.code === 0) {
@@ -186,7 +189,7 @@ async function loadModules() {
       originalEnabled.value = new Set(res.data.enabledModules)
     }
   } catch (e: any) {
-    Message.error('加载模块配置失败')
+    loadError.value = e.response?.data?.message || '加载模块配置失败'
   } finally {
     loading.value = false
   }
@@ -217,13 +220,6 @@ onMounted(() => {
 .archived-notice .notice-icon {
   color: var(--color-warning-6);
   font-size: 16px;
-}
-
-.loading-state {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 120px;
 }
 
 .settings-section {

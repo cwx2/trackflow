@@ -6,12 +6,8 @@
       <span>项目已归档，设置为只读状态</span>
     </div>
 
-    <!-- 加载状态 -->
-    <div v-if="loading" class="loading-state">
-      <a-spin :size="24" />
-    </div>
-
-    <template v-else>
+    <!-- 加载/内容区 -->
+    <DataContainer :loading="loading">
       <!-- 启用开关 Section -->
       <div class="settings-section">
         <h3 class="section-title">时间追踪</h3>
@@ -69,7 +65,7 @@
           </div>
         </div>
       </div>
-    </template>
+    </DataContainer>
 
     <!-- 禁用确认对话框 -->
     <a-modal
@@ -136,6 +132,7 @@ import { Message } from '@arco-design/web-vue'
 import { IconLock, IconInfoCircle, IconCheckCircle, IconExclamationCircleFill, IconSync } from '@arco-design/web-vue/es/icon'
 import { projectApi } from '@/api'
 import type { ProjectDetailVO } from '@/api/types'
+import { DataContainer } from '@/components/base'
 
 const props = defineProps<{
   project: ProjectDetailVO
@@ -248,14 +245,6 @@ async function doToggle(newEnabled: boolean) {
 .archived-notice .notice-icon {
   font-size: 16px;
   color: var(--tf-text-tertiary);
-}
-
-/* Loading */
-.loading-state {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 120px;
 }
 
 /* Section */

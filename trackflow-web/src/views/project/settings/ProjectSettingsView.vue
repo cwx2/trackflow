@@ -1,17 +1,16 @@
 <template>
   <div class="project-settings-page">
-    <!-- 加载状态 -->
-    <div v-if="loading" class="loading-state">
-      <a-spin :size="28" />
-    </div>
-
-    <template v-else-if="project">
+    <DataContainer
+      :loading="loading"
+      :error="error || undefined"
+      :retry="loadProject"
+    >
       <!-- 顶部面包屑 -->
       <div class="page-header">
         <div class="breadcrumb">
           <a class="breadcrumb-link" @click="$router.push('/projects')">项目</a>
           <span class="breadcrumb-sep">/</span>
-          <a class="breadcrumb-link" @click="$router.push(`/projects/${project.key}`)">{{ project.name }}</a>
+          <a class="breadcrumb-link" @click="$router.push(`/projects/${project!.key}`)">{{ project!.name }}</a>
           <span class="breadcrumb-sep">/</span>
           <span class="breadcrumb-current">设置</span>
         </div>
@@ -27,7 +26,7 @@
       <a-tabs :active-key="activeTab" @change="handleTabChange" class="settings-tabs">
         <a-tab-pane key="general" title="基本设置">
           <ProjectSettingsGeneral
-            :project="project"
+            :project="project!"
             :can-edit="canEditProject"
             :is-archived="isArchived"
             @updated="handleProjectUpdated"
@@ -35,60 +34,52 @@
         </a-tab-pane>
         <a-tab-pane key="members" title="成员管理">
           <ProjectSettingsMembers
-            :project="project"
+            :project="project!"
             :can-manage="canManageMembers"
             :is-archived="isArchived"
           />
         </a-tab-pane>
         <a-tab-pane key="custom-fields" title="自定义字段">
           <ProjectSettingsCustomFields
-            :project="project"
+            :project="project!"
             :can-manage="canManageCustomFields"
             :is-archived="isArchived"
           />
         </a-tab-pane>
         <a-tab-pane key="workflow" title="工作流">
           <ProjectSettingsWorkflow
-            :project="project"
+            :project="project!"
             :can-manage="canManageWorkflow"
             :is-archived="isArchived"
           />
         </a-tab-pane>
         <a-tab-pane key="time-tracking" title="时间追踪">
           <ProjectSettingsTimeTracking
-            :project="project"
+            :project="project!"
             :can-manage="canEditProject"
             :is-archived="isArchived"
           />
         </a-tab-pane>
         <a-tab-pane key="modules" title="功能模块">
           <ProjectSettingsModules
-            :project="project"
+            :project="project!"
             :can-manage="canEditProject"
             :is-archived="isArchived"
           />
         </a-tab-pane>
       </a-tabs>
-    </template>
-
-    <!-- 错误状态 -->
-    <div v-else-if="error" class="error-state">
-      <icon-close-circle class="error-icon" />
-      <h3 class="error-title">加载失败</h3>
-      <p class="error-desc">{{ error }}</p>
-      <a-button type="primary" @click="loadProject">重试</a-button>
-    </div>
+    </DataContainer>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { IconCloseCircle } from '@arco-design/web-vue/es/icon'
 import { projectApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import { loadProjectPermissions } from '@/composables/usePermission'
 import type { ProjectDetailVO } from '@/api/types'
+import { DataContainer } from '@/components/base'
 import ProjectSettingsGeneral from './ProjectSettingsGeneral.vue'
 import ProjectSettingsMembers from './ProjectSettingsMembers.vue'
 import ProjectSettingsCustomFields from './ProjectSettingsCustomFields.vue'
@@ -200,13 +191,6 @@ watch(() => route.params.projectKey, () => {
   margin: 0 auto;
 }
 
-.loading-state {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 200px;
-}
-
 /* Breadcrumb */
 .page-header {
   margin-bottom: 24px;
@@ -265,28 +249,4 @@ watch(() => route.params.projectKey, () => {
   padding-top: 24px;
 }
 
-/* Error */
-.error-state {
-  text-align: center;
-  padding: 80px 24px;
-}
-
-.error-icon {
-  font-size: 48px;
-  color: var(--tf-text-quaternary, var(--tf-text-tertiary));
-  margin-bottom: 16px;
-}
-
-.error-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--tf-text-primary);
-  margin: 0 0 8px;
-}
-
-.error-desc {
-  font-size: 13px;
-  color: var(--tf-text-tertiary);
-  margin: 0 0 24px;
-}
 </style>

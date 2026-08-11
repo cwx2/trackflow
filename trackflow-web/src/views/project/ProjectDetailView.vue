@@ -1,12 +1,11 @@
 <template>
   <div class="project-detail-page">
-    <!-- 加载状态 -->
-    <div v-if="loading" class="loading-state">
-      <a-spin :size="28" />
-    </div>
-
-    <!-- 项目详情 -->
-    <template v-else-if="project">
+    <DataContainer
+      :loading="loading"
+      :error="error || undefined"
+      :retry="loadProject"
+    >
+      <template v-if="project">
       <!-- 归档状态提示 -->
       <div v-if="isArchived" class="archived-banner">
         <icon-lock class="archived-icon" />
@@ -116,16 +115,8 @@
 
       <!-- 项目成员列表 -->
       <ProjectMemberList v-if="project" :project-id="project.key || project.id" />
-
-    </template>
-
-    <!-- 错误状态 -->
-    <div v-else-if="error" class="error-state">
-      <icon-close-circle class="error-icon" />
-      <h3 class="error-title">加载失败</h3>
-      <p class="error-desc">{{ error }}</p>
-      <a-button type="primary" @click="loadProject">重试</a-button>
-    </div>
+      </template>
+    </DataContainer>
   </div>
 </template>
 
@@ -138,7 +129,6 @@ import {
   IconUser,
   IconUserGroup,
   IconStar,
-  IconCloseCircle,
   IconEdit,
   IconLock,
   IconMore,
@@ -151,6 +141,7 @@ import { useAuthStore } from '@/stores/auth'
 import { loadProjectPermissions } from '@/composables/usePermission'
 import type { ProjectDetailVO, ProjectStatisticsVO } from '@/api/types'
 import { Message, Modal } from '@arco-design/web-vue'
+import { DataContainer } from '@/components/base'
 import ProjectWidgetPanel from './ProjectWidgetPanel.vue'
 import ProjectActivityFeed from './ProjectActivityFeed.vue'
 import ProjectStatistics from './ProjectStatistics.vue'
@@ -315,8 +306,6 @@ onMounted(() => {
   margin: 0 auto;
 }
 
-.loading-state { display: flex; align-items: center; justify-content: center; height: 200px; }
-
 .page-header {
   display: flex;
   align-items: center;
@@ -438,11 +427,6 @@ onMounted(() => {
   margin-left: 2px;
 }
 .lead-item.editable:hover .edit-hint-icon { opacity: 1; }
-
-.error-state { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 64px 24px; text-align: center; }
-.error-icon { font-size: 40px; color: var(--tf-danger); margin-bottom: 12px; }
-.error-title { font-size: 16px; font-weight: 500; color: var(--tf-text-primary); margin: 0 0 8px; }
-.error-desc { font-size: 13px; color: var(--tf-text-tertiary); margin: 0 0 16px; }
 
 .archived-banner {
   display: flex;
