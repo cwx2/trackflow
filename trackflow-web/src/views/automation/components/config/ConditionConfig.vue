@@ -1,5 +1,5 @@
-<template>
-  <div class="condition-config">
+﻿<template>
+  <div class="node-config condition-config">
     <a-form :model="localData" layout="vertical" size="small">
       <a-form-item label="节点标签">
         <a-input v-model="localData.label" placeholder="条件判断" />
@@ -99,14 +99,7 @@ watch(() => props.data, (val) => {
   margin-top: 4px;
 }
 
-:deep(.arco-form-item) {
-  margin-bottom: 12px;
-}
 
-:deep(.arco-form-item-label) {
-  font-size: 12px;
-  color: var(--tf-text-secondary);
-}
 
 /* 输出分支说明 */
 .output-info {

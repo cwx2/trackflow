@@ -1,5 +1,5 @@
-<template>
-  <div class="start-config">
+﻿<template>
+  <div class="node-config start-config">
     <a-form :model="local" layout="vertical" size="small">
 
       <!-- 触发参数列表 -->
@@ -161,19 +161,7 @@ watch(() => props.data, (val) => {
   width: 90px;
 }
 
-:deep(.arco-form-item) {
-  margin-bottom: 12px;
-}
 
-:deep(.arco-form-item-label) {
-  font-size: 12px;
-  color: var(--tf-text-secondary);
-}
-
-:deep(.arco-alert) {
-  padding: 8px 12px;
-  font-size: 12px;
-}
 
 :deep(.arco-alert code) {
   background: var(--tf-bg-elevated);

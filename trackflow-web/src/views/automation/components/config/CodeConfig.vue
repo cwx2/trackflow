@@ -1,5 +1,5 @@
-<template>
-  <div class="code-config">
+﻿<template>
+  <div class="node-config code-config">
     <div class="config-item">
       <label class="config-label">语言</label>
       <a-select v-model="local.language" size="small" class="config-select">

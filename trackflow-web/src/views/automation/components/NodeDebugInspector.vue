@@ -227,8 +227,6 @@ async function copyResult() {
 .debug-actions button:hover { border-color: var(--tf-accent); color: var(--tf-accent); transform: translateY(-1px); }.debug-actions .danger:hover { border-color: var(--tf-danger); color: var(--tf-danger); }
 .debug-tabs { }
 .debug-tabs :deep(.arco-tabs-nav) { padding: 4px 12px 0; }
-.debug-tabs :deep(.arco-tabs-content) { padding: 0; }
-.debug-tabs :deep(.arco-tabs-pane) { padding: 0; }
 .debug-content { flex: 1; min-height: 0; overflow: auto; padding: 12px; animation: content-enter 160ms ease-out both; }.summary-content { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-content: start; gap: 8px; }
 .summary-card { display: flex; flex-direction: column; gap: 5px; padding: 11px; border: 1px solid var(--tf-border); border-radius: 8px; background: linear-gradient(135deg, var(--tf-bg-body), var(--tf-bg-surface)); }.summary-card.success { border-color: color-mix(in srgb, var(--tf-success) 35%, var(--tf-border)); }.summary-card span, .summary-card small { color: var(--tf-text-tertiary); font-size: 11px; }.summary-card strong { color: var(--tf-text-primary); font-size: 13px; }
 .debug-message, .debug-error, .preview-section { grid-column: 1 / -1; }.debug-message, .debug-error { padding: 10px; border-radius: 8px; color: var(--tf-text-secondary); font-size: 12px; line-height: 1.55; background: var(--tf-bg-body); }.debug-message.simulated { background: var(--tf-accent-bg); }.debug-error { background: var(--tf-danger-bg); color: var(--tf-danger); }

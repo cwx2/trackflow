@@ -1,5 +1,5 @@
-<template>
-  <div class="file-input-config">
+﻿<template>
+  <div class="node-config file-input-config">
     <a-form :model="localData" layout="vertical" size="small">
       <a-form-item label="节点标签">
         <a-input v-model="localData.label" placeholder="文件输入" />
@@ -102,14 +102,7 @@ watch(() => props.data, (val) => {
   margin-bottom: 12px;
 }
 
-:deep(.arco-form-item) {
-  margin-bottom: 12px;
-}
 
-:deep(.arco-form-item-label) {
-  font-size: 12px;
-  color: var(--tf-text-secondary);
-}
 
 :deep(.arco-radio-group-direction-vertical .arco-radio) {
   margin-bottom: 8px;

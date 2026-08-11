@@ -1,5 +1,5 @@
-<template>
-  <div class="http-config">
+﻿<template>
+  <div class="node-config http-config">
     <div class="config-item">
       <label class="config-label">请求方法</label>
       <a-select v-model="local.method" size="small" class="config-select">

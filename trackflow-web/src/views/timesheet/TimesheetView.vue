@@ -1283,8 +1283,6 @@ onMounted(async () => {
 /* Tabs — 让 a-tabs 紧贴 header，去掉默认内边距 */
 .timesheet-tabs { margin: 0; }
 .timesheet-tabs :deep(.arco-tabs-nav) { padding: 0 24px; }
-.timesheet-tabs :deep(.arco-tabs-content) { padding: 0; }
-.timesheet-tabs :deep(.arco-tabs-pane) { padding: 0; }
 
 /* Controls */
 .timesheet-controls { padding: 12px 24px; display: flex; align-items: center; justify-content: space-between; }

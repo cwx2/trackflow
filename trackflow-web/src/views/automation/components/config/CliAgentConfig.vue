@@ -1,5 +1,5 @@
-<template>
-  <div class="cli-agent-config">
+﻿<template>
+  <div class="node-config cli-agent-config">
     <a-form :model="localData" layout="vertical" size="small">
       <a-form-item label="节点标签">
         <a-input v-model="localData.label" placeholder="CLI Agent" />
@@ -93,12 +93,5 @@ watch(() => props.data, (val) => {
   margin-top: 4px;
 }
 
-:deep(.arco-form-item) {
-  margin-bottom: 12px;
-}
 
-:deep(.arco-form-item-label) {
-  font-size: 12px;
-  color: var(--tf-text-secondary);
-}
 </style>

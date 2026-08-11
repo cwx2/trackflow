@@ -1,5 +1,5 @@
-<template>
-  <div class="generic-node-config">
+﻿<template>
+  <div class="node-config generic-node-config">
     <a-form v-if="definition" :model="local" layout="vertical" size="small">
       <div v-if="definition.inputPorts.length" class="section-title">输入参数</div>
       <a-form-item v-for="port in definition.inputPorts" :key="port.name" :label="port.label || port.name">

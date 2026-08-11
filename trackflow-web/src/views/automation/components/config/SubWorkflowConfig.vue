@@ -1,5 +1,5 @@
-<template>
-  <div class="sub-workflow-config">
+﻿<template>
+  <div class="node-config sub-workflow-config">
     <div class="config-item">
       <label class="config-label">选择子工作流</label>
       <a-select

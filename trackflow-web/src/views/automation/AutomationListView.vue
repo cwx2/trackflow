@@ -483,24 +483,6 @@ onMounted(() => {
   gap: 4px;
 }
 
-/* 深色主题适配 */
-:deep(.arco-table) {
-  background: var(--tf-bg-surface);
-}
-
-:deep(.arco-table-th) {
-  background: var(--tf-bg-elevated);
-  color: var(--tf-text-secondary);
-}
-
-:deep(.arco-table-td) {
-  color: var(--tf-text-primary);
-}
-
-:deep(.arco-table-tr:hover .arco-table-td) {
-  background: var(--tf-bg-hover);
-}
-
 /* 下拉箭头 */
 .dropdown-arrow {
   margin-left: 4px;

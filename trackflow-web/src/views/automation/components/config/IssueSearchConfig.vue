@@ -1,5 +1,5 @@
-<template>
-  <div class="issue-search-config">
+﻿<template>
+  <div class="node-config issue-search-config">
     <a-form :model="local" layout="vertical" size="small">
       <div class="full-filter-alert">
         <strong>完整筛选</strong>
@@ -401,12 +401,5 @@ onMounted(() => {
   vertical-align: middle;
 }
 
-:deep(.arco-form-item) {
-  margin-bottom: 12px;
-}
 
-:deep(.arco-form-item-label) {
-  font-size: 12px;
-  color: var(--tf-text-secondary);
-}
 </style>

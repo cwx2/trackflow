@@ -459,11 +459,6 @@ onMounted(() => {
 .role-table :deep(.arco-table-content-scroll) { flex: 1; min-height: 0; overflow: hidden; }
 .role-table :deep(.arco-table-body) { flex: 1; max-height: none !important; overflow-y: auto !important; }
 
-/* Table custom cell styles */
-.role-table :deep(.arco-table-th) { font-size: var(--font-size-xs); color: var(--text-secondary); text-transform: uppercase; background: var(--bg-tertiary); }
-.role-table :deep(.arco-table-td) { font-size: var(--font-size-sm); }
-.role-table :deep(.arco-table-tr:hover .arco-table-td) { background: var(--bg-hover); }
-
 .role-name { color: var(--text-bright); font-weight: 500; }
 .code-tag { font-size: var(--font-size-xs); background: var(--bg-tertiary); padding: 2px 6px; border-radius: var(--radius-sm); color: var(--accent-blue); }
 .type-badge { font-size: var(--font-size-xs); padding: 2px 6px; border-radius: var(--radius-sm); }

@@ -531,10 +531,7 @@ onMounted(() => {
 }
 
 .members-table :deep(.arco-table-th) {
-  background: var(--tf-bg-surface);
   font-size: 12px;
-  color: var(--tf-text-tertiary);
-  font-weight: 500;
 }
 
 .members-table :deep(.arco-table-td) {

@@ -1,5 +1,5 @@
-<template>
-  <div class="global-variables-config">
+﻿<template>
+  <div class="node-config global-variables-config">
     <div class="config-desc">
       全局变量可在所有节点的 Prompt 模板中通过 {变量名} 引用
     </div>

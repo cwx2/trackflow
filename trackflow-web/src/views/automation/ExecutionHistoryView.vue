@@ -241,8 +241,4 @@ onMounted(() => {
 .execution-table { background: var(--tf-bg-surface); border-radius: 8px; }
 .time-text { font-size: 13px; color: var(--tf-text-secondary); font-family: monospace; }
 .user-text { font-size: 13px; color: var(--tf-text-secondary); }
-
-:deep(.arco-table-th) { background: var(--tf-bg-elevated); color: var(--tf-text-secondary); }
-:deep(.arco-table-td) { color: var(--tf-text-primary); }
-:deep(.arco-table-tr:hover .arco-table-td) { background: var(--tf-bg-hover); }
 </style>

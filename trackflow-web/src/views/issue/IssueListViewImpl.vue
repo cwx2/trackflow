@@ -1459,9 +1459,8 @@ onBeforeRouteLeave((_to, _from, next) => {
 .issue-table { flex: 1; min-height: 0; overflow: hidden; }
 .issue-table :deep(.arco-table) { font-size: 13px; }
 .issue-table :deep(.arco-scrollbar-container.arco-table-content) { overflow-y: auto !important; }
-.issue-table :deep(.arco-table-th) { font-size: 11px; color: var(--tf-text-tertiary); text-transform: uppercase; letter-spacing: 0.5px; background: var(--tf-bg-surface); }
+.issue-table :deep(.arco-table-th) { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
 .issue-table :deep(.arco-table-tr) { cursor: pointer; transition: background 0.15s; }
-.issue-table :deep(.arco-table-tr:hover .arco-table-td) { background: var(--tf-bg-hover); }
 .issue-table :deep(.arco-table-td) { padding: 8px 12px; }
 .issue-table :deep(.arco-table-col-resize-handle) { width: 3px; background: transparent; transition: background 0.15s; }
 .issue-table :deep(.arco-table-col-resize-handle:hover),

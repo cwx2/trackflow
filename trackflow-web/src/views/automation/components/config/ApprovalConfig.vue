@@ -1,5 +1,5 @@
-<template>
-  <div class="approval-config">
+﻿<template>
+  <div class="node-config approval-config">
     <a-form :model="local" layout="vertical" size="small">
 
       <!-- 审批标题 -->
@@ -172,17 +172,6 @@ watch(() => props.data, (val) => {
   line-height: 1.6;
 }
 
-:deep(.arco-form-item) {
-  margin-bottom: 12px;
-}
 
-:deep(.arco-form-item-label) {
-  font-size: 12px;
-  color: var(--tf-text-secondary);
-}
 
-:deep(.arco-alert) {
-  padding: 8px 12px;
-  font-size: 12px;
-}
 </style>

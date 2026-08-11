@@ -1,5 +1,5 @@
-<template>
-  <div class="issue-context-config">
+﻿<template>
+  <div class="node-config issue-context-config">
     <a-form :model="local" layout="vertical">
       <a-form-item label="工单对象">
         <div v-if="isReference('issue')" class="reference-value">
@@ -143,17 +143,6 @@ watch(() => props.data, (val) => {
   font-size: 11px;
 }
 
-:deep(.arco-form-item) {
-  margin-bottom: 12px;
-}
 
-:deep(.arco-form-item-label) {
-  font-size: 12px;
-  color: var(--tf-text-secondary);
-}
 
-:deep(.arco-alert) {
-  padding: 8px 12px;
-  font-size: 12px;
-}
 </style>

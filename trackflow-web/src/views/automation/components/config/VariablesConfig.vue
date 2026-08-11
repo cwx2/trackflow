@@ -1,5 +1,5 @@
-<template>
-  <div class="variables-config">
+﻿<template>
+  <div class="node-config variables-config">
     <div class="var-list">
       <div v-for="(item, index) in localVars" :key="item._key" class="var-row">
         <a-input v-model="item.key" placeholder="变量名" class="var-key-input" />

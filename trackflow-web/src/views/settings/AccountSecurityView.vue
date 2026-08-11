@@ -459,10 +459,7 @@ onMounted(() => {
 }
 
 .token-table-wrapper :deep(.arco-table-th) {
-  background: var(--tf-bg-surface);
   font-size: 11px;
-  color: var(--tf-text-tertiary);
-  font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.3px;
 }
@@ -470,10 +467,6 @@ onMounted(() => {
 .token-table-wrapper :deep(.arco-table-td) {
   font-size: 12px;
   border-color: var(--tf-border-light);
-}
-
-.token-table-wrapper :deep(.arco-table-tr:hover .arco-table-td) {
-  background: var(--tf-bg-hover);
 }
 
 .token-name-cell {

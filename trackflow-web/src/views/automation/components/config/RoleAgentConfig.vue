@@ -1,5 +1,5 @@
-<template>
-  <div class="role-agent-config">
+﻿<template>
+  <div class="node-config role-agent-config">
     <a-form :model="local" layout="vertical">
       <a-form-item label="Agent 角色">
         <a-select
@@ -264,12 +264,5 @@ onMounted(() => {
   color: var(--color-primary-6);
 }
 
-:deep(.arco-form-item) {
-  margin-bottom: 12px;
-}
 
-:deep(.arco-form-item-label) {
-  font-size: 12px;
-  color: var(--tf-text-secondary);
-}
 </style>

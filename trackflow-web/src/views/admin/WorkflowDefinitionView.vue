@@ -654,7 +654,6 @@ function formatRelativeDate(dateStr: string | null): string {
 }
 
 .detail-tabs :deep(.arco-tabs-content) {
-  padding: 0;
   overflow-y: auto;
 }
 

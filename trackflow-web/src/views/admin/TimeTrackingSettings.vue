@@ -642,10 +642,7 @@ onMounted(loadSettings)
 }
 
 .recalc-table :deep(.arco-table-th) {
-  font-weight: 500;
-  color: var(--tf-text-tertiary);
   font-size: 12px;
-  background: var(--tf-bg-surface);
 }
 
 .recalc-table :deep(.arco-table-td) {

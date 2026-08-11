@@ -1,5 +1,5 @@
-<template>
-  <div class="loop-config">
+﻿<template>
+  <div class="node-config loop-config">
     <a-form :model="localData" layout="vertical" size="small">
       <a-form-item label="节点标签">
         <a-input v-model="localData.label" placeholder="重试循环" />
@@ -148,19 +148,7 @@ watch(() => props.data, (val) => {
   margin-top: 4px;
 }
 
-:deep(.arco-form-item) {
-  margin-bottom: 12px;
-}
 
-:deep(.arco-form-item-label) {
-  font-size: 12px;
-  color: var(--tf-text-secondary);
-}
-
-:deep(.arco-alert) {
-  padding: 8px 12px;
-  font-size: 12px;
-}
 
 /* 输出分支说明 */
 .output-info {

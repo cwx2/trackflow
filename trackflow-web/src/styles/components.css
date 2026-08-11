@@ -14,6 +14,69 @@
   color: var(--color-text-3);
 }
 
+/* ===== a-table 主题覆盖 ===== */
+/*
+ * 全局统一 table 的表头/单元格颜色，适配暗色/亮色主题。
+ * 各页面只需关注自身布局（wrapper height），不需要重复覆盖颜色。
+ */
+.arco-table-th {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--tf-text-tertiary);
+  background: var(--tf-bg-surface) !important;
+}
+
+.arco-table-td {
+  color: var(--tf-text-primary);
+}
+
+.arco-table-tr:hover .arco-table-td {
+  background: var(--tf-bg-hover) !important;
+}
+
+/* ===== a-tabs 主题覆盖 ===== */
+/*
+ * 统一去除 a-tabs 内容区的默认 padding（页面自己控制内边距）。
+ * 如需保留 padding，在具体页面用 :deep() 覆盖。
+ */
+.arco-tabs-content {
+  padding: 0 !important;
+}
+
+.arco-tabs-pane {
+  padding: 0;
+}
+
+/* ===== a-form-item 主题覆盖 ===== */
+/*
+ * automation config 面板（.node-config）统一 label 字号和间距。
+ * 所有 config/*.vue 根元素均带 node-config class。
+ */
+.node-config .arco-form-item {
+  margin-bottom: 12px;
+}
+
+.node-config .arco-form-item-label-col {
+  font-size: 12px;
+  color: var(--tf-text-secondary);
+}
+
+/* node-config 内的 a-alert 紧凑样式 */
+.node-config .arco-alert {
+  padding: 8px 12px;
+  font-size: 12px;
+}
+
+/* ===== a-breadcrumb 主题覆盖 ===== */
+/*
+ * 统一面包屑链接颜色与 cursor，无需每个页面单独覆盖。
+ */
+.arco-breadcrumb-item a,
+.arco-breadcrumb-item span[role="link"] {
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
 /* ===== 打印样式（全局） ===== */
 @media print {
   /* 隐藏侧边栏和导航 */
