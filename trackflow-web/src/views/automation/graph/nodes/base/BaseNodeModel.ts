@@ -39,6 +39,8 @@ export const PORT_SECTION_PADDING_V   = 4  // 每个输入/输出分区的上下
 export const PORT_DIVIDER_H           = 1  // 输入、输出分区之间的分隔线
 export const OPTIONAL_TOGGLE_H        = 24 // 可选参数开关行高
 export const PORT_HANDLE_OFFSET       = 6  // 锚点相对卡片边缘的外伸距离
+/** 可拖拽热区半径；大于视觉插座，保证端口在稠密行中仍易于命中。 */
+export const PORT_CONNECT_HIT_RADIUS  = 12
 
 export abstract class BaseNodeModel extends HtmlNodeModel {
   /** 子类需覆盖：提供节点类型名（用于从 node-definitions 读取默认值） */

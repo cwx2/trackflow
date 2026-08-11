@@ -289,6 +289,7 @@ import { buildWorkflowDefinition, createInitialWorkflowDefinition, getWorkflowNo
 import { FlowEdge } from './graph/edges/FlowEdge'
 import { ExecutionFlowAnimator, type WorkflowCanvasEdge } from './graph/edges/ExecutionFlowAnimator'
 import { registerAllNodes } from './graph/nodes/index'
+import { PORT_CONNECT_HIT_RADIUS } from './graph/nodes/base/BaseNodeModel'
 import CliAgentConfig from './components/config/CliAgentConfig.vue'
 import VariablesConfig from './components/config/VariablesConfig.vue'
 import ConditionConfig from './components/config/ConditionConfig.vue'
@@ -939,15 +940,16 @@ async function initLogicFlow() {
         strokeWidth: 2,
       },
       anchor: {
-        fill: 'transparent',
+        // 无形的连接热区大于视觉端口；在密集端口行中也能稳定拖拽。
+        fill: 'rgba(0, 0, 0, 0.001)',
         stroke: 'transparent',
         strokeWidth: 0,
-        r: 4,
+        r: PORT_CONNECT_HIT_RADIUS,
         hover: {
-          fill: 'var(--wf-edge-color, var(--tf-accent))',
-          stroke: 'var(--tf-bg-surface)',
-          strokeWidth: 2,
-          r: 5,
+          fill: 'rgba(0, 0, 0, 0.001)',
+          stroke: 'transparent',
+          strokeWidth: 0,
+          r: PORT_CONNECT_HIT_RADIUS,
         }
       }
     }
