@@ -289,10 +289,12 @@
           </div>
           <div class="role-section-desc">用户在各个具体项目中的成员角色</div>
 
-          <div v-if="userProjectRoles.length === 0" class="role-empty">
-            <span class="role-empty-icon">📁</span>
-            <span>未加入任何项目</span>
-          </div>
+          <EmptyState
+            v-if="userProjectRoles.length === 0"
+            icon="folder"
+            title="未加入任何项目"
+            :compact="true"
+          />
 
           <div v-else class="project-role-list">
             <div v-for="pr in userProjectRoles" :key="`${pr.projectId}-${pr.roleCode}`" class="project-role-item">
@@ -366,7 +368,7 @@ import type { UserProfileProjectRoleInfo } from '@/api/user'
 import type { GlobalMemberVO } from '@/api/globalMember'
 import { useAuthStore } from '@/stores/auth'
 import { AdminPageLayout, AdminPagination } from '@/components/admin'
-import { UserAvatar, IssueStatusTag } from '@/components/base'
+import { UserAvatar, IssueStatusTag, EmptyState } from '@/components/base'
 import { usePagedList } from '@/composables/usePagedList'
 
 const authStore = useAuthStore()

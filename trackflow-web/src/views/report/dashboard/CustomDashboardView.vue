@@ -195,21 +195,27 @@
         </div>
 
         <!-- 空微件状态 -->
-        <div v-else class="empty-widgets">
-          <template v-if="canEdit">
-            <EmptyState icon="bar-chart" title="仪表盘还没有微件" description="点击「添加微件」为仪表盘添加数据展示组件。">
-              <template #action>
-                <a-button type="primary" size="small" @click="showAddWidgetModal = true">
-                  <template #icon><icon-plus /></template>
-                  添加微件
-                </a-button>
-              </template>
-            </EmptyState>
-          </template>
-          <template v-else>
-            <EmptyState icon="bar-chart" title="仪表盘暂无内容" description="仪表盘创建者尚未添加微件。" />
-          </template>
-        </div>
+        <template v-else>
+          <EmptyState
+            v-if="canEdit"
+            icon="bar-chart"
+            title="仪表盘还没有微件"
+            description="点击「添加微件」为仪表盘添加数据展示组件。"
+          >
+            <template #action>
+              <a-button type="primary" size="small" @click="showAddWidgetModal = true">
+                <template #icon><icon-plus /></template>
+                添加微件
+              </a-button>
+            </template>
+          </EmptyState>
+          <EmptyState
+            v-else
+            icon="bar-chart"
+            title="仪表盘暂无内容"
+            description="仪表盘创建者尚未添加微件。"
+          />
+        </template>
       </template>
     </div>
 

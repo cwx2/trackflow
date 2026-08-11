@@ -8,3 +8,6 @@ export { default as TiptapEditor } from './TiptapEditor.vue'
 export { default as TimeProgressIndicator } from './TimeProgressIndicator.vue'
 export { default as WidgetCard } from './WidgetCard.vue'
 export { default as ToastNotification } from './ToastNotification.vue'
+
+export { default as ShareTargetsModal } from './ShareTargetsModal.vue'
+export type { ShareTargetItem, PermissionOption } from './ShareTargetsModal.vue'

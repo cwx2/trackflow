@@ -437,112 +437,31 @@
               </a>
             </div>
             <div class="column-body">
-              <div
+              <KanbanCard
                 v-for="issue in getEffectiveColumnIssues(col)"
                 :key="issue.id"
-                class="kanban-card"
-                :class="[
-                  `kanban-card--${cardSize}`,
-                  getCardColorClass(issue),
-                  {
-                    'kanban-card--dragging': draggingIssue?.id === issue.id,
-                    'kanban-card--transitioning': transitioningIssueIds.has(issue.id),
-                    'kanban-card--no-drag': !isCardDraggable(issue),
-                    'kanban-card--selected': selectedIds.has(issue.id)
-                  }
-                ]"
-                :style="getCardProjectColorStyle(issue)"
-                role="button"
-                tabindex="0"
+                :issue="issue"
+                :card-size="cardSize"
+                :card-config="cardConfig"
+                :color-class="getCardColorClass(issue)"
+                :project-color-style="getCardProjectColorStyle(issue)"
+                :is-dragging="draggingIssue?.id === issue.id"
+                :is-transitioning="transitioningIssueIds.has(issue.id)"
+                :is-selected="selectedIds.has(issue.id)"
                 :draggable="isCardDraggable(issue)"
+                :show-project-key="isMultiProjectBoard"
+                :can-assign="canCreateIssue"
+                :members="projectMembers"
+                :sprint-name="issue.sprintId ? getSprintName(issue.sprintId) : undefined"
+                :custom-field-details="getVisibleCustomFieldDetails(issue)"
+                :tags="getVisibleTags(issue)"
                 @dragstart="onDragStart($event, issue)"
                 @dragend="onDragEnd"
                 @click="onCardClick($event, issue)"
                 @dblclick="onCardDblClick(issue)"
                 @keydown="onCardKeydown($event, issue)"
-              >
-                <div class="card-header">
-                  <!-- 多项目看板时显示项目 Key 标记 -->
-                  <span
-                    v-if="isMultiProjectBoard && issue.projectKey"
-                    class="card-project-tag"
-                    :title="`来自项目 ${issue.projectKey}`"
-                  >{{ issue.projectKey }}</span>
-                  <span class="card-key">{{ issue.issueKey }}</span>
-                  <span
-                    v-if="isCardFieldVisible('priority')"
-                    class="card-priority"
-                    :class="issue.priority?.toLowerCase()"
-                    :title="localizePriority(issue.priority)"
-                  >
-                    {{ priorityIcon(issue.priority) }}
-                  </span>
-                </div>
-                <div class="card-title" :class="`card-title--${cardSize}`">{{ issue.title }}</div>
-                <!-- M/L: custom fields -->
-                <div v-if="cardSize !== 'S' && hasVisibleCustomFields(issue)" class="card-custom-fields">
-                  <template v-for="detail in getVisibleCustomFieldDetails(issue)" :key="detail.customFieldId">
-                    <template v-if="detail.isMulti && detail.displayValues">
-                      <span v-for="(dv, idx) in detail.displayValues" :key="idx" class="card-cf-tag" :style="cardConfig.showCustomFieldColors !== false && detail.colors?.[idx] ? { background: detail.colors[idx], color: 'var(--tf-text-on-accent)' } : {}">{{ dv }}</span>
-                    </template>
-                    <span v-else-if="cardConfig.showCustomFieldColors !== false && detail.color" class="card-cf-tag" :style="{ background: detail.color, color: 'var(--tf-text-on-accent)' }">{{ detail.displayValue }}</span>
-                    <span v-else class="card-cf-tag">{{ detail.displayValue }}</span>
-                  </template>
-                </div>
-                <!-- Card metadata fields based on card config -->
-                <div v-if="cardSize !== 'S' && (isCardFieldVisible('dueDate') || isCardFieldVisible('sprint') || isCardFieldVisible('estimatedHours') || isCardFieldVisible('tags'))" class="card-meta-fields">
-                  <a-tooltip v-if="isCardFieldVisible('dueDate') && issue.dueDate && getCardDueDateClass(issue)" :content="getCardDueDateTooltip(issue)" position="top" mini>
-                    <span class="card-meta-tag" :class="getCardDueDateClass(issue)">📅 {{ issue.dueDate.slice(5) }}</span>
-                  </a-tooltip>
-                  <span v-else-if="isCardFieldVisible('dueDate') && issue.dueDate" class="card-meta-tag">📅 {{ issue.dueDate.slice(5) }}</span>
-                  <span v-if="isCardFieldVisible('sprint') && issue.sprintId" class="card-meta-tag">🏃 {{ getSprintName(issue.sprintId) }}</span>
-                  <span v-if="isCardFieldVisible('estimatedHours') && issue.estimatedHours" class="card-meta-tag">⏱ {{ issue.estimatedHours }}h</span>
-                  <template v-if="isCardFieldVisible('tags') && (issue as any).tags && (issue as any).tags.length > 0">
-                    <span v-for="tag in getVisibleTags(issue)" :key="tag.id" class="card-tag" :style="tag.color ? { background: tag.color, color: 'var(--tf-text-on-accent)' } : {}">{{ tag.name }}</span>
-                  </template>
-                </div>
-                <div class="card-footer">
-                  <span v-if="isCardFieldVisible('type')" class="card-type">
-                    <template v-if="getCardFieldDisplayMode('type') === 'initial'">{{ typeInitial(issue.issueType) }}</template>
-                    <template v-else>{{ typeLabel(issue.issueType) }}</template>
-                  </span>
-                  <span v-else class="card-type-spacer"></span>
-                  <!-- 已分配：显示头像 -->
-                  <div class="card-assignee-avatar" v-if="isCardFieldVisible('assignee') && issue.assigneeName" :title="issue.assigneeName">
-                    <template v-if="getCardFieldDisplayMode('assignee') === 'full_name'">
-                      <span class="assignee-full-name">{{ issue.assigneeName }}</span>
-                    </template>
-                    <template v-else>
-                      <img
-                        v-if="issue.assigneeAvatarUrl"
-                        :src="issue.assigneeAvatarUrl"
-                        :alt="issue.assigneeName"
-                        class="avatar-img"
-                      />
-                      <UserAvatar v-else :name="issue.assigneeName || '?'" :size="24" />
-                    </template>
-                  </div>
-                  <!-- 未分配 + 有权限：显示 Set assignee 按钮 -->
-                  <a-dropdown
-                    v-else-if="isCardFieldVisible('assignee') && !issue.assigneeName && canCreateIssue && projectMembers.length > 0"
-                    trigger="click"
-                    @select="(userId: any) => onCardSetAssignee(userId, issue)"
-                  >
-                    <button
-                      class="set-assignee-btn"
-                      :title="'分配负责人'"
-                      @click.stop
-                    >
-                      <icon-user class="set-assignee-icon" />
-                    </button>
-                    <template #content>
-                      <a-doption v-for="m in projectMembers" :key="m.userId" :value="m.userId">
-                        {{ m.displayName }}
-                      </a-doption>
-                    </template>
-                  </a-dropdown>
-                </div>
-              </div>
+                @assign="(userId) => onCardSetAssignee(userId, issue)"
+              />
               <div
                 v-if="getEffectiveColumnIssues(col).length === 0"
                 class="column-empty-state"
@@ -756,112 +675,31 @@
                   @drop="onDrop($event, getDropTargetStatusId(col))"
                 >
                   <template v-if="!collapsedColumns.has(col.id)">
-                    <div
+                    <KanbanCard
                       v-for="issue in getSwimlaneEffectiveColumnIssues(lane.key, col)"
                       :key="issue.id"
-                      class="kanban-card"
-                      :class="[
-                        `kanban-card--${cardSize}`,
-                        getCardColorClass(issue),
-                        {
-                          'kanban-card--dragging': draggingIssue?.id === issue.id,
-                          'kanban-card--transitioning': transitioningIssueIds.has(issue.id),
-                          'kanban-card--no-drag': !isCardDraggable(issue),
-                          'kanban-card--selected': selectedIds.has(issue.id)
-                        }
-                      ]"
-                      :style="getCardProjectColorStyle(issue)"
-                      role="button"
-                      tabindex="0"
+                      :issue="issue"
+                      :card-size="cardSize"
+                      :card-config="cardConfig"
+                      :color-class="getCardColorClass(issue)"
+                      :project-color-style="getCardProjectColorStyle(issue)"
+                      :is-dragging="draggingIssue?.id === issue.id"
+                      :is-transitioning="transitioningIssueIds.has(issue.id)"
+                      :is-selected="selectedIds.has(issue.id)"
                       :draggable="isCardDraggable(issue)"
+                      :show-project-key="isMultiProjectBoard"
+                      :can-assign="canCreateIssue"
+                      :members="projectMembers"
+                      :sprint-name="issue.sprintId ? getSprintName(issue.sprintId) : undefined"
+                      :custom-field-details="getVisibleCustomFieldDetails(issue)"
+                      :tags="getVisibleTags(issue)"
                       @dragstart="onDragStart($event, issue)"
                       @dragend="onDragEnd"
                       @click="onCardClick($event, issue)"
                       @dblclick="onCardDblClick(issue)"
                       @keydown="onCardKeydown($event, issue)"
-                    >
-                      <div class="card-header">
-                        <!-- 多项目看板时显示项目 Key 标记 -->
-                        <span
-                          v-if="isMultiProjectBoard && issue.projectKey"
-                          class="card-project-tag"
-                          :title="`来自项目 ${issue.projectKey}`"
-                        >{{ issue.projectKey }}</span>
-                        <span class="card-key">{{ issue.issueKey }}</span>
-                        <span
-                          v-if="isCardFieldVisible('priority')"
-                          class="card-priority"
-                          :class="issue.priority?.toLowerCase()"
-                          :title="localizePriority(issue.priority)"
-                        >
-                          {{ priorityIcon(issue.priority) }}
-                        </span>
-                      </div>
-                      <div class="card-title" :class="`card-title--${cardSize}`">{{ issue.title }}</div>
-                      <!-- M/L: custom fields -->
-                      <div v-if="cardSize !== 'S' && hasVisibleCustomFields(issue)" class="card-custom-fields">
-                        <template v-for="detail in getVisibleCustomFieldDetails(issue)" :key="detail.customFieldId">
-                          <template v-if="detail.isMulti && detail.displayValues">
-                            <span v-for="(dv, idx) in detail.displayValues" :key="idx" class="card-cf-tag" :style="cardConfig.showCustomFieldColors !== false && detail.colors?.[idx] ? { background: detail.colors[idx], color: 'var(--tf-text-on-accent)' } : {}">{{ dv }}</span>
-                          </template>
-                          <span v-else-if="cardConfig.showCustomFieldColors !== false && detail.color" class="card-cf-tag" :style="{ background: detail.color, color: 'var(--tf-text-on-accent)' }">{{ detail.displayValue }}</span>
-                          <span v-else class="card-cf-tag">{{ detail.displayValue }}</span>
-                        </template>
-                      </div>
-                      <!-- Card metadata fields based on card config -->
-                      <div v-if="cardSize !== 'S' && (isCardFieldVisible('dueDate') || isCardFieldVisible('sprint') || isCardFieldVisible('estimatedHours') || isCardFieldVisible('tags'))" class="card-meta-fields">
-                        <a-tooltip v-if="isCardFieldVisible('dueDate') && issue.dueDate && getCardDueDateClass(issue)" :content="getCardDueDateTooltip(issue)" position="top" mini>
-                          <span class="card-meta-tag" :class="getCardDueDateClass(issue)">📅 {{ issue.dueDate.slice(5) }}</span>
-                        </a-tooltip>
-                        <span v-else-if="isCardFieldVisible('dueDate') && issue.dueDate" class="card-meta-tag">📅 {{ issue.dueDate.slice(5) }}</span>
-                        <span v-if="isCardFieldVisible('sprint') && issue.sprintId" class="card-meta-tag">🏃 {{ getSprintName(issue.sprintId) }}</span>
-                        <span v-if="isCardFieldVisible('estimatedHours') && issue.estimatedHours" class="card-meta-tag">⏱ {{ issue.estimatedHours }}h</span>
-                        <template v-if="isCardFieldVisible('tags') && (issue as any).tags && (issue as any).tags.length > 0">
-                          <span v-for="tag in getVisibleTags(issue)" :key="tag.id" class="card-tag" :style="tag.color ? { background: tag.color, color: 'var(--tf-text-on-accent)' } : {}">{{ tag.name }}</span>
-                        </template>
-                      </div>
-                      <div class="card-footer">
-                        <span v-if="isCardFieldVisible('type')" class="card-type">
-                          <template v-if="getCardFieldDisplayMode('type') === 'initial'">{{ typeInitial(issue.issueType) }}</template>
-                          <template v-else>{{ typeLabel(issue.issueType) }}</template>
-                        </span>
-                        <span v-else class="card-type-spacer"></span>
-                        <!-- 已分配：显示头像 -->
-                        <div class="card-assignee-avatar" v-if="isCardFieldVisible('assignee') && issue.assigneeName" :title="issue.assigneeName">
-                          <template v-if="getCardFieldDisplayMode('assignee') === 'full_name'">
-                            <span class="assignee-full-name">{{ issue.assigneeName }}</span>
-                          </template>
-                          <template v-else>
-                            <img
-                              v-if="issue.assigneeAvatarUrl"
-                              :src="issue.assigneeAvatarUrl"
-                              :alt="issue.assigneeName"
-                              class="avatar-img"
-                            />
-                            <UserAvatar v-else :name="issue.assigneeName || '?'" :size="24" />
-                          </template>
-                        </div>
-                        <!-- 未分配 + 有权限：显示 Set assignee 按钮 -->
-                        <a-dropdown
-                          v-else-if="isCardFieldVisible('assignee') && !issue.assigneeName && canCreateIssue && projectMembers.length > 0"
-                          trigger="click"
-                          @select="(userId: any) => onCardSetAssignee(userId, issue)"
-                        >
-                          <button
-                            class="set-assignee-btn"
-                            :title="'分配负责人'"
-                            @click.stop
-                          >
-                            <icon-user class="set-assignee-icon" />
-                          </button>
-                          <template #content>
-                            <a-doption v-for="m in projectMembers" :key="m.userId" :value="m.userId">
-                              {{ m.displayName }}
-                            </a-doption>
-                          </template>
-                        </a-dropdown>
-                      </div>
-                    </div>
+                      @assign="(userId) => onCardSetAssignee(userId, issue)"
+                    />
                     <!-- 空单元格 drop hint -->
                     <div
                       v-if="getSwimlaneEffectiveColumnIssues(lane.key, col).length === 0 && isDragging && isEffectiveColumnDropAllowed(col)"
@@ -1153,6 +991,7 @@ import BoardSettingsDrawer from './BoardSettingsDrawer.vue'
 import BoardSelector from './BoardSelector.vue'
 import BacklogPanel from './BacklogPanel.vue'
 import BoardChartPanel from './BoardChartPanel.vue'
+import KanbanCard from './components/KanbanCard.vue'
 import IssuePreviewDrawer from './IssuePreviewDrawer.vue'
 import CloneBoardModal from './CloneBoardModal.vue'
 import IssueCreatePanel from '@/components/IssueCreatePanel.vue'

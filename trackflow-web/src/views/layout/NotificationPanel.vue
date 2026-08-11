@@ -115,39 +115,15 @@
                 </div>
 
                 <!-- 通知项 -->
-                <div
+                <NotificationItem
                   v-for="item in getVisibleItems(group)"
                   :key="item.id"
-                  class="notification-item"
-                  :class="{ unread: !item.isRead, 'highlight-flash': highlightedId === item.id }"
-                  :data-notification-id="item.id"
-                  :data-unread="!item.isRead ? 'true' : undefined"
+                  :item="item"
+                  :highlight-id="highlightedId"
                   @click="handleItemClick(item)"
+                  @mark-read="handleMarkRead"
                 >
-                  <div class="item-indicator">
-                    <span v-if="!item.isRead" class="unread-dot"></span>
-                  </div>
-                  <div class="item-icon" :class="{ 'has-avatar': item.actorAvatar }">
-                    <img v-if="item.actorAvatar" :src="item.actorAvatar" :alt="item.actorName" class="actor-avatar" />
-                    <UserAvatar v-else-if="item.actorName" :name="item.actorName" :size="28" />
-                    <span v-else class="actor-system" title="系统操作">
-                      <icon-common :size="14" />
-                    </span>
-                  </div>
-                  <div class="item-content">
-                    <div class="item-title">
-                      {{ item.title }}
-                      <span v-if="item.aggregationCount && item.aggregationCount > 1" class="aggregation-badge">
-                        {{ item.aggregationCount }}次变更
-                      </span>
-                    </div>
-                    <div class="item-body">{{ item.content }}</div>
-                    <div class="item-footer">
-                      <span v-if="item.reasonLabel" class="item-reason">{{ item.reasonLabel }}</span>
-                      <span class="item-time">{{ formatTime(item.updatedAt || item.createdAt) }}</span>
-                    </div>
-                  </div>
-                  <div class="item-actions">
+                  <template #actions>
                     <button
                       v-if="!item.isRead"
                       class="item-action-btn"
@@ -174,8 +150,8 @@
                     >
                       <icon-close :size="12" />
                     </button>
-                  </div>
-                </div>
+                  </template>
+                </NotificationItem>
 
                 <!-- 展开/收起按钮 -->
                 <button
@@ -213,6 +189,7 @@ import { useRouter } from 'vue-router'
 import { useNotification } from '@/composables/useNotification'
 import type { NotificationVO, NotificationCategory } from '@/api/notification'
 import { UserAvatar, EmptyState } from '@/components/base'
+import NotificationItem from './NotificationItem.vue'
 
 const router = useRouter()
 const {

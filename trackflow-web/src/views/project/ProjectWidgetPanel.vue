@@ -52,21 +52,26 @@
     </template>
 
     <!-- 空状态 -->
-    <div v-else class="widget-empty-state">
-      <template v-if="canEdit && !isArchived">
-        <div class="widget-empty-icon">📊</div>
-        <p class="widget-empty-title">尚未配置监控视图</p>
-        <p class="widget-empty-desc">点击「添加 Widget」开始配置项目监控视图，跟踪工单进度、Sprint 状态等数据</p>
-        <a-button type="primary" size="small" @click="showAddWidgetModal = true">
-          <template #icon><icon-plus /></template>
-          添加 Widget
-        </a-button>
-      </template>
-      <template v-else>
-        <div class="widget-empty-icon">📊</div>
-        <p class="widget-empty-title">暂无监控视图</p>
-      </template>
-    </div>
+    <template v-else>
+      <EmptyState
+        v-if="canEdit && !isArchived"
+        icon="bar-chart"
+        title="尚未配置监控视图"
+        description="点击「添加 Widget」开始配置项目监控视图，跟踪工单进度、Sprint 状态等数据"
+      >
+        <template #action>
+          <a-button type="primary" size="small" @click="showAddWidgetModal = true">
+            <template #icon><icon-plus /></template>
+            添加 Widget
+          </a-button>
+        </template>
+      </EmptyState>
+      <EmptyState
+        v-else
+        icon="bar-chart"
+        title="暂无监控视图"
+      />
+    </template>
 
     <!-- 添加 Widget 弹窗 -->
     <a-modal
@@ -147,6 +152,7 @@ import { projectApi } from '@/api'
 import { customDashboardApi } from '@/api/customDashboard'
 import type { DashboardDetailVO, DashboardWidgetVO } from '@/api/customDashboard'
 import WidgetCard from '@/components/base/WidgetCard.vue'
+import { EmptyState } from '@/components/base'
 
 const props = defineProps<{
   projectId: string

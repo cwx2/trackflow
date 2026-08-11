@@ -88,71 +88,46 @@
           :key="item.id"
           class="notification-item-wrapper"
         >
-          <div
-            class="notification-item"
-            :class="{ unread: !item.isRead }"
+          <NotificationItem
+            :item="item"
             @click="handleItemClick(item)"
+            @mark-read="handleMarkRead"
+            @mark-unread="handleMarkUnread"
           >
-            <div class="item-indicator">
-              <span v-if="!item.isRead" class="unread-dot"></span>
-          </div>
-          <div class="item-icon" :class="{ 'has-avatar': item.actorAvatar }">
-            <img v-if="item.actorAvatar" :src="item.actorAvatar" :alt="item.actorName" class="actor-avatar" />
-            <UserAvatar v-else-if="item.actorName" :name="item.actorName" :size="28" />
-            <span v-else class="actor-system" title="系统操作">
-              <icon-common :size="14" />
-            </span>
-          </div>
-          <div class="item-content">
-            <div class="item-title">
-              {{ item.title }}
-              <span v-if="item.aggregationCount && item.aggregationCount > 1" class="aggregation-badge">
-                {{ item.aggregationCount }}次变更
-              </span>
-            </div>
-            <div class="item-body">{{ item.content }}</div>
-            <div class="item-meta">
-              <span v-if="item.reasonLabel" class="item-reason">{{ item.reasonLabel }}</span>
-              <span class="item-time">{{ formatTime(item.updatedAt || item.createdAt) }}</span>
-              <span v-if="item.resourceUrl || (item.resourceType === 'issue' && item.resourceId)" class="item-link">
-                {{ item.resourceType === 'sprint' ? '查看 Sprint →' : '查看工单 →' }}
-              </span>
-            </div>
-          </div>
-          <div class="item-actions">
-            <button
-              v-if="!item.isRead"
-              class="item-action-btn"
-              title="标记已读"
-              @click.stop="handleMarkRead(item.id)"
-            >
-              <icon-check :size="14" />
-            </button>
-            <button
-              v-else
-              class="item-action-btn"
-              title="标记未读"
-              @click.stop="handleMarkUnread(item.id)"
-            >
-              <icon-record :size="14" />
-            </button>
-            <button
-              v-if="canReply(item)"
-              class="item-action-btn item-reply-btn"
-              title="回复"
-              @click.stop="toggleReply(item.id)"
-            >
-              <icon-reply :size="14" />
-            </button>
-            <button
-              class="item-action-btn item-delete-btn"
-              title="删除通知"
-              @click.stop="handleDelete(item.id)"
-            >
-              <icon-close :size="14" />
-            </button>
-          </div>
-        </div>
+            <template #actions>
+              <button
+                v-if="!item.isRead"
+                class="item-action-btn"
+                title="标记已读"
+                @click.stop="handleMarkRead(item.id)"
+              >
+                <icon-check :size="14" />
+              </button>
+              <button
+                v-else
+                class="item-action-btn"
+                title="标记未读"
+                @click.stop="handleMarkUnread(item.id)"
+              >
+                <icon-record :size="14" />
+              </button>
+              <button
+                v-if="canReply(item)"
+                class="item-action-btn item-reply-btn"
+                title="回复"
+                @click.stop="toggleReply(item.id)"
+              >
+                <icon-reply :size="14" />
+              </button>
+              <button
+                class="item-action-btn item-delete-btn"
+                title="删除通知"
+                @click.stop="handleDelete(item.id)"
+              >
+                <icon-close :size="14" />
+              </button>
+            </template>
+          </NotificationItem>
         <!-- 内联回复编辑器 -->
         <div v-if="replyingItemId === item.id" class="reply-editor" @click.stop>
           <textarea
@@ -207,6 +182,7 @@ import { projectApi, issueApi } from '@/api'
 import type { NotificationVO, NotificationCategory } from '@/api/notification'
 import { Message } from '@arco-design/web-vue'
 import { UserAvatar, EmptyState } from '@/components/base'
+import NotificationItem from '@/views/layout/NotificationItem.vue'
 
 const router = useRouter()
 const {

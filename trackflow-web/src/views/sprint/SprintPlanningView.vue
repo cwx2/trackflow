@@ -367,15 +367,17 @@
         </div>
 
         <!-- 无 Sprint 空状态 -->
-        <div v-if="targetSprints.length === 0 && !sprintsLoading" class="no-sprints-state">
-          <div class="empty-icon">🏃</div>
-          <h3 class="empty-title">暂无可规划的 Sprint</h3>
-          <p class="empty-desc">请先创建一个 Sprint（计划中或进行中状态）</p>
-          <div class="no-sprints-actions">
+        <EmptyState
+          v-if="targetSprints.length === 0 && !sprintsLoading"
+          icon="user-group"
+          title="暂无可规划的 Sprint"
+          description="请先创建一个 Sprint（计划中或进行中状态）"
+        >
+          <template #action>
             <a-button v-if="canCreateSprint" type="primary" size="small" @click="openSprintCreateModal">+ 新建迭代</a-button>
             <a-button type="text" size="small" @click="goToSprintPage">前往迭代管理</a-button>
-          </div>
-        </div>
+          </template>
+        </EmptyState>
       </div>
     </div>
 
