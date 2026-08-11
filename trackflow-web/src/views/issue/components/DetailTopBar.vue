@@ -4,16 +4,19 @@
       <button class="icon-btn" @click="$router.back()" title="返回">
         <icon-left :size="16" />
       </button>
-      <nav class="breadcrumb">
-        <a v-if="fromQueryName" class="crumb" @click="navigateBack">{{ fromQueryName }}</a>
-        <a v-else class="crumb" @click="$router.push('/issues')">{{ projectName }}</a>
-        <span class="sep">/</span>
-        <span class="crumb-current">{{ issueKey }}</span>
-        <!-- 受限工单锁定图标（对标 YouTrack "Visible to" 锁定标识） -->
-        <a-tooltip v-if="isRestricted" content="此工单为受限访问，仅部分用户可见">
-          <icon-lock class="restricted-icon" :size="13" />
-        </a-tooltip>
-      </nav>
+      <a-breadcrumb class="breadcrumb">
+        <a-breadcrumb-item>
+          <a v-if="fromQueryName" @click="navigateBack">{{ fromQueryName }}</a>
+          <a v-else @click="$router.push('/issues')">{{ projectName }}</a>
+        </a-breadcrumb-item>
+        <a-breadcrumb-item>
+          {{ issueKey }}
+          <!-- 受限工单锁定图标（对标 YouTrack "Visible to" 锁定标识） -->
+          <a-tooltip v-if="isRestricted" content="此工单为受限访问，仅部分用户可见">
+            <icon-lock class="restricted-icon" :size="13" />
+          </a-tooltip>
+        </a-breadcrumb-item>
+      </a-breadcrumb>
       <span class="meta">
         创建者 <b>{{ createdBy }}</b> · {{ createdAgo }}
         &nbsp;·&nbsp; 更新者 <b>{{ updatedBy }}</b> · {{ updatedAgo }}
@@ -338,15 +341,8 @@ watch(() => props.canQuickActions, () => {
   font-weight: 500;
 }
 
-.breadcrumb { display: flex; align-items: center; gap: 4px; font-size: 13px; }
-.crumb {
-  color: var(--tf-text-secondary);
-  cursor: pointer;
-  transition: color 150ms;
-}
-.crumb:hover { color: var(--tf-accent); }
-.sep { color: var(--tf-text-muted); font-size: 12px; }
-.crumb-current { color: var(--tf-text-primary); font-weight: 500; }
+.breadcrumb { font-size: 13px; }
+.breadcrumb :deep(a) { cursor: pointer; }
 
 .meta { font-size: 11px; color: var(--tf-text-muted); margin-left: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .meta b { color: var(--tf-text-secondary); font-weight: 500; }
