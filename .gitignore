@@ -10,7 +10,8 @@ requirements/
 
 # === Kiro / 文档 ===
 .kiro/
-docs/
+docs/*
+!docs/automation-node-contract.md
 .playwright-mcp
 /test/
 
