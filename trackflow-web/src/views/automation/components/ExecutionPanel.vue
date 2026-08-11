@@ -212,7 +212,8 @@ watch(nodeList, (items) => {
   background: var(--tf-bg-surface);
   display: flex;
   flex-direction: column;
-  max-height: 300px;
+  height: 100%;
+  min-height: 0;
 }
 
 .panel-header {
@@ -275,7 +276,7 @@ watch(nodeList, (items) => {
 }
 
 .node-list {
-  width: 200px;
+  width: 260px;
   flex-shrink: 0;
   border-right: 1px solid var(--tf-border);
   overflow-y: auto;
@@ -333,7 +334,7 @@ watch(nodeList, (items) => {
   border-radius: 6px;
   padding: 8px;
   margin: 0;
-  max-height: 100px;
+  max-height: 280px;
   overflow-y: auto;
   white-space: pre-wrap;
   word-break: break-all;

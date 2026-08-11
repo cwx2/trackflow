@@ -49,35 +49,47 @@
 
         <div class="panel-inner">
           <template v-if="selectedNode">
-            <div class="panel-header">
-              <span class="panel-title">{{ getNodeTitle(selectedNode.properties?.nodeType) }}</span>
-              <a-button type="text" size="small" status="danger" @click="deleteSelectedNode">删除</a-button>
+            <div class="panel-header inspector-header">
+              <div>
+                <span class="panel-title">{{ getNodeTitle(selectedNode.properties?.nodeType) }}</span>
+                <div class="inspector-tabs">
+                  <button :class="{ active: inspectorTab === 'config' }" @click="inspectorTab = 'config'">配置</button>
+                  <button :class="{ active: inspectorTab === 'debug' }" @click="inspectorTab = 'debug'">调试</button>
+                </div>
+              </div>
+              <a-button v-if="inspectorTab === 'config'" type="text" size="small" status="danger" @click="deleteSelectedNode">删除</a-button>
             </div>
-            <CliAgentConfig v-if="selectedNode.properties?.nodeType === 'cli-agent'" :data="selectedNode.properties" @update:data="updateSelectedNodeProperties" />
-            <VariablesConfig v-else-if="selectedNode.properties?.nodeType === 'variables'" :data="selectedNode.properties" @update:data="updateSelectedNodeProperties" />
-            <ConditionConfig v-else-if="selectedNode.properties?.nodeType === 'condition'" :data="selectedNode.properties" @update:data="updateSelectedNodeProperties" />
-            <LoopConfig v-else-if="selectedNode.properties?.nodeType === 'loop'" :data="selectedNode.properties" @update:data="updateSelectedNodeProperties" />
-            <FileInputConfig v-else-if="selectedNode.properties?.nodeType === 'file-input'" :data="selectedNode.properties" @update:data="updateSelectedNodeProperties" />
-            <DelayConfig v-else-if="selectedNode.properties?.nodeType === 'delay'" :data="selectedNode.properties" @update:data="updateSelectedNodeProperties" />
-            <CodeConfig v-else-if="selectedNode.properties?.nodeType === 'code'" :data="selectedNode.properties" @update:data="updateSelectedNodeProperties" />
-            <HttpRequestConfig v-else-if="selectedNode.properties?.nodeType === 'http-request'" :data="selectedNode.properties" @update:data="updateSelectedNodeProperties" />
-            <SubWorkflowConfig v-else-if="selectedNode.properties?.nodeType === 'sub-workflow'" :data="selectedNode.properties" @update:data="updateSelectedNodeProperties" />
-            <IssueSearchConfig v-else-if="selectedNode.properties?.nodeType === 'trackflow-issue-search'" :data="selectedNode.properties" @update:data="updateSelectedNodeProperties" />
-            <IssueTransitionConfig v-else-if="selectedNode.properties?.nodeType === 'trackflow-issue-transition'" :data="selectedNode.properties" @update:data="updateSelectedNodeProperties" />
-            <IssueContextConfig v-else-if="selectedNode.properties?.nodeType === 'trackflow-issue-context'" :data="selectedNode.properties" @update:data="updateSelectedNodeProperties" />
-            <IssueUpdateConfig v-else-if="selectedNode.properties?.nodeType === 'trackflow-issue-update'" :data="selectedNode.properties" @update:data="updateSelectedNodeProperties" />
-            <RoleAgentConfig v-else-if="selectedNode.properties?.nodeType === 'role-agent'" :data="selectedNode.properties" @update:data="updateSelectedNodeProperties" />
-            <StartConfig v-else-if="selectedNode.properties?.nodeType === 'start'" :data="selectedNode.properties" @update:data="updateSelectedNodeProperties" />
-            <EndConfig v-else-if="selectedNode.properties?.nodeType === 'end'" :data="selectedNode.properties" @update:data="updateSelectedNodeProperties" />
-            <ApprovalConfig v-else-if="selectedNode.properties?.nodeType === 'approval'" :data="selectedNode.properties" @update:data="updateSelectedNodeProperties" />
-            <IssueGetConfig v-else-if="selectedNode.properties?.nodeType === 'trackflow-issue-get'" :data="selectedNode.properties" @update:data="updateSelectedNodeProperties" />
-            <IssueCommentConfig v-else-if="selectedNode.properties?.nodeType === 'trackflow-issue-comment'" :data="selectedNode.properties" @update:data="updateSelectedNodeProperties" />
-            <GenericNodeConfig
-              v-else
-              :data="selectedNode.properties"
-              @update:data="updateSelectedNodeProperties"
-              :definition="getNodeDefinition(selectedNode.properties?.nodeType)"
+            <NodeDebugInspector
+              v-if="inspectorTab === 'debug'"
+              :node-name="selectedNode.properties?.nodeMeta?.title || getNodeTitle(selectedNode.properties?.nodeType)"
+              :status="nodeStatusMap[selectedNode.id] || 'idle'"
+              :detail="nodeExecutionDetails[selectedNode.id]"
+              @rerun="rerunLastNodeTest"
+              @clear="clearNodeDebugSession"
+              @copied="Message.success('调试结果已复制')"
             />
+            <template v-else>
+              <CliAgentConfig v-if="selectedNode.properties?.nodeType === 'cli-agent'" :data="selectedNode.properties" @update:data="updateSelectedNodeProperties" />
+              <VariablesConfig v-else-if="selectedNode.properties?.nodeType === 'variables'" :data="selectedNode.properties" @update:data="updateSelectedNodeProperties" />
+              <ConditionConfig v-else-if="selectedNode.properties?.nodeType === 'condition'" :data="selectedNode.properties" @update:data="updateSelectedNodeProperties" />
+              <LoopConfig v-else-if="selectedNode.properties?.nodeType === 'loop'" :data="selectedNode.properties" @update:data="updateSelectedNodeProperties" />
+              <FileInputConfig v-else-if="selectedNode.properties?.nodeType === 'file-input'" :data="selectedNode.properties" @update:data="updateSelectedNodeProperties" />
+              <DelayConfig v-else-if="selectedNode.properties?.nodeType === 'delay'" :data="selectedNode.properties" @update:data="updateSelectedNodeProperties" />
+              <CodeConfig v-else-if="selectedNode.properties?.nodeType === 'code'" :data="selectedNode.properties" @update:data="updateSelectedNodeProperties" />
+              <HttpRequestConfig v-else-if="selectedNode.properties?.nodeType === 'http-request'" :data="selectedNode.properties" @update:data="updateSelectedNodeProperties" />
+              <SubWorkflowConfig v-else-if="selectedNode.properties?.nodeType === 'sub-workflow'" :data="selectedNode.properties" @update:data="updateSelectedNodeProperties" />
+              <IssueSearchConfig v-else-if="selectedNode.properties?.nodeType === 'trackflow-issue-search'" :data="selectedNode.properties" @update:data="updateSelectedNodeProperties" />
+              <IssueTransitionConfig v-else-if="selectedNode.properties?.nodeType === 'trackflow-issue-transition'" :data="selectedNode.properties" @update:data="updateSelectedNodeProperties" />
+              <IssueContextConfig v-else-if="selectedNode.properties?.nodeType === 'trackflow-issue-context'" :data="selectedNode.properties" @update:data="updateSelectedNodeProperties" />
+              <IssueUpdateConfig v-else-if="selectedNode.properties?.nodeType === 'trackflow-issue-update'" :data="selectedNode.properties" @update:data="updateSelectedNodeProperties" />
+              <RoleAgentConfig v-else-if="selectedNode.properties?.nodeType === 'role-agent'" :data="selectedNode.properties" @update:data="updateSelectedNodeProperties" />
+              <StartConfig v-else-if="selectedNode.properties?.nodeType === 'start'" :data="selectedNode.properties" @update:data="updateSelectedNodeProperties" />
+              <EndConfig v-else-if="selectedNode.properties?.nodeType === 'end'" :data="selectedNode.properties" @update:data="updateSelectedNodeProperties" />
+              <ApprovalConfig v-else-if="selectedNode.properties?.nodeType === 'approval'" :data="selectedNode.properties" @update:data="updateSelectedNodeProperties" />
+              <IssueGetConfig v-else-if="selectedNode.properties?.nodeType === 'trackflow-issue-get'" :data="selectedNode.properties" @update:data="updateSelectedNodeProperties" />
+              <IssueCommentConfig v-else-if="selectedNode.properties?.nodeType === 'trackflow-issue-comment'" :data="selectedNode.properties" @update:data="updateSelectedNodeProperties" />
+              <GenericNodeConfig v-else :data="selectedNode.properties" @update:data="updateSelectedNodeProperties" :definition="getNodeDefinition(selectedNode.properties?.nodeType)" />
+            </template>
           </template>
           <template v-else>
             <div class="panel-header">
@@ -110,8 +122,8 @@
         @cancel="handleCancelRun"
       />
 
-      <!-- 执行日志浮层（可折叠） -->
-      <div v-if="executionPanelOpen" class="execution-overlay">
+      <!-- 整体运行才使用底部追踪抽屉；节点调试在右侧检查器中完成。 -->
+      <div v-if="executionPanelOpen && executionPanelMode === 'workflow'" class="execution-dock" :class="{ 'right-panel-open': rightPanelOpen }">
         <ExecutionPanel
           :node-status-map="nodeStatusMap"
           :node-execution-details="nodeExecutionDetails"
@@ -364,6 +376,7 @@ import IssueCommentConfig from './components/config/IssueCommentConfig.vue'
 import GenericNodeConfig from './components/config/GenericNodeConfig.vue'
 import GlobalVariablesConfig from './components/config/GlobalVariablesConfig.vue'
 import ExecutionPanel from './components/ExecutionPanel.vue'
+import NodeDebugInspector from './components/NodeDebugInspector.vue'
 import BottomToolbar from './components/BottomToolbar.vue'
 import EditorTopbar from './components/EditorTopbar.vue'
 
@@ -425,6 +438,7 @@ const settingsModel = computed(() => ({
 // 全局变量和选中节点
 const globalVariables = ref<Record<string, GlobalVariable>>({})
 const selectedNode = ref<any>(null)
+const inspectorTab = ref<'config' | 'debug'>('config')
 const nodeActionTarget = ref<any>(null)
 const showRenameNodeModal = ref(false)
 const showDeleteNodeModal = ref(false)
@@ -543,6 +557,9 @@ async function confirmNodeTest() {
   }
   const testedNode = JSON.parse(JSON.stringify(nodeTestNode.value))
   const nodeName = testedNode.properties?.nodeMeta?.title || testedNode.properties?.nodeType || testedNode.id
+  selectedNode.value = testedNode
+  rightPanelOpen.value = true
+  inspectorTab.value = 'debug'
   executionPanelMode.value = 'node-debug'
   nodeStatusMap.value = { [testedNode.id]: 'running' }
   nodeExecutionDetails.value = {
@@ -628,6 +645,7 @@ function clearNodeDebugSession() {
   streamingOutput.value = {}
   lastNodeTest.value = null
   executionPanelOpen.value = false
+  inspectorTab.value = 'config'
 }
 
 // 面板开关
@@ -994,6 +1012,7 @@ async function initLogicFlow() {
     // 深拷贝避免直接引用 LogicFlow 内部对象导致的递归更新
     selectedNode.value = JSON.parse(JSON.stringify(data))
     rightPanelOpen.value = true  // 点击节点自动展开右侧面板
+    inspectorTab.value = 'config'
   })
 
   lf.on('node:test', ({ data }) => {
@@ -1735,23 +1754,29 @@ onUnmounted(() => {
   --wf-run-running:         var(--tf-accent);
 }
 
-/* 执行日志浮层 */
-.execution-overlay {
+/* 完整流程的底部执行追踪抽屉；节点级调试始终在右侧检查器中展示。 */
+.execution-dock {
   position: absolute;
   bottom: 72px;
-  left: 50%;
-  transform: translateX(-50%);
+  left: 24px;
+  right: 24px;
   z-index: 25;
-  width: min(640px, 90%);
+  height: min(42vh, 560px);
+  min-height: 320px;
   background: var(--wf-canvas-bg, var(--tf-bg-body));
   border: 1px solid var(--wf-card-border);
   border-radius: 12px;
   box-shadow: 0 8px 32px rgba(0,0,0,0.5);
-  overflow: hidden;
+  overflow: auto;
+  resize: vertical;
   pointer-events: all;
-  max-height: 360px;
   display: flex;
   flex-direction: column;
+  transition: right 0.2s ease;
+}
+
+.execution-dock.right-panel-open {
+  right: 482px;
 }
 
 /* 悬浮面板公共样式 */
@@ -1785,6 +1810,7 @@ onUnmounted(() => {
   box-shadow: var(--tf-shadow-xl);
   display: flex;
   flex-direction: column;
+  min-height: 0;
 }
 
 .config-panel .panel-inner {
@@ -1843,6 +1869,20 @@ onUnmounted(() => {
   font-weight: 600;
   color: var(--tf-text-primary);
 }
+
+.inspector-header > div:first-child { min-width: 0; }
+.inspector-tabs { display: flex; gap: 12px; margin-top: 8px; }
+.inspector-tabs button {
+  padding: 0 0 5px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--tf-text-secondary);
+  cursor: pointer;
+  font-size: 12px;
+}
+.inspector-tabs button:hover { color: var(--tf-text-primary); }
+.inspector-tabs button.active { color: var(--tf-accent); border-bottom-color: var(--tf-accent); font-weight: 600; }
 
 /* LogicFlow 主题覆盖 */
 :deep(.lf-graph) {
