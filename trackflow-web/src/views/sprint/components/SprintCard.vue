@@ -51,10 +51,20 @@
           </template>
         </span>
       </div>
-      <div class="sprint-dates" v-if="sprint.startDate">
+      <div class="sprint-dates" v-if="sprint.startDate && sprint.endDate">
         {{ formatDate(sprint.startDate) }} — {{ formatDate(sprint.endDate) }}
       </div>
-      <div class="sprint-dates sprint-dates-missing" v-else-if="isActive">
+      <div class="sprint-dates sprint-dates-missing" v-else-if="sprint.startDate && !sprint.endDate">
+        <span class="dates-missing-icon">📅</span> 结束日期未设置
+        <span class="dates-partial-info">（开始：{{ formatDate(sprint.startDate) }}）</span>
+        <a-button v-if="canEdit" size="mini" type="text" @click="$emit('editDates', sprint)">设置</a-button>
+      </div>
+      <div class="sprint-dates sprint-dates-missing" v-else-if="!sprint.startDate && sprint.endDate">
+        <span class="dates-missing-icon">📅</span> 开始日期未设置
+        <span class="dates-partial-info">（结束：{{ formatDate(sprint.endDate) }}）</span>
+        <a-button v-if="canEdit" size="mini" type="text" @click="$emit('editDates', sprint)">设置</a-button>
+      </div>
+      <div class="sprint-dates sprint-dates-missing" v-else-if="isActive || isPlanned">
         <span class="dates-missing-icon">📅</span> 未设置日期
         <a-button v-if="canEdit" size="mini" type="text" @click="$emit('editDates', sprint)">设置</a-button>
       </div>
@@ -287,7 +297,8 @@ interface SprintTimeInfo {
 }
 
 const timeInfo = computed<SprintTimeInfo | null>(() => {
-  if (!props.sprint.endDate) return null
+  // Both dates must be set to calculate meaningful time info
+  if (!props.sprint.startDate || !props.sprint.endDate) return null
   // Only show for active/planned
   if (!isActive.value && !isPlanned.value) return null
 
@@ -295,14 +306,12 @@ const timeInfo = computed<SprintTimeInfo | null>(() => {
   today.setHours(0, 0, 0, 0)
   const end = new Date(props.sprint.endDate)
   end.setHours(0, 0, 0, 0)
+  const start = new Date(props.sprint.startDate)
+  start.setHours(0, 0, 0, 0)
 
-  if (props.sprint.startDate) {
-    const start = new Date(props.sprint.startDate)
-    start.setHours(0, 0, 0, 0)
-    if (today.getTime() < start.getTime()) {
-      const daysUntilStart = Math.ceil((start.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
-      return { type: 'not-started', days: daysUntilStart }
-    }
+  if (today.getTime() < start.getTime()) {
+    const daysUntilStart = Math.ceil((start.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+    return { type: 'not-started', days: daysUntilStart }
   }
 
   const remainingDays = Math.ceil((end.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
@@ -516,6 +525,12 @@ function formatDate(dateStr?: string): string {
 
 .dates-missing-icon {
   font-size: 12px;
+}
+
+.dates-partial-info {
+  font-size: 11px;
+  color: var(--color-text-4);
+  font-style: normal;
 }
 
 /* Status Warning / Hint */
