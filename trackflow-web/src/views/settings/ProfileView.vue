@@ -12,11 +12,10 @@
     </div>
 
     <!-- 面包屑 -->
-    <div class="profile-breadcrumb">
-      <span class="breadcrumb-item">用户</span>
-      <span class="breadcrumb-sep">/</span>
-      <span class="breadcrumb-item current">{{ username }}</span>
-    </div>
+    <a-breadcrumb style="margin-bottom: 24px">
+      <a-breadcrumb-item>用户</a-breadcrumb-item>
+      <a-breadcrumb-item>{{ username }}</a-breadcrumb-item>
+    </a-breadcrumb>
 
     <!-- Tab 标签页结构 -->
     <a-tabs v-model:active-key="activeTab" class="profile-tabs">
@@ -365,24 +364,6 @@ onMounted(() => {
 .profile-username {
   font-size: 13px;
   color: var(--tf-text-tertiary);
-}
-
-/* ===== 面包屑 ===== */
-.profile-breadcrumb {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 24px;
-  font-size: 12px;
-  color: var(--tf-text-tertiary);
-}
-
-.breadcrumb-sep {
-  color: var(--tf-text-quaternary);
-}
-
-.breadcrumb-item.current {
-  color: var(--tf-text-secondary);
 }
 
 /* ===== Tabs ===== */
