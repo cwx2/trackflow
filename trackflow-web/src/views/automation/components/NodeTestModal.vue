@@ -11,7 +11,7 @@
       此节点会执行真实写操作、外部请求或脚本。确认后才会实际运行；测试输入不会保存到工作流。
     </a-alert>
     <a-checkbox v-if="hasSideEffects" :model-value="confirmSideEffects" class="node-test-confirm"
-      @update:model-value="emit('update:confirmSideEffects', $event)">
+      @update:model-value="emit('update:confirmSideEffects', $event === true)">
       我确认允许本次节点试运行产生真实副作用
     </a-checkbox>
     <a-alert v-else-if="isSimulation" type="info" :show-icon="true" class="run-input-guide">
