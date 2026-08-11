@@ -164,6 +164,9 @@ export class FlowEdgeView extends PolylineEdge {
       : null
 
     const warningBadge = typeCompat === 'warning' ? buildWarningBadge(model) : null
+    const iterationBadge = props?.collectionBindingMode === 'each'
+      ? buildIterationBadge(model?.pointsList || [], isVisible || isSelected)
+      : null
 
     // LogicFlow 的 h() 与 Vue VNode 泛型不同，边子元素只在 SVG 渲染期使用。
     const particles: any[] = []
@@ -176,7 +179,7 @@ export class FlowEdgeView extends PolylineEdge {
       )
     }
 
-    return h('g', {}, [hitArea, selectionHalo, mainPath, startPlug, endPlug, directionMarker, warningBadge, ...particles].filter(Boolean) as any)
+    return h('g', {}, [hitArea, selectionHalo, mainPath, startPlug, endPlug, directionMarker, warningBadge, iterationBadge, ...particles].filter(Boolean) as any)
   }
 
   /** 端口插座已表达流向，避免默认箭头与终点圆环重叠。 */
@@ -189,6 +192,24 @@ export class FlowEdgeView extends PolylineEdge {
 }
 
 // ─── 纯函数工具（无副作用，可单元测试） ────────────────────────────────────────
+
+function buildIterationBadge(points: Array<{ x: number; y: number }>, visible: boolean) {
+  if (!visible || points.length < 2) return null
+  const midpoint = points[Math.floor(points.length / 2)]
+  if (!midpoint) return null
+  return h('g', { transform: `translate(${midpoint.x - 24}, ${midpoint.y - 11})`, 'pointer-events': 'none' }, [
+    h('rect', {
+      x: 0, y: 0, width: 48, height: 18, rx: 9,
+      fill: 'var(--wf-surface-elevated, #172554)',
+      stroke: 'var(--wf-edge-data, #38bdf8)',
+      'stroke-width': '1', opacity: '0.94',
+    }),
+    h('text', {
+      x: 24, y: 12.5, 'text-anchor': 'middle',
+      fill: 'var(--wf-edge-data, #38bdf8)', 'font-size': '10', 'font-weight': '600',
+    }, '逐项'),
+  ])
+}
 
 /** 根据运行状态和类型兼容性计算边颜色（CSS 变量优先，硬编码兜底） */
 export function resolveEdgeColor(status: ExecutionFlowStatus | string, typeCompat: TypeCompat, selected = false): string {

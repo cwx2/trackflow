@@ -196,6 +196,8 @@ export interface WorkflowEdge {
   sourcePortName: string   // 从哪个输出端口出发
   targetNodeId: string
   targetPortName: string   // 连到哪个输入端口
+  /** 集合输出映射到单项输入时，逐条建立并保持项目执行上下文。 */
+  collectionBindingMode?: 'direct' | 'each'
 }
 
 /** 全局变量定义 */

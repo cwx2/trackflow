@@ -238,10 +238,12 @@ export abstract class BaseNodeModel extends HtmlNodeModel {
     const sourcePort = sourceOutputs.find(port => port.name === sourceAnchor._portName)
     const targetPort = targetInputs.find(port => port.name === targetAnchor._portName)
     if (!sourcePort || !targetPort) return { isAllPass: false, msg: '端口信息不完整，无法建立数据绑定' }
-    if (!isDirectlyAssignable(sourcePort.valueType, targetPort.valueType)) {
+    const isCollectionToItem = portCardinality(sourcePort) === 'collection'
+      && portCardinality(targetPort) === 'single'
+    if (!isCollectionToItem && !isDirectlyAssignable(sourcePort.valueType, targetPort.valueType)) {
       return { isAllPass: false, msg: `类型不兼容：${sourcePort.valueType} 不能直接连接到 ${targetPort.valueType}` }
     }
-    if (portCardinality(sourcePort) !== portCardinality(targetPort)) {
+    if (!isCollectionToItem && portCardinality(sourcePort) !== portCardinality(targetPort)) {
       return { isAllPass: false, msg: portCardinality(sourcePort) === 'collection'
         ? '列表不能直接连接到单项。请插入“批处理”节点。'
         : '单条数据不能直接连接到列表端口。' }

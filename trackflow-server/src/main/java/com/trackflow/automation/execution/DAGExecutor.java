@@ -219,7 +219,7 @@ public class DAGExecutor {
                 }
 
                 try {
-                    Map<String, Object> outputs = executor.execute(resolvedInputs, node, ctx);
+                    Map<String, Object> outputs = executeWithItemScopes(executor, resolvedInputs, node, ctx);
                     Map<String, Object> safeOutputs = outputs != null ? outputs : Map.of();
                     ctx.setNodeOutputs(node.id(), safeOutputs);
                     executionPlanner.completeNode(
@@ -822,6 +822,55 @@ public class DAGExecutor {
         } catch (NumberFormatException exception) {
             throw new DAGBuilder.InvalidWorkflowException("批处理子工作流 ID 无效: " + node.id());
         }
+    }
+
+    /**
+     * Executes a node once for every item supplied to a single-value input.
+     *
+     * <p>A collection-to-single edge is an explicit {@code each} binding in
+     * the workflow contract. Once that scope is entered, returned values stay
+     * as ordered collections so downstream single-value nodes continue in the
+     * same item scope without needing a hidden child workflow.</p>
+     */
+    private Map<String, Object> executeWithItemScopes(NodeExecutor executor,
+                                                       Map<String, Object> resolvedInputs,
+                                                       WorkflowNodeModel node,
+                                                       ExecutionContext context)
+            throws NodeExecutionException {
+        List<String> itemInputs = new ArrayList<>();
+        int itemCount = -1;
+        for (com.trackflow.automation.node.model.InputParameter input : node.inputs()) {
+            Object value = resolvedInputs.get(input.name());
+            if (input.cardinality() != com.trackflow.automation.node.model.PortCardinality.single
+                    || !(value instanceof List<?> values)) {
+                continue;
+            }
+            if (itemCount < 0) {
+                itemCount = values.size();
+            } else if (itemCount != values.size()) {
+                throw new NodeExecutionException(node.id(),
+                        "逐项处理的多个列表输入数量不一致，无法按序配对");
+            }
+            itemInputs.add(input.name());
+        }
+        if (itemInputs.isEmpty()) {
+            return executor.execute(resolvedInputs, node, context);
+        }
+
+        Map<String, List<Object>> collectedOutputs = new LinkedHashMap<>();
+        for (int index = 0; index < itemCount; index++) {
+            Map<String, Object> itemInputsValue = new LinkedHashMap<>(resolvedInputs);
+            for (String inputName : itemInputs) {
+                itemInputsValue.put(inputName, ((List<?>) resolvedInputs.get(inputName)).get(index));
+            }
+            Map<String, Object> itemOutputs = executor.execute(itemInputsValue, node, context);
+            if (itemOutputs == null) continue;
+            itemOutputs.forEach((name, value) ->
+                    collectedOutputs.computeIfAbsent(name, ignored -> new ArrayList<>()).add(value));
+        }
+        Map<String, Object> outputs = new LinkedHashMap<>();
+        collectedOutputs.forEach(outputs::put);
+        return outputs;
     }
 
     private boolean evaluateLoopExit(WorkflowNodeModel node, Object output, Object status) {

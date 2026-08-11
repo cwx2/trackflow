@@ -11,13 +11,13 @@ const RESERVED_NODE_PROPERTIES = new Set([
 /** 将历史存量定义升级为当前节点注册表的正式端口契约。 */
 export function migrateWorkflowDefinition(raw: any): WorkflowDefinition {
   if (raw.globalVariables !== undefined) {
-    return normalizeFlowEdges(synchronizeDefinitionBindings({
+    return normalizeLegacyInlineBatches(normalizeFlowEdges(synchronizeDefinitionBindings({
       ...raw,
       nodes: (raw.nodes || []).map((node: any) => upgradeNodeContract(node)),
-    } as WorkflowDefinition))
+    } as WorkflowDefinition)))
   }
 
-  return normalizeFlowEdges(synchronizeDefinitionBindings({
+  return normalizeLegacyInlineBatches(normalizeFlowEdges(synchronizeDefinitionBindings({
     globalVariables: Object.fromEntries(
       Object.entries(raw.variables || {}).map(([key, value]) => [key, { type: 'string' as const, defaultValue: value }]),
     ),
@@ -55,8 +55,9 @@ export function migrateWorkflowDefinition(raw: any): WorkflowDefinition {
       sourcePortName: edge.sourceHandle || edge.sourcePortName || 'output',
       targetNodeId: edge.target || edge.targetNodeId,
       targetPortName: edge.targetHandle || edge.targetPortName || 'input',
+      collectionBindingMode: edge.collectionBindingMode,
     })),
-  } as WorkflowDefinition))
+  } as WorkflowDefinition)))
 }
 
 /**
@@ -166,7 +167,7 @@ export function buildWorkflowDefinition(
   globalVariables: Record<string, GlobalVariable>,
   graphData: { nodes: any[]; edges: any[] },
 ): WorkflowDefinition {
-  return normalizeFlowEdges(synchronizeDefinitionBindings({
+  return normalizeLegacyInlineBatches(normalizeFlowEdges(synchronizeDefinitionBindings({
     globalVariables,
     nodes: graphData.nodes.map(normalizeCanvasNode),
     edges: graphData.edges.map((edge: any) => ({
@@ -175,8 +176,9 @@ export function buildWorkflowDefinition(
       sourcePortName: edge.properties?.sourcePortName || 'output',
       targetNodeId: edge.targetNodeId,
       targetPortName: edge.properties?.targetPortName || 'input',
+      collectionBindingMode: edge.properties?.collectionBindingMode,
     })),
-  } as WorkflowDefinition))
+  } as WorkflowDefinition)))
 }
 
 /**
@@ -193,7 +195,12 @@ export function synchronizeDefinitionBindings(definition: WorkflowDefinition): W
     const target = nodesById.get(edge.targetNodeId)
     const sourcePort = source?.outputs.find(port => port.name === edge.sourcePortName)
     const targetInput = target?.inputs.find(input => input.name === edge.targetPortName)
-    if (!sourcePort || !targetInput || targetInput.value != null || !isDirectlyCompatible(sourcePort.valueType, targetInput.valueType)) continue
+    const sourceCardinality = sourcePort?.cardinality || (sourcePort?.valueType === 'array' ? 'collection' : 'single')
+    const targetCardinality = targetInput?.cardinality || (targetInput?.valueType === 'array' ? 'collection' : 'single')
+    const isEachBinding = edge.collectionBindingMode === 'each'
+      && sourceCardinality === 'collection' && targetCardinality === 'single'
+    if (!sourcePort || !targetInput || targetInput.value != null
+      || (!isEachBinding && !isDirectlyCompatible(sourcePort.valueType, targetInput.valueType))) continue
     targetInput.value = { type: 'ref', nodeId: source!.id, outputName: sourcePort.name }
   }
   return { ...definition, nodes }
@@ -215,6 +222,54 @@ function normalizeFlowEdges(definition: WorkflowDefinition): WorkflowDefinition 
       : edge
   })
   return { ...definition, edges }
+}
+
+/**
+ * The first batch-node implementation invoked an unrelated child workflow,
+ * while the canvas presented it as an inline iterator. A blank legacy batch
+ * therefore means the author intended a collection-to-item data binding.
+ * Convert only that unambiguous shape; configured child-workflow batches keep
+ * their original behaviour.
+ */
+function normalizeLegacyInlineBatches(definition: WorkflowDefinition): WorkflowDefinition {
+  let nodes = definition.nodes
+  let edges = definition.edges || []
+  for (const batch of definition.nodes.filter(node => node.type === 'batch'
+    && !String(node.config?.workflowId || '').trim())) {
+    const dataInput = edges.find(edge => edge.targetNodeId === batch.id
+      && edge.sourcePortName !== '__flow' && edge.targetPortName !== '__flow')
+    const flowInput = edges.find(edge => edge.targetNodeId === batch.id
+      && edge.sourcePortName === '__flow' && edge.targetPortName === '__flow')
+    const flowOutput = edges.find(edge => edge.sourceNodeId === batch.id
+      && edge.sourcePortName === '__flow' && edge.targetPortName === '__flow')
+    if (!dataInput || !flowInput || !flowOutput) continue
+
+    const source = nodes.find(node => node.id === dataInput.sourceNodeId)
+    const target = nodes.find(node => node.id === flowOutput.targetNodeId)
+    const sourcePort = source?.outputs.find(port => port.name === dataInput.sourcePortName)
+    const targetInput = target?.inputs.find(input => input.cardinality === 'single'
+      && (!sourcePort?.semanticType || !input.semanticType || input.semanticType === sourcePort.semanticType))
+    if (!source || !target || !sourcePort || !targetInput) continue
+
+    nodes = nodes.filter(node => node.id !== batch.id)
+    edges = edges
+      .filter(edge => edge.sourceNodeId !== batch.id && edge.targetNodeId !== batch.id)
+      .concat([
+        {
+          ...dataInput,
+          targetNodeId: target.id,
+          targetPortName: targetInput.name,
+          collectionBindingMode: 'each',
+        },
+        {
+          ...flowInput,
+          id: `${batch.id}-inline-flow`,
+          targetNodeId: target.id,
+          targetPortName: '__flow',
+        },
+      ])
+  }
+  return synchronizeDefinitionBindings({ ...definition, nodes, edges })
 }
 
 function isDirectlyCompatible(source: string, target: string) {

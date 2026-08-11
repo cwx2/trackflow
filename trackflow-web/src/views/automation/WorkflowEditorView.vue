@@ -492,6 +492,12 @@ function getAnchorPortName(anchorId: unknown, nodeId: string, direction: 'in' | 
     : null
 }
 
+function portCardinality(node: any, portName: string, direction: 'in' | 'out') {
+  const ports = direction === 'in' ? node?.properties?.inputs : node?.properties?.outputs
+  const port = (ports || []).find((candidate: any) => candidate.name === portName)
+  return port?.cardinality || (port?.valueType === 'array' ? 'collection' : 'single')
+}
+
 /**
  * 画布边不仅是视觉连线，也是运行时数据绑定：source.output -> target.input。
  * 把这一步放在编辑器基座，避免每个节点配置面板各自实现一次且遗漏保存/试运行。
@@ -514,8 +520,12 @@ function synchronizeEdgeBinding(edge: any) {
     })
     return
   }
+  const source = lf.getNodeModelById(edge.sourceNodeId) as any
   const target = lf.getNodeModelById(edge.targetNodeId) as any
   if (!target) return
+  const collectionBindingMode = portCardinality(source, sourcePortName, 'out') === 'collection'
+    && portCardinality(target, targetPortName, 'in') === 'single'
+    ? 'each' : 'direct'
   const inputs = (target.properties?.inputs || []).map((input: any) => input.name === targetPortName
     ? { ...input, value: { type: 'ref', nodeId: edge.sourceNodeId, outputName: sourcePortName } }
     : input)
@@ -533,7 +543,7 @@ function synchronizeEdgeBinding(edge: any) {
   lf.setProperties(edge.targetNodeId, properties)
   lf.setProperties(edge.id, {
     ...(edge.properties || {}), sourcePortName, targetPortName,
-    edgeKind, connectionViewMode: connectionViewMode.value,
+    edgeKind, collectionBindingMode, connectionViewMode: connectionViewMode.value,
   })
   if (selectedNode.value?.id === edge.targetNodeId) {
     selectedNode.value = { ...selectedNode.value, properties }
@@ -1265,6 +1275,7 @@ async function loadWorkflow() {
           properties: {
             sourcePortName: e.sourcePortName,
             targetPortName: e.targetPortName,
+            collectionBindingMode: e.collectionBindingMode,
             edgeKind: e.sourcePortName === FLOW_PORT ? 'control' : 'data',
             connectionViewMode: connectionViewMode.value,
           }

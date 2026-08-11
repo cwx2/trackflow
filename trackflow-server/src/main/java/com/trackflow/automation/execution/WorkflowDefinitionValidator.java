@@ -6,6 +6,7 @@ import com.trackflow.automation.node.model.InputParameter;
 import com.trackflow.automation.node.model.InputPortDef;
 import com.trackflow.automation.node.model.InputValue;
 import com.trackflow.automation.node.model.InputBindingMode;
+import com.trackflow.automation.node.model.CollectionBindingMode;
 import com.trackflow.automation.node.model.LiteralValue;
 import com.trackflow.automation.node.model.OutputPortDef;
 import com.trackflow.automation.node.model.VariableRef;
@@ -175,10 +176,21 @@ public class WorkflowDefinitionValidator {
             if (targetPort == null) {
                 throw invalid("连线目标端口不存在: " + edge.id() + " -> " + edge.targetPortName());
             }
-            if (sourcePort.cardinality() != targetPort.cardinality()) {
+            boolean itemBinding = sourcePort.cardinality() == com.trackflow.automation.node.model.PortCardinality.collection
+                    && targetPort.cardinality() == com.trackflow.automation.node.model.PortCardinality.single;
+            if (itemBinding && edge.collectionBindingMode() != CollectionBindingMode.each) {
+                throw invalid("集合输出连接到单项输入时，必须启用逐项处理： "
+                        + edge.sourceNodeId() + "." + edge.sourcePortName() + " → "
+                        + edge.targetNodeId() + "." + edge.targetPortName());
+            }
+            if (!itemBinding && sourcePort.cardinality() != targetPort.cardinality()) {
                 throw invalid("集合与单条数据不能直接连线，需配置批处理: "
                         + edge.sourceNodeId() + "." + edge.sourcePortName() + " → "
                         + edge.targetNodeId() + "." + edge.targetPortName());
+            }
+            if (itemBinding && sourcePort.semanticType() == null && !"any".equals(targetPort.valueType())) {
+                throw invalid("逐项处理需要集合端口声明元素业务类型： "
+                        + edge.sourceNodeId() + "." + edge.sourcePortName());
             }
             if (sourcePort.semanticType() != null && targetPort.semanticType() != null
                     && !sourcePort.semanticType().equals(targetPort.semanticType())) {
@@ -189,14 +201,15 @@ public class WorkflowDefinitionValidator {
 
         for (WorkflowNodeModel node : nodeById.values()) {
             for (InputParameter input : node.inputs()) {
-                validateInputValue(node, input, nodeById, definitionByNodeId);
+                validateInputValue(node, input, nodeById, definitionByNodeId, edges);
             }
         }
     }
 
     private void validateInputValue(WorkflowNodeModel node, InputParameter input,
                                     Map<String, WorkflowNodeModel> nodeById,
-                                    Map<String, NodeDefinition> definitionByNodeId) {
+                                    Map<String, NodeDefinition> definitionByNodeId,
+                                    List<WorkflowEdgeModel> edges) {
         InputValue value = input.value();
         if (!(value instanceof VariableRef ref)) return;
         if (!"ref".equals(ref.type()) || ref.nodeId() == null || ref.outputName() == null) {
@@ -212,11 +225,18 @@ public class WorkflowDefinitionValidator {
             throw invalid("变量引用了不存在的输出端口: " + ref.nodeId() + "." + ref.outputName());
         }
         boolean explicitPath = ref.path() != null && !ref.path().isBlank();
-        if (!explicitPath && !isCompatible(sourcePort.valueType(), input.valueType())) {
+        boolean itemBinding = sourcePort.cardinality() == com.trackflow.automation.node.model.PortCardinality.collection
+                && input.cardinality() == com.trackflow.automation.node.model.PortCardinality.single
+                && edges.stream().anyMatch(edge -> edge.sourceNodeId().equals(ref.nodeId())
+                && edge.sourcePortName().equals(ref.outputName())
+                && edge.targetNodeId().equals(node.id())
+                && edge.targetPortName().equals(input.name())
+                && edge.collectionBindingMode() == CollectionBindingMode.each);
+        if (!explicitPath && !itemBinding && !isCompatible(sourcePort.valueType(), input.valueType())) {
             throw invalid("变量类型不兼容: " + ref.nodeId() + "." + ref.outputName()
                     + " 不能赋给 " + node.id() + "." + input.name());
         }
-        if (!explicitPath && sourcePort.cardinality() != input.cardinality()) {
+        if (!explicitPath && !itemBinding && sourcePort.cardinality() != input.cardinality()) {
             throw invalid("集合与单条数据不能直接引用，需配置批处理: "
                     + ref.nodeId() + "." + ref.outputName() + " → " + node.id() + "." + input.name());
         }

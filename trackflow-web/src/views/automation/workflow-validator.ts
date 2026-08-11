@@ -49,6 +49,12 @@ export function validateExecutableWorkflow(definition: WorkflowDefinition): stri
     const targetPort = getNodeDefinition(target.type)?.inputPorts.find(port => port.name === edge.targetPortName)
     if (!sourcePort) return `连线来源端口不存在：${edge.sourcePortName}`
     if (!targetPort) return `连线目标端口不存在：${edge.targetPortName}`
+    const sourceCardinality = sourcePort.cardinality || (sourcePort.valueType === 'array' ? 'collection' : 'single')
+    const targetCardinality = targetPort.cardinality || (targetPort.valueType === 'array' ? 'collection' : 'single')
+    if (sourceCardinality === 'collection' && targetCardinality === 'single'
+      && edge.collectionBindingMode !== 'each') {
+      return `集合连线必须启用逐项处理：${source.nodeMeta?.title || source.id} → ${target.nodeMeta?.title || target.id}`
+    }
   }
 
   for (const node of nodes) {
@@ -58,7 +64,12 @@ export function validateExecutableWorkflow(definition: WorkflowDefinition): stri
       const source = byId.get(ref.nodeId)
       const sourcePort = source && getNodeDefinition(source.type)?.outputPorts.find(port => port.name === ref.outputName)
       if (!sourcePort) return `变量引用不存在：${ref.nodeId}.${ref.outputName}`
-      if (!ref.path && !compatible(sourcePort.valueType, input.valueType)) {
+      const itemBinding = edges.some(edge => edge.sourceNodeId === ref.nodeId
+        && edge.sourcePortName === ref.outputName
+        && edge.targetNodeId === node.id
+        && edge.targetPortName === input.name
+        && edge.collectionBindingMode === 'each')
+      if (!ref.path && !itemBinding && !compatible(sourcePort.valueType, input.valueType)) {
         return `变量类型不兼容：${ref.nodeId}.${ref.outputName} → ${node.id}.${input.name}`
       }
       if (ref.path && !['object', 'array', 'any'].includes(sourcePort.valueType)) {

@@ -7,6 +7,7 @@ import com.trackflow.automation.node.NodeRegistry;
 import com.trackflow.automation.node.model.InputParameter;
 import com.trackflow.automation.node.model.InputPortDef;
 import com.trackflow.automation.node.model.InputValue;
+import com.trackflow.automation.node.model.CollectionBindingMode;
 import com.trackflow.automation.node.model.NodeRuntimePolicy;
 import com.trackflow.automation.node.model.OutputPortDef;
 import com.trackflow.automation.node.model.PortCardinality;
@@ -43,7 +44,7 @@ class BatchNodeContractTest {
     }
 
     @Test
-    void rejectsACollectionConnectedDirectlyToAnItemPort() {
+    void requiresAnExplicitEachBindingForACollectionToItemConnection() {
         CollectionSource source = new CollectionSource();
         SingleIssueConsumer consumer = new SingleIssueConsumer();
         WorkflowDefinitionValidator validator = validator(
@@ -58,6 +59,24 @@ class BatchNodeContractTest {
 
         assertThrows(DAGBuilder.InvalidWorkflowException.class,
                 () -> validator.validateDraft(definition));
+    }
+
+    @Test
+    void allowsAnExplicitEachBindingForACollectionToItemConnection() {
+        CollectionSource source = new CollectionSource();
+        SingleIssueConsumer consumer = new SingleIssueConsumer();
+        WorkflowDefinitionValidator validator = validator(
+                new NodeDefinition[]{source, consumer}, new NodeExecutor[]{source, consumer});
+
+        WorkflowNodeModel sourceNode = node("search", source, Map.of());
+        WorkflowNodeModel consumerNode = node("context", consumer, Map.of(
+                "item", refInput(consumer.getInputPorts().getFirst(), "search", "items")));
+        WorkflowDefinitionModel definition = new WorkflowDefinitionModel(Map.of(),
+                List.of(sourceNode, consumerNode), List.of(
+                new WorkflowEdgeModel("search-context", "search", "items", "context", "item",
+                        CollectionBindingMode.each)));
+
+        assertDoesNotThrow(() -> validator.validateDraft(definition));
     }
 
     private WorkflowDefinitionValidator validator(NodeDefinition[] definitions, NodeExecutor[] executors) {

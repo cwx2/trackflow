@@ -78,6 +78,14 @@ public class ExecutionContext {
     /** 只支持显式的 Map key 或数组下标，不使用反射读取对象属性。 */
     private Object resolvePath(Object value, String path) {
         if (value == null || path == null || path.isBlank()) return value;
+        if (value instanceof List<?> values) {
+            String firstSegment = path.split("\\.", 2)[0];
+            try {
+                Integer.parseInt(firstSegment);
+            } catch (NumberFormatException exception) {
+                return values.stream().map(item -> resolvePath(item, path)).toList();
+            }
+        }
         Object current = value;
         for (String segment : path.split("\\.")) {
             if (current instanceof Map<?, ?> map) {

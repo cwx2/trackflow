@@ -108,13 +108,13 @@ function validateDirectPortBinding(source: any, target: any, sourceAnchor?: any,
   const sourcePort = sourcePortInfo(source, sourceAnchor._portName, 'output')
   const targetPort = sourcePortInfo(target, targetAnchor._portName, 'input')
   if (!sourcePort || !targetPort) return { isAllPass: false, msg: '端口信息不完整，无法建立数据绑定' }
-  if (sourcePort.valueType !== targetPort.valueType
+  const isCollectionToItem = portCardinality(sourcePort) === 'collection'
+    && portCardinality(targetPort) === 'single'
+  if (!isCollectionToItem && sourcePort.valueType !== targetPort.valueType
     && sourcePort.valueType !== 'any' && targetPort.valueType !== 'any') {
     return { isAllPass: false, msg: `类型不兼容：${sourcePort.valueType} 不能直接连接到 ${targetPort.valueType}` }
   }
-  if (portCardinality(sourcePort) !== portCardinality(targetPort)) {
-    const isCollectionToItem = portCardinality(sourcePort) === 'collection'
-      && portCardinality(targetPort) === 'single'
+  if (!isCollectionToItem && portCardinality(sourcePort) !== portCardinality(targetPort)) {
     return {
       isAllPass: false,
       msg: isCollectionToItem
