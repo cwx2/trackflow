@@ -31,7 +31,12 @@ function hasVisibleTriggerPopup(): boolean {
   const popups = document.querySelectorAll('.arco-trigger-popup')
   for (const popup of popups) {
     const el = popup as HTMLElement
-    if (el.offsetWidth > 0 || el.offsetHeight > 0) {
+    // 必须同时有宽度和高度才算可见。
+    // Arco Trigger 的 popup 容器在关闭后仍保留在 DOM 中，
+    // 外层 .arco-trigger-popup 可能有 offsetWidth（由 min-width 设置），
+    // 但 offsetHeight 为 0（内容区 display:none 导致高度塌陷）。
+    // 使用 AND 确保只有真正展开的弹层才被判定为可见。
+    if (el.offsetWidth > 0 && el.offsetHeight > 0) {
       const style = window.getComputedStyle(el)
       if (style.display !== 'none' && style.visibility !== 'hidden') {
         return true
