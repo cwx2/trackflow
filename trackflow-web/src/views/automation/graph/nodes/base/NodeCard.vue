@@ -457,7 +457,8 @@ function onNodeClick() {
    * 使用绝对定位，不能再通过 flex + 负 margin 估算位置。
    */
   position: absolute;
-  top: 50%;
+  /* NodeCard 的 1px 外边框使内容盒较模型坐标下移 1px。 */
+  top: calc(50% - 1px);
   z-index: 3;
   box-sizing: border-box;
   width: 14px;
@@ -474,14 +475,14 @@ function onNodeClick() {
 /* 输入/输出均为空心插座；颜色表达数据进入与流出方向。 */
 .port-dot.in {
   color: var(--wf-port-in);
-  left: -13px; /* 14px 外径：圆心位于卡片左边缘外 6px */
+  left: -14px; /* 内容盒从外边框内侧起算，补偿 1px 后圆心精确落在锚点。 */
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--wf-port-in) 36%, transparent);
 }
 
 /* 输出端口以橙色空心环与输入端口区分。 */
 .port-dot.out {
   color: var(--wf-port-out);
-  right: -13px; /* 14px 外径：圆心位于卡片右边缘外 6px */
+  right: -14px; /* 同理，右侧向外补偿 1px。 */
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--wf-port-out) 36%, transparent);
 }
 .port-row:hover .port-dot {
