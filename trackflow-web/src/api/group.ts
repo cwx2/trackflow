@@ -56,8 +56,8 @@ export const groupApi = {
   },
 
   /** 用户组列表 */
-  list(params?: { keyword?: string; page?: number; pageSize?: number }) {
-    return request.get<any, R<PageResult<UserGroupVO>>>('/groups', { params })
+  list(params?: { keyword?: string; page?: number; pageSize?: number }, signal?: AbortSignal) {
+    return request.get<any, R<PageResult<UserGroupVO>>>('/groups', { params, signal })
   },
 
   /** 用户组详情 */

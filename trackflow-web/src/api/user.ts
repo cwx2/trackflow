@@ -19,8 +19,8 @@ export const userApi = {
     keyword?: string; username?: string; displayName?: string; email?: string
     orgId?: string; status?: string; banStatus?: string; roleId?: string
     page?: number; pageSize?: number; sort?: string
-  }) {
-    return request.get<any, R<PageResult<UserVO>>>('/users', { params })
+  }, signal?: AbortSignal) {
+    return request.get<any, R<PageResult<UserVO>>>('/users', { params, signal })
   },
 
   /** 创建用户 */

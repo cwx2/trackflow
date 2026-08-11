@@ -1,5 +1,6 @@
 import { ref, computed, watch } from 'vue'
 import { issueApi } from '@/api'
+import { type MaybeRefOrGetter, toValue } from 'vue'
 
 /**
  * 工单类型选项管理 - 从后端自定义字段系统动态加载工单类型选项
@@ -125,27 +126,32 @@ export function getIssueTypeLabel(issueType: string | null | undefined, projectI
 
 /**
  * 组合式函数：响应式的工单类型选项
+ *
+ * 参数 projectId 支持三种形式（MaybeRefOrGetter）：
+ * - 普通值：useIssueTypeOptions('proj-1')
+ * - Ref：useIssueTypeOptions(projectIdRef)
+ * - Getter：useIssueTypeOptions(() => props.projectId)
  */
-export function useIssueTypeOptions(projectIdRef: { value: string | null | undefined }) {
+export function useIssueTypeOptions(projectId: MaybeRefOrGetter<string | null | undefined>) {
   const options = ref<IssueTypeOption[]>(DEFAULT_ISSUE_TYPE_OPTIONS)
   const loading = ref(false)
 
   async function refresh() {
-    const projectId = projectIdRef.value
-    if (!projectId) {
+    const id = toValue(projectId)
+    if (!id) {
       options.value = DEFAULT_ISSUE_TYPE_OPTIONS
       return
     }
     loading.value = true
     try {
-      options.value = await loadIssueTypeOptions(projectId)
+      options.value = await loadIssueTypeOptions(id)
     } finally {
       loading.value = false
     }
   }
 
   // 项目切换时重新加载
-  watch(() => projectIdRef.value, () => {
+  watch(() => toValue(projectId), () => {
     refresh()
   }, { immediate: true })
 

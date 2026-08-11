@@ -10,7 +10,7 @@
  * - Props: visible, title, permissionOptions, hintContent, initialTargets, saving
  * - Emits: 'update:visible', 'save'(targets: ShareTargetItem[])
  */
-import { ref, watch } from 'vue'
+import { ref, watch, onWatcherCleanup } from 'vue'
 import { IconClose } from '@arco-design/web-vue/es/icon'
 import { userApi } from '@/api'
 import { groupApi } from '@/api/group'
@@ -70,7 +70,49 @@ interface SearchOption {
 const searchValue = ref<string | undefined>(undefined)
 const searching = ref(false)
 const searchOptions = ref<SearchOption[]>([])
-let searchTimer: ReturnType<typeof setTimeout> | null = null
+
+// ===== 搜索竞态保护 =====
+// watch searchValue：debounce 300ms 后发请求，onWatcherCleanup 自动取消上一次请求
+// 避免旧请求结果覆盖新结果（用户快速输入时的竞态条件）
+watch(searchValue, (keyword) => {
+  if (!keyword || keyword.length < 1) {
+    searchOptions.value = []
+    return
+  }
+
+  const controller = new AbortController()
+  const timer = setTimeout(async () => {
+    searching.value = true
+    try {
+      const options: SearchOption[] = []
+      const [usersRes, groupsRes] = await Promise.all([
+        userApi.list({ keyword, page: 1, pageSize: 10 }, controller.signal),
+        groupApi.list({ keyword, page: 1, pageSize: 10 }, controller.signal),
+      ])
+      if (controller.signal.aborted) return
+      for (const u of usersRes.data?.list || []) {
+        options.push({ key: `user:${u.id}`, type: 'user', id: Number(u.id), name: u.displayName || u.username })
+      }
+      for (const g of groupsRes.data?.list || []) {
+        options.push({ key: `group:${g.id}`, type: 'group', id: Number(g.id), name: g.name })
+      }
+      const existingKeys = new Set(shareTargets.value.map(t => t.key))
+      searchOptions.value = options.filter(o => !existingKeys.has(o.key))
+    } catch (e) {
+      if (!(e instanceof DOMException && e.name === 'AbortError')) {
+        searchOptions.value = []
+      }
+    } finally {
+      if (!controller.signal.aborted) searching.value = false
+    }
+  }, 300)
+
+  // watch 触发新值时，自动 abort 上一个请求并清除上一个 debounce timer
+  onWatcherCleanup(() => {
+    clearTimeout(timer)
+    controller.abort()
+  })
+})
 
 // ===== 共享目标列表 =====
 
@@ -90,35 +132,8 @@ watch(
 
 // ===== 搜索逻辑 =====
 
-function handleSearch(keyword: string) {
-  if (searchTimer) clearTimeout(searchTimer)
-  if (!keyword || keyword.length < 1) {
-    searchOptions.value = []
-    return
-  }
-  searchTimer = setTimeout(async () => {
-    searching.value = true
-    try {
-      const options: SearchOption[] = []
-      const [usersRes, groupsRes] = await Promise.all([
-        userApi.list({ keyword, page: 1, pageSize: 10 }),
-        groupApi.list({ keyword, page: 1, pageSize: 10 }),
-      ])
-      for (const u of usersRes.data?.list || []) {
-        options.push({ key: `user:${u.id}`, type: 'user', id: Number(u.id), name: u.displayName || u.username })
-      }
-      for (const g of groupsRes.data?.list || []) {
-        options.push({ key: `group:${g.id}`, type: 'group', id: Number(g.id), name: g.name })
-      }
-      const existingKeys = new Set(shareTargets.value.map(t => t.key))
-      searchOptions.value = options.filter(o => !existingKeys.has(o.key))
-    } catch {
-      searchOptions.value = []
-    } finally {
-      searching.value = false
-    }
-  }, 300)
-}
+// searchValue 的更新由 a-select 的 @search 直接驱动（见模板）
+// 搜索逻辑已移入 watch(searchValue, ...) 中统一处理
 
 function handleAddTarget(key: string | undefined) {
   if (!key) return
@@ -166,7 +181,7 @@ function handleOk() {
         allow-clear
         :filter-option="false"
         class="share-search-select"
-        @search="handleSearch"
+        @search="searchValue = $event"
         @change="(v) => handleAddTarget(v as string | undefined)"
       >
         <a-option v-for="opt in searchOptions" :key="opt.key" :value="opt.key">

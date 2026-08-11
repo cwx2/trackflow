@@ -511,7 +511,11 @@ import WorkflowActivityDrawer from './components/WorkflowActivityDrawer.vue'
 import WorkflowRulePanel from './WorkflowRulePanel.vue'
 import ScheduledRulePanel from './ScheduledRulePanel.vue'
 import TransitionGuardPanel from './components/TransitionGuardPanel.vue'
-import WorkflowCanvasView from './WorkflowCanvasView.vue'
+import { defineAsyncComponent, type ComponentPublicInstance } from 'vue'
+// WorkflowCanvasView 是重型画布组件（Vue Flow + 大量 SVG），首屏不需要，懒加载减少主包体积
+const WorkflowCanvasView = defineAsyncComponent(
+  () => import('./WorkflowCanvasView.vue')
+)
 import AdminPageLayout from '@/components/admin/AdminPageLayout.vue'
 import { EmptyState } from '@/components/base'
 import { localizeStatusName, localizeCategoryName } from '@/utils/fieldLabels'
@@ -878,7 +882,7 @@ function onGuardSaved() {
 }
 
 // ========== 画布视图 ==========
-const canvasViewRef = ref<InstanceType<typeof WorkflowCanvasView> | null>(null)
+const canvasViewRef = ref<ComponentPublicInstance | null>(null)
 
 function onCanvasToggleTransition(fromId: string, toId: string) {
   toggleTransition(fromId, toId)

@@ -58,6 +58,7 @@
           <IssueListItem
             v-for="issue in sortedIssues"
             :key="issue.id"
+            v-memo="[issue.id, issue.updatedAt, activeIssueId === issue.id, focusedIssueId === issue.id, selectedIds.has(issue.id), density]"
             :data-id="issue.id"
             :issue="issue"
             :density="density"
@@ -93,6 +94,7 @@
           <IssueListItem
             v-for="issue in unsortedIssues"
             :key="issue.id"
+            v-memo="[issue.id, issue.updatedAt, activeIssueId === issue.id, focusedIssueId === issue.id, selectedIds.has(issue.id), density]"
             :issue="issue"
             :density="density"
             :indent="0"

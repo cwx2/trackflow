@@ -1,4 +1,4 @@
-import { ref, computed, watch, type Ref } from 'vue'
+﻿import { ref, computed, watch, type MaybeRefOrGetter, toValue } from 'vue'
 import { customFieldApi } from '@/api'
 import type { AvailableColumnVO } from '@/api/types'
 
@@ -28,7 +28,7 @@ const STORAGE_KEY = 'trackflow:issue-list-columns'
  * 动态列配置 composable
  * 从后端 API 加载可用列（固定属性 + 自定义字段），支持保存到 savedQuery 或 localStorage
  */
-export function useColumnConfig(projectId?: Ref<string | undefined>) {
+export function useColumnConfig(projectId?: MaybeRefOrGetter<string | undefined>) {
   const allColumns = ref<ColumnDef[]>([])
   const visibleKeys = ref<string[]>(loadFromStorage())
   const columnsLoading = ref(false)
@@ -39,7 +39,7 @@ export function useColumnConfig(projectId?: Ref<string | undefined>) {
   async function fetchAvailableColumns() {
     columnsLoading.value = true
     try {
-      const res = await customFieldApi.availableColumns(projectId?.value || undefined)
+      const res = await customFieldApi.availableColumns(toValue(projectId) || undefined)
       const apiColumns: AvailableColumnVO[] = res.data || []
 
       const defs: ColumnDef[] = [
@@ -152,8 +152,8 @@ export function useColumnConfig(projectId?: Ref<string | undefined>) {
   }, { deep: true })
 
   // projectId 变化时重新加载；初始化时也加载一次
-  if (projectId) {
-    watch(projectId, () => {
+  if (projectId !== undefined) {
+    watch(() => toValue(projectId), () => {
       fetchAvailableColumns()
     }, { immediate: true })
   } else {

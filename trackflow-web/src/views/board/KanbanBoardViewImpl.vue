@@ -440,6 +440,7 @@
               <KanbanCard
                 v-for="issue in getEffectiveColumnIssues(col)"
                 :key="issue.id"
+                v-memo="[issue.id, issue.statusId, issue.priority, draggingIssue?.id === issue.id, transitioningIssueIds.has(issue.id), selectedIds.has(issue.id), cardSize]"
                 :issue="issue"
                 :card-size="cardSize"
                 :card-config="{ ...cardConfig, fieldDisplayModes: cardConfig.fieldDisplayModes ?? undefined, currentEstimationFieldId: cardConfig.currentEstimationFieldId ?? undefined }"
@@ -678,6 +679,7 @@
                     <KanbanCard
                       v-for="issue in getSwimlaneEffectiveColumnIssues(lane.key, col)"
                       :key="issue.id"
+                      v-memo="[issue.id, issue.statusId, issue.priority, draggingIssue?.id === issue.id, transitioningIssueIds.has(issue.id), selectedIds.has(issue.id), cardSize]"
                       :issue="issue"
                       :card-size="cardSize"
                       :card-config="{ ...cardConfig, fieldDisplayModes: cardConfig.fieldDisplayModes ?? undefined, currentEstimationFieldId: cardConfig.currentEstimationFieldId ?? undefined }"
@@ -987,7 +989,11 @@
 import { useKanbanBoard } from './composables'
 import { localizeStatusName } from '@/utils/fieldLabels'
 import { IssueStatusTag, EmptyState } from '@/components/base'
-import BoardSettingsDrawer from './BoardSettingsDrawer.vue'
+import { defineAsyncComponent } from 'vue'
+// BoardSettingsDrawer 包含 settings tabs + 大量表单，只在用户点击设置按钮时才需要，懒加载
+const BoardSettingsDrawer = defineAsyncComponent(
+  () => import('./BoardSettingsDrawer.vue')
+)
 import BoardSelector from './BoardSelector.vue'
 import BacklogPanel from './BacklogPanel.vue'
 import BoardChartPanel from './BoardChartPanel.vue'

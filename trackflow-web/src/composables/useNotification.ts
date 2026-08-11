@@ -1,4 +1,4 @@
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, effectScope } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useWebSocket } from '@/composables/useWebSocket'
 import type { StompSubscription } from '@stomp/stompjs'
@@ -32,6 +32,13 @@ let wsSubscription: StompSubscription | null = null
 let wsConnected = false
 let wsConnectCalled = false
 let wsDisconnectFn: (() => void) | null = null
+
+/**
+ * 模块级 effectScope：统一管理所有 watch 副作用的生命周期。
+ * 退出登录时调用 notificationScope.stop() 一次性销毁所有 watcher，
+ * 而不是手动维护多个 stopHandle。
+ */
+let notificationScope = effectScope()
 
 /**
  * 从 localStorage 恢复上次选择的标签页
@@ -333,18 +340,20 @@ export function useNotification() {
       console.debug('[Notification] WebSocket subscribed, polling stopped')
     }
 
-    // 监听连接状态变化
-    watch(status, (newStatus) => {
-      if (newStatus === 'connected') {
-        doSubscribe()
-      } else if (newStatus === 'disconnected' || newStatus === 'error') {
-        // WebSocket 断开 — 恢复轮询作为降级方案
-        if (wsConnected) {
-          wsConnected = false
-          startPolling()
-          console.debug('[Notification] WebSocket disconnected, polling resumed')
+    // 监听连接状态变化（在 notificationScope 内，退出登录时自动停止）
+    notificationScope.run(() => {
+      watch(status, (newStatus) => {
+        if (newStatus === 'connected') {
+          doSubscribe()
+        } else if (newStatus === 'disconnected' || newStatus === 'error') {
+          // WebSocket 断开 — 恢复轮询作为降级方案
+          if (wsConnected) {
+            wsConnected = false
+            startPolling()
+            console.debug('[Notification] WebSocket disconnected, polling resumed')
+          }
         }
-      }
+      })
     })
 
     // 如果已经连接，立即订阅
@@ -388,18 +397,24 @@ export function useNotification() {
       subscribeNotifications()
     }
 
-    watch(() => authStore.isAuthenticated, (authenticated) => {
-      if (authenticated) {
-        fetchUnreadCount()
-        subscribeNotifications()
-      } else {
-        cleanupWebSocket()
-        stopPolling()
-        unreadCount.value = 0
-        categoryUnreadCounts.value = { all: 0, mention: 0, subscription: 0, system: 0 }
-        notifications.value = []
-        panelVisible.value = false
-      }
+    // 监听登录状态变化（在 notificationScope 内，退出登录时自动停止）
+    notificationScope.run(() => {
+      watch(() => authStore.isAuthenticated, (authenticated) => {
+        if (authenticated) {
+          fetchUnreadCount()
+          subscribeNotifications()
+        } else {
+          cleanupWebSocket()
+          stopPolling()
+          notificationScope.stop()
+          // 重建 scope 供下次登录使用
+          notificationScope = effectScope()
+          unreadCount.value = 0
+          categoryUnreadCounts.value = { all: 0, mention: 0, subscription: 0, system: 0 }
+          notifications.value = []
+          panelVisible.value = false
+        }
+      })
     })
   }
 
