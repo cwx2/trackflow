@@ -130,24 +130,39 @@ git diff --cached -- <file>
 >
 > - 文件为空（exit code 0）→ ✅ 继续审核
 > - 有任何 TS 错误 → ❌ **MUST 级问题，必须全部修复**
+
+> **🔴 组件复用检查（每次审核强制执行）**：
 >
-> 常见错误类型和修复：
-> | 错误码 | 含义 | 修复方式 |
-> |--------|------|----------|
-> | TS2322 | 类型不兼容（最常见） | `null` 赋给不接受 null 的类型用 `?? undefined`；回调参数改为 `(val: any)` |
-> | TS6133 | 变量声明未使用 | 删除或加 `_` 前缀 |
-> | TS6196 | import 了但未使用 | 从 import 语句中删除 |
-> | TS7006 | 参数隐式 any | 显式声明类型或改为 `any` |
-> | TS7053 | string 不能索引 Ref 类型 | 改为 `(ref as unknown as Record<string, T>)[key]` |
+> 新增任何 UI 代码前，必须先确认是否有现成的 Arco 或自定义组件可复用。以下情况不合格，直接标为 ❌ SHOULD：
 >
-> 不得以"不影响运行"为由忽略 TS 错误——类型错误是潜在运行时 Bug 的信号。
+> | 发现这种手写代码 | 应该用 |
+> |----------------|--------|
+> | `<button :class="{active}">` 切换 tab | `<a-tabs>` + `<a-tab-pane>` |
+> | `<button :class="{active}">` 视图切换 | `<a-radio-group type="button">` |
+> | `<span>` 显示首字母头像 | `UserAvatar` 组件 |
+> | `<div class="breadcrumb">` | `<a-breadcrumb>` |
+> | `<div class="progress-bar">` 单段进度 | `<a-progress>` |
+> | `<div class="empty-state">` | `EmptyState` 组件 |
+> | `<div class="loading-state">` | `DataContainer` 或 `<a-spin>` |
+> | `<button class="nav-btn">` 导航按钮 | `<a-button>` |
+> | `<div v-if="loading">骨架</div>` | `<a-skeleton>` |
+> | 手写 toast div | `Message` / `Notification` |
+
+> **🔴 样式封装检查（每次审核强制执行）**：
+>
+> 以下情况不合格，标为 ❌ SHOULD：
+>
+> 1. 新增 `:deep()` 覆盖与 `components.css` 中已有全局样式重复
+> 2. 同一 `:deep()` 覆盖已在 3+ 个文件出现未提取到 `components.css`
+> 3. 手写按钮/卡片/分隔线等样式，而 Arco 有对应组件
 
 | 检查项 | 规则 |
 |--------|------|
 | API 管理 | 从 `@/api` 统一导入，不在组件写 URL |
 | 类型 | 后端 VO 对应 interface，放 `src/api/types.ts`，ID 为 string |
-| 组件 | `<script setup lang="ts">`，优先 Arco Design 组件 |
+| 组件 | `<script setup lang="ts">`，**必须优先使用 Arco Design 或自定义基础组件** |
 | 响应处理 | `res.code === 0`，`Message.error()` 提示 |
+| 无用 CSS | 手写样式与 Arco 组件样式重复时，删除手写，覆盖逻辑统一到 `components.css` |
 
 ---
 
