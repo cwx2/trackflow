@@ -5,15 +5,11 @@
       <h1 class="page-title">时间表</h1>
     </div>
 
-    <!-- Tabs -->
-    <div class="timesheet-tabs">
-      <button class="tab-btn" :class="{ active: activeTab === 'people' }" @click="switchTab('people')">人员</button>
-      <button class="tab-btn" :class="{ active: activeTab === 'projects' }" @click="switchTab('projects')">项目</button>
-      <button class="tab-btn" :class="{ active: activeTab === 'workgroups' }" @click="switchTab('workgroups')">工作群组</button>
-    </div>
+    <!-- ===================== Tab 导航 ===================== -->
+    <a-tabs v-model:active-key="activeTab" class="timesheet-tabs" @change="(key) => switchTab(key as 'people' | 'projects' | 'workgroups')">
 
     <!-- ===================== 人员视图 ===================== -->
-    <template v-if="activeTab === 'people'">
+    <a-tab-pane key="people" title="人员">
       <!-- User selector & filters -->
       <div class="timesheet-controls">
         <div class="controls-left">
@@ -119,10 +115,13 @@
         @day-click="openAddDialog"
         @entry-click="openEditDialog"
       />
-    </template>
+
+      <!-- Loading overlay（人员视图） -->
+      <div v-if="loading" class="loading-overlay"><a-spin :size="24" /></div>
+    </a-tab-pane>
 
     <!-- ===================== 项目视图 ===================== -->
-    <template v-else-if="activeTab === 'projects'">
+    <a-tab-pane key="projects" title="项目">
       <!-- Project selector & filters -->
       <div class="timesheet-controls">
         <div class="controls-left">
@@ -218,10 +217,13 @@
           :entries="projectEntries"
         />
       </div>
-    </template>
+
+      <!-- Loading overlay（项目视图） -->
+      <div v-if="loading" class="loading-overlay"><a-spin :size="24" /></div>
+    </a-tab-pane>
 
     <!-- ===================== 工作群组视图 ===================== -->
-    <template v-else-if="activeTab === 'workgroups'">
+    <a-tab-pane key="workgroups" title="工作群组">
       <!-- Date range & navigation -->
       <div class="timesheet-datebar">
         <div class="date-info">
@@ -301,12 +303,12 @@
           </div>
         </div>
       </div>
-    </template>
 
-    <!-- Loading overlay -->
-    <div v-if="loading" class="loading-overlay">
-      <a-spin :size="24" />
-    </div>
+      <!-- Loading overlay（工作群组视图） -->
+      <div v-if="loading" class="loading-overlay"><a-spin :size="24" /></div>
+    </a-tab-pane>
+
+    </a-tabs>
 
     <!-- Add/Edit Dialog -->
     <a-modal
@@ -598,7 +600,6 @@ function refresh() {
 }
 
 function switchTab(tab: 'people' | 'projects' | 'workgroups') {
-  activeTab.value = tab
   // Persist to URL query for refresh preservation
   router.replace({ query: { ...route.query, view: tab } })
   if (tab === 'people') {
@@ -1279,11 +1280,11 @@ onMounted(async () => {
 /* Attribute value dot */
 .attr-value-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
 
-/* Tabs */
-.timesheet-tabs { display: flex; gap: 0; padding: 12px 24px 0; border-bottom: 1px solid var(--tf-border-light); }
-.tab-btn { padding: 8px 16px; font-size: 13px; color: var(--tf-text-secondary); background: none; border: none; border-bottom: 2px solid transparent; cursor: pointer; transition: color 0.15s, border-color 0.15s; margin-bottom: -1px; }
-.tab-btn:hover { color: var(--tf-text-primary); }
-.tab-btn.active { color: var(--tf-accent); border-bottom-color: var(--tf-accent); font-weight: 500; }
+/* Tabs — 让 a-tabs 紧贴 header，去掉默认内边距 */
+.timesheet-tabs { margin: 0; }
+.timesheet-tabs :deep(.arco-tabs-nav) { padding: 0 24px; }
+.timesheet-tabs :deep(.arco-tabs-content) { padding: 0; }
+.timesheet-tabs :deep(.arco-tabs-pane) { padding: 0; }
 
 /* Controls */
 .timesheet-controls { padding: 12px 24px; display: flex; align-items: center; justify-content: space-between; }

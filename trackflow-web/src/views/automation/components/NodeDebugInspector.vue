@@ -21,15 +21,9 @@
       <p>点击节点卡片上的播放按钮。这里会展示本次调试的输入、输出和错误，不会写入正式执行历史。</p>
     </div>
     <template v-else>
-      <div class="debug-tabs" role="tablist" aria-label="节点调试内容">
-        <button :class="{ active: activeTab === 'summary' }" @click="activeTab = 'summary'">概览</button>
-        <button :class="{ active: activeTab === 'input' }" @click="activeTab = 'input'">输入</button>
-        <button :class="{ active: activeTab === 'output' }" @click="activeTab = 'output'">结果</button>
-        <button :class="{ active: activeTab === 'raw' }" @click="activeTab = 'raw'">原始数据</button>
-        <button v-if="detail.errorInfo" :class="{ active: activeTab === 'error' }" @click="activeTab = 'error'">错误</button>
-      </div>
-
-      <div v-if="activeTab === 'summary'" class="debug-content summary-content">
+      <a-tabs v-model:active-key="activeTab" size="mini" class="debug-tabs">
+        <a-tab-pane key="summary" title="概览">
+          <div class="debug-content summary-content">
         <div class="summary-card result-card" :class="status">
           <span>运行结果</span>
           <strong>{{ statusLabel }}</strong>
@@ -56,18 +50,22 @@
           </div>
         </div>
         <div v-if="detail.errorInfo" class="debug-error">{{ detail.errorInfo }}</div>
-      </div>
+        </div>
+        </a-tab-pane>
 
-      <div v-else-if="activeTab === 'input'" class="debug-content">
+        <a-tab-pane key="input" title="输入">
+          <div class="debug-content">
         <div v-if="inputEntries.length" class="field-list">
           <div v-for="entry in inputEntries" :key="entry.key" class="field-row">
             <span>{{ entry.key }}</span><strong>{{ displayValue(entry.value) }}</strong>
           </div>
         </div>
         <div v-else class="empty-data">本节点不需要额外输入。</div>
-      </div>
+          </div>
+        </a-tab-pane>
 
-      <div v-else-if="activeTab === 'output'" class="debug-content output-content">
+        <a-tab-pane key="output" title="结果">
+          <div class="debug-content output-content">
         <section v-if="conditionResult" class="branch-result" :class="conditionResult.passed ? 'passed' : 'not-passed'">
           <span>条件判断结果</span>
           <strong>{{ conditionResult.passed ? '命中「成立」分支' : '命中「不成立」分支' }}</strong>
@@ -88,12 +86,21 @@
           </div>
         </div>
         <div v-else class="empty-data">本次运行没有返回数据。</div>
-      </div>
+          </div>
+        </a-tab-pane>
 
-      <div v-else-if="activeTab === 'raw'" class="debug-content raw-content">
-        <JsonDataViewer :value="{ input: detail.input, output: detail.output, message: detail.message }" label="节点原始数据" />
-      </div>
-      <div v-else class="debug-content raw-content"><JsonDataViewer :value="detail.errorInfo" label="节点错误信息" error /></div>
+        <a-tab-pane key="raw" title="原始数据">
+          <div class="debug-content raw-content">
+            <JsonDataViewer :value="{ input: detail.input, output: detail.output, message: detail.message }" label="节点原始数据" />
+          </div>
+        </a-tab-pane>
+
+        <a-tab-pane v-if="detail.errorInfo" key="error" title="错误">
+          <div class="debug-content raw-content">
+            <JsonDataViewer :value="detail.errorInfo" label="节点错误信息" error />
+          </div>
+        </a-tab-pane>
+      </a-tabs>
     </template>
   </section>
 </template>
@@ -218,7 +225,10 @@ async function copyResult() {
 .debug-duration { color: var(--tf-text-tertiary); font-size: 11px; }.debug-actions { display: flex; flex-shrink: 0; gap: 4px; }
 .debug-actions button { border: 1px solid var(--tf-border); border-radius: 5px; padding: 3px 7px; background: var(--tf-bg-body); color: var(--tf-text-secondary); cursor: pointer; font-size: 11px; transition: border-color .16s, color .16s, transform .16s; }
 .debug-actions button:hover { border-color: var(--tf-accent); color: var(--tf-accent); transform: translateY(-1px); }.debug-actions .danger:hover { border-color: var(--tf-danger); color: var(--tf-danger); }
-.debug-tabs { display: flex; gap: 2px; padding: 8px 12px 0; border-bottom: 1px solid var(--tf-border); }.debug-tabs button { border: none; border-bottom: 2px solid transparent; padding: 7px 9px; background: transparent; color: var(--tf-text-secondary); cursor: pointer; font-size: 12px; transition: color .16s, border-color .16s; }.debug-tabs button.active { border-bottom-color: var(--tf-accent); color: var(--tf-accent); font-weight: 600; }
+.debug-tabs { }
+.debug-tabs :deep(.arco-tabs-nav) { padding: 4px 12px 0; }
+.debug-tabs :deep(.arco-tabs-content) { padding: 0; }
+.debug-tabs :deep(.arco-tabs-pane) { padding: 0; }
 .debug-content { flex: 1; min-height: 0; overflow: auto; padding: 12px; animation: content-enter 160ms ease-out both; }.summary-content { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-content: start; gap: 8px; }
 .summary-card { display: flex; flex-direction: column; gap: 5px; padding: 11px; border: 1px solid var(--tf-border); border-radius: 8px; background: linear-gradient(135deg, var(--tf-bg-body), var(--tf-bg-surface)); }.summary-card.success { border-color: color-mix(in srgb, var(--tf-success) 35%, var(--tf-border)); }.summary-card span, .summary-card small { color: var(--tf-text-tertiary); font-size: 11px; }.summary-card strong { color: var(--tf-text-primary); font-size: 13px; }
 .debug-message, .debug-error, .preview-section { grid-column: 1 / -1; }.debug-message, .debug-error { padding: 10px; border-radius: 8px; color: var(--tf-text-secondary); font-size: 12px; line-height: 1.55; background: var(--tf-bg-body); }.debug-message.simulated { background: var(--tf-accent-bg); }.debug-error { background: var(--tf-danger-bg); color: var(--tf-danger); }

@@ -45,20 +45,18 @@
     </div>
 
     <!-- 分类标签页 -->
-    <div class="page-tabs">
-      <button
-        v-for="tab in visibleTabs"
-        :key="tab.key"
-        class="tab-item"
-        :class="{ active: activeCategory === tab.key }"
-        @click="handleCategoryChange(tab.key)"
-      >
-        <span class="tab-label">{{ tab.label }}</span>
-        <span v-if="getCategoryCount(tab.key) > 0" class="tab-badge">
-          {{ getCategoryCount(tab.key) }}
-        </span>
-      </button>
-    </div>
+    <a-tabs
+      v-model:active-key="activeCategory"
+      class="page-tabs"
+      @change="(key) => handleCategoryChange(key as NotificationCategory)"
+    >
+      <a-tab-pane v-for="tab in visibleTabs" :key="tab.key">
+        <template #title>
+          {{ tab.label }}
+          <span v-if="getCategoryCount(tab.key) > 0" class="tab-badge">{{ getCategoryCount(tab.key) }}</span>
+        </template>
+      </a-tab-pane>
+    </a-tabs>
 
     <!-- 内容区 -->
     <div class="page-body">
@@ -582,31 +580,6 @@ onMounted(() => {
   flex-shrink: 0;
 }
 
-.tab-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 10px 14px;
-  border: none;
-  background: transparent;
-  color: var(--tf-text-secondary);
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  white-space: nowrap;
-  position: relative;
-  transition: color 0.15s;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
-}
-.tab-item:hover {
-  color: var(--tf-text-primary);
-}
-.tab-item.active {
-  color: var(--tf-accent);
-  border-bottom-color: var(--tf-accent);
-}
-
 .tab-badge {
   display: inline-flex;
   align-items: center;
@@ -620,11 +593,17 @@ onMounted(() => {
   color: var(--tf-text-on-accent, #fff);
   background: var(--tf-accent);
   border-radius: 9px;
+  margin-left: 4px;
 }
-.tab-item:not(.active) .tab-badge {
+/* 非激活 tab 的 badge 颜色降级 */
+:deep(.arco-tabs-tab:not(.arco-tabs-tab-active)) .tab-badge {
   background: var(--tf-text-quaternary, var(--tf-text-tertiary));
   opacity: 0.7;
 }
+
+/* page-tabs：去掉 a-tabs 默认内容区内边距，只保留 nav bar */
+.page-tabs :deep(.arco-tabs-content) { display: none; }
+.page-tabs :deep(.arco-tabs-nav) { padding: 0; margin: 0; }
 
 /* Page Body */
 .page-body {
