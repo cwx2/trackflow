@@ -45,7 +45,7 @@
             <UserHoverCard :user-id="item.userId">
               <strong class="user-name-link">{{ item.user }}</strong>
             </UserHoverCard>
-            <span class="item-time">{{ item.timeAgo }}</span>
+            <span class="item-time" :title="formatPreciseTime(item.ts)">{{ item.timeAgo }}</span>
             <span v-if="item.type === 'comment' && item.isEdited" class="edited-badge">已编辑</span>
             <span v-if="item.type === 'comment' && item.visibleToGroupNames && item.visibleToGroupNames.length > 0" class="visibility-badge" :title="'仅 ' + item.visibleToGroupNames.join(', ') + ' 可见'">
               🔒 {{ item.visibleToGroupNames.join(', ') }}
@@ -482,6 +482,18 @@ function doPermanentDelete() {
   permanentDeletingCommentId.value = null
 }
 
+
+/** 将时间戳格式化为精确日期时间字符串，用于 tooltip 显示 */
+function formatPreciseTime(ts: number): string {
+  const d = new Date(ts)
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  const hour = String(d.getHours()).padStart(2, '0')
+  const min = String(d.getMinutes()).padStart(2, '0')
+  const sec = String(d.getSeconds()).padStart(2, '0')
+  return `${year}/${month}/${day} ${hour}:${min}:${sec}`
+}
 
 /** 将分钟数格式化为 "Xh Ym" 或 "Xm" */
 function formatDurationMin(minutes?: number): string {
