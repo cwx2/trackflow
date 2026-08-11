@@ -94,18 +94,22 @@ defineProps<{
 }
 
 .terminal-port {
+  /* 与 NodeCard 端口相同：节点提供空心插座，边提供实心插头。 */
   position: absolute;
   top: 50%;
   z-index: 1;
-  width: 10px;
-  height: 10px;
-  border: 2px solid var(--wf-node-bg);
+  box-sizing: border-box;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--terminal-color);
   border-radius: 50%;
-  background: var(--terminal-color);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--terminal-color) 62%, transparent);
+  background: transparent;
+  pointer-events: none;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--terminal-color) 36%, transparent);
   transform: translateY(-50%);
 }
 
-.terminal-port-start { right: -13px; }
-.terminal-port-end { left: -13px; }
+/* 补偿端点节点内容盒的 1px 边框，使插座圆心与模型锚点严格重合。 */
+.terminal-port-start { right: -14px; }
+.terminal-port-end { left: -14px; }
 </style>

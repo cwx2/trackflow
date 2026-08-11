@@ -46,6 +46,16 @@ public class AutomationWorkflowService {
     private static final Set<String> TRIGGERS = Set.of(
             "manual", "schedule", "issue_created", "issue_changed", "webhook");
     private static final Set<String> CONCURRENCY_MODES = Set.of("queue", "skip", "parallel");
+    /**
+     * 新建工作流的最小可执行基线。开始和结束是系统端点，不由用户从节点库手动创建；
+     * 用户在两者之间插入业务节点即可。端口快照必须与 NodeRegistry 的正式契约一致。
+     */
+    private static final String DEFAULT_WORKFLOW_DEFINITION = """
+            {"globalVariables":{},"nodes":[
+              {"id":"start","type":"start","position":{"x":260,"y":260},"nodeMeta":{"title":"开始","icon":"▶","description":"工作流触发入口","color":"#10b981","category":"特殊节点"},"inputs":[],"outputs":[{"name":"trigger","valueType":"object","description":"触发参数"}],"config":{}},
+              {"id":"end","type":"end","position":{"x":700,"y":260},"nodeMeta":{"title":"结束","icon":"⏹","description":"工作流终点","color":"#ef4444","category":"特殊节点"},"inputs":[{"name":"result","valueType":"any","required":false,"optional":false,"description":"工作流最终输出","value":{"type":"ref","nodeId":"start","outputName":"trigger"}}],"outputs":[],"config":{}}
+            ],"edges":[{"id":"start-to-end","sourceNodeId":"start","sourcePortName":"trigger","targetNodeId":"end","targetPortName":"result"}]}
+            """;
 
     /**
      * 查询工作流列表（按更新时间倒序）
@@ -84,10 +94,10 @@ public class AutomationWorkflowService {
         workflow.setConcurrencyMode("queue");
         workflow.setMaxConcurrent(1);
         workflow.setRuntimeEnabled(false);
-        // 使用传入的 definition（从模板克隆时），否则初始化空画布
+        // 使用传入的 definition（从模板克隆时）；空白创建也必须具备可运行的系统端点。
         String definition = (dto.getDefinition() != null && !dto.getDefinition().isBlank())
                 ? dto.getDefinition()
-                : "{\"globalVariables\":{},\"nodes\":[],\"edges\":[]}";
+                : DEFAULT_WORKFLOW_DEFINITION;
         if (dto.getDefinition() != null && !dto.getDefinition().isBlank()) {
             validateDraftDefinition(definition);
         }
