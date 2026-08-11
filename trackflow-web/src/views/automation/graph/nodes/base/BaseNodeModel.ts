@@ -44,7 +44,8 @@ export const PORT_ROW_H         = 28   // 每个端口行高
 export const HEADER_H                 = 49 // 标题区（含底部分隔线）高度
 export const PORT_SECTION_PADDING_V   = 4  // 每个输入/输出分区的上下内边距
 export const PORT_DIVIDER_H           = 1  // 输入、输出分区之间的分隔线
-export const COLLAPSED_INPUT_TOGGLE_H = 28 // 收纳参数开关行高
+// 必须与 NodeCard 的 .optional-toggle 高度保持一致，否则其后的输出锚点会偏移。
+export const COLLAPSED_INPUT_TOGGLE_H = 24 // 收纳参数开关行高
 export const PORT_HANDLE_OFFSET       = 6  // 锚点相对卡片边缘的外伸距离
 /** 可拖拽热区半径；大于视觉插座，保证端口在稠密行中仍易于命中。 */
 export const PORT_CONNECT_HIT_RADIUS  = 12
