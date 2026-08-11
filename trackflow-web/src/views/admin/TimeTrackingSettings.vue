@@ -641,10 +641,7 @@ onMounted(loadSettings)
   margin-bottom: 8px;
 }
 
-.recalc-table :deep(.arco-table-th) {
-  font-size: 12px;
-}
-
+/* arco-table-th font-size:12px 已在 components.css 全局设置，无需重复 */
 .recalc-table :deep(.arco-table-td) {
   font-size: 12px;
 }

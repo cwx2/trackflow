@@ -166,20 +166,17 @@ export interface DataItem {
   status?: string
 }
 
+const modelValue = defineModel<Record<string, any>>({ required: true })
+
 const props = defineProps<{
   schema: WidgetConfigField[]
-  modelValue: Record<string, any>
   projects?: DataItem[]
   reports?: DataItem[]
   sprints?: DataItem[]
   users?: DataItem[]
 }>()
 
-const emit = defineEmits<{
-  'update:modelValue': [value: Record<string, any>]
-}>()
-
-const formData = computed(() => props.modelValue)
+const formData = computed(() => modelValue.value)
 
 /** 仅显示满足 showWhen 条件的字段 */
 const visibleFields = computed(() => {
@@ -190,7 +187,7 @@ const visibleFields = computed(() => {
 })
 
 function updateField(key: string, value: unknown) {
-  emit('update:modelValue', { ...props.modelValue, [key]: value })
+  modelValue.value = { ...modelValue.value, [key]: value }
 }
 </script>
 

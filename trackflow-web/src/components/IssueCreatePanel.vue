@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <a-modal
     :visible="visible"
     :footer="false"
@@ -727,8 +727,9 @@ import { DEFAULT_PRIORITY_OPTIONS, DEFAULT_PRIORITY_COLOR } from '@/composables/
 import { DEFAULT_ISSUE_TYPE_OPTIONS, DEFAULT_ISSUE_TYPE_COLOR } from '@/views/issue/composables/useIssueTypeOptions'
 import type { CustomFieldDefinitionVO, IssueTemplateVO, FilterRule, IssueStatusVO, IssueVO as SimilarIssue } from '@/api/types'
 
+const visible = defineModel<boolean>('visible', { default: false })
+
 const props = defineProps<{
-  visible: boolean
   projectId?: string
   sprintId?: string | null
   lockSprint?: boolean
@@ -740,7 +741,6 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  'update:visible': [val: boolean]
   created: []
   'cancel-with-data': [formData: any]
   /** 用户点击全屏按钮，携带当前表单数据 */
@@ -841,7 +841,7 @@ onUnmounted(() => {
 /** 粘贴事件处理：从剪贴板获取图片文件 */
 function handlePaste(e: ClipboardEvent) {
   // 仅在弹窗可见时处理
-  if (!props.visible) return
+  if (!visible.value) return
 
   const items = e.clipboardData?.items
   if (!items) return
@@ -1343,7 +1343,7 @@ function suspendBeforeUnload() {
  * 供父组件在用户取消导航后调用
  */
 function resumeBeforeUnload() {
-  if (props.visible && isDirty.value) {
+  if (visible.value && isDirty.value) {
     window.addEventListener('beforeunload', handleBeforeUnload)
   }
 }
@@ -1380,7 +1380,7 @@ const isMac = navigator.platform.toUpperCase().includes('MAC')
 
 // beforeunload 监听：浏览器关闭/刷新时提示
 function handleBeforeUnload(e: BeforeUnloadEvent) {
-  if (props.visible && isDirty.value) {
+  if (visible.value && isDirty.value) {
     e.preventDefault()
     e.returnValue = ''
   }
@@ -1406,7 +1406,7 @@ let unsubscribeSessionEvent: (() => void) | null = null
 
 function handleSessionExpiring() {
   // 仅在面板可见且有实质内容时保存
-  if (!props.visible || !isDirty.value) return
+  if (!visible.value || !isDirty.value) return
 
   saveSessionRecoveryDraft({
     fromPath: window.location.pathname,
@@ -1444,13 +1444,13 @@ watch(() => props.projectId, (val) => {
   if (val) {
     form.projectId = val
     // 仅在面板可见时加载数据（避免隐藏状态下触发无权限的 API 调用）
-    if (props.visible) {
+    if (visible.value) {
       onProjectChange(val)
     }
   }
 }, { immediate: true })
 
-watch(() => props.visible, (val) => {
+watch(() => visible.value, (val) => {
   if (val) {
     window.addEventListener('beforeunload', handleBeforeUnload)
     window.addEventListener('keydown', handleKeyDown, true)
@@ -1617,7 +1617,7 @@ function doClose() {
   resetForm()
   // 立即移除 beforeunload 监听器，不等待 watch(visible) 的异步时序
   window.removeEventListener('beforeunload', handleBeforeUnload)
-  emit('update:visible', false)
+  visible.value = false
   // 延迟清理可能残留的遮罩层（防御性措施）
   // 需要等待外层 <a-modal> 的关闭动画完成（约 200-300ms）后再执行清理
   // 使用 setTimeout 而非 nextTick，因为 nextTick 可能在动画完成前执行
@@ -1820,7 +1820,7 @@ function discardDraft() {
       // Modal 完全关闭后执行后续逻辑
       isDiscarding.value = false
       if (shouldDiscard) {
-        emit('update:visible', false)
+        visible.value = false
         // 使用 setTimeout 等待外层 modal 关闭动画完成后再清理
         setTimeout(() => {
           cleanupOrphanedModals()
@@ -1836,10 +1836,10 @@ async function submitAndClose() {
   if (success) {
     resetForm()  // 先重置表单，确保 isDirty 为 false
     // 立即移除 beforeunload 监听器，不等待 watch(visible) 的异步时序
-    // 解决 emit('update:visible', false) 经过父组件反射回来之前的窗口期问题
+    // 解决 visible.value = false 经过父组件反射回来之前的窗口期问题
     window.removeEventListener('beforeunload', handleBeforeUnload)
     emit('created')
-    emit('update:visible', false)
+    visible.value = false
   }
 }
 
@@ -2002,7 +2002,7 @@ async function doSubmit(): Promise<boolean> {
 }
 
 onMounted(() => {
-  if (props.visible) {
+  if (visible.value) {
     loadProjects()
     loadStatuses()
   }

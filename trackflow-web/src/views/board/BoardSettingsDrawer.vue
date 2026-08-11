@@ -1,15 +1,15 @@
-<template>
+﻿<template>
   <a-drawer
     :visible="visible"
     title="看板设置"
     :width="520"
     :mask-closable="true"
     :footer="true"
-    @cancel="$emit('update:visible', false)"
+    @cancel="visible = false"
   >
     <template #footer>
       <div class="drawer-footer">
-        <a-button @click="$emit('update:visible', false)">取消</a-button>
+        <a-button @click="visible = false">取消</a-button>
         <a-button type="primary" :loading="saving" @click="handleSave">保存配置</a-button>
       </div>
     </template>
@@ -365,8 +365,9 @@ interface PriorityWipLocal {
   wipMax: number | null | undefined
 }
 
+const visible = defineModel<boolean>('visible', { default: false })
+
 const props = defineProps<{
-  visible: boolean
   projectId: string
   projectName: string
   columns: BoardColumnVO[]
@@ -374,7 +375,6 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  'update:visible': [value: boolean]
   'saved': []
 }>()
 
@@ -480,7 +480,7 @@ const dropIndex = ref<number | null>(null)
 const dropPosition = ref<'above' | 'below' | null>(null)
 
 // 当 drawer 打开时加载配置
-watch(() => props.visible, async (newVisible) => {
+watch(() => visible.value, async (newVisible) => {
   if (newVisible && props.projectId) {
     // 加载可用项目列表（用于关联项目多选），每次打开时可刷新
     loadProjectsIfNeeded()
@@ -666,7 +666,7 @@ watch(() => props.visible, async (newVisible) => {
 
 // 当 columns prop 变化且 drawer 打开时也更新
 watch(() => props.columns, () => {
-  if (props.visible && props.columns.length > 0) {
+  if (visible.value && props.columns.length > 0) {
     const statusColumns = props.columns.filter(c => c.statusId != null)
     if (statusColumns.length > 0) {
       editableColumns.value = statusColumns.map(c => ({
@@ -1056,7 +1056,7 @@ async function handleSave() {
     })
 
     Message.success('看板设置已保存')
-    emit('update:visible', false)
+    visible.value = false
     emit('saved')
   } catch (e: any) {
     const status = e.response?.status
