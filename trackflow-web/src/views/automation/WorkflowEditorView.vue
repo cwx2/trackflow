@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="workflow-editor-view">
     <!-- 顶部工具栏 -->
     <EditorTopbar
@@ -123,7 +123,7 @@
     </div>
 
     <a-modal v-model:visible="settingsOpen" title="自动运行设置" :width="520" @ok="saveSettings">
-      <a-alert type="info" class="runtime-settings-alert">
+      <a-alert type="info" style="margin-bottom: 16px">
         保存和发布都不会启动自动化。发布成功后，请在顶部点击“启动”；停止后不再接收新触发，已有任务会继续完成。
       </a-alert>
       <a-form :model="settingsModel" layout="vertical">
@@ -131,8 +131,10 @@
           <a-input-number v-model="workflowProjectId" :min="1" style="width: 100%" />
         </a-form-item>
         <a-form-item label="执行身份（用户 ID）">
+          <template #extra>
+            <span class="settings-hint">所有 TrackFlow 写操作都按该用户的真实权限与状态机执行。</span>
+          </template>
           <a-input-number v-model="workflowActorUserId" :min="1" style="width: 100%" />
-          <div class="settings-hint">所有 TrackFlow 写操作都按该用户的真实权限与状态机执行。</div>
         </a-form-item>
         <a-form-item label="触发方式">
           <a-select v-model="workflowTriggerType">
@@ -152,16 +154,22 @@
           </a-form-item>
         </template>
         <a-form-item v-if="workflowTriggerType === 'issue_changed'" label="监听字段">
+          <template #extra>
+            <span class="settings-hint">多个字段用英文逗号分隔；留空表示监听所有字段。</span>
+          </template>
           <a-input v-model="triggerFields" placeholder="status_id,priority,assignee" />
-          <div class="settings-hint">多个字段用英文逗号分隔；留空表示监听所有字段。</div>
         </a-form-item>
         <a-form-item v-if="workflowTriggerType === 'issue_changed'" label="允许自动化再次触发">
+          <template #extra>
+            <span class="settings-hint">默认关闭，防止状态变更工作流递归触发自身。</span>
+          </template>
           <a-switch v-model="allowAutomationEvents" />
-          <div class="settings-hint">默认关闭，防止状态变更工作流递归触发自身。</div>
         </a-form-item>
         <a-form-item v-if="workflowTriggerType === 'webhook'" label="Token SHA-256">
+          <template #extra>
+            <span class="settings-hint">调用方传原始 Token 到 X-TrackFlow-Webhook-Token，并提供 X-Idempotency-Key。</span>
+          </template>
           <a-input v-model="triggerWebhookTokenSha256" placeholder="64 位十六进制 SHA-256" />
-          <div class="settings-hint">调用方传原始 Token 到 X-TrackFlow-Webhook-Token，并提供 X-Idempotency-Key。</div>
         </a-form-item>
         <a-form-item label="并发策略">
           <a-select v-model="workflowConcurrencyMode">
@@ -1880,5 +1888,15 @@ onUnmounted(() => {
   font-size: 12px;
   font-weight: 500;
   color: var(--tf-text-secondary);
+}
+
+/* 运行设置弹窗：字段下方的辅助说明 */
+.settings-hint {
+  display: block;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--tf-text-tertiary);
+  margin-top: 2px;
+  word-break: break-word;
 }
 </style>
