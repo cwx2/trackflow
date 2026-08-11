@@ -854,13 +854,18 @@ function toggleDebugMode() {
   }
 }
 
-// 节点面板：从注册表驱动，不再硬编码
-const basicNodes = DRAGGABLE_NODES.map(def => ({
+// 节点面板：开始节点由系统唯一维护；结束节点可按分支需要新增。
+const endNodeDefinition = getNodeDefinition('end')
+const paletteNodeDefinitions = [
+  ...DRAGGABLE_NODES,
+  ...(endNodeDefinition ? [endNodeDefinition] : []),
+]
+const basicNodes = paletteNodeDefinitions.map(def => ({
   type: def.type,
-  label: def.meta.title,
+  label: def.type === 'end' ? '结束（分支终点）' : def.meta.title,
   icon: def.meta.icon,
   color: def.meta.color,
-  desc: def.meta.description,
+  desc: def.type === 'end' ? '为当前分支添加一个流程终点' : def.meta.description,
   category: def.meta.category,
 }))
 
