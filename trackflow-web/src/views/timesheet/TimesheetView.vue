@@ -29,6 +29,7 @@
     <!-- ===================== 人员视图 ===================== -->
     <a-tab-pane key="people" title="人员">
       <!-- User selector & filters -->
+      <div class="timesheet-controls">
         <div class="controls-left">
           <div class="user-selector-area">
             <template v-if="canViewOthers">
