@@ -5,13 +5,30 @@
       <h1 class="page-title">时间表</h1>
     </div>
 
+    <!-- ===================== 统一日期栏（所有视图共用） ===================== -->
+    <div class="timesheet-datebar">
+      <div class="date-info">
+        <span class="date-range">{{ dateRangeLabel }}</span>
+        <span class="total-time">{{ totalTimeLabel }}</span>
+      </div>
+      <div class="date-nav">
+        <a-button size="small" @click="navigate(-1)">←</a-button>
+        <a-button size="small" @click="goToday">今天</a-button>
+        <a-button size="small" @click="navigate(1)">→</a-button>
+        <a-radio-group v-model="viewMode" type="button" size="small" @change="onViewModeChange">
+          <a-radio value="week">周</a-radio>
+          <a-radio value="month">月</a-radio>
+        </a-radio-group>
+        <a-button v-if="activeTab === 'people'" type="primary" size="small" @click="openAddDialog()">添加已花费时间</a-button>
+      </div>
+    </div>
+
     <!-- ===================== Tab 导航 ===================== -->
     <a-tabs v-model:active-key="activeTab" class="timesheet-tabs" @change="(key) => switchTab(key as 'people' | 'projects' | 'workgroups')">
 
     <!-- ===================== 人员视图 ===================== -->
     <a-tab-pane key="people" title="人员">
       <!-- User selector & filters -->
-      <div class="timesheet-controls">
         <div class="controls-left">
           <div class="user-selector-area">
             <template v-if="canViewOthers">
@@ -76,23 +93,6 @@
         </div>
       </div>
 
-      <!-- Date range & navigation -->
-      <div class="timesheet-datebar">
-        <div class="date-info">
-          <span class="date-range">{{ dateRangeLabel }}</span>
-          <span class="total-time">{{ selectedUserDisplayName }} 总已用时间: {{ formatDuration(weekTotal) }}</span>
-        </div>
-        <div class="date-nav">
-          <button class="nav-btn" @click="navigate(-1)">←</button>
-          <button class="nav-btn today-btn" @click="goToday">今天</button>
-          <button class="nav-btn" @click="navigate(1)">→</button>
-          <div class="view-toggle">
-            <button class="toggle-btn" :class="{ active: viewMode === 'week' }" @click="switchView('week')">周</button>
-            <button class="toggle-btn" :class="{ active: viewMode === 'month' }" @click="switchView('month')">月</button>
-          </div>
-          <button class="add-time-btn" @click="openAddDialog()">添加已花费时间</button>
-        </div>
-      </div>
 
       <!-- Week View -->
       <WeekGrid
@@ -142,23 +142,6 @@
           <div class="filters">
             <span class="filter-label">汇总范围:</span>
             <span class="filter-value">{{ selectedProjectId ? '项目明细' : '所有可见项目' }}</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Date range & navigation -->
-      <div class="timesheet-datebar">
-        <div class="date-info">
-          <span class="date-range">{{ dateRangeLabel }}</span>
-          <span class="total-time">总已用时间: {{ formatDuration(projectViewTotal) }}</span>
-        </div>
-        <div class="date-nav">
-          <button class="nav-btn" @click="navigate(-1)">←</button>
-          <button class="nav-btn today-btn" @click="goToday">今天</button>
-          <button class="nav-btn" @click="navigate(1)">→</button>
-          <div class="view-toggle">
-            <button class="toggle-btn" :class="{ active: viewMode === 'week' }" @click="switchView('week')">周</button>
-            <button class="toggle-btn" :class="{ active: viewMode === 'month' }" @click="switchView('month')">月</button>
           </div>
         </div>
       </div>
@@ -224,22 +207,6 @@
 
     <!-- ===================== 工作群组视图 ===================== -->
     <a-tab-pane key="workgroups" title="工作群组">
-      <!-- Date range & navigation -->
-      <div class="timesheet-datebar">
-        <div class="date-info">
-          <span class="date-range">{{ dateRangeLabel }}</span>
-          <span class="total-time">所有工作组总工时: {{ formatDuration(groupViewTotal) }}</span>
-        </div>
-        <div class="date-nav">
-          <button class="nav-btn" @click="navigate(-1)">←</button>
-          <button class="nav-btn today-btn" @click="goToday">今天</button>
-          <button class="nav-btn" @click="navigate(1)">→</button>
-          <div class="view-toggle">
-            <button class="toggle-btn" :class="{ active: viewMode === 'week' }" @click="switchView('week')">周</button>
-            <button class="toggle-btn" :class="{ active: viewMode === 'month' }" @click="switchView('month')">月</button>
-          </div>
-        </div>
-      </div>
 
       <!-- 无数据空状态 -->
       <EmptyState
@@ -592,6 +559,17 @@ const groupViewTotal = computed(() => {
   return groupSummaries.value.reduce((sum, g) => sum + g.totalDuration, 0)
 })
 
+// 当前视图的总工时标签
+const totalTimeLabel = computed(() => {
+  if (activeTab.value === 'people') {
+    return `${selectedUserDisplayName.value} 总已用时间: ${formatDuration(weekTotal.value)}`
+  } else if (activeTab.value === 'projects') {
+    return `总已用时间: ${formatDuration(projectViewTotal.value)}`
+  } else {
+    return `所有工作组总工时: ${formatDuration(groupViewTotal.value)}`
+  }
+})
+
 // Tab switching
 function refresh() {
   if (activeTab.value === 'people') loadEntries()
@@ -916,8 +894,8 @@ function goToday() {
   currentMonthDate.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 }
 
-function switchView(mode: 'week' | 'month') {
-  viewMode.value = mode
+// a-radio-group @change 触发
+function onViewModeChange() {
   reloadCurrentTab()
 }
 
@@ -1305,15 +1283,6 @@ onMounted(async () => {
 .date-range { font-size: 15px; font-weight: 500; color: var(--tf-text-primary); }
 .total-time { font-size: 12px; color: var(--tf-text-tertiary); }
 .date-nav { display: flex; align-items: center; gap: 8px; }
-.nav-btn { height: 28px; padding: 0 10px; border: 1px solid var(--tf-border); border-radius: var(--tf-radius-md); background: transparent; color: var(--tf-text-secondary); font-size: 12px; cursor: pointer; transition: background 0.15s, color 0.15s; }
-.nav-btn:hover { background: var(--tf-bg-hover); color: var(--tf-text-primary); }
-.today-btn { font-weight: 500; }
-.view-toggle { display: flex; border: 1px solid var(--tf-border); border-radius: var(--tf-radius-md); overflow: hidden; }
-.toggle-btn { height: 28px; padding: 0 12px; border: none; background: transparent; color: var(--tf-text-secondary); font-size: 12px; cursor: pointer; transition: background 0.15s, color 0.15s; }
-.toggle-btn + .toggle-btn { border-left: 1px solid var(--tf-border); }
-.toggle-btn.active { background: var(--tf-accent-bg); color: var(--tf-accent); font-weight: 500; }
-.add-time-btn { height: 32px; padding: 0 14px; border: none; border-radius: var(--tf-radius-md); background: var(--tf-accent); color: var(--tf-text-on-accent); font-size: 12px; font-weight: 500; cursor: pointer; transition: opacity 0.15s; }
-.add-time-btn:hover { opacity: 0.9; }
 
 /* Week Grid - styles moved to WeekGrid.vue */
 
