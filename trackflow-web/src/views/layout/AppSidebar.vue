@@ -81,6 +81,7 @@
       </SidebarNavItem>
 
       <SidebarNavItem
+        v-if="canViewTimesheet"
         to="/timesheets"
         label="时间表"
         :collapsed="sidebarCollapsed"
@@ -314,6 +315,12 @@ const canViewTrash = computed(() => {
 const canViewSprintPlanning = computed(() => {
   if (isAdmin.value) return true
   if (authStore.permissionsLoaded) return authStore.hasGlobalPermission('nav:sprint_manage')
+  return false
+})
+
+const canViewTimesheet = computed(() => {
+  if (isAdmin.value) return true
+  if (authStore.permissionsLoaded) return authStore.hasGlobalPermission('nav:timesheet')
   return false
 })
 

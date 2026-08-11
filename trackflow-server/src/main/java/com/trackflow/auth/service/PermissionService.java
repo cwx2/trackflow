@@ -658,6 +658,9 @@ public class PermissionService {
             if (allProjectPerms.contains("issue:delete")) {
                 permissions.add("nav:trash");
             }
+            if (allProjectPerms.contains("time:log") || allProjectPerms.contains("time:view_others")) {
+                permissions.add("nav:timesheet");
+            }
             if (allProjectPerms.contains("issue:edit")
                     || allProjectPerms.contains("issue:delete")
                     || allProjectPerms.contains("issue:assign")

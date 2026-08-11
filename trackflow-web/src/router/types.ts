@@ -16,6 +16,8 @@ declare module 'vue-router' {
     requiresSprintManage?: boolean
     /** 是否需要创建工单权限 */
     requiresCreateIssue?: boolean
+    /** 是否需要时间表查看权限 */
+    requiresTimesheet?: boolean
     /** 细粒度权限标识（如 system:manage_users） */
     requiredPermission?: string
     /** 页面标题（用于 document.title） */

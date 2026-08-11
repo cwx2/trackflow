@@ -115,7 +115,7 @@ const routes = [
         path: 'timesheets',
         name: 'Timesheets',
         component: () => import('@/views/timesheet/TimesheetView.vue'),
-        meta: { title: '工时记录' }
+        meta: { requiresTimesheet: true, title: '工时记录' }
       },
       {
         path: 'automation',
@@ -420,6 +420,15 @@ router.beforeEach(async (to, _from, next) => {
   // Sprint 规划路由权限检查：system:admin 或在任意项目中有 sprint:create/sprint:edit
   if (to.meta.requiresSprintManage && permissionCheckAvailable) {
     const canAccess = authStore.hasGlobalPermission('system:admin') || authStore.hasGlobalPermission('nav:sprint_manage')
+    if (!canAccess) {
+      next({ name: 'Forbidden' })
+      return
+    }
+  }
+
+  // 时间表路由权限检查：system:admin 或在任意项目中有 time:log/time:view_others
+  if (to.meta.requiresTimesheet && permissionCheckAvailable) {
+    const canAccess = authStore.hasGlobalPermission('system:admin') || authStore.hasGlobalPermission('nav:timesheet')
     if (!canAccess) {
       next({ name: 'Forbidden' })
       return
