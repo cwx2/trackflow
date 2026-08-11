@@ -133,20 +133,32 @@ git diff --cached -- <file>
 
 > **🔴 组件复用检查（每次审核强制执行）**：
 >
-> 新增任何 UI 代码前，必须先确认是否有现成的 Arco 或自定义组件可复用。以下情况不合格，直接标为 ❌ SHOULD：
+> **第一步，先动态获取当前可用组件清单**：
+> ```bash
+> cat src/components/base/index.ts   # 基础通用组件
+> cat src/components/admin/index.ts  # admin 专用组件
+> ```
+> 看到组件名后读对应 `.vue` 文件的 `<script setup>` 部分，了解 Props/Emits/Slots。
 >
-> | 发现这种手写代码 | 应该用 |
-> |----------------|--------|
-> | `<button :class="{active}">` 切换 tab | `<a-tabs>` + `<a-tab-pane>` |
-> | `<button :class="{active}">` 视图切换 | `<a-radio-group type="button">` |
-> | `<span>` 显示首字母头像 | `UserAvatar` 组件 |
-> | `<div class="breadcrumb">` | `<a-breadcrumb>` |
-> | `<div class="progress-bar">` 单段进度 | `<a-progress>` |
-> | `<div class="empty-state">` | `EmptyState` 组件 |
-> | `<div class="loading-state">` | `DataContainer` 或 `<a-spin>` |
-> | `<button class="nav-btn">` 导航按钮 | `<a-button>` |
-> | `<div v-if="loading">骨架</div>` | `<a-skeleton>` |
-> | 手写 toast div | `Message` / `Notification` |
+> **第二步，对照以下信号判断是否应该复用**：
+>
+> | 发现这种手写代码 | 先查是否有对应组件 |
+> |----------------|-----------------|
+> | 手写 tab/切换 button | 查是否有对应 base 组件，没有再用 `<a-tabs>` / `<a-radio-group>` |
+> | 手写首字母头像 span | 一定有 `UserAvatar` 可用 |
+> | 手写空状态 div | 一定有 `EmptyState` 可用 |
+> | 手写 loading 状态 | 一定有 `DataContainer` 或 `<a-spin>` 可用 |
+> | 手写删除 + 确认弹窗 | 一定有 `DeleteConfirmButton` 可用 |
+> | 手写优先级/状态标签 | 查是否有对应 base 组件 |
+> | admin 页面手写表格/布局 | 一定有 admin 组件可用 |
+> | 手写普通按钮 CSS | 用 `<a-button>`，删手写 CSS |
+> | 手写面包屑 | 用 `<a-breadcrumb>` |
+> | 手写进度条 | 查是否有对应 base 组件，没有再用 `<a-progress>` |
+>
+> **第三步，判断是否应该提取为新组件**：
+> - 同一段 UI 在 **2+ 个视图文件**中出现 → ❌ SHOULD，提取为组件放 `base/` 或模块 `components/`
+> - 视图模板超过 **200 行** → ❌ SHOULD，按功能区块拆分子组件
+> - 展示型组件内部直接调用 API → ❌ MUST，改为 Props 接收数据
 
 > **🔴 样式封装检查（每次审核强制执行）**：
 >
