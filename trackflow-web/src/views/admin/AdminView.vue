@@ -1,14 +1,11 @@
 <template>
   <div class="admin-page">
-    <!-- 权限加载中 / 无权限 -->
     <DataContainer
       :loading="loading"
       :is-empty="!hasAnyAdminPermission"
       empty-title="无访问权限"
       empty-description="你没有系统管理权限，无法访问此页面"
     >
-
-    <!-- 正常内容 -->
       <div class="admin-header">
         <h1 class="admin-title">系统管理</h1>
         <p class="admin-desc">管理用户、角色、组织和系统配置</p>
@@ -21,7 +18,9 @@
           :to="item.path"
           class="admin-card"
         >
-          <div class="card-icon">{{ item.icon }}</div>
+          <div class="card-icon">
+            <component :is="item.icon" />
+          </div>
           <div class="card-content">
             <h3 class="card-title">{{ item.title }}</h3>
             <p class="card-desc">{{ item.description }}</p>
@@ -36,22 +35,36 @@
 <script setup lang="ts">
 import { computed, ref, onMounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
-import { IconRight } from '@arco-design/web-vue/es/icon'
+import {
+  IconRight,
+  IconUser,
+  IconUserGroup,
+  IconSafe,
+  IconHome,
+  IconEdit,
+  IconFile,
+  IconClockCircle,
+  IconTag,
+  IconNotification,
+  IconThunderbolt,
+  IconLink,
+  IconSettings,
+  IconShareAlt
+} from '@arco-design/web-vue/es/icon'
 import DataContainer from '@/components/base/DataContainer.vue'
+import type { Component } from 'vue'
 
 const authStore = useAuthStore()
 const loading = ref(true)
 
-/** 是否有任一系统管理权限 */
-const hasAnyAdminPermission = computed(() => {
-  return authStore.hasGlobalPermission('system:manage_users')
-    || authStore.hasGlobalPermission('system:manage_roles')
-    || authStore.hasGlobalPermission('system:manage_orgs')
-    || authStore.hasGlobalPermission('system:manage_groups')
-})
+const hasAnyAdminPermission = computed(() =>
+  authStore.hasGlobalPermission('system:manage_users')
+  || authStore.hasGlobalPermission('system:manage_roles')
+  || authStore.hasGlobalPermission('system:manage_orgs')
+  || authStore.hasGlobalPermission('system:manage_groups')
+)
 
 onMounted(async () => {
-  // 等待权限加载完毕（正常情况下路由守卫已 await，这里做兜底）
   if (!authStore.permissionsLoaded && authStore.isAuthenticated) {
     await authStore.loadGlobalPermissions()
   }
@@ -60,117 +73,116 @@ onMounted(async () => {
 
 interface AdminMenuItem {
   path: string
-  icon: string
+  icon: Component
   title: string
   description: string
-  permission: string // 所需的细粒度权限
+  permission: string
 }
 
 const menuItems: AdminMenuItem[] = [
   {
     path: '/admin/users',
-    icon: '👥',
+    icon: IconUser,
     title: '用户管理',
     description: '查看、编辑、禁用用户，管理用户角色分配',
     permission: 'system:manage_users'
   },
   {
     path: '/admin/roles',
-    icon: '🛡️',
+    icon: IconSafe,
     title: '角色管理',
     description: '定义角色及其权限，配置全局和项目级角色',
     permission: 'system:manage_roles'
   },
   {
     path: '/admin/organizations',
-    icon: '🏢',
+    icon: IconHome,
     title: '组织管理',
     description: '管理组织结构和组织信息',
     permission: 'system:manage_orgs'
   },
   {
     path: '/admin/groups',
-    icon: '👥',
+    icon: IconUserGroup,
     title: '用户组',
     description: '创建用户组，通过组批量管理权限，简化团队配置',
     permission: 'system:manage_groups'
   },
   {
     path: '/admin/custom-fields',
-    icon: '📝',
+    icon: IconEdit,
     title: '自定义字段',
     description: '定义和管理 Issue 自定义字段',
     permission: 'system:manage_roles'
   },
   {
     path: '/admin/audit-logs',
-    icon: '📜',
+    icon: IconFile,
     title: '审计日志',
     description: '查看系统权限变更记录，追踪管理操作历史',
     permission: 'system:manage_users'
   },
   {
     path: '/admin/time-tracking',
-    icon: '⏱',
+    icon: IconClockCircle,
     title: '时间追踪',
     description: '配置每日工作时长和每周工作日',
     permission: 'system:manage_roles'
   },
   {
     path: '/admin/work-item-attributes',
-    icon: '🏷️',
+    icon: IconTag,
     title: '工作项属性',
     description: '管理工时记录的分类属性和值列表',
     permission: 'system:manage_roles'
   },
   {
     path: '/admin/notifications',
-    icon: '🔔',
+    icon: IconNotification,
     title: '通知管理',
     description: '配置全局通知策略、默认偏好和保留策略',
     permission: 'system:manage_roles'
   },
   {
     path: '/admin/rules',
-    icon: '⚡',
+    icon: IconThunderbolt,
     title: '规则引擎',
     description: '配置自动化规则，实现工单计分与罚款统计',
     permission: 'system:manage_roles'
   },
   {
     path: '/admin/webhooks',
-    icon: '🔗',
+    icon: IconLink,
     title: 'Webhook',
     description: '管理项目 Webhook 通知，事件触发时推送到外部系统',
     permission: 'system:manage_roles'
   },
   {
     path: '/admin/action-rules',
-    icon: '⚡',
+    icon: IconSettings,
     title: 'Action 动作',
     description: '配置工单自定义动作按钮（一键延期、标记为重复、升级优先级等）',
     permission: 'system:manage_roles'
   },
   {
     path: '/admin/integrations',
-    icon: '🔌',
+    icon: IconShareAlt,
     title: '第三方集成',
     description: '管理外部系统适配器的启用/禁用、配置和事件日志',
     permission: 'system:manage_roles'
   },
   {
     path: '/admin/link-types',
-    icon: '🔗',
+    icon: IconLink,
     title: '关联类型',
     description: '管理工单关联类型，定义正向/反向显示名称和方向规则',
     permission: 'system:manage_settings'
   }
 ]
 
-/** 根据用户权限过滤可见的菜单项 */
-const visibleMenuItems = computed(() => {
-  return menuItems.filter(item => authStore.hasGlobalPermission(item.permission))
-})
+const visibleMenuItems = computed(() =>
+  menuItems.filter(item => authStore.hasGlobalPermission(item.permission))
+)
 </script>
 
 <style scoped>
@@ -180,67 +192,7 @@ const visibleMenuItems = computed(() => {
   overflow-y: auto;
 }
 
-.admin-loading {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 200px;
-}
-
-.loading-text {
-  font-size: 13px;
-  color: var(--tf-text-tertiary);
-}
-
-.admin-forbidden {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 300px;
-  text-align: center;
-}
-
-.forbidden-icon {
-  font-size: 40px;
-  margin-bottom: 16px;
-}
-
-.forbidden-title {
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--tf-text-primary);
-  margin: 0 0 8px 0;
-}
-
-.forbidden-desc {
-  font-size: 13px;
-  color: var(--tf-text-tertiary);
-  margin: 0 0 24px 0;
-}
-
-.forbidden-btn {
-  display: inline-flex;
-  align-items: center;
-  height: 36px;
-  padding: 0 16px;
-  background: var(--tf-accent);
-  color: var(--tf-text-on-accent);
-  border-radius: 6px;
-  text-decoration: none;
-  font-size: 13px;
-  font-weight: 500;
-  transition: opacity 0.15s;
-}
-
-.forbidden-btn:hover {
-  opacity: 0.9;
-  text-decoration: none;
-}
-
-.admin-header {
-  margin-bottom: 32px;
-}
+.admin-header { margin-bottom: 32px; }
 
 .admin-title {
   font-size: 20px;
@@ -290,6 +242,7 @@ const visibleMenuItems = computed(() => {
   align-items: center;
   justify-content: center;
   font-size: 20px;
+  color: var(--tf-accent);
   flex-shrink: 0;
 }
 
