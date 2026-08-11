@@ -119,7 +119,7 @@
                   v-for="item in getVisibleItems(group)"
                   :key="item.id"
                   :item="item"
-                  :highlight-id="highlightedId"
+                  :highlight-id="highlightedId ?? undefined"
                   @click="handleItemClick(item)"
                   @mark-read="handleMarkRead"
                 >
@@ -188,7 +188,7 @@ import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useNotification } from '@/composables/useNotification'
 import type { NotificationVO, NotificationCategory } from '@/api/notification'
-import { UserAvatar, EmptyState } from '@/components/base'
+import { EmptyState } from '@/components/base'
 import NotificationItem from './NotificationItem.vue'
 
 const router = useRouter()
@@ -414,22 +414,6 @@ function getEmptyDesc(): string {
     case 'system': return '项目成员变更、归档等系统级事件会出现在这里'
     default: return '当有新的工单分配、评论或状态变更时，通知会出现在这里'
   }
-}
-
-function formatTime(dateStr: string): string {
-  const date = new Date(dateStr)
-  const now = new Date()
-  const diffMs = now.getTime() - date.getTime()
-  const diffMin = Math.floor(diffMs / 60000)
-  const diffHour = Math.floor(diffMs / 3600000)
-  const diffDay = Math.floor(diffMs / 86400000)
-
-  if (diffMin < 1) return '刚刚'
-  if (diffMin < 60) return `${diffMin} 分钟前`
-  if (diffHour < 24) return `${diffHour} 小时前`
-  if (diffDay < 7) return `${diffDay} 天前`
-
-  return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
 }
 
 /**

@@ -442,7 +442,7 @@
                 :key="issue.id"
                 :issue="issue"
                 :card-size="cardSize"
-                :card-config="cardConfig"
+                :card-config="{ ...cardConfig, fieldDisplayModes: cardConfig.fieldDisplayModes ?? undefined, currentEstimationFieldId: cardConfig.currentEstimationFieldId ?? undefined }"
                 :color-class="getCardColorClass(issue)"
                 :project-color-style="getCardProjectColorStyle(issue)"
                 :is-dragging="draggingIssue?.id === issue.id"
@@ -453,7 +453,7 @@
                 :can-assign="canCreateIssue"
                 :members="projectMembers"
                 :sprint-name="issue.sprintId ? getSprintName(issue.sprintId) : undefined"
-                :custom-field-details="getVisibleCustomFieldDetails(issue)"
+                :custom-field-details="getVisibleCustomFieldDetails(issue).map(d => ({ ...d, displayValue: d.displayValue ?? '', color: d.color ?? undefined, colors: d.colors?.filter((c): c is string => c != null) }))"
                 :tags="getVisibleTags(issue)"
                 @dragstart="onDragStart($event, issue)"
                 @dragend="onDragEnd"
@@ -680,7 +680,7 @@
                       :key="issue.id"
                       :issue="issue"
                       :card-size="cardSize"
-                      :card-config="cardConfig"
+                      :card-config="{ ...cardConfig, fieldDisplayModes: cardConfig.fieldDisplayModes ?? undefined, currentEstimationFieldId: cardConfig.currentEstimationFieldId ?? undefined }"
                       :color-class="getCardColorClass(issue)"
                       :project-color-style="getCardProjectColorStyle(issue)"
                       :is-dragging="draggingIssue?.id === issue.id"
@@ -691,7 +691,7 @@
                       :can-assign="canCreateIssue"
                       :members="projectMembers"
                       :sprint-name="issue.sprintId ? getSprintName(issue.sprintId) : undefined"
-                      :custom-field-details="getVisibleCustomFieldDetails(issue)"
+                      :custom-field-details="getVisibleCustomFieldDetails(issue).map(d => ({ ...d, displayValue: d.displayValue ?? '', color: d.color ?? undefined, colors: d.colors?.filter((c): c is string => c != null) }))"
                       :tags="getVisibleTags(issue)"
                       @dragstart="onDragStart($event, issue)"
                       @dragend="onDragEnd"
@@ -985,8 +985,8 @@
 
 <script setup lang="ts">
 import { useKanbanBoard } from './composables'
-import { localizeStatusName, localizePriority } from '@/utils/fieldLabels'
-import { IssueStatusTag, UserAvatar, EmptyState } from '@/components/base'
+import { localizeStatusName } from '@/utils/fieldLabels'
+import { IssueStatusTag, EmptyState } from '@/components/base'
 import BoardSettingsDrawer from './BoardSettingsDrawer.vue'
 import BoardSelector from './BoardSelector.vue'
 import BacklogPanel from './BacklogPanel.vue'
@@ -996,7 +996,7 @@ import IssuePreviewDrawer from './IssuePreviewDrawer.vue'
 import CloneBoardModal from './CloneBoardModal.vue'
 import IssueCreatePanel from '@/components/IssueCreatePanel.vue'
 import BatchActionToolbar from '@/components/BatchActionToolbar.vue'
-import { IconSettings, IconSearch, IconList, IconBarChart, IconPlus, IconFile, IconCalendar, IconUser, IconCopy } from '@arco-design/web-vue/es/icon'
+import { IconSettings, IconSearch, IconList, IconBarChart, IconPlus, IconFile, IconCalendar, IconCopy } from '@arco-design/web-vue/es/icon'
 
 const {
   // Core state
@@ -1051,9 +1051,9 @@ const {
   plannedSprints, dismissGuidance,
   openCreateSprintFromGuidance, activatePlannedSprint, activatingSprintId,
   // Card config
-  cardConfig, isCardFieldVisible, getCardFieldDisplayMode,
-  getCardColorClass, getCardProjectColorStyle, getCardDueDateClass, getCardDueDateTooltip,
-  hasVisibleCustomFields, getVisibleCustomFieldDetails, getVisibleTags,
+  cardConfig,
+  getCardColorClass, getCardProjectColorStyle,
+  getVisibleCustomFieldDetails, getVisibleTags,
   // Card interactions
   onCardClick, onCardDblClick, onCardKeydown, onCardSetAssignee,
   // Drag
@@ -1099,7 +1099,6 @@ const {
   boardTruncated, boardTotalCount, boardTotalEstimation,
   // Helper functions
   getSprintName,
-  priorityIcon, typeLabel, typeInitial,
   // onBatch handlers
   onBatchAssign, onBatchSprint, onBatchPriority,
   onBatchTagAdd, onBatchTagRemove, onBatchLink, onBatchDelete,

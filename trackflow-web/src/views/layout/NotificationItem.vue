@@ -22,10 +22,7 @@ interface Props {
   canReply?: boolean
 }
 
-const props = withDefaults(defineProps<Props>(), {
-  highlightId: undefined,
-  canReply: false,
-})
+const { item, highlightId, canReply = false } = defineProps<Props>()
 
 const emit = defineEmits<{
   click: [item: NotificationVO]
