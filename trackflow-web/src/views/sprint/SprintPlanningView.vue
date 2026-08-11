@@ -1956,7 +1956,9 @@ onMounted(async () => {
 .sprint-goal-icon {
   font-size: 11px;
   flex-shrink: 0;
-  margin-top: 1px;
+  /* font-size:12px line-height:1.5 → 行高 18px，图标 11px，(18-11)/2 ≈ 3px */
+  margin-top: 3px;
+  line-height: 1;
 }
 
 .sprint-goal-text {

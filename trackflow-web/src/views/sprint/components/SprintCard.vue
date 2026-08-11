@@ -570,16 +570,17 @@ function cancelInlineEdit() {
   background: var(--tf-accent-subtle);
   border-radius: 6px;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 8px;
   font-size: 12px;
   color: var(--color-text-2);
 }
 
 .sprint-goal-banner-icon {
-  font-size: 14px;
+  font-size: 13px;
   color: var(--tf-accent);
   flex-shrink: 0;
+  line-height: 1;
 }
 
 /* Actions */
