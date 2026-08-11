@@ -422,7 +422,7 @@
     />
 
     <!-- 新建 Sprint 弹窗 -->
-    <a-modal v-model:visible="showSprintCreate" title="新建迭代" :width="480" @ok="handleSprintCreate" :ok-loading="sprintCreating">
+    <a-modal v-model:visible="showSprintCreate" title="新建迭代" :width="480" @ok="handleSprintCreate" :ok-loading="sprintCreating" :on-before-cancel="handleSprintCreateBeforeCancel">
       <a-form :model="sprintCreateForm" layout="vertical">
         <a-form-item label="名称" required>
           <a-input v-model="sprintCreateForm.name" placeholder="如：Sprint 25" />
@@ -1105,6 +1105,22 @@ async function doSprintCreate(confirmOverlap: boolean) {
   } finally {
     sprintCreating.value = false
   }
+}
+
+/**
+ * 新建迭代弹窗关闭前拦截：如有已填写内容则弹出确认提示。
+ */
+function handleSprintCreateBeforeCancel(): boolean {
+  const dirty = !!(sprintCreateForm.name.trim() || sprintCreateForm.goal.trim() || sprintCreateForm.startDate || sprintCreateForm.endDate)
+  if (!dirty) return true
+  Modal.confirm({
+    title: '确认放弃',
+    content: '表单中有未保存的内容，确定要放弃吗？',
+    okText: '放弃',
+    cancelText: '继续编辑',
+    onOk: () => { showSprintCreate.value = false }
+  })
+  return false
 }
 
 /**

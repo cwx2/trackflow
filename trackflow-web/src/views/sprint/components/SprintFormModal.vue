@@ -1,6 +1,6 @@
 <template>
   <!-- 创建 Sprint 弹窗 -->
-  <a-modal v-model:visible="createVisible" title="新建迭代" :width="480" @ok="handleCreate" :ok-loading="creating">
+  <a-modal v-model:visible="createVisible" title="新建迭代" :width="480" @ok="handleCreate" :ok-loading="creating" :on-before-cancel="handleCreateBeforeCancel">
     <a-form :model="createForm" layout="vertical">
       <a-form-item label="名称" required>
         <a-input v-model="createForm.name" placeholder="如：Sprint 25" />
@@ -43,7 +43,7 @@
   </a-modal>
 
   <!-- 编辑 Sprint 弹窗 -->
-  <a-modal v-model:visible="editVisible" title="编辑迭代" :width="480" @ok="handleUpdate" :ok-loading="updating" ok-text="保存修改">
+  <a-modal v-model:visible="editVisible" title="编辑迭代" :width="480" @ok="handleUpdate" :ok-loading="updating" ok-text="保存修改" :on-before-cancel="handleEditBeforeCancel">
     <a-form :model="editForm" layout="vertical">
       <a-form-item label="名称" required>
         <a-input v-model="editForm.name" placeholder="迭代名称" />
@@ -109,7 +109,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, watch } from 'vue'
-import { Message } from '@arco-design/web-vue'
+import { Message, Modal } from '@arco-design/web-vue'
 import { sprintApi } from '@/api'
 import { ERROR_CODES } from '@/api/error-codes'
 import type { SprintVO, CreationPreviewVO, SprintOverlapWarning } from '@/api/types'
@@ -289,6 +289,56 @@ function confirmOverlapAndProceed() {
   showOverlapConfirm.value = false
   if (overlapContext.value === 'create') doCreate(true)
   else doUpdate(true)
+}
+
+// ===== 关闭前确认（防止误触 Escape 丢失已填写数据） =====
+
+/** 判断创建表单是否有用户已填写的内容 */
+function isCreateFormDirty(): boolean {
+  return !!(createForm.name.trim() || createForm.goal.trim() || createForm.startDate || createForm.endDate)
+}
+
+/** 判断编辑表单是否相对原始数据有修改 */
+function isEditFormDirty(): boolean {
+  if (!props.editingSprint) return false
+  return (
+    editForm.name.trim() !== (props.editingSprint.name || '') ||
+    editForm.goal.trim() !== (props.editingSprint.goal || '') ||
+    editForm.startDate !== (props.editingSprint.startDate || '') ||
+    editForm.endDate !== (props.editingSprint.endDate || '')
+  )
+}
+
+/**
+ * 创建弹窗关闭前拦截：如有已填写内容则弹出确认提示。
+ * 返回 false 阻止关闭，返回 true 允许关闭。
+ */
+function handleCreateBeforeCancel(): boolean {
+  if (!isCreateFormDirty()) return true
+  // 使用异步确认弹窗，手动控制关闭
+  Modal.confirm({
+    title: '确认放弃',
+    content: '表单中有未保存的内容，确定要放弃吗？',
+    okText: '放弃',
+    cancelText: '继续编辑',
+    onOk: () => { createVisible.value = false }
+  })
+  return false
+}
+
+/**
+ * 编辑弹窗关闭前拦截：如有修改则弹出确认提示。
+ */
+function handleEditBeforeCancel(): boolean {
+  if (!isEditFormDirty()) return true
+  Modal.confirm({
+    title: '确认放弃',
+    content: '您有未保存的修改，确定要放弃吗？',
+    okText: '放弃',
+    cancelText: '继续编辑',
+    onOk: () => { editVisible.value = false }
+  })
+  return false
 }
 </script>
 

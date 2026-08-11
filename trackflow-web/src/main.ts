@@ -17,6 +17,10 @@ import './composables/useTheme'
 import { installMessageThrottle } from './utils/messageThrottle'
 installMessageThrottle()
 
+// 安装全局 Modal Escape 键层级管理（修复 Escape 同时关闭 DatePicker 和 Modal 的问题）
+import { installModalEscapeGuard } from './composables/useModalEscapeGuard'
+installModalEscapeGuard()
+
 // 注册内置 Widget 插件（必须在 mount 之前）
 import './widgets/builtin'
 
