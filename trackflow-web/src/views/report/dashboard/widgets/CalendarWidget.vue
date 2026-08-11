@@ -59,6 +59,8 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { IconCalendar, IconLeft, IconRight } from '@arco-design/web-vue/es/icon'
 import { issueApi } from '@/api/issue'
+import { getMonthDays } from '@/utils/timesheet'
+import { isToday, toDateKey, addMonths } from '@/utils/date'
 import type { IssueVO } from '@/api/types'
 
 const props = defineProps<{
@@ -87,65 +89,33 @@ interface CalendarCell {
 }
 
 const calendarCells = computed((): CalendarCell[] => {
-  const today = new Date()
-  const todayStr = formatDate(today)
-  const year = calendarYear.value
-  const month = calendarMonth.value
-  const firstDay = new Date(year, month - 1, 1)
-  const lastDay = new Date(year, month, 0)
-  const cells: CalendarCell[] = []
-  const startWeekday = firstDay.getDay()
-
-  for (let i = 0; i < startWeekday; i++) {
-    const d = new Date(year, month - 1, -startWeekday + i + 1)
-    const dateStr = formatDate(d)
-    cells.push({ date: dateStr, day: d.getDate(), isCurrentMonth: false, isToday: false, isOverdue: false, issues: [] })
-  }
-
-  for (let day = 1; day <= lastDay.getDate(); day++) {
-    const d = new Date(year, month - 1, day)
-    const dateStr = formatDate(d)
-    const issues = calendarIssueMap.value.get(dateStr) || []
-    const isOverdue = dateStr < todayStr
-    cells.push({ date: dateStr, day, isCurrentMonth: true, isToday: dateStr === todayStr, isOverdue, issues })
-  }
-
-  const remaining = 42 - cells.length
-  for (let i = 1; i <= remaining; i++) {
-    const d = new Date(year, month, i)
-    const dateStr = formatDate(d)
-    cells.push({ date: dateStr, day: i, isCurrentMonth: false, isToday: false, isOverdue: false, issues: [] })
-  }
-
-  return cells
+  const todayStr = toDateKey(new Date())
+  const days = getMonthDays(calendarYear.value, calendarMonth.value)
+  return days.map(d => ({
+    date:           d.date,
+    day:            d.dateNum,
+    isCurrentMonth: d.currentMonth,
+    isToday:        isToday(d.date),
+    isOverdue:      d.currentMonth && d.date < todayStr,
+    issues:         calendarIssueMap.value.get(d.date) || [],
+  }))
 })
 
 const calendarTitle = computed(() => `${calendarYear.value} 年 ${calendarMonth.value} 月`)
 
-function formatDate(d: Date): string {
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
-}
-
 function prevMonth() {
-  if (calendarMonth.value === 1) {
-    calendarYear.value--
-    calendarMonth.value = 12
-  } else {
-    calendarMonth.value--
-  }
+  const ym = `${calendarYear.value}-${String(calendarMonth.value).padStart(2,'0')}`
+  const prev = addMonths(ym, -1)
+  const [y, m] = prev.split('-').map(Number)
+  calendarYear.value = y; calendarMonth.value = m
   loadCalendarData()
 }
 
 function nextMonth() {
-  if (calendarMonth.value === 12) {
-    calendarYear.value++
-    calendarMonth.value = 1
-  } else {
-    calendarMonth.value++
-  }
+  const ym = `${calendarYear.value}-${String(calendarMonth.value).padStart(2,'0')}`
+  const next = addMonths(ym, 1)
+  const [y, m] = next.split('-').map(Number)
+  calendarYear.value = y; calendarMonth.value = m
   loadCalendarData()
 }
 
