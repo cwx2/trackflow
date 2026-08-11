@@ -272,6 +272,8 @@ const props = defineProps<{
   activeQueryName?: string | null
   isOwnedQuery?: boolean
   readonlyFilterLabels?: string[]
+  /** Saved Query 的筛选条件（已解析为 InitialFilter 格式），用于切换到筛选模式时预填 chips */
+  queryFilters?: InitialFilter[]
 }>()
 
 const emit = defineEmits<{
@@ -439,12 +441,23 @@ watch(mode, (newMode) => {
   emit('mode-change', newMode)
   if (suppressEmit) return
   if (newMode === 'search') {
-    // Clear filters, apply search
+    // Switching to search mode
+    if (props.activeQueryName && activeFilters.value.length > 0) {
+      // Active Saved Query is still in effect: just clear filter chips visually,
+      // emit search (empty keyword) so the parent continues using queryId
+      activeFilters.value = []
+    }
     emitSearch()
   } else {
-    // Clear search, apply filters
+    // Switching to filter mode
     searchKeyword.value = ''
-    emitFilters()
+    if (props.activeQueryName && props.queryFilters && props.queryFilters.length > 0) {
+      // Active Saved Query: pre-populate filter chips but DON'T emit filter event.
+      // The list is already showing correct results via queryId; emitting would clear it.
+      populateFiltersFromQuery(props.queryFilters)
+    } else {
+      emitFilters()
+    }
   }
 })
 
@@ -1180,7 +1193,16 @@ let suppressEmit = false
 function applyInitialFilters(filters: InitialFilter[]) {
   suppressEmit = true
   mode.value = 'filter'
-  activeFilters.value = filters.map(f => {
+  activeFilters.value = buildFilterChipsFromInitial(filters)
+  // nextTick 后恢复 emit 能力，确保 mode watch 已执行完毕
+  nextTick(() => { suppressEmit = false })
+}
+
+/**
+ * 将 InitialFilter[] 转换为 FilterChip[]（纯数据转换，不操作 mode/suppressEmit）
+ */
+function buildFilterChipsFromInitial(filters: InitialFilter[]): FilterChip[] {
+  return filters.map(f => {
     const field = FILTER_FIELDS.find(ff => ff.key === f.fieldKey)
     const op = field?.operators.find(o => o.key === f.operator)
     return {
@@ -1192,8 +1214,14 @@ function applyInitialFilters(filters: InitialFilter[]) {
       valueLabel: f.valueLabels?.join(', ') || f.values.join(', ')
     }
   })
-  // nextTick 后恢复 emit 能力，确保 mode watch 已执行完毕
-  nextTick(() => { suppressEmit = false })
+}
+
+/**
+ * 从 Saved Query 的解析过滤条件中填充 activeFilters（用于模式切换时保留条件）
+ * 不改变 mode 和 suppressEmit，供 watch(mode) 内部调用
+ */
+function populateFiltersFromQuery(filters: InitialFilter[]) {
+  activeFilters.value = buildFilterChipsFromInitial(filters)
 }
 
 /**

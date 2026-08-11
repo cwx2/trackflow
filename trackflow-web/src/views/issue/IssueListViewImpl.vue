@@ -42,6 +42,7 @@
         :active-query-name="activeQueryId ? activeQueryName : null"
         :is-owned-query="activeQueryOwned"
         :readonly-filter-labels="activeQueryReadonlyLabels"
+        :query-filters="activeQueryParsedFilters"
         @search="onGlobalSearch"
         @filter="onGlobalFilter"
         @clear-query="onClearQuery"
@@ -1145,6 +1146,81 @@ const activeQueryReadonlyLabels = computed<string[]>(() => {
     const opLabel = (op && op !== 'eq') ? ` ${operatorLabels[op] || op}` : ':'
     return `${fieldLabel}${opLabel} ${values}`
   }).filter(l => l && l.trim())
+})
+
+/**
+ * 将 Saved Query 的筛选条件解析为 FilterBar 可消费的 InitialFilter[] 格式。
+ * 当用户在 Saved Query 激活状态下切换到筛选模式时，FilterBar 使用此数据预填 chips。
+ */
+const activeQueryParsedFilters = computed(() => {
+  if (!activeQueryObj.value?.filters) return []
+  let filters: any[]
+  if (typeof activeQueryObj.value.filters === 'string') {
+    try { filters = JSON.parse(activeQueryObj.value.filters) } catch { return [] }
+  } else {
+    filters = activeQueryObj.value.filters
+  }
+  if (!Array.isArray(filters)) return []
+
+  const result: Array<{ fieldKey: string; operator: string; values: string[]; valueLabels?: string[] }> = []
+
+  for (const f of filters) {
+    const rawValues = Array.isArray(f.value) ? f.value : (f.value ? [String(f.value)] : [])
+
+    // Map saved query field names to FilterBar field keys
+    let fieldKey = f.field
+    if (fieldKey === 'type') fieldKey = 'issueType'
+
+    // Map saved query operators to FilterBar operators
+    let operator = 'is'
+    switch (f.operator) {
+      case 'eq': operator = 'is'; break
+      case 'neq': operator = 'is_not'; break
+      case 'in': operator = rawValues.length > 1 ? 'any_of' : 'is'; break
+      case 'not_in': operator = 'none_of'; break
+      case 'open':
+        // "open" means status is not closed — filter by non-closed statuses
+        {
+          const openStatuses = statusCache.value.filter(s => !s.isClosed)
+          if (openStatuses.length > 0) {
+            result.push({
+              fieldKey: 'status',
+              operator: 'any_of',
+              values: openStatuses.map(s => s.id),
+              valueLabels: openStatuses.map(s => localizeStatusName(s.name))
+            })
+          }
+        }
+        continue  // skip the default push below
+      default: operator = 'is'
+    }
+
+    // Map values: handle special markers like '${currentUser}'
+    const values = rawValues.map((v: string) => {
+      if (v === '${currentUser}') return 'me'
+      return v
+    })
+
+    // Build human-readable labels
+    const valueLabels = rawValues.map((v: string) => {
+      if (v === '${currentUser}') return '我'
+      if (fieldKey === 'status') {
+        const s = statusCache.value.find(st => st.id === v || st.code === v)
+        return s ? localizeStatusName(s.name) : v
+      }
+      if (fieldKey === 'priority') return localizePriority(v)
+      if (fieldKey === 'issueType') return getIssueTypeLabelForRecord(v)
+      if (fieldKey === 'project') {
+        const p = projectList.value.find(pr => pr.id === v)
+        return p ? `${p.key} - ${p.name}` : v
+      }
+      return v
+    })
+
+    result.push({ fieldKey, operator, values, valueLabels })
+  }
+
+  return result
 })
 
 // ===== Coordination Functions =====
