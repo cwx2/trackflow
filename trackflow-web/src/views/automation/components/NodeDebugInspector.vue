@@ -91,15 +91,16 @@
       </div>
 
       <div v-else-if="activeTab === 'raw'" class="debug-content raw-content">
-        <pre class="json-block">{{ formatJson({ input: detail.input, output: detail.output, message: detail.message }) }}</pre>
+        <JsonDataViewer :value="{ input: detail.input, output: detail.output, message: detail.message }" label="节点原始数据" />
       </div>
-      <div v-else class="debug-content"><pre class="error-block">{{ detail.errorInfo }}</pre></div>
+      <div v-else class="debug-content raw-content"><JsonDataViewer :value="detail.errorInfo" label="节点错误信息" error /></div>
     </template>
   </section>
 </template>
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import JsonDataViewer from './JsonDataViewer.vue'
 
 type DebugDetail = {
   input?: unknown
@@ -224,7 +225,7 @@ async function copyResult() {
 .output-content { display: flex; flex-direction: column; }.section-heading { display: flex; flex-shrink: 0; align-items: baseline; justify-content: space-between; margin: 2px 0 8px; color: var(--tf-text-primary); font-size: 12px; font-weight: 600; }.section-heading small { color: var(--tf-text-tertiary); font-weight: 400; }.record-list { display: flex; flex-direction: column; gap: 6px; }.record-list.full { flex: 1; min-height: 0; overflow-y: auto; padding-right: 2px; }.record-row { display: flex; flex-direction: column; gap: 3px; padding: 9px 10px; border: 1px solid var(--tf-border); border-radius: 7px; background: var(--tf-bg-body); animation: record-enter 180ms ease-out both; transition: border-color .16s, transform .16s; }.record-row:hover { border-color: var(--tf-accent); transform: translateX(2px); }.record-row strong { color: var(--tf-text-primary); font-size: 12px; }.record-row span { color: var(--tf-text-tertiary); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .field-list { display: flex; flex-direction: column; gap: 6px; }.field-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 9px 10px; border: 1px solid var(--tf-border); border-radius: 7px; background: var(--tf-bg-body); font-size: 12px; }.field-row span { color: var(--tf-text-tertiary); }.field-row strong { overflow: hidden; color: var(--tf-text-primary); font-weight: 500; text-align: right; text-overflow: ellipsis; white-space: nowrap; }
 .branch-result { display: flex; flex-direction: column; gap: 6px; padding: 14px; border: 1px solid var(--tf-border); border-radius: 9px; background: var(--tf-bg-body); animation: content-enter 160ms ease-out both; }.branch-result.passed { border-color: color-mix(in srgb, var(--tf-success) 40%, var(--tf-border)); background: linear-gradient(135deg, var(--tf-success-bg), var(--tf-bg-body)); }.branch-result.not-passed { border-color: color-mix(in srgb, var(--tf-accent) 40%, var(--tf-border)); background: linear-gradient(135deg, var(--tf-accent-bg), var(--tf-bg-body)); }.branch-result span, .branch-result p { color: var(--tf-text-secondary); font-size: 12px; }.branch-result strong { color: var(--tf-text-primary); font-size: 14px; }.branch-result p { margin: 0; }
-.json-block, .error-block { min-height: 190px; max-height: 460px; margin: 0; padding: 12px; overflow: auto; border: 1px solid var(--tf-border); border-radius: 8px; background: var(--tf-bg-body); color: var(--tf-text-secondary); font-size: 12px; line-height: 1.6; white-space: pre; }.error-block { color: var(--tf-danger); }.empty-data { padding: 18px; border: 1px dashed var(--tf-border); border-radius: 8px; color: var(--tf-text-tertiary); text-align: center; font-size: 12px; }.debug-empty { padding: 28px 18px; color: var(--tf-text-secondary); text-align: center; }.debug-empty strong { display: block; color: var(--tf-text-primary); font-size: 13px; }.debug-empty p { margin: 8px 0 0; font-size: 12px; line-height: 1.6; }
+.raw-content { display: flex; overflow: hidden; }.empty-data { padding: 18px; border: 1px dashed var(--tf-border); border-radius: 8px; color: var(--tf-text-tertiary); text-align: center; font-size: 12px; }.debug-empty { padding: 28px 18px; color: var(--tf-text-secondary); text-align: center; }.debug-empty strong { display: block; color: var(--tf-text-primary); font-size: 13px; }.debug-empty p { margin: 8px 0 0; font-size: 12px; line-height: 1.6; }
 @keyframes inspector-enter { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } } @keyframes content-enter { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } } @keyframes record-enter { from { opacity: 0; transform: translateX(-4px); } to { opacity: 1; transform: translateX(0); } } @keyframes status-pulse { 50% { box-shadow: 0 0 0 4px var(--tf-accent-bg); } }
 @media (prefers-reduced-motion: reduce) { .node-debug-inspector, .debug-content, .record-row, .debug-status.running { animation: none; }.debug-actions button, .record-row { transition: none; } }
 </style>
