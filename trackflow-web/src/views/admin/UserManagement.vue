@@ -874,7 +874,7 @@ onMounted(() => {
 .table-wrapper .user-table { flex: 1; min-height: 0; }
 .table-wrapper :deep(.arco-table) { height: 100%; }
 .table-wrapper :deep(.arco-table-container) { height: 100%; display: flex; flex-direction: column; }
-.table-wrapper :deep(.arco-table-content-scroll) { flex: 1; min-height: 0; overflow: hidden; }
+.table-wrapper :deep(.arco-table-content) { flex: 1; min-height: 0; overflow: hidden; }
 .table-wrapper :deep(.arco-table-body) { flex: 1; max-height: none !important; overflow-y: auto !important; }
 
 /* User Table */

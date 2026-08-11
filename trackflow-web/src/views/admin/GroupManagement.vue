@@ -543,7 +543,7 @@ onMounted(async () => {
 .group-table { flex: 1; min-height: 0; }
 .group-table :deep(.arco-table) { height: 100%; }
 .group-table :deep(.arco-table-container) { height: 100%; display: flex; flex-direction: column; }
-.group-table :deep(.arco-table-content-scroll) { flex: 1; min-height: 0; overflow: hidden; }
+.group-table :deep(.arco-table-content) { flex: 1; min-height: 0; overflow: hidden; }
 .group-table :deep(.arco-table-body) { flex: 1; max-height: none !important; overflow-y: auto !important; }
 
 /* Table */

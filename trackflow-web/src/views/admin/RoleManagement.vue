@@ -456,7 +456,7 @@ onMounted(() => {
 .role-table { flex: 1; min-height: 0; }
 .role-table :deep(.arco-table) { height: 100%; }
 .role-table :deep(.arco-table-container) { height: 100%; display: flex; flex-direction: column; }
-.role-table :deep(.arco-table-content-scroll) { flex: 1; min-height: 0; overflow: hidden; }
+.role-table :deep(.arco-table-content) { flex: 1; min-height: 0; overflow: hidden; }
 .role-table :deep(.arco-table-body) { flex: 1; max-height: none !important; overflow-y: auto !important; }
 
 .role-name { color: var(--text-bright); font-weight: 500; }

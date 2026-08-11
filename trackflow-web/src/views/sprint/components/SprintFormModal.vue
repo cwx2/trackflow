@@ -94,9 +94,13 @@
         <div v-for="sprint in overlapWarning.overlappingSprints" :key="sprint.name" class="overlap-sprint-item">
           <span class="overlap-sprint-name">{{ sprint.name }}</span>
           <span class="overlap-sprint-dates">{{ sprint.startDate }} ~ {{ sprint.endDate }}</span>
-          <span class="overlap-sprint-status" :class="sprint.status">
-            {{ sprint.status === 'active' ? '进行中' : '计划中' }}
-          </span>
+          <IssueStatusTag
+            :name="sprint.status === 'active' ? '进行中' : '计划中'"
+            :color="getSprintStatusColor(sprint.status)"
+            size="small"
+            :show-dot="false"
+            variant="plain"
+          />
         </div>
       </div>
       <div class="overlap-warning-hint">
@@ -114,6 +118,8 @@ import { IconExclamationCircle } from '@arco-design/web-vue/es/icon'
 import { sprintApi } from '@/api'
 import { ERROR_CODES } from '@/api/error-codes'
 import { useModalEscapeHandler } from '@/composables/useModalEscapeGuard'
+import { IssueStatusTag } from '@/components/base'
+import { getSprintStatusColor } from '@/utils/uiColors'
 import type { SprintVO, CreationPreviewVO, SprintOverlapWarning } from '@/api/types'
 
 const props = defineProps<{
@@ -400,9 +406,6 @@ useModalEscapeHandler(editVisible, handleEditEscape)
 .overlap-sprint-item { display: flex; align-items: center; gap: 12px; padding: 6px 8px; background: var(--color-bg-2); border-radius: 4px; }
 .overlap-sprint-name { font-size: 13px; font-weight: 500; color: var(--color-text-1); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .overlap-sprint-dates { font-size: 12px; color: var(--color-text-3); white-space: nowrap; }
-.overlap-sprint-status { font-size: 11px; padding: 1px 6px; border-radius: 3px; white-space: nowrap; }
-.overlap-sprint-status.active { color: var(--color-success-6); background: var(--color-success-1); }
-.overlap-sprint-status.planned { color: var(--color-primary-6); background: var(--color-primary-1); }
 .overlap-warning-hint { font-size: 12px; color: var(--color-text-3); line-height: 1.6; }
 .overlap-warning-hint p { margin: 0; }
 </style>
