@@ -1,14 +1,19 @@
 <template>
-  <!-- ===== 计时器 Badge（侧边栏底部常驻显示） ===== -->
+  <!-- ===== 计时器 Badge + 快捷面板 ===== -->
   <template v-if="timerStore.isRunning">
-    <a-tooltip
-      v-if="collapsed"
-      :content="`${timerStore.issueKey} — ${timerStore.elapsedDisplay}`"
+    <!--
+      折叠/展开条件包裹：内容体只写一份。
+      展开时外层是透明 VirtualWrapper，折叠时外层是 a-tooltip。
+    -->
+    <component
+      :is="collapsed ? 'a-tooltip' : virtualTag"
+      :content="collapsed ? `${timerStore.issueKey} — ${timerStore.elapsedDisplay}` : undefined"
       position="right"
       :mini="true"
     >
       <div
         class="footer-item timer-badge"
+        :title="!collapsed ? `${timerStore.issueKey} ${timerStore.issueTitle} — ${timerStore.elapsedDisplay}` : undefined"
         @click="togglePopover"
       >
         <span class="nav-icon timer-icon-wrap">
@@ -20,25 +25,9 @@
           <span class="timer-elapsed">{{ timerStore.elapsedDisplay }}</span>
         </span>
       </div>
-    </a-tooltip>
+    </component>
 
-    <div
-      v-else
-      class="footer-item timer-badge"
-      :title="`${timerStore.issueKey} ${timerStore.issueTitle} — ${timerStore.elapsedDisplay}`"
-      @click="togglePopover"
-    >
-      <span class="nav-icon timer-icon-wrap">
-        <icon-clock-circle />
-        <span class="timer-pulse"></span>
-      </span>
-      <span class="nav-label timer-badge-label">
-        <span class="timer-badge-key">{{ timerStore.issueKey }}</span>
-        <span class="timer-elapsed">{{ timerStore.elapsedDisplay }}</span>
-      </span>
-    </div>
-
-    <!-- ===== 计时器快捷面板（点击 badge 后展开） ===== -->
+    <!-- 快捷面板（点击 badge 后展开） -->
     <div v-if="visible" class="timer-popover">
       <div class="timer-popover-header">
         <icon-clock-circle class="timer-popover-icon" />
@@ -71,19 +60,22 @@
  * 职责：
  * - 计时器运行时在侧边栏底部显示 Badge（工单号 + 已用时间）
  * - 点击 Badge 展开浮层，可跳转到工单或停止计时
- * - 折叠时 Badge 只显示图标，hover 展示 tooltip
+ * - 折叠时 Badge 只显示图标，hover 显示 tooltip
  *
- * Props：
- *   collapsed — 侧边栏是否折叠（影响 badge 展示方式）
- *
- * Emits：
- *   close — 浮层关闭时通知父级（用于点击外部关闭）
+ * CSS 说明：
+ * - .footer-item / .nav-icon / .nav-label / 折叠隐藏规则 均由 AppSidebar 的全局样式提供
+ * - 本文件只写计时器专属样式（timer-*）
  */
 import { useRouter } from 'vue-router'
 import { useTimerStore } from '@/stores/timer'
 
+// 透明包裹：展开态不需要 tooltip，用此组件替代 a-tooltip 做无 DOM 的透传
+const virtualTag = {
+  name: 'VirtualWrapper',
+  render() { return (this as any).$slots.default?.() },
+}
+
 defineProps<{ collapsed: boolean }>()
-defineEmits<{ close: [] }>()
 
 const router = useRouter()
 const timerStore = useTimerStore()
@@ -105,40 +97,12 @@ function goToIssue() {
 
 async function handleStop() {
   const result = await timerStore.stopTimer()
-  if (result.success) {
-    visible.value = false
-  }
+  if (result.success) visible.value = false
 }
 </script>
 
 <style scoped>
-/* ===== 复用 footer-item 基础样式（与 AppSidebar 对齐） ===== */
-.footer-item {
-  display: flex;
-  align-items: center;
-  height: 36px;
-  gap: 10px;
-  padding: 0 12px;
-  border-radius: var(--tf-radius-md);
-  color: var(--tf-sidebar-text);
-  font-size: 13px;
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s;
-}
-.footer-item:hover {
-  background: var(--tf-sidebar-hover);
-  color: var(--tf-text-primary);
-}
-
-.nav-icon {
-  font-size: 18px;
-  width: 20px;
-  text-align: center;
-  flex-shrink: 0;
-  color: inherit;
-}
-
-/* ===== 计时器 Badge ===== */
+/* ===== 计时器专属样式（.footer-item / .nav-icon 由 AppSidebar 提供） ===== */
 .timer-icon-wrap {
   position: relative;
   display: inline-flex;
@@ -186,17 +150,6 @@ async function handleStop() {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   flex-shrink: 0;
-}
-
-/* 折叠时隐藏文字 */
-:global(.sidebar.collapsed) .nav-label,
-:global(.sidebar.collapsed) .timer-badge-label {
-  display: none;
-}
-:global(.sidebar.collapsed) .footer-item {
-  padding: 0;
-  justify-content: center;
-  gap: 0;
 }
 
 /* ===== 计时器浮层 ===== */

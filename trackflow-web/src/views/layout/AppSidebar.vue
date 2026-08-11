@@ -176,7 +176,7 @@
       <SidebarNavItem
         :label="themeLabel"
         :collapsed="sidebarCollapsed"
-        class="theme-switcher"
+        item-class="theme-switcher"
         @click="cycleTheme"
       >
         <template #icon>
@@ -184,10 +184,10 @@
         </template>
       </SidebarNavItem>
 
-      <!-- 用户头像 -->
-      <a-tooltip
-        v-if="sidebarCollapsed"
-        :content="userName"
+      <!-- 用户头像：折叠时 tooltip，展开时直接渲染，内容体只写一份 -->
+      <component
+        :is="sidebarCollapsed ? 'a-tooltip' : virtualTag"
+        :content="sidebarCollapsed ? userName : undefined"
         position="right"
         :mini="true"
       >
@@ -195,11 +195,7 @@
           <UserAvatar :name="userName" :size="24" />
           <span class="user-name">{{ userName }}</span>
         </div>
-      </a-tooltip>
-      <div v-else class="sidebar-user" @click="showUserMenu = !showUserMenu">
-        <UserAvatar :name="userName" :size="24" />
-        <span class="user-name">{{ userName }}</span>
-      </div>
+      </component>
 
       <!-- ===== 用户下拉菜单 ===== -->
       <div v-if="showUserMenu" class="user-menu">
@@ -254,6 +250,12 @@ import TimerPopover from './TimerPopover.vue'
 import { UserAvatar } from '@/components/base'
 import trackflowLogoUrl from '@/assets/trackflow-watermark.svg'
 import trackflowIconUrl from '@/assets/trackflow-icon.svg'
+
+// 透明包裹：展开态不需要 tooltip，用此组件代替 a-tooltip 做无 DOM 透传
+const virtualTag = {
+  name: 'VirtualWrapper',
+  render() { return (this as any).$slots.default?.() },
+}
 
 defineEmits<{ openCreate: [] }>()
 
@@ -481,6 +483,36 @@ onUnmounted(() => document.removeEventListener('click', handleClickOutside))
   flex-direction: column;
   gap: 4px;
   position: relative;
+}
+
+/*
+  .footer-item / .nav-label 用 :deep 穿透，让子组件（TimerPopover）内部的
+  同名 class 也能继承折叠/展开的基础样式，无需在子组件里重复定义。
+*/
+.sidebar-footer :deep(.footer-item) {
+  display: flex;
+  align-items: center;
+  height: 36px;
+  gap: 10px;
+  padding: 0 12px;
+  border-radius: var(--tf-radius-md);
+  color: var(--tf-sidebar-text);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.sidebar-footer :deep(.footer-item):hover {
+  background: var(--tf-sidebar-hover);
+  color: var(--tf-text-primary);
+}
+.sidebar.collapsed .sidebar-footer :deep(.footer-item) {
+  padding: 0;
+  justify-content: center;
+  gap: 0;
+}
+.sidebar.collapsed .sidebar-footer :deep(.nav-label),
+.sidebar.collapsed .sidebar-footer :deep(.timer-badge-label) {
+  display: none;
 }
 
 .theme-switcher {
