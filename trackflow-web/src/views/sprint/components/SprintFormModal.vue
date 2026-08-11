@@ -1,6 +1,6 @@
 <template>
   <!-- 创建 Sprint 弹窗 -->
-  <a-modal v-model:visible="createVisible" title="新建迭代" :width="480" @ok="handleCreate" :ok-loading="creating" :on-before-cancel="handleCreateBeforeCancel">
+  <a-modal v-model:visible="createVisible" title="新建迭代" :width="480" @ok="handleCreate" :ok-loading="creating" :esc-to-close="false" :on-before-cancel="handleCreateBeforeCancel">
     <a-form :model="createForm" layout="vertical">
       <a-form-item label="名称" required>
         <a-input v-model="createForm.name" placeholder="如：Sprint 25" />
@@ -43,7 +43,7 @@
   </a-modal>
 
   <!-- 编辑 Sprint 弹窗 -->
-  <a-modal v-model:visible="editVisible" title="编辑迭代" :width="480" @ok="handleUpdate" :ok-loading="updating" ok-text="保存修改" :on-before-cancel="handleEditBeforeCancel">
+  <a-modal v-model:visible="editVisible" title="编辑迭代" :width="480" @ok="handleUpdate" :ok-loading="updating" ok-text="保存修改" :esc-to-close="false" :on-before-cancel="handleEditBeforeCancel">
     <a-form :model="editForm" layout="vertical">
       <a-form-item label="名称" required>
         <a-input v-model="editForm.name" placeholder="迭代名称" />
@@ -112,6 +112,7 @@ import { ref, reactive, computed, watch } from 'vue'
 import { Message, Modal } from '@arco-design/web-vue'
 import { sprintApi } from '@/api'
 import { ERROR_CODES } from '@/api/error-codes'
+import { useModalEscapeHandler } from '@/composables/useModalEscapeGuard'
 import type { SprintVO, CreationPreviewVO, SprintOverlapWarning } from '@/api/types'
 
 const props = defineProps<{
@@ -310,12 +311,12 @@ function isEditFormDirty(): boolean {
 }
 
 /**
- * 创建弹窗关闭前拦截：如有已填写内容则弹出确认提示。
+ * 创建弹窗关闭前拦截（X 按钮/遮罩点击触发）。
+ * Escape 键由 useModalEscapeHandler 处理。
  * 返回 false 阻止关闭，返回 true 允许关闭。
  */
 function handleCreateBeforeCancel(): boolean {
   if (!isCreateFormDirty()) return true
-  // 使用异步确认弹窗，手动控制关闭
   Modal.confirm({
     title: '确认放弃',
     content: '表单中有未保存的内容，确定要放弃吗？',
@@ -327,7 +328,8 @@ function handleCreateBeforeCancel(): boolean {
 }
 
 /**
- * 编辑弹窗关闭前拦截：如有修改则弹出确认提示。
+ * 编辑弹窗关闭前拦截（X 按钮/遮罩点击触发）。
+ * Escape 键由 useModalEscapeHandler 处理。
  */
 function handleEditBeforeCancel(): boolean {
   if (!isEditFormDirty()) return true
@@ -340,6 +342,43 @@ function handleEditBeforeCancel(): boolean {
   })
   return false
 }
+
+// ===== Escape 键层级处理（通过全局 guard 注册） =====
+
+/** 创建弹窗 Escape handler：空表单直接关闭，脏表单弹确认 */
+function handleCreateEscape(): boolean {
+  if (!isCreateFormDirty()) {
+    createVisible.value = false
+    return true
+  }
+  Modal.confirm({
+    title: '确认放弃',
+    content: '表单中有未保存的内容，确定要放弃吗？',
+    okText: '放弃',
+    cancelText: '继续编辑',
+    onOk: () => { createVisible.value = false }
+  })
+  return true
+}
+
+/** 编辑弹窗 Escape handler：无修改直接关闭，有修改弹确认 */
+function handleEditEscape(): boolean {
+  if (!isEditFormDirty()) {
+    editVisible.value = false
+    return true
+  }
+  Modal.confirm({
+    title: '确认放弃',
+    content: '您有未保存的修改，确定要放弃吗？',
+    okText: '放弃',
+    cancelText: '继续编辑',
+    onOk: () => { editVisible.value = false }
+  })
+  return true
+}
+
+useModalEscapeHandler(createVisible, handleCreateEscape)
+useModalEscapeHandler(editVisible, handleEditEscape)
 </script>
 
 <style scoped>

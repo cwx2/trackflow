@@ -422,7 +422,7 @@
     />
 
     <!-- 新建 Sprint 弹窗 -->
-    <a-modal v-model:visible="showSprintCreate" title="新建迭代" :width="480" @ok="handleSprintCreate" :ok-loading="sprintCreating" :on-before-cancel="handleSprintCreateBeforeCancel">
+    <a-modal v-model:visible="showSprintCreate" title="新建迭代" :width="480" @ok="handleSprintCreate" :ok-loading="sprintCreating" :esc-to-close="false" :on-before-cancel="handleSprintCreateBeforeClose">
       <a-form :model="sprintCreateForm" layout="vertical">
         <a-form-item label="名称" required>
           <a-input v-model="sprintCreateForm.name" placeholder="如：Sprint 25" />
@@ -486,6 +486,7 @@ import IssuePriorityBadge from '@/components/base/IssuePriorityBadge.vue'
 import IssueCreatePanel from '@/components/IssueCreatePanel.vue'
 import { EmptyState } from '@/components/base'
 import { useDrafts } from '@/composables/useDrafts'
+import { useModalEscapeHandler } from '@/composables/useModalEscapeGuard'
 import type { IssueVO, SprintVO, ProjectMemberVO, SprintVelocityVO, CreationPreviewVO, SprintOverlapWarning } from '@/api/types'
 
 const router = useRouter()
@@ -1111,6 +1112,30 @@ async function doSprintCreate(confirmOverlap: boolean) {
  * 新建迭代弹窗关闭前拦截：如有已填写内容则弹出确认提示。
  */
 function handleSprintCreateBeforeCancel(): boolean {
+  const dirty = !!(sprintCreateForm.name.trim() || sprintCreateForm.goal.trim() || sprintCreateForm.startDate || sprintCreateForm.endDate)
+  if (!dirty) {
+    showSprintCreate.value = false
+    return true
+  }
+  Modal.confirm({
+    title: '确认放弃',
+    content: '表单中有未保存的内容，确定要放弃吗？',
+    okText: '放弃',
+    cancelText: '继续编辑',
+    onOk: () => { showSprintCreate.value = false }
+  })
+  return true
+}
+
+// 注册 Modal Escape handler：按 Escape 时检查表单脏状态
+useModalEscapeHandler(showSprintCreate, handleSprintCreateBeforeCancel)
+
+/**
+ * X 按钮 / 遮罩点击的关闭前检查（onBeforeCancel）。
+ * Escape 键由 useModalEscapeHandler 处理，此函数仅处理非 Escape 的关闭触发。
+ * 返回 true 允许关闭，返回 false 阻止并弹确认。
+ */
+function handleSprintCreateBeforeClose(): boolean {
   const dirty = !!(sprintCreateForm.name.trim() || sprintCreateForm.goal.trim() || sprintCreateForm.startDate || sprintCreateForm.endDate)
   if (!dirty) return true
   Modal.confirm({
