@@ -686,7 +686,6 @@ const nodeTestNode = ref<any>(null)
 const nodeTestInputText = ref('{}')
 const nodeTestConfirmSideEffects = ref(false)
 const nodeTestLoading = ref(false)
-const nodeTestResult = ref<NodeTestResultVO | null>(null)
 let activeEvtSource: EventSource | null = null
 let executionPollTimer: ReturnType<typeof setInterval> | null = null
 const NODE_TEST_SIDE_EFFECT_TYPES = new Set([
