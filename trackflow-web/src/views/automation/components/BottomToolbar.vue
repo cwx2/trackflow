@@ -157,7 +157,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
 
 interface NodeItem {
   type: string
@@ -218,6 +218,11 @@ function toggleAddNodePanel() {
   addNodePanelOpen.value = !addNodePanelOpen.value
   if (addNodePanelOpen.value) {
     nodeSearchKeyword.value = ''
+    // 面板打开后滚动到顶部，确保 TrackFlow 分类可见
+    nextTick(() => {
+      const scrollEl = wrapRef.value?.querySelector('.panel-scroll') as HTMLElement | null
+      if (scrollEl) scrollEl.scrollTop = 0
+    })
   }
 }
 
