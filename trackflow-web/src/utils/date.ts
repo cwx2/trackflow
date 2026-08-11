@@ -1,16 +1,121 @@
 /**
  * utils/date.ts — 日期/时间格式化工具
  *
- * 统一替代项目中散落在 40+ 个组件里各自定义的
- * formatTime / formatDate / formatDateTime 函数。
+ * 设计原则（参考 date-fns）：
+ *   - 纯函数，不修改入参，永远返回新值
+ *   - 所有函数接受 DateInput（Date | string | null | undefined），内部做 toDate() 转换
+ *   - 函数可组合：复杂操作由简单函数叠加实现
  *
- * 三个函数覆盖项目中出现的全部格式需求：
- *   - formatRelativeTime  → "刚刚 / 5 分钟前 / 2 小时前 / 3 天前 / 2026-08-11"
- *   - formatDateTime      → "2026-08-11 14:30"（精确到分，列表/卡片首选）
- *   - formatDate          → "2026-08-11"（仅日期）
- *
- * 所有函数对空值/无效值安全，返回空字符串。
+ * 函数分组：
+ *   [类型]    DateInput
+ *   [转换]    toDate / toDateKey
+ *   [判断]    isToday / isWeekend / isSameDay
+ *   [导航]    startOfWeek / addDays / addMonths / addWeeks
+ *   [格式]    formatRelativeTime / formatDateTime / formatDate / formatDateDisplay
  */
+
+// ─── 类型 ────────────────────────────────────────────────────────────────────
+
+/** 所有日期函数都接受此类型的入参，内部统一用 toDate() 转换 */
+export type DateInput = Date | string | null | undefined
+
+// ─── 转换 ────────────────────────────────────────────────────────────────────
+
+/**
+ * 将任意日期输入转换为 Date 对象。无效输入返回 null。
+ */
+export function toDate(input: DateInput): Date | null {
+  if (!input) return null
+  const d = input instanceof Date ? input : new Date(input)
+  return isNaN(d.getTime()) ? null : d
+}
+
+/**
+ * 将日期格式化为标准键值 "YYYY-MM-DD"。
+ * 接受 Date 对象或字符串，统一出口，无效输入返回 ''。
+ */
+export function toDateKey(input: DateInput): string {
+  const d = toDate(input)
+  if (!d) return ''
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+
+// ─── 判断 ────────────────────────────────────────────────────────────────────
+
+/**
+ * 判断某个日期是否是今天。接受 Date 对象或 "YYYY-MM-DD" 字符串。
+ */
+export function isToday(input: DateInput): boolean {
+  const key = toDateKey(input)
+  return !!key && key === toDateKey(new Date())
+}
+
+/**
+ * 判断某个日期是否是周末（周六或周日）。
+ */
+export function isWeekend(input: DateInput): boolean {
+  const d = toDate(input)
+  if (!d) return false
+  const day = d.getDay()
+  return day === 0 || day === 6
+}
+
+/**
+ * 判断两个日期是否是同一天（忽略时间部分）。
+ */
+export function isSameDay(a: DateInput, b: DateInput): boolean {
+  const ka = toDateKey(a)
+  return !!ka && ka === toDateKey(b)
+}
+
+// ─── 导航 ────────────────────────────────────────────────────────────────────
+
+/**
+ * 返回某日期所在周的周一（ISO 周：周一为第一天）。返回 "YYYY-MM-DD"。
+ */
+export function startOfWeek(input: DateInput): string {
+  const d = toDate(input)
+  if (!d) return ''
+  const date = new Date(d)
+  const day = date.getDay()
+  const diff = date.getDate() - day + (day === 0 ? -6 : 1)
+  date.setDate(diff)
+  return toDateKey(date)
+}
+
+/**
+ * 在某个日期基础上加减若干天，返回新的 "YYYY-MM-DD" 字符串。
+ * @param days   正数向未来，负数向过去
+ */
+export function addDays(input: DateInput, days: number): string {
+  const d = toDate(input)
+  if (!d) return ''
+  const result = new Date(d)
+  result.setDate(result.getDate() + days)
+  return toDateKey(result)
+}
+
+/**
+ * 在某个月份基础上加减若干月，返回新的 "YYYY-MM" 字符串。
+ * @param yearMonth  格式 "YYYY-MM"
+ * @param months     正数向未来，负数向过去
+ */
+export function addMonths(yearMonth: string, months: number): string {
+  const [year, month] = yearMonth.split('-').map(Number)
+  const d = new Date(year, month - 1 + months, 1)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+}
+
+/**
+ * 在某个周开始日期基础上加减若干周，返回新的 "YYYY-MM-DD" 字符串。
+ * @param weekStart  周一的 "YYYY-MM-DD"
+ */
+export function addWeeks(weekStart: string, weeks: number): string {
+  return addDays(weekStart, weeks * 7)
+}
+
+// ─── 格式化（输出给用户看的字符串） ─────────────────────────────────────────
 
 /**
  * 相对时间格式化。
@@ -20,12 +125,10 @@
  * - < 30 天   → "N 天前"
  * - 更早      → "2026-08-11" 绝对日期
  */
-export function formatRelativeTime(dateStr: string | null | undefined): string {
-  if (!dateStr) return ''
-  const d = new Date(dateStr)
-  if (isNaN(d.getTime())) return ''
-  const diffMs = Date.now() - d.getTime()
-  const diffSec = Math.floor(diffMs / 1000)
+export function formatRelativeTime(input: DateInput): string {
+  const d = toDate(input)
+  if (!d) return ''
+  const diffSec = Math.floor((Date.now() - d.getTime()) / 1000)
   if (diffSec < 60) return '刚刚'
   const diffMin = Math.floor(diffSec / 60)
   if (diffMin < 60) return `${diffMin} 分钟前`
@@ -33,29 +136,32 @@ export function formatRelativeTime(dateStr: string | null | undefined): string {
   if (diffHour < 24) return `${diffHour} 小时前`
   const diffDay = Math.floor(diffHour / 24)
   if (diffDay < 30) return `${diffDay} 天前`
-  return formatDate(dateStr)
+  return toDateKey(d)
 }
 
 /**
- * 日期+时间格式化，精确到分钟。
- * 输出示例：2026-08-11 14:30
+ * 日期+时间格式化，精确到分钟。输出示例：2026-08-11 14:30
  */
-export function formatDateTime(dateStr: string | null | undefined): string {
-  if (!dateStr) return ''
-  const d = new Date(dateStr)
-  if (isNaN(d.getTime())) return ''
+export function formatDateTime(input: DateInput): string {
+  const d = toDate(input)
+  if (!d) return ''
   const pad = (n: number) => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
 /**
- * 仅日期格式化。
- * 输出示例：2026-08-11
+ * 仅日期格式化，输出 "YYYY-MM-DD"。接受字符串或 Date 对象。
  */
-export function formatDate(dateStr: string | null | undefined): string {
-  if (!dateStr) return ''
-  const d = new Date(dateStr)
-  if (isNaN(d.getTime())) return ''
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+export function formatDate(input: DateInput): string {
+  return toDateKey(input)
+}
+
+/**
+ * 人类友好的日期显示格式，输出 "YYYY/M/D"（不补零）。
+ * 适合在 UI 日历标题、tooltip 中使用。
+ */
+export function formatDateDisplay(input: DateInput): string {
+  const d = toDate(input)
+  if (!d) return ''
+  return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`
 }

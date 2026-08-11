@@ -439,6 +439,7 @@
 
 <script setup lang="ts">
 import { formatDuration } from '@/utils/duration'
+import { toDateKey, formatDateDisplay, startOfWeek, addWeeks, addMonths, getWorkingDaysInRange, parseDuration, parseTimeToMinutes, formatDurationCompact } from '@/utils/timesheet'
 import { ref, computed, onMounted, watch } from 'vue'
 import { Message, Modal } from '@arco-design/web-vue'
 import { useAuthStore } from '@/stores/auth'
@@ -455,7 +456,7 @@ import { UserAvatar } from '@/components/base'
 const authStore = useAuthStore()
 const route = useRoute()
 const router = useRouter()
-const { loadSettings: loadTTSettings, minutesPerDay, minutesPerWeek, isWorkingDay, quotaText } = useTimeTrackingSettings()
+const { loadSettings: loadTTSettings, minutesPerDay, isWorkingDay, quotaText } = useTimeTrackingSettings()
 
 // State
 const activeTab = ref<'people' | 'projects' | 'workgroups'>((route.query.view as any) || 'people')
@@ -996,7 +997,7 @@ function openEditDialog(entry: TimeEntryVO) {
     issueId: entry.issueId,
     workDate: entry.workDate,
     dateRange: undefined,
-    durationText: formatDurationInput(entry.duration ?? 0),
+    durationText: formatDurationCompact(entry.duration ?? 0),
     startTimeStr: entry.startTime != null ? `${String(Math.floor(entry.startTime / 60)).padStart(2, '0')}:${String(entry.startTime % 60).padStart(2, '0')}` : undefined,
     description: entry.description || '',
     forUserId: undefined
@@ -1042,7 +1043,7 @@ async function saveEntry() {
     }
   }
 
-  const totalDuration = parseDuration(form.value.durationText)
+  const totalDuration = parseDuration(form.value.durationText, minutesPerDay())
   if (!totalDuration || totalDuration <= 0) {
     Message.warning('时长格式无效，请使用如 2h30m, 1h, 45m')
     return
@@ -1165,47 +1166,6 @@ async function deleteEntry() {
 }
 
 // Helpers
-
-
-function formatDurationInput(minutes: number): string {
-  const h = Math.floor(minutes / 60)
-  const m = minutes % 60
-  if (h === 0) return `${m}m`
-  if (m === 0) return `${h}h`
-  return `${h}h${m}m`
-}
-
-function parseDuration(text: string): number | null {
-  const cleaned = text.trim().toLowerCase()
-  let total = 0
-  const weekMatch = cleaned.match(/(\d+)\s*w/)
-  const dayMatch = cleaned.match(/(\d+)\s*d/)
-  const hourMatch = cleaned.match(/(\d+)\s*h/)
-  const minMatch = cleaned.match(/(\d+)\s*m/)
-
-  const mPerDay = minutesPerDay()
-  const mPerWeek = minutesPerWeek()
-
-  if (weekMatch) total += parseInt(weekMatch[1]) * mPerWeek
-  if (dayMatch) total += parseInt(dayMatch[1]) * mPerDay
-  if (hourMatch) total += parseInt(hourMatch[1]) * 60
-  if (minMatch) total += parseInt(minMatch[1])
-
-  // If just a number, treat as hours
-  if (!weekMatch && !dayMatch && !hourMatch && !minMatch) {
-    const num = parseFloat(cleaned)
-    if (!isNaN(num)) total = Math.round(num * 60)
-  }
-
-  return total > 0 ? total : null
-}
-
-function parseTimeToMinutes(timeStr: string): number | undefined {
-  if (!timeStr) return undefined
-  const parts = timeStr.split(':')
-  if (parts.length !== 2) return undefined
-  return parseInt(parts[0]) * 60 + parseInt(parts[1])
-}
 
 function formatDateKey(d: Date): string {
   const year = d.getFullYear()
