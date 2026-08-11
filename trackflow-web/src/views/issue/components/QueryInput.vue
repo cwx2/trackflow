@@ -11,7 +11,7 @@
         @focus="onFocus"
         @blur="onBlur"
       />
-      <span v-if="modelValue" class="query-clear" @mousedown.prevent="$emit('update:modelValue', '')">✕</span>
+      <span v-if="modelValue" class="query-clear" @mousedown.prevent="modelValue = ''">✕</span>
     </div>
     <!-- Autocomplete dropdown -->
     <div v-if="showDropdown && suggestions.length > 0" class="query-dropdown" ref="dropdownRef">
@@ -58,8 +58,9 @@ interface FieldDef {
 
 // ==================== Props & Emits ====================
 
+const modelValue = defineModel<string>({ default: '' })
+
 const props = defineProps<{
-  modelValue: string
   placeholder?: string
   statusList: IssueStatusVO[]
   projectList: ProjectVO[]
@@ -67,7 +68,6 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  (e: 'update:modelValue', value: string): void
   (e: 'submit'): void
 }>()
 
@@ -183,7 +183,7 @@ function getOperatorHints(): Suggestion[] {
 
 function onInput(e: Event) {
   const value = (e.target as HTMLInputElement).value
-  emit('update:modelValue', value)
+  modelValue.value = value
   nextTick(() => updateSuggestions())
 }
 

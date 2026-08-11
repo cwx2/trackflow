@@ -7,7 +7,7 @@
       size="small"
       allow-clear
       :style="{ width: typeof searchWidth === 'number' ? `${searchWidth}px` : (searchWidth || '280px') }"
-      @input="$emit('update:modelValue', $event)"
+      @input="modelValue = $event"
       @search="$emit('search', $event)"
       @clear="$emit('clear')"
     />
@@ -35,9 +35,9 @@
 </template>
 
 <script setup lang="ts">
+const modelValue = defineModel<string>({ default: '' })
+
 withDefaults(defineProps<{
-  /** 搜索框 v-model */
-  modelValue?: string
   /** 搜索框占位符 */
   searchPlaceholder?: string
   /** 搜索框最大宽度，默认 280px */
@@ -45,14 +45,12 @@ withDefaults(defineProps<{
   /** 已选中的行数（>0 时显示批量操作区） */
   selectedCount?: number
 }>(), {
-  modelValue: '',
   searchPlaceholder: '搜索...',
   searchWidth: '280px',
   selectedCount: 0
 })
 
 defineEmits<{
-  'update:modelValue': [value: string]
   'search': [value: string]
   'clear': []
 }>()

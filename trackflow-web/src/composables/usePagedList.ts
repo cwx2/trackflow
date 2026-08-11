@@ -3,7 +3,7 @@
  *
  * 消除各管理页面中重复的 list/total/page/pageSize/loading/loadXxx 模式
  */
-import { ref, reactive, computed, watch, type Ref, type UnwrapNestedRefs } from 'vue'
+import { ref, shallowRef, reactive, computed, watch, type Ref, type UnwrapNestedRefs } from 'vue'
 
 export interface Pagination {
   page: number
@@ -61,7 +61,8 @@ export function usePagedList<T, P extends Record<string, any> = Record<string, a
     autoRefreshOnFilterChange = false
   } = options
 
-  const list = ref<T[]>([]) as Ref<T[]>
+  // list 用 shallowRef：每次加载替换整个数组引用，Vue 无需递归代理每条记录的字段
+  const list = shallowRef<T[]>([]) as Ref<T[]>
   const total = ref(0)
   const loading = ref(false)
   const error = ref<string | null>(null)
