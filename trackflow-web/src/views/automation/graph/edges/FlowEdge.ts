@@ -162,8 +162,8 @@ export class FlowEdgeView extends PolylineEdge {
       particles.push(
         h('defs', {}, [h('path', { id: pathId, d: pathD, fill: 'none', stroke: 'none' })]),
         buildParticle(pathId, color, 0),
-        buildParticle(pathId, color, 0.7),
-        buildParticle(pathId, color, 1.4),
+        buildParticle(pathId, color, 0.3),
+        buildParticle(pathId, color, 0.6),
       )
     }
 
@@ -422,7 +422,7 @@ function buildWarningBadge(model: any) {
  */
 function buildParticle(pathId: string, color: string, delayS: number) {
   const motionAttrs = {
-    dur: '1.6s',
+    dur: '0.9s',
     begin: `${delayS}s`,
     repeatCount: 'indefinite',
     rotate: 'auto',

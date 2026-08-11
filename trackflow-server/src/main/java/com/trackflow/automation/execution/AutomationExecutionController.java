@@ -2,7 +2,6 @@ package com.trackflow.automation.execution;
 
 import com.trackflow.automation.execution.dto.ExecuteWorkflowDTO;
 import com.trackflow.automation.execution.dto.NodeTestDTO;
-import com.trackflow.automation.execution.entity.AutomationExecution;
 import com.trackflow.automation.execution.vo.ExecutionDetailVO;
 import com.trackflow.automation.execution.vo.ExecutionStartedVO;
 import com.trackflow.automation.execution.vo.ExecutionSummaryVO;
@@ -83,15 +82,20 @@ public class AutomationExecutionController {
 
     @GetMapping("/executions/{executionId}/stream")
     @PreAuthorize("@perm.checkGlobal('system:admin')")
-    public SseEmitter stream(@PathVariable Long executionId) {
-        // 如果执行已完成，直接返回一个立即关闭的 emitter
-        AutomationExecution exec = executionService.requireExecution(executionId);
-        if (exec != null && !AutomationExecutionStatus.RUNNING.getValue().equals(exec.getStatus())) {
-            SseEmitter done = new SseEmitter(0L);
-            done.complete();
-            return done;
+    public SseEmitter stream(
+            @PathVariable Long executionId,
+            @RequestHeader(value = "Last-Event-ID", required = false) String lastEventId) {
+        executionService.requireExecution(executionId);
+        return sseNotifier.register(executionId, parseLastEventId(lastEventId));
+    }
+
+    private Long parseLastEventId(String lastEventId) {
+        if (lastEventId == null || lastEventId.isBlank()) return null;
+        try {
+            return Long.parseLong(lastEventId);
+        } catch (NumberFormatException ignored) {
+            return null;
         }
-        return sseNotifier.register(executionId);
     }
 
     // ── 执行历史 ──────────────────────────────────────────────────

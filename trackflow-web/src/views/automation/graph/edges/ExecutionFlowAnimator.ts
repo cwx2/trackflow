@@ -14,10 +14,13 @@ export type WorkflowCanvasEdge = {
 
 type EdgePropertyWriter = (edgeId: string, properties: { flowStatus: ExecutionFlowStatus }) => void
 
-const FLOW_DURATION_MS = 1_650
+/** 与 FlowEdge 粒子时长保持一致，保证快速工作流也至少渲染一个完整流动周期。 */
+const FLOW_DURATION_MS = 900
 
 export class ExecutionFlowAnimator {
   private readonly settleTimers = new Map<string, number>()
+  private readonly startTimers = new Map<string, number>()
+  private readonly nodeArrivalTimes = new Map<string, number>()
   private generation = 0
 
   constructor(
@@ -29,22 +32,50 @@ export class ExecutionFlowAnimator {
   begin() {
     this.generation += 1
     this.clearTimers()
+    this.nodeArrivalTimes.clear()
     this.setAll('idle')
   }
 
   /** 播放实际进入 targetNodeId 的数据流。 */
   flowIntoNode(targetNodeId: string) {
     const generation = this.generation
-    for (const edge of this.getIncomingEdges(targetNodeId)) {
+    const edges = this.getIncomingEdges(targetNodeId)
+    if (edges.length === 0) {
+      this.nodeArrivalTimes.set(targetNodeId, Date.now())
+      return
+    }
+
+    // SSE 可能在同一个绘制帧内回放多个极快节点。以已知上游的可视抵达时间
+    // 为下限，既不改变真实执行顺序，又给用户留下能看见的流动过渡。
+    const startedAt = Math.max(
+      Date.now(),
+      ...edges.map(edge => this.nodeArrivalTimes.get(edge.sourceNodeId) || 0),
+    )
+    this.nodeArrivalTimes.set(targetNodeId, startedAt + FLOW_DURATION_MS)
+
+    for (const edge of edges) {
       this.clearTimer(edge.id)
-      this.setEdgeProperties(edge.id, { flowStatus: 'running' })
-      const timer = window.setTimeout(() => {
-        if (this.generation === generation) {
-          this.setEdgeProperties(edge.id, { flowStatus: 'done' })
-        }
-        this.settleTimers.delete(edge.id)
-      }, FLOW_DURATION_MS)
-      this.settleTimers.set(edge.id, timer)
+      const delay = Math.max(0, startedAt - Date.now())
+      const start = () => {
+        if (this.generation !== generation) return
+        this.setEdgeProperties(edge.id, { flowStatus: 'running' })
+        const settle = window.setTimeout(() => {
+          if (this.generation === generation) {
+            this.setEdgeProperties(edge.id, { flowStatus: 'done' })
+          }
+          this.settleTimers.delete(edge.id)
+        }, FLOW_DURATION_MS)
+        this.settleTimers.set(edge.id, settle)
+      }
+      if (delay === 0) {
+        start()
+      } else {
+        const timer = window.setTimeout(() => {
+          this.startTimers.delete(edge.id)
+          start()
+        }, delay)
+        this.startTimers.set(edge.id, timer)
+      }
     }
   }
 
@@ -58,7 +89,14 @@ export class ExecutionFlowAnimator {
 
   /** 整体执行结束后结算仍在流动的边，不影响已经完成或失败的路径。 */
   settle(outcome: 'success' | 'failed' | 'cancelled') {
-    const status: ExecutionFlowStatus = outcome === 'success' ? 'done' : 'failed'
+    // 成功的快速流程仍让已排队的真实路径完整播放；实际执行状态已经结束，
+    // 这里只保留一个不阻塞用户的视觉回放。
+    if (outcome === 'success') return
+    const status: ExecutionFlowStatus = 'failed'
+    for (const edgeId of this.startTimers.keys()) {
+      this.clearStartTimer(edgeId)
+      this.setEdgeProperties(edgeId, { flowStatus: status })
+    }
     for (const edgeId of this.settleTimers.keys()) {
       this.clearTimer(edgeId)
       this.setEdgeProperties(edgeId, { flowStatus: status })
@@ -93,7 +131,14 @@ export class ExecutionFlowAnimator {
   }
 
   private clearTimers() {
+    for (const edgeId of this.startTimers.keys()) this.clearStartTimer(edgeId)
     for (const edgeId of this.settleTimers.keys()) this.clearTimer(edgeId)
+  }
+
+  private clearStartTimer(edgeId: string) {
+    const timer = this.startTimers.get(edgeId)
+    if (timer !== undefined) window.clearTimeout(timer)
+    this.startTimers.delete(edgeId)
   }
 
   private clearTimer(edgeId: string) {

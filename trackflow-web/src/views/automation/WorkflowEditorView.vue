@@ -1616,7 +1616,8 @@ function applyExecutionDetail(detail: ExecutionDetailVO) {
   }
   nodeStatusMap.value = statuses
   nodeExecutionDetails.value = details
-  executionFlowAnimator?.restoreCompletedPaths(statuses)
+  // 运行中优先让 SSE 时间线驱动动画；否则轮询会把极快流程在首帧直接涂成完成态。
+  if (!isRunning.value) executionFlowAnimator?.restoreCompletedPaths(statuses)
 }
 
 async function refreshExecutionDetail(executionId: string) {
