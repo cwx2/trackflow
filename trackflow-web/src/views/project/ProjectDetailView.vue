@@ -20,11 +20,10 @@
 
       <!-- 顶部面包屑 + 操作 -->
       <div class="page-header">
-        <div class="breadcrumb">
-          <a class="breadcrumb-link" @click="$router.push('/projects')">项目</a>
-          <span class="breadcrumb-sep">/</span>
-          <span class="breadcrumb-current">{{ project.name }}</span>
-        </div>
+        <a-breadcrumb>
+          <a-breadcrumb-item @click="$router.push('/projects')" style="cursor:pointer">项目</a-breadcrumb-item>
+          <a-breadcrumb-item>{{ project.name }}</a-breadcrumb-item>
+        </a-breadcrumb>
         <div class="header-actions">
           <a-button v-if="canEditProject && !isArchived" size="small" @click="goToSettings">
             <template #icon><icon-settings /></template>
@@ -312,24 +311,6 @@ onMounted(() => {
   justify-content: space-between;
   margin-bottom: 24px;
 }
-
-.breadcrumb {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  color: var(--tf-text-tertiary);
-}
-
-.breadcrumb-link {
-  color: var(--tf-accent);
-  cursor: pointer;
-  transition: opacity 0.15s;
-}
-.breadcrumb-link:hover { opacity: 0.8; }
-
-.breadcrumb-sep { color: var(--tf-text-quaternary, var(--tf-text-tertiary)); }
-.breadcrumb-current { color: var(--tf-text-secondary); }
 
 .project-hero {
   display: flex;
