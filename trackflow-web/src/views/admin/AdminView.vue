@@ -26,7 +26,7 @@
             <h3 class="card-title">{{ item.title }}</h3>
             <p class="card-desc">{{ item.description }}</p>
           </div>
-          <span class="card-arrow">→</span>
+          <icon-right class="card-arrow" />
         </router-link>
       </div>
     </DataContainer>
@@ -36,6 +36,7 @@
 <script setup lang="ts">
 import { computed, ref, onMounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
+import { IconRight } from '@arco-design/web-vue/es/icon'
 import DataContainer from '@/components/base/DataContainer.vue'
 
 const authStore = useAuthStore()

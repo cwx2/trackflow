@@ -31,8 +31,9 @@
         @click="$emit('toggleExpand', group.groupId)"
       >
         <div class="group-header-left">
-          <span class="group-expand-icon">{{ expandedGroups.has(group.groupId) ? '▼' : '▶' }}</span>
-          <span class="group-icon">👥</span>
+          <icon-down v-if="expandedGroups.has(group.groupId)" class="group-expand-icon" />
+          <icon-right v-else class="group-expand-icon" />
+          <icon-user-group class="group-icon" />
           <span class="group-name">{{ group.groupName }}</span>
           <span class="group-member-count">{{ group.memberCount }} 人</span>
         </div>
@@ -85,6 +86,7 @@
 import { formatDuration } from '@/utils/duration'
 import TimesheetDateBar from './TimesheetDateBar.vue'
 import { EmptyState, UserAvatar } from '@/components/base'
+import { IconDown, IconRight, IconUserGroup } from '@arco-design/web-vue/es/icon'
 import type { GroupTimeSummaryVO, TimeEntryVO } from '@/api/timeEntry'
 
 defineProps<{
