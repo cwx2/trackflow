@@ -19,8 +19,10 @@
       审批、循环和子工作流依赖完整编排上下文。这里会检查配置和输入是否可用，不会真正创建审批、循环或启动子流程。
     </a-alert>
     <a-alert v-else type="info" :show-icon="true" class="run-input-guide">
-      <template #title>{{ inputFields.length ? '可直接运行，无需填写输入' : '此节点无需额外输入，可直接运行' }}</template>
-      {{ inputFields.length
+      <template #title>{{ requiredMockFields.length ? '需要为上游引用提供模拟数据' : (inputFields.length ? '可直接运行，无需填写输入' : '此节点无需额外输入，可直接运行') }}</template>
+      {{ requiredMockFields.length
+        ? '单节点调试不会执行上游节点。请在下方 JSON 中为标记“需模拟”的字段提供本次测试值。'
+        : inputFields.length
         ? '系统会使用节点当前配置。只有想临时替换某个输入时，才需要填写下方的覆盖值。'
         : '本次试运行将使用节点当前配置；结果不会修改工作流。' }}
     </a-alert>
@@ -28,11 +30,11 @@
       <span class="run-input-fields-label">可临时覆盖的输入（可选）</span>
       <div class="run-input-field-tags">
         <a-tag v-for="field in inputFields" :key="field.name" color="arcoblue">
-          {{ field.label }}{{ field.required ? '（必填）' : '（可选）' }}
+          {{ field.label }}{{ field.requiresMock ? '（需模拟）' : (field.required ? '（必填）' : '（可选）') }}
         </a-tag>
       </div>
       <p v-for="field in inputFields" :key="`${field.name}-description`" class="run-input-field-description">
-        <code>{{ field.name }}</code>：{{ field.description || `${field.valueType} 类型输入` }}
+        <code>{{ field.name }}</code>：{{ field.source ? `来自 ${field.source}；单节点调试时需提供模拟值` : (field.description || `${field.valueType} 类型输入`) }}
       </p>
     </div>
     <div class="node-test-json-heading">
@@ -50,15 +52,27 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
+
 export type NodeTestInputField = {
   name: string
   label: string
   valueType: string
   description?: string
   required: boolean
+  requiresMock?: boolean
+  source?: string
 }
 
-defineProps<{
+const emit = defineEmits<{
+  'update:visible': [visible: boolean]
+  'update:inputText': [value: string]
+  'update:confirmSideEffects': [value: boolean]
+  fillExample: []
+  run: []
+}>()
+
+const props = defineProps<{
   visible: boolean
   nodeName: string
   loading: boolean
@@ -70,13 +84,7 @@ defineProps<{
   inputExample: string
 }>()
 
-const emit = defineEmits<{
-  'update:visible': [visible: boolean]
-  'update:inputText': [value: string]
-  'update:confirmSideEffects': [value: boolean]
-  fillExample: []
-  run: []
-}>()
+const requiredMockFields = computed(() => props.inputFields.filter(field => field.requiresMock))
 </script>
 
 <style scoped>

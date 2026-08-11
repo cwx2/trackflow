@@ -70,6 +70,11 @@
               @copied="Message.success('调试结果已复制')"
             />
             <template v-else>
+              <NodeContractSummary
+                :contract="selectedNodeContract"
+                :inputs="selectedNode.properties?.inputs || []"
+                @disconnect="disconnectSelectedInput"
+              />
               <CliAgentConfig v-if="selectedNode.properties?.nodeType === 'cli-agent'" :data="selectedNode.properties" @update:data="updateSelectedNodeProperties" />
               <VariablesConfig v-else-if="selectedNode.properties?.nodeType === 'variables'" :data="selectedNode.properties" @update:data="updateSelectedNodeProperties" />
               <ConditionConfig v-else-if="selectedNode.properties?.nodeType === 'condition'" :data="selectedNode.properties" @update:data="updateSelectedNodeProperties" />
@@ -316,6 +321,7 @@ import WorkflowRunModal, { type WorkflowRunInputRequirement } from './components
 import NodeTestModal, { type NodeTestInputField } from './components/NodeTestModal.vue'
 import NodeActionModals from './components/NodeActionModals.vue'
 import NodeDebugInspector from './components/NodeDebugInspector.vue'
+import NodeContractSummary from './components/NodeContractSummary.vue'
 import BottomToolbar from './components/BottomToolbar.vue'
 import EditorTopbar from './components/EditorTopbar.vue'
 
@@ -534,6 +540,22 @@ function clearEdgeBinding(edge: any) {
   }
 }
 
+/** 由统一契约面板断开数据来源，始终通过删除边来保持画布和运行时输入一致。 */
+function disconnectSelectedInput(portName: string) {
+  if (!lf || !selectedNode.value?.id) return
+  const nodeId = selectedNode.value.id
+  const graphData = lf.getGraphData() as { edges: any[] }
+  const connectedEdges = graphData.edges.filter(edge => edge.targetNodeId === nodeId
+    && (edge.properties?.targetPortName === portName || edge.targetAnchorId === `${nodeId}-in-${portName}`))
+  if (connectedEdges.length) {
+    connectedEdges.forEach(edge => lf?.deleteEdge(edge.id))
+    return
+  }
+  const inputs = (selectedNode.value.properties?.inputs || []).map((input: any) => input.name === portName
+    ? { ...input, value: null } : input)
+  updateSelectedNodeProperties({ ...(selectedNode.value.properties || {}), inputs })
+}
+
 async function openNodeTest(node: any) {
   if (!workflowId.value || !lf) return
   // 单节点试运行必须与整张草稿保存隔离：画布里其他旧边或未完成节点不能阻断当前节点调试。
@@ -708,6 +730,10 @@ let activeEvtSource: EventSource | null = null
 let executionPollTimer: ReturnType<typeof setInterval> | null = null
 let executionFlowAnimator: ExecutionFlowAnimator | null = null
 const serverNodeContracts = ref<Record<string, AutomationNodeDefinitionVO>>({})
+const selectedNodeContract = computed(() => {
+  const type = selectedNode.value?.properties?.nodeType || selectedNode.value?.type
+  return serverNodeContracts.value[type]
+})
 const currentNodeTestMode = computed(() => {
   const type = nodeTestNode.value?.properties?.nodeType || nodeTestNode.value?.type
   return serverNodeContracts.value[type]?.runtime?.testMode || 'safe'
@@ -727,6 +753,10 @@ const nodeTestInputFields = computed<NodeTestInputField[]>(() => {
       valueType: port.valueType,
       description: port.description,
       required: configured?.required === true || port.required === true,
+      requiresMock: configured?.value?.type === 'ref',
+      source: configured?.value?.type === 'ref'
+        ? `${configured.value.nodeId}.${configured.value.outputName}${configured.value.path ? `.${configured.value.path}` : ''}`
+        : undefined,
     }
   })
 })

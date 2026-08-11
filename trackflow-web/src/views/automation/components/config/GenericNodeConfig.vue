@@ -5,8 +5,10 @@
       <a-form-item v-for="port in definition.inputPorts" :key="port.name" :label="port.label || port.name">
         <template v-if="port.description" #extra>{{ port.description }}</template>
         <div v-if="isReference(port.name)" class="reference-value">
-          <code>{{ referenceLabel(port.name) }}</code>
-          <a-button size="mini" type="text" @click="clearValue(port.name)">改为固定值</a-button>
+          <div>
+            <code>{{ referenceLabel(port.name) }}</code>
+            <small>由画布连线提供；请在上方“已连接的数据输入”中断开后再改固定值。</small>
+          </div>
         </div>
         <a-switch
           v-else-if="port.valueType === 'boolean'"
@@ -119,7 +121,6 @@ function setJsonLiteral(name: string, value: string, type: string) {
     Message.warning(`JSON 格式错误：${error.message}`)
   }
 }
-function clearValue(name: string) { const item = input(name); if (item) item.value = null; commit() }
 function setConfig(key: string, value: unknown) { local.config ||= {}; local.config[key] = value; commit() }
 function commit() { emit('update:data', JSON.parse(JSON.stringify(local))) }
 </script>
@@ -130,4 +131,5 @@ function commit() { emit('update:data', JSON.parse(JSON.stringify(local))) }
 .form-hint { margin-top: 4px; font-size: 11px; color: var(--tf-text-tertiary); }
 .reference-value { display: flex; align-items: center; justify-content: space-between; width: 100%; }
 .reference-value code { color: var(--color-primary-6); }
+.reference-value small { display: block; margin-top: 4px; color: var(--tf-text-tertiary); font-size: 10px; line-height: 1.4; }
 </style>
