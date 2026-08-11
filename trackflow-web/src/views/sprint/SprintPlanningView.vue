@@ -155,7 +155,7 @@
                   </div>
                   <div class="card-meta">
                     <span class="card-type">{{ localizeIssueType(issue.issueType) }}</span>
-                    <span v-if="issue.estimatedHours" class="card-estimation">⏱ {{ issue.estimatedHours }}h</span>
+                    <span v-if="issue.estimatedHours" class="card-estimation"><icon-clock-circle class="estimation-icon" /> {{ issue.estimatedHours }}h</span>
                     <span v-if="issue.assigneeName" class="card-assignee">{{ issue.assigneeName }}</span>
                   </div>
                 </div>
@@ -210,7 +210,7 @@
               >/ {{ sprint.totalIssues }}</span>
             </div>
             <div class="panel-header-right">
-              <span class="sprint-total-hours" v-if="getSprintTotalHours(sprint.id) > 0">⏱ {{ formatHours(getSprintTotalHours(sprint.id)) }}</span>
+              <span class="sprint-total-hours" v-if="getSprintTotalHours(sprint.id) > 0"><icon-clock-circle class="hours-icon" /> {{ formatHours(getSprintTotalHours(sprint.id)) }}</span>
               <span v-if="sprint.startDate" class="sprint-dates">{{ formatDate(sprint.startDate) }} — {{ formatDate(sprint.endDate) }}</span>
               <a-tooltip content="在工单列表中查看此 Sprint 的工单">
                 <button class="panel-view-issues-btn" @click="viewSprintIssues(sprint)">
@@ -295,7 +295,7 @@
                 :class="{ 'sprint-goal-empty': !sprint.goal, 'sprint-goal-editable': canEditSprint }"
                 @click="canEditSprint && startGoalEdit(sprint)"
               >
-                <span class="sprint-goal-icon">🎯</span>
+                <icon-trophy class="sprint-goal-icon" />
                 <span class="sprint-goal-text">{{ sprint.goal || '设置 Sprint 目标...' }}</span>
                 <span v-if="canEditSprint" class="sprint-goal-edit-hint">点击编辑</span>
               </div>
@@ -338,7 +338,7 @@
                   </div>
                   <div class="card-meta">
                     <span class="card-type">{{ localizeIssueType(issue.issueType) }}</span>
-                    <span v-if="issue.estimatedHours" class="card-estimation">⏱ {{ issue.estimatedHours }}h</span>
+                    <span v-if="issue.estimatedHours" class="card-estimation"><icon-clock-circle class="estimation-icon" /> {{ issue.estimatedHours }}h</span>
                     <span v-if="issue.assigneeName" class="card-assignee">{{ issue.assigneeName }}</span>
                   </div>
                 </div>
@@ -485,7 +485,7 @@ import { formatDate, formatDueDate, getDueDateStatus } from '@/utils/date'
 import { ref, computed, watch, reactive, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { Message, Modal } from '@arco-design/web-vue'
-import { IconSearch, IconPlus, IconList, IconFilter, IconDown, IconUp, IconClockCircle } from '@arco-design/web-vue/es/icon'
+import { IconSearch, IconPlus, IconList, IconFilter, IconDown, IconUp, IconClockCircle, IconTrophy } from '@arco-design/web-vue/es/icon'
 import { issueApi, sprintApi, projectApi } from '@/api'
 import { ERROR_CODES } from '@/api/error-codes'
 import { useProjectStore } from '@/stores/project'

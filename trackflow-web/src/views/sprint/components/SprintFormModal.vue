@@ -85,7 +85,7 @@
   >
     <div class="overlap-warning-content">
       <div class="overlap-warning-header">
-        <span class="overlap-warning-icon">⚠️</span>
+        <span class="overlap-warning-icon"><icon-exclamation-circle /></span>
         <span class="overlap-warning-title">
           {{ overlapContext === 'create' ? '新建迭代' : '修改后的迭代' }}日期与以下已有迭代存在重叠：
         </span>
@@ -110,6 +110,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, watch } from 'vue'
 import { Message, Modal } from '@arco-design/web-vue'
+import { IconExclamationCircle } from '@arco-design/web-vue/es/icon'
 import { sprintApi } from '@/api'
 import { ERROR_CODES } from '@/api/error-codes'
 import { useModalEscapeHandler } from '@/composables/useModalEscapeGuard'

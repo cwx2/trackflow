@@ -12,7 +12,7 @@
     <!-- 无关联工单 -->
     <div v-if="preview && preview.totalIssues === 0" class="delete-no-issues">
       <div class="delete-warning-banner">
-        <span class="warning-icon">⚠️</span>
+        <icon-exclamation-circle class="warning-icon" />
         <span class="warning-text">此操作不可撤销</span>
       </div>
       <p class="delete-desc">
@@ -25,7 +25,7 @@
     <!-- 有关联工单 -->
     <div v-else-if="preview" class="delete-with-issues">
       <div class="delete-warning-banner danger">
-        <span class="warning-icon">🚨</span>
+        <icon-close-circle class="warning-icon" />
         <span class="warning-text">此操作不可撤销</span>
       </div>
       <p class="delete-desc">
@@ -33,7 +33,7 @@
         <template v-if="preview.dateRange"> ({{ preview.dateRange }})</template>？
       </p>
       <div class="delete-impact-info">
-        <span class="impact-icon">📋</span>
+        <icon-unordered-list class="impact-icon" />
         <span>该迭代包含 <strong>{{ preview.totalIssues }}</strong> 个工单，删除后这些工单的迭代归属将被清空。</span>
       </div>
 
@@ -83,6 +83,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { Message } from '@arco-design/web-vue'
+import { IconExclamationCircle, IconCloseCircle, IconUnorderedList } from '@arco-design/web-vue/es/icon'
 import { sprintApi } from '@/api'
 import { IssueStatusTag } from '@/components/base'
 import { getSprintStatusColor } from '@/utils/uiColors'
@@ -174,7 +175,7 @@ async function confirmDelete() {
   border-color: rgba(var(--danger-6), 0.2);
   color: rgb(var(--danger-6));
 }
-.warning-icon { font-size: 16px; }
+.warning-icon { font-size: 16px; flex-shrink: 0; }
 
 .delete-desc { font-size: 14px; color: var(--color-text-1); margin: 0; line-height: 1.6; }
 .delete-hint { font-size: 12px; color: var(--color-text-3); margin: 0; }
@@ -190,7 +191,7 @@ async function confirmDelete() {
   color: var(--color-text-1);
   line-height: 1.5;
 }
-.impact-icon { font-size: 14px; flex-shrink: 0; margin-top: 2px; }
+.impact-icon { font-size: 14px; flex-shrink: 0; margin-top: 2px; color: var(--tf-text-tertiary); }
 
 .delete-move-section { display: flex; flex-direction: column; gap: 12px; }
 .move-option-label { font-size: 13px; font-weight: 500; color: var(--color-text-1); margin: 0; }

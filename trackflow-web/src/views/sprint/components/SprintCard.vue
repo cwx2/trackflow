@@ -88,7 +88,7 @@
 
     <!-- Sprint Goal -->
     <div class="sprint-goal-banner" v-if="sprint.goal">
-      <span class="sprint-goal-banner-icon">🎯</span>
+      <icon-trophy class="sprint-goal-banner-icon" />
       <span class="sprint-goal-banner-text">{{ sprint.goal }}</span>
     </div>
 
@@ -188,7 +188,7 @@
 <script setup lang="ts">
 import { formatDate } from '@/utils/date'
 import { ref, computed, nextTick } from 'vue'
-import { IconEdit } from '@arco-design/web-vue/es/icon'
+import { IconEdit, IconTrophy } from '@arco-design/web-vue/es/icon'
 import type { SprintVO } from '@/api/types'
 import SprintProgress from './SprintProgress.vue'
 import SprintBurndownChart from './SprintBurndownChart.vue'
@@ -577,6 +577,8 @@ function cancelInlineEdit() {
 }
 
 .sprint-goal-banner-icon {
+  font-size: 14px;
+  color: var(--tf-accent);
   flex-shrink: 0;
 }
 

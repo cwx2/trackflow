@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="sprint-progress-section" v-if="sprint.totalIssues > 0">
     <!-- ===== 多段进度条：按实际工作流状态着色 ===== -->
     <div class="progress-bar-container">
@@ -65,7 +65,7 @@
         未分配 {{ sprint.unassignedIssues }}
       </span>
       <span v-if="sprint.totalEstimatedHours && sprint.totalEstimatedHours > 0" class="stat-item estimation">
-        <span class="stat-icon">⏱</span>
+        <icon-clock-circle class="stat-icon" />
         <template v-if="sprint.completedEstimatedHours !== undefined">
           已完成 {{ formatHours(sprint.completedEstimatedHours) }} / 共 {{ formatHours(sprint.totalEstimatedHours) }}
         </template>
@@ -117,7 +117,7 @@
         未分配 {{ sprint.unassignedIssues }}
       </span>
       <span v-if="sprint.totalEstimatedHours && sprint.totalEstimatedHours > 0" class="stat-item estimation">
-        <span class="stat-icon">⏱</span>
+        <icon-clock-circle class="stat-icon" />
         <template v-if="sprint.completedEstimatedHours !== undefined">
           已完成 {{ formatHours(sprint.completedEstimatedHours) }} / 共 {{ formatHours(sprint.totalEstimatedHours) }}
         </template>
@@ -146,6 +146,7 @@
  * - Emits：viewCategory（旧三级）、viewStatus（新按状态跳转）、viewTotal/viewOverdue/viewUnassigned
  */
 import { computed } from 'vue'
+import { IconClockCircle } from '@arco-design/web-vue/es/icon'
 import type { SprintVO } from '@/api/types'
 
 const props = withDefaults(defineProps<{

@@ -114,7 +114,7 @@
       <!-- Completed Sprints Section (collapsible) -->
       <div v-if="completedSprints.length > 0" class="completed-section">
         <div class="completed-section-header" @click="showCompletedSprints = !showCompletedSprints">
-          <span class="completed-toggle-icon">{{ showCompletedSprints ? '▾' : '▸' }}</span>
+          <icon-down v-if="showCompletedSprints" class="completed-toggle-icon" /><icon-right v-else class="completed-toggle-icon" />
           <span class="completed-section-title">已完成</span>
           <span class="completed-section-count">{{ completedSprints.length }}</span>
         </div>
@@ -145,7 +145,7 @@
       <!-- Archived Sprints Section (collapsible) -->
       <div v-if="archivedSprints.length > 0" class="completed-section archived-section">
         <div class="completed-section-header" @click="showArchivedSprints = !showArchivedSprints">
-          <span class="completed-toggle-icon">{{ showArchivedSprints ? '▾' : '▸' }}</span>
+          <icon-down v-if="showArchivedSprints" class="completed-toggle-icon" /><icon-right v-else class="completed-toggle-icon" />
           <span class="completed-section-title">已归档</span>
           <span class="completed-section-count">{{ archivedSprints.length }}</span>
         </div>

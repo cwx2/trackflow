@@ -10,13 +10,17 @@
   >
     <!-- Sprint 中无工单 -->
     <div v-if="preview && preview.totalIssues === 0" class="complete-no-issues">
-      <div class="complete-icon warning-state">⚠️</div>
+      <div class="complete-icon warning-state">
+        <icon-exclamation-circle />
+      </div>
       <p class="complete-desc">此迭代中没有任何工单，是否仍要完成？</p>
     </div>
 
     <!-- 所有工单已完成 -->
     <div v-else-if="preview && preview.openIssues.length === 0" class="complete-no-issues">
-      <div class="complete-icon">✅</div>
+      <div class="complete-icon">
+        <icon-check-circle />
+      </div>
       <p class="complete-desc">
         该迭代中 <strong>{{ preview.totalIssues }}</strong> 个工单全部已完成
       </p>
@@ -25,7 +29,7 @@
     <!-- 有未完成工单 -->
     <div v-else-if="preview" class="complete-with-issues">
       <div class="complete-warning">
-        <span class="warning-icon">⚠️</span>
+        <icon-exclamation-circle class="warning-icon" />
         <span>该迭代中共 <strong>{{ preview.totalIssues }}</strong> 个工单，已完成 <strong>{{ preview.completedIssues }}</strong> 个，仍有 <strong>{{ preview.openIssues.length }}</strong> 个未完成</span>
       </div>
 
@@ -89,6 +93,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { Message } from '@arco-design/web-vue'
+import { IconExclamationCircle, IconCheckCircle } from '@arco-design/web-vue/es/icon'
 import { sprintApi } from '@/api'
 import { localizeStatusName } from '@/utils/fieldLabels'
 import { IssueStatusTag } from '@/components/base'
@@ -192,8 +197,8 @@ async function confirmComplete() {
   padding: 24px 0;
   text-align: center;
 }
-.complete-icon { font-size: 36px; margin-bottom: 12px; }
-.complete-icon.warning-state { opacity: 0.9; }
+.complete-icon { font-size: 36px; margin-bottom: 12px; color: var(--tf-success); }
+.complete-icon.warning-state { color: var(--tf-warning); }
 .complete-desc { font-size: 14px; color: var(--color-text-2); }
 
 .complete-with-issues { display: flex; flex-direction: column; gap: 16px; }
@@ -208,7 +213,7 @@ async function confirmComplete() {
   font-size: 13px;
   color: var(--color-text-1);
 }
-.warning-icon { font-size: 16px; }
+.warning-icon { font-size: 16px; color: var(--tf-warning); flex-shrink: 0; }
 
 .open-issues-list {
   max-height: 200px;
