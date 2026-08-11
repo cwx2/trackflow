@@ -66,6 +66,7 @@ public class WorkflowDefinitionValidator {
             throw invalid("节点没有可用实现: " + node.type() + " (" + node.id() + ")");
         }
         validateNodeSnapshot(node, nodeDefinition, false);
+        validateNodeConfiguration(node, nodeDefinition, true);
     }
 
     private void validateStructure(WorkflowDefinitionModel definition, boolean executable) {
@@ -141,6 +142,16 @@ public class WorkflowDefinitionValidator {
             if (!VALUE_TYPES.contains(actual.valueType())) {
                 throw invalid("节点输出端口类型不支持: " + node.id() + "." + actual.name());
             }
+        }
+        validateNodeConfiguration(node, expected, executable);
+    }
+
+    private void validateNodeConfiguration(WorkflowNodeModel node, NodeDefinition definition,
+                                           boolean executable) {
+        try {
+            definition.validateConfiguration(node, executable);
+        } catch (IllegalArgumentException exception) {
+            throw invalid(exception.getMessage());
         }
     }
 

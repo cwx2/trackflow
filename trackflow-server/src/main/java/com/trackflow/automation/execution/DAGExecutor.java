@@ -149,6 +149,14 @@ public class DAGExecutor {
                         completeWaitingNode(executionId, node, ctx, edgeStates, outgoingEdges, checkpoint);
                         continue;
                     }
+                    if ("batch".equals(checkpoint.getWaitingKind())
+                            && !checkpoint.getWaitingResult().isEmpty()) {
+                        if (handleBatchResult(executionId, node, ctx, edgeStates,
+                                outgoingEdges, checkpoint)) {
+                            continue;
+                        }
+                        return;
+                    }
                     if ("loop".equals(checkpoint.getWaitingKind())
                             && !checkpoint.getWaitingResult().isEmpty()) {
                         if (handleLoopResult(executionId, node, ctx, edgeStates,
@@ -202,6 +210,12 @@ public class DAGExecutor {
                     suspendForChild(executionId, nodeExecId, node, resolvedInputs,
                             ctx, edgeStates, checkpoint, "loop".equals(node.type()));
                     return;
+                }
+                if ("batch".equals(node.type())) {
+                    boolean waitingForChild = suspendForBatch(executionId, nodeExecId, node, resolvedInputs,
+                            ctx, edgeStates, outgoingEdges, checkpoint);
+                    if (waitingForChild) return;
+                    continue;
                 }
 
                 try {
@@ -624,6 +638,191 @@ public class DAGExecutor {
         return false;
     }
 
+    @SuppressWarnings("unchecked")
+    private boolean suspendForBatch(Long executionId, Long nodeExecutionId, WorkflowNodeModel node,
+                                    Map<String, Object> inputs, ExecutionContext context,
+                                    Map<String, WorkflowExecutionPlanner.EdgeState> edgeStates,
+                                    Map<String, List<com.trackflow.automation.node.model.WorkflowEdgeModel>> outgoingEdges,
+                                    WorkflowExecutionCheckpoint checkpoint) {
+        Object rawItems = inputs.get("items");
+        if (!(rawItems instanceof List<?> rawList)) {
+            throw new DAGBuilder.InvalidWorkflowException("批处理节点的待处理列表必须是数组: " + node.id());
+        }
+        int maxItems = node.config() != null
+                ? intValue(node.config().get("maxItems"), 100, 1, 1000) : 100;
+        List<Object> items = new ArrayList<>();
+        List<Object> skippedItems = new ArrayList<>();
+        for (int index = 0; index < rawList.size(); index++) {
+            if (index < maxItems) items.add(rawList.get(index));
+            else skippedItems.add(rawList.get(index));
+        }
+        Map<String, Object> metadata = new LinkedHashMap<>();
+        metadata.put("items", items);
+        metadata.put("index", 0);
+        metadata.put("successItems", new ArrayList<>());
+        metadata.put("failedItems", new ArrayList<>());
+        metadata.put("skippedItems", skippedItems);
+        checkpoint.setWaitingMetadata(metadata);
+        if (items.isEmpty()) {
+            checkpoint.setWaitingNodeId(node.id());
+            checkpoint.setWaitingNodeExecutionId(nodeExecutionId);
+            checkpoint.setWaitingKind("batch");
+            finishBatch(executionId, node, context, edgeStates, checkpoint);
+            completeWaitingNode(executionId, node, context, edgeStates, outgoingEdges, checkpoint);
+            return false;
+        }
+        suspendNextBatchChild(executionId, nodeExecutionId, node, context, edgeStates, checkpoint);
+        return true;
+    }
+
+    @SuppressWarnings("unchecked")
+    private void suspendNextBatchChild(Long executionId, Long nodeExecutionId, WorkflowNodeModel node,
+                                       ExecutionContext context,
+                                       Map<String, WorkflowExecutionPlanner.EdgeState> edgeStates,
+                                       WorkflowExecutionCheckpoint checkpoint) {
+        Map<String, Object> metadata = new LinkedHashMap<>(checkpoint.getWaitingMetadata());
+        List<Object> items = metadata.get("items") instanceof List<?> list
+                ? (List<Object>) list : List.of();
+        int index = intValue(metadata.get("index"), 0, 0, Math.max(0, items.size()));
+        if (index >= items.size()) {
+            finishBatch(executionId, node, context, edgeStates, checkpoint);
+            return;
+        }
+        Long childWorkflowId = childWorkflowId(node);
+        String itemInputKey = node.config() != null
+                ? String.valueOf(node.config().getOrDefault("itemInputKey", "item")) : "item";
+        if (itemInputKey.isBlank()) itemInputKey = "item";
+        Map<String, Object> childInput = new LinkedHashMap<>();
+        childInput.put(itemInputKey, items.get(index));
+        childInput.put("index", index);
+        Long childExecutionId = executionServiceProvider.getObject().startChild(
+                childWorkflowId, childInput, executionId, node.id());
+
+        metadata.put("childExecutionId", childExecutionId);
+        metadata.put("childWorkflowId", childWorkflowId);
+        metadata.put("childInput", childInput);
+        checkpoint.setWaitingMetadata(metadata);
+        checkpoint.setWaitingNodeId(node.id());
+        checkpoint.setWaitingNodeExecutionId(nodeExecutionId);
+        checkpoint.setWaitingKind("batch");
+        checkpoint.setWaitingResult(Map.of());
+        checkpoint.setWaitingUntil(null);
+
+        AutomationNodeExecution nodeRecord = new AutomationNodeExecution();
+        nodeRecord.setId(nodeExecutionId);
+        nodeRecord.setStatus(AutomationNodeStatus.WAITING.getValue());
+        nodeRecord.setOutcome("waiting_batch_item");
+        nodeExecutionMapper.updateById(nodeRecord);
+        saveCheckpoint(executionId, context, edgeStates, checkpoint);
+
+        AutomationExecution execution = new AutomationExecution();
+        execution.setId(executionId);
+        execution.setStatus(AutomationExecutionStatus.WAITING_EVENT.getValue());
+        execution.setHeartbeatAt(LocalDateTime.now());
+        executionMapper.updateById(execution);
+    }
+
+    @SuppressWarnings("unchecked")
+    private boolean handleBatchResult(
+            Long executionId, WorkflowNodeModel node, ExecutionContext context,
+            Map<String, WorkflowExecutionPlanner.EdgeState> edgeStates,
+            Map<String, List<com.trackflow.automation.node.model.WorkflowEdgeModel>> outgoingEdges,
+            WorkflowExecutionCheckpoint checkpoint) {
+        Map<String, Object> metadata = new LinkedHashMap<>(checkpoint.getWaitingMetadata());
+        List<Object> items = metadata.get("items") instanceof List<?> list ? (List<Object>) list : List.of();
+        int index = intValue(metadata.get("index"), 0, 0, Math.max(0, items.size()));
+        Object item = index < items.size() ? items.get(index) : null;
+        boolean success = Boolean.TRUE.equals(checkpoint.getWaitingResult().get("success"));
+        List<Map<String, Object>> successItems = mutableResultItems(metadata.get("successItems"));
+        List<Map<String, Object>> failedItems = mutableResultItems(metadata.get("failedItems"));
+        Map<String, Object> itemResult = new LinkedHashMap<>();
+        itemResult.put("index", index);
+        itemResult.put("item", item);
+        itemResult.put("output", checkpoint.getWaitingResult().getOrDefault("output", Map.of()));
+        if (success) successItems.add(itemResult);
+        else {
+            itemResult.put("error", checkpoint.getWaitingResult().getOrDefault("error", "子工作流执行失败"));
+            failedItems.add(itemResult);
+        }
+        metadata.put("successItems", successItems);
+        metadata.put("failedItems", failedItems);
+        metadata.put("index", index + 1);
+        checkpoint.setWaitingMetadata(metadata);
+
+        String failureMode = node.config() != null
+                ? String.valueOf(node.config().getOrDefault("onItemFailure", "continue")) : "continue";
+        if (!success && "stop".equals(failureMode)) {
+            List<Object> skippedItems = mutableItems(metadata.get("skippedItems"));
+            for (int remaining = index + 1; remaining < items.size(); remaining++) {
+                skippedItems.add(items.get(remaining));
+            }
+            metadata.put("skippedItems", skippedItems);
+            checkpoint.setWaitingMetadata(metadata);
+            finishBatch(executionId, node, context, edgeStates, checkpoint);
+            completeWaitingNode(executionId, node, context, edgeStates, outgoingEdges, checkpoint);
+            return true;
+        }
+        if (index + 1 >= items.size()) {
+            finishBatch(executionId, node, context, edgeStates, checkpoint);
+            completeWaitingNode(executionId, node, context, edgeStates, outgoingEdges, checkpoint);
+            return true;
+        }
+        suspendNextBatchChild(executionId, checkpoint.getWaitingNodeExecutionId(), node,
+                context, edgeStates, checkpoint);
+        return false;
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> mutableResultItems(Object value) {
+        List<Map<String, Object>> results = new ArrayList<>();
+        if (value instanceof List<?> list) {
+            for (Object entry : list) {
+                if (entry instanceof Map<?, ?> map) results.add(new LinkedHashMap<>((Map<String, Object>) map));
+            }
+        }
+        return results;
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Object> mutableItems(Object value) {
+        return value instanceof List<?> list ? new ArrayList<>((List<Object>) list) : new ArrayList<>();
+    }
+
+    private void finishBatch(Long executionId, WorkflowNodeModel node, ExecutionContext context,
+                             Map<String, WorkflowExecutionPlanner.EdgeState> edgeStates,
+                             WorkflowExecutionCheckpoint checkpoint) {
+        Map<String, Object> metadata = checkpoint.getWaitingMetadata();
+        List<?> items = metadata.get("items") instanceof List<?> list ? list : List.of();
+        List<?> succeeded = metadata.get("successItems") instanceof List<?> list ? list : List.of();
+        List<?> failed = metadata.get("failedItems") instanceof List<?> list ? list : List.of();
+        List<?> skipped = metadata.get("skippedItems") instanceof List<?> list ? list : List.of();
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("total", items.size() + skipped.size());
+        summary.put("processed", succeeded.size() + failed.size());
+        summary.put("succeeded", succeeded.size());
+        summary.put("failed", failed.size());
+        summary.put("skipped", skipped.size());
+        checkpoint.setWaitingResult(Map.of(
+                "successItems", succeeded,
+                "failedItems", failed,
+                "skippedItems", skipped,
+                "summary", summary));
+        saveCheckpoint(executionId, context, edgeStates, checkpoint);
+    }
+
+    private Long childWorkflowId(WorkflowNodeModel node) {
+        Object workflowValue = node.config() != null ? node.config().get("workflowId") : null;
+        if (workflowValue == null || workflowValue.toString().isBlank()) {
+            throw new DAGBuilder.InvalidWorkflowException("批处理节点未配置子工作流: " + node.id());
+        }
+        try {
+            return workflowValue instanceof Number number
+                    ? number.longValue() : Long.valueOf(workflowValue.toString());
+        } catch (NumberFormatException exception) {
+            throw new DAGBuilder.InvalidWorkflowException("批处理子工作流 ID 无效: " + node.id());
+        }
+    }
+
     private boolean evaluateLoopExit(WorkflowNodeModel node, Object output, Object status) {
         String operator = node.config() != null
                 ? String.valueOf(node.config().getOrDefault("exitOperator", "contains")) : "contains";
@@ -742,6 +941,7 @@ public class DAGExecutor {
             case "approval" -> Boolean.TRUE.equals(outputs.get("approved")) ? "approved" : "rejected";
             case "subworkflow" -> "child_" + outputs.getOrDefault("status", "completed");
             case "loop" -> Boolean.TRUE.equals(outputs.get("success")) ? "loop_satisfied" : "loop_exhausted";
+            case "batch" -> "batch_completed";
             default -> "timer_elapsed";
         });
         nodeRecord.setFinishedAt(LocalDateTime.now());

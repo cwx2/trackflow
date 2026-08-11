@@ -6,6 +6,7 @@ import { cliAgentDefinition }    from './cli-agent'
 import { variablesDefinition }   from './variables'
 import { conditionDefinition }   from './condition'
 import { loopDefinition }        from './loop'
+import { batchDefinition }       from './batch'
 import { fileInputDefinition }   from './file-input'
 import { delayDefinition }       from './delay'
 import { codeDefinition }        from './code'
@@ -25,6 +26,7 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
   'variables':    variablesDefinition,
   'condition':    conditionDefinition,
   'loop':         loopDefinition,
+  'batch':        batchDefinition,
   'file-input':   fileInputDefinition,
   'delay':        delayDefinition,
   'code':         codeDefinition,
@@ -59,9 +61,9 @@ export function findNodeContractDrift(serverDefinitions: AutomationNodeDefinitio
       continue
     }
     comparePorts(type, '输入', local.inputPorts, server.inputPorts, drift,
-      (port) => `${port.name}:${port.valueType}:${port.required}:${Boolean(port.optional)}`)
+      (port) => `${port.name}:${port.valueType}:${port.required}:${Boolean(port.optional)}:${port.cardinality || defaultCardinality(port.valueType)}:${port.semanticType || ''}`)
     comparePorts(type, '输出', local.outputPorts, server.outputPorts, drift,
-      (port) => `${port.name}:${port.valueType}`)
+      (port) => `${port.name}:${port.valueType}:${port.cardinality || defaultCardinality(port.valueType)}:${port.semanticType || ''}`)
     for (const localPort of local.inputPorts) {
       const serverPort = server.inputPorts.find(port => port.name === localPort.name)
       if (!serverPort) continue
@@ -83,6 +85,10 @@ function defaultBindingModes(valueType: string) {
   return (valueType === 'string' || valueType === 'any'
     ? ['literal', 'reference', 'template']
     : ['literal', 'reference']).sort()
+}
+
+function defaultCardinality(valueType: string) {
+  return valueType === 'array' ? 'collection' : 'single'
 }
 
 function comparePorts<T extends { name: string }>(
@@ -116,6 +122,7 @@ export const DRAGGABLE_NODES: NodeDefinition[] = [
   variablesDefinition,
   conditionDefinition,
   loopDefinition,
+  batchDefinition,
   fileInputDefinition,
   delayDefinition,
   approvalDefinition,

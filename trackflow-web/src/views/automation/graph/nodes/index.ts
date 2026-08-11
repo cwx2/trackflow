@@ -98,23 +98,45 @@ function validateDirectPortBinding(source: any, target: any, sourceAnchor?: any,
   if (sourceAnchor?.type !== 'output' || targetAnchor?.type !== 'input') {
     return { isAllPass: false, msg: '请从输出端口连接到输入端口' }
   }
-  const sourceType = sourcePortType(source, sourceAnchor._portName)
-  const targetType = targetPortType(target, targetAnchor._portName)
-  if (!sourceType || !targetType) return { isAllPass: false, msg: '端口信息不完整，无法建立数据绑定' }
-  if (sourceType !== targetType && sourceType !== 'any' && targetType !== 'any') {
-    return { isAllPass: false, msg: `类型不兼容：${sourceType} 不能直接连接到 ${targetType}` }
+  const sourcePort = sourcePortInfo(source, sourceAnchor._portName, 'output')
+  const targetPort = sourcePortInfo(target, targetAnchor._portName, 'input')
+  if (!sourcePort || !targetPort) return { isAllPass: false, msg: '端口信息不完整，无法建立数据绑定' }
+  if (sourcePort.valueType !== targetPort.valueType
+    && sourcePort.valueType !== 'any' && targetPort.valueType !== 'any') {
+    return { isAllPass: false, msg: `类型不兼容：${sourcePort.valueType} 不能直接连接到 ${targetPort.valueType}` }
+  }
+  if (portCardinality(sourcePort) !== portCardinality(targetPort)) {
+    const isCollectionToItem = portCardinality(sourcePort) === 'collection'
+      && portCardinality(targetPort) === 'single'
+    return {
+      isAllPass: false,
+      msg: isCollectionToItem
+        ? '列表不能直接连接到单项。请插入“批处理”节点，让每一项进入子工作流。'
+        : '单条数据与列表端口不能直接连接，请检查数据形态。',
+    }
+  }
+  if (sourcePort.semanticType && targetPort.semanticType
+    && sourcePort.semanticType !== targetPort.semanticType) {
+    return { isAllPass: false, msg: `业务对象不兼容：${sourcePort.semanticType} 不能连接到 ${targetPort.semanticType}` }
   }
   return { isAllPass: true }
 }
 
-function sourcePortType(node: any, name: string) {
-  const ports = node?.properties?.outputs || getNodeDefinition(node?.properties?.nodeType || node?.type)?.outputPorts || []
-  return ports.find((port: any) => port.name === name)?.valueType
+function sourcePortInfo(node: any, name: string, direction: 'input' | 'output') {
+  const definition = getNodeDefinition(node?.properties?.nodeType || node?.type)
+  const ports = direction === 'output'
+    ? node?.properties?.outputs || definition?.outputPorts || []
+    : node?.properties?.inputs || definition?.inputPorts || []
+  return ports.find((port: any) => port.name === name) as {
+    name: string
+    valueType: string
+    cardinality?: 'single' | 'collection'
+    semanticType?: string
+  } | undefined
 }
 
-function targetPortType(node: any, name: string) {
-  const ports = node?.properties?.inputs || getNodeDefinition(node?.properties?.nodeType || node?.type)?.inputPorts || []
-  return ports.find((port: any) => port.name === name)?.valueType
+function portCardinality(port: { valueType: string, cardinality?: 'single' | 'collection' }) {
+  return port.cardinality || (port.valueType === 'array' ? 'collection' : 'single')
 }
 
 // ─── Comment 注释节点 ─────────────────────────────────────────────────────────

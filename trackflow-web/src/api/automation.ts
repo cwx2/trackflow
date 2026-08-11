@@ -161,6 +161,7 @@ export type NodeType =
   | 'variables'
   | 'condition'
   | 'loop'
+  | 'batch'
   | 'file-input'
   | 'delay'
   | 'code'

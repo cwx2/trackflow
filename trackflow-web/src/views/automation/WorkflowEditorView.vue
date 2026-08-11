@@ -79,6 +79,7 @@
               <VariablesConfig v-else-if="selectedNode.properties?.nodeType === 'variables'" :data="selectedNode.properties" @update:data="updateSelectedNodeProperties" />
               <ConditionConfig v-else-if="selectedNode.properties?.nodeType === 'condition'" :data="selectedNode.properties" @update:data="updateSelectedNodeProperties" />
               <LoopConfig v-else-if="selectedNode.properties?.nodeType === 'loop'" :data="selectedNode.properties" @update:data="updateSelectedNodeProperties" />
+              <BatchConfig v-else-if="selectedNode.properties?.nodeType === 'batch'" :data="selectedNode.properties" @update:data="updateSelectedNodeProperties" />
               <FileInputConfig v-else-if="selectedNode.properties?.nodeType === 'file-input'" :data="selectedNode.properties" @update:data="updateSelectedNodeProperties" />
               <DelayConfig v-else-if="selectedNode.properties?.nodeType === 'delay'" :data="selectedNode.properties" @update:data="updateSelectedNodeProperties" />
               <CodeConfig v-else-if="selectedNode.properties?.nodeType === 'code'" :data="selectedNode.properties" @update:data="updateSelectedNodeProperties" />
@@ -300,6 +301,7 @@ import CliAgentConfig from './components/config/CliAgentConfig.vue'
 import VariablesConfig from './components/config/VariablesConfig.vue'
 import ConditionConfig from './components/config/ConditionConfig.vue'
 import LoopConfig from './components/config/LoopConfig.vue'
+import BatchConfig from './components/config/BatchConfig.vue'
 import FileInputConfig from './components/config/FileInputConfig.vue'
 import DelayConfig from './components/config/DelayConfig.vue'
 import CodeConfig from './components/config/CodeConfig.vue'
