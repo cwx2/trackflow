@@ -7,6 +7,7 @@
   >
     <!-- ── 标题区 ── -->
     <div class="node-header">
+      <span class="flow-port flow-port-in" title="流程入口：连接上一个节点" aria-label="流程入口" />
       <div class="color-bar" />
       <div class="node-icon" :style="{ background: nodeMeta.color + '22' }">
         <component
@@ -49,6 +50,7 @@
           </div>
         </div>
       </div>
+      <span class="flow-port flow-port-out" title="流程出口：连接下一个节点" aria-label="流程出口" />
     </div>
 
     <!-- ── 端口区 ── -->
@@ -470,6 +472,28 @@ function onNodeClick() {
   pointer-events: none;
   transform: translateY(-50%);
   transition: transform 120ms ease, box-shadow 120ms ease, background 120ms ease;
+}
+
+/* 标题栏端口只表示执行顺序；参数区端口只表示数据绑定。 */
+.flow-port {
+  position: absolute;
+  top: 17px;
+  z-index: 4;
+  box-sizing: border-box;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--wf-flow-port, #94a3b8);
+  border-radius: 50%;
+  background: var(--wf-node-bg);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--wf-flow-port, #94a3b8) 36%, transparent);
+  pointer-events: none;
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+.flow-port-in { left: -14px; }
+.flow-port-out { right: -14px; }
+.node-card:hover .flow-port {
+  transform: scale(1.14);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--wf-flow-port, #94a3b8) 18%, transparent);
 }
 
 /* 输入/输出均为空心插座；颜色表达数据进入与流出方向。 */

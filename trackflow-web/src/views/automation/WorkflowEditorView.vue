@@ -496,6 +496,13 @@ function synchronizeEdgeBinding(edge: any) {
     // 旧草稿没有具名 anchor 时不得伪造默认端口；保存校验会明确指出问题。
     return
   }
+  if (sourcePortName === '__flow' || targetPortName === '__flow') {
+    // 流程线只建立执行依赖，不覆写任何业务参数。
+    if (sourcePortName === '__flow' && targetPortName === '__flow') {
+      lf.setProperties(edge.id, { ...(edge.properties || {}), sourcePortName, targetPortName, edgeKind: 'control' })
+    }
+    return
+  }
   const target = lf.getNodeModelById(edge.targetNodeId) as any
   if (!target) return
   const inputs = (target.properties?.inputs || []).map((input: any) => input.name === targetPortName
@@ -513,7 +520,7 @@ function synchronizeEdgeBinding(edge: any) {
 
   const properties = { ...(target.properties || {}), inputs }
   lf.setProperties(edge.targetNodeId, properties)
-  lf.setProperties(edge.id, { ...(edge.properties || {}), sourcePortName, targetPortName })
+  lf.setProperties(edge.id, { ...(edge.properties || {}), sourcePortName, targetPortName, edgeKind: 'data' })
   if (selectedNode.value?.id === edge.targetNodeId) {
     selectedNode.value = { ...selectedNode.value, properties }
   }
@@ -527,6 +534,7 @@ function clearEdgeBinding(edge: any) {
   const targetPortName = edge.properties?.targetPortName
     || getAnchorPortName(edge.targetAnchorId, edge.targetNodeId, 'in')
   if (!sourcePortName || !targetPortName) return
+  if (sourcePortName === '__flow' || targetPortName === '__flow') return
   const target = lf.getNodeModelById(edge.targetNodeId) as any
   if (!target) return
   const inputs = (target.properties?.inputs || []).map((input: any) => {
@@ -1109,6 +1117,11 @@ async function initLogicFlow() {
     synchronizeEdgeBinding(data)
   })
 
+  // LogicFlow 会拦截无效连接；把底层的校验原因转成用户可见反馈，避免“拖了没反应”。
+  lf.on('connection:not-allowed', ({ msg }: { msg?: string }) => {
+    Message.warning(msg || '这两个端口不能直接连接。流程线请连接标题栏端口，参数线请连接字段端口。')
+  })
+
   lf.on('edge:delete', ({ data }: any) => {
     clearEdgeBinding(data)
   })
@@ -1181,7 +1194,11 @@ async function loadWorkflow() {
           // 使用具名锚点 ID，让边精准连接到对应端口
           sourceAnchorId: e.sourcePortName ? `${e.sourceNodeId}-out-${e.sourcePortName}` : undefined,
           targetAnchorId: e.targetPortName ? `${e.targetNodeId}-in-${e.targetPortName}` : undefined,
-          properties: { sourcePortName: e.sourcePortName, targetPortName: e.targetPortName }
+          properties: {
+            sourcePortName: e.sourcePortName,
+            targetPortName: e.targetPortName,
+            edgeKind: e.sourcePortName === '__flow' ? 'control' : 'data',
+          }
         }))
       }
       

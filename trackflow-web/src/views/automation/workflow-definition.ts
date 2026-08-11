@@ -7,13 +7,13 @@ const RESERVED_NODE_PROPERTIES = new Set(['nodeType', 'nodeMeta', 'inputs', 'out
 /** 将历史存量定义升级为当前节点注册表的正式端口契约。 */
 export function migrateWorkflowDefinition(raw: any): WorkflowDefinition {
   if (raw.globalVariables !== undefined) {
-    return synchronizeDefinitionBindings({
+    return normalizeFlowEdges(synchronizeDefinitionBindings({
       ...raw,
       nodes: (raw.nodes || []).map((node: any) => upgradeNodeContract(node)),
-    } as WorkflowDefinition)
+    } as WorkflowDefinition))
   }
 
-  return synchronizeDefinitionBindings({
+  return normalizeFlowEdges(synchronizeDefinitionBindings({
     globalVariables: Object.fromEntries(
       Object.entries(raw.variables || {}).map(([key, value]) => [key, { type: 'string' as const, defaultValue: value }]),
     ),
@@ -52,7 +52,7 @@ export function migrateWorkflowDefinition(raw: any): WorkflowDefinition {
       targetNodeId: edge.target || edge.targetNodeId,
       targetPortName: edge.targetHandle || edge.targetPortName || 'input',
     })),
-  } as WorkflowDefinition)
+  } as WorkflowDefinition))
 }
 
 /**
@@ -90,9 +90,9 @@ export function createInitialWorkflowDefinition(): WorkflowDefinition {
     edges: [{
       id: 'start-to-end',
       sourceNodeId: 'start',
-      sourcePortName: 'trigger',
+      sourcePortName: '__flow',
       targetNodeId: 'end',
-      targetPortName: 'result',
+      targetPortName: '__flow',
     }],
   } as WorkflowDefinition
 }
@@ -162,7 +162,7 @@ export function buildWorkflowDefinition(
   globalVariables: Record<string, GlobalVariable>,
   graphData: { nodes: any[]; edges: any[] },
 ): WorkflowDefinition {
-  return synchronizeDefinitionBindings({
+  return normalizeFlowEdges(synchronizeDefinitionBindings({
     globalVariables,
     nodes: graphData.nodes.map(normalizeCanvasNode),
     edges: graphData.edges.map((edge: any) => ({
@@ -172,7 +172,7 @@ export function buildWorkflowDefinition(
       targetNodeId: edge.targetNodeId,
       targetPortName: edge.properties?.targetPortName || 'input',
     })),
-  } as WorkflowDefinition)
+  } as WorkflowDefinition))
 }
 
 /**
@@ -184,6 +184,7 @@ export function synchronizeDefinitionBindings(definition: WorkflowDefinition): W
   const nodes = definition.nodes.map(node => ({ ...node, inputs: node.inputs.map(input => ({ ...input })) }))
   const nodesById = new Map(nodes.map(node => [node.id, node]))
   for (const edge of definition.edges || []) {
+    if (edge.sourcePortName === '__flow' || edge.targetPortName === '__flow') continue
     const source = nodesById.get(edge.sourceNodeId)
     const target = nodesById.get(edge.targetNodeId)
     const sourcePort = source?.outputs.find(port => port.name === edge.sourcePortName)
@@ -192,6 +193,24 @@ export function synchronizeDefinitionBindings(definition: WorkflowDefinition): W
     targetInput.value = { type: 'ref', nodeId: source!.id, outputName: sourcePort.name }
   }
   return { ...definition, nodes }
+}
+
+/**
+ * 历史画布曾借用 start.trigger / end.result 表示执行顺序。现在统一收敛为正式流程端口，
+ * 但保留已经建立的参数引用，避免用户打开既有工作流后丢失数据配置。
+ */
+function normalizeFlowEdges(definition: WorkflowDefinition): WorkflowDefinition {
+  const nodesById = new Map(definition.nodes.map(node => [node.id, node]))
+  const edges = (definition.edges || []).map(edge => {
+    const sourceType = nodesById.get(edge.sourceNodeId)?.type
+    const targetType = nodesById.get(edge.targetNodeId)?.type
+    const isLegacyStart = sourceType === 'start' && edge.sourcePortName === 'trigger'
+    const isLegacyEnd = targetType === 'end' && edge.targetPortName === 'result'
+    return isLegacyStart || isLegacyEnd
+      ? { ...edge, sourcePortName: '__flow', targetPortName: '__flow' }
+      : edge
+  })
+  return { ...definition, edges }
 }
 
 function isDirectlyCompatible(source: string, target: string) {

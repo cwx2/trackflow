@@ -159,6 +159,12 @@ public class WorkflowDefinitionValidator {
                                Map<String, WorkflowNodeModel> nodeById,
                                Map<String, NodeDefinition> definitionByNodeId) {
         for (WorkflowEdgeModel edge : edges) {
+            if ("__flow".equals(edge.sourcePortName()) || "__flow".equals(edge.targetPortName())) {
+                if (!"__flow".equals(edge.sourcePortName()) || !"__flow".equals(edge.targetPortName())) {
+                    throw invalid("流程线必须从流程出口连接到流程入口: " + edge.id());
+                }
+                continue;
+            }
             NodeDefinition source = definitionByNodeId.get(edge.sourceNodeId());
             NodeDefinition target = definitionByNodeId.get(edge.targetNodeId());
             OutputPortDef sourcePort = byOutputName(source.getOutputPorts()).get(edge.sourcePortName());

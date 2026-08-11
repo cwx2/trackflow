@@ -5,7 +5,7 @@
  * + registerAllNodes() 统一注册入口
  */
 import { BaseNodeView } from './base/BaseNodeView'
-import { BaseNodeModel } from './base/BaseNodeModel'
+import { BaseNodeModel, FLOW_PORT } from './base/BaseNodeModel'
 import { HtmlNode, HtmlNodeModel } from '@logicflow/core'
 import TerminalNode from './base/TerminalNode.vue'
 
@@ -50,7 +50,7 @@ class StartModel extends HtmlNodeModel {
     this.text = { value: '', x: 0, y: 0, draggable: false, editable: false }
   }
   getDefaultAnchor() {
-    return [{ id: `${this.id}-out-trigger`, x: this.x + 62, y: this.y, type: 'output', edgeAddable: true, connectable: true, _portName: 'trigger' }]
+    return [{ id: `${this.id}-out-${FLOW_PORT}`, x: this.x + 62, y: this.y, type: 'output', edgeAddable: true, connectable: true, _portName: FLOW_PORT, _edgeKind: 'control' }]
   }
   isAllowConnectedAsSource(target: any, sourceAnchor?: any, targetAnchor?: any, edgeId?: string) {
     const inherited = super.isAllowConnectedAsSource(target, sourceAnchor, targetAnchor, edgeId)
@@ -77,7 +77,7 @@ class EndModel extends HtmlNodeModel {
     this.text = { value: '', x: 0, y: 0, draggable: false, editable: false }
   }
   getDefaultAnchor() {
-    return [{ id: `${this.id}-in-result`, x: this.x - 62, y: this.y, type: 'input', edgeAddable: true, connectable: true, _portName: 'result' }]
+    return [{ id: `${this.id}-in-${FLOW_PORT}`, x: this.x - 62, y: this.y, type: 'input', edgeAddable: true, connectable: true, _portName: FLOW_PORT, _edgeKind: 'control' }]
   }
   isAllowConnectedAsTarget(source: any, sourceAnchor?: any, targetAnchor?: any, edgeId?: string) {
     const inherited = super.isAllowConnectedAsTarget(source, sourceAnchor, targetAnchor, edgeId)
@@ -97,6 +97,13 @@ export const EndNodeDef = { type: 'end', view: EndView, model: EndModel }
 function validateDirectPortBinding(source: any, target: any, sourceAnchor?: any, targetAnchor?: any) {
   if (sourceAnchor?.type !== 'output' || targetAnchor?.type !== 'input') {
     return { isAllPass: false, msg: '请从输出端口连接到输入端口' }
+  }
+  const isFlowSource = sourceAnchor?._portName === FLOW_PORT
+  const isFlowTarget = targetAnchor?._portName === FLOW_PORT
+  if (isFlowSource || isFlowTarget) {
+    return isFlowSource && isFlowTarget
+      ? { isAllPass: true }
+      : { isAllPass: false, msg: '开始/结束连接的是流程线。请连接到节点标题栏左侧的流程入口，而不是参数端口。' }
   }
   const sourcePort = sourcePortInfo(source, sourceAnchor._portName, 'output')
   const targetPort = sourcePortInfo(target, targetAnchor._portName, 'input')

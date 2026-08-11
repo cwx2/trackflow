@@ -18,6 +18,8 @@ export interface PortDef {
   required?: boolean
   optional?: boolean
   description?: string
+  cardinality?: 'single' | 'collection'
+  semanticType?: string
 }
 
 /** 节点运行状态 */
@@ -41,6 +43,8 @@ export const OPTIONAL_TOGGLE_H        = 24 // 可选参数开关行高
 export const PORT_HANDLE_OFFSET       = 6  // 锚点相对卡片边缘的外伸距离
 /** 可拖拽热区半径；大于视觉插座，保证端口在稠密行中仍易于命中。 */
 export const PORT_CONNECT_HIT_RADIUS  = 12
+/** 执行顺序与参数数据是两种不同的关系，不能共用业务端口。 */
+export const FLOW_PORT = '__flow'
 
 export abstract class BaseNodeModel extends HtmlNodeModel {
   /** 子类需覆盖：提供节点类型名（用于从 node-definitions 读取默认值） */
@@ -151,7 +155,23 @@ export abstract class BaseNodeModel extends HtmlNodeModel {
     const { x, y, width, height, id, properties } = this
     const { inputGroups, outputs, hasOptionalToggle } = this._getPortLayout(properties as any)
 
-    const anchors: any[] = []
+    // 标题栏两侧是独立的流程端口，用于表达执行顺序，不会绑定业务参数。
+    const anchors: any[] = [
+      {
+        id: `${id}-in-${FLOW_PORT}`,
+        x: x - width / 2 - PORT_HANDLE_OFFSET,
+        y: y - height / 2 + HEADER_H / 2,
+        type: 'input', edgeAddable: true, connectable: true,
+        _portName: FLOW_PORT, _edgeKind: 'control',
+      },
+      {
+        id: `${id}-out-${FLOW_PORT}`,
+        x: x + width / 2 + PORT_HANDLE_OFFSET,
+        y: y - height / 2 + HEADER_H / 2,
+        type: 'output', edgeAddable: true, connectable: true,
+        _portName: FLOW_PORT, _edgeKind: 'control',
+      },
+    ]
     let cursorY = y - height / 2 + HEADER_H
 
     // 每个输入分区都有自己的上下 padding，锚点圆心取端口行的精确中心。
@@ -204,6 +224,13 @@ export abstract class BaseNodeModel extends HtmlNodeModel {
     if (sourceAnchor?.type !== 'output' || targetAnchor?.type !== 'input') {
       return { isAllPass: false, msg: '请从输出端口连接到输入端口' }
     }
+    const isFlowSource = sourceAnchor?._portName === FLOW_PORT
+    const isFlowTarget = targetAnchor?._portName === FLOW_PORT
+    if (isFlowSource || isFlowTarget) {
+      return isFlowSource && isFlowTarget
+        ? { isAllPass: true }
+        : { isAllPass: false, msg: '这是流程端口。请连接到目标节点标题栏左侧的流程入口；参数请连接到具体字段。' }
+    }
     const sourceOutputs = (this.properties?.outputs || []) as PortDef[]
     const targetInputs = (target?.properties?.inputs || []) as PortDef[]
     const sourcePort = sourceOutputs.find(port => port.name === sourceAnchor._portName)
@@ -211,6 +238,14 @@ export abstract class BaseNodeModel extends HtmlNodeModel {
     if (!sourcePort || !targetPort) return { isAllPass: false, msg: '端口信息不完整，无法建立数据绑定' }
     if (!isDirectlyAssignable(sourcePort.valueType, targetPort.valueType)) {
       return { isAllPass: false, msg: `类型不兼容：${sourcePort.valueType} 不能直接连接到 ${targetPort.valueType}` }
+    }
+    if (portCardinality(sourcePort) !== portCardinality(targetPort)) {
+      return { isAllPass: false, msg: portCardinality(sourcePort) === 'collection'
+        ? '列表不能直接连接到单项。请插入“批处理”节点。'
+        : '单条数据不能直接连接到列表端口。' }
+    }
+    if (sourcePort.semanticType && targetPort.semanticType && sourcePort.semanticType !== targetPort.semanticType) {
+      return { isAllPass: false, msg: `业务对象不兼容：${sourcePort.semanticType} 不能连接到 ${targetPort.semanticType}` }
     }
     return inherited
   }
@@ -226,4 +261,8 @@ export abstract class BaseNodeModel extends HtmlNodeModel {
 
 function isDirectlyAssignable(source?: string, target?: string) {
   return !source || !target || source === target || source === 'any' || target === 'any'
+}
+
+function portCardinality(port: PortDef) {
+  return port.cardinality || (port.valueType === 'array' ? 'collection' : 'single')
 }

@@ -70,6 +70,7 @@ export class FlowEdgeModel extends PolylineEdgeModel {
 
   private _resolveColor(): string {
     const props = this.properties as any
+    if (props?.edgeKind === 'control') return 'var(--wf-flow-edge, #94a3b8)'
     const status    = props?.flowStatus || 'idle'
     const typeCompat: TypeCompat = props?.typeCompat || 'compatible'
     return resolveEdgeColor(status, typeCompat)
@@ -109,12 +110,15 @@ export class FlowEdgeView extends PolylineEdge {
     const { model }  = this.props as any
     const props      = model?.properties as any
     const status     = props?.flowStatus || 'idle'
+    const edgeKind   = props?.edgeKind || 'data'
     const typeCompat: TypeCompat = props?.typeCompat || 'compatible'
     const isRunning  = status === 'running'
     const isSelected = Boolean(model?.isSelected)
 
     const pathD  = buildRoundedPathD(model?.pointsList || [], 12)
-    const color  = resolveEdgeColor(status, typeCompat, isSelected)
+    const color  = edgeKind === 'control'
+      ? 'var(--wf-flow-edge, #94a3b8)'
+      : resolveEdgeColor(status, typeCompat, isSelected)
     const isDashed = typeCompat === 'warning' || typeCompat === 'incompatible'
     const { startPoint, endPoint } = model
     const pathId = `flow-path-${model.id}`
@@ -143,7 +147,7 @@ export class FlowEdgeView extends PolylineEdge {
       'stroke-width': isRunning ? STROKE_WIDTH_RUNNING : STROKE_WIDTH_NORMAL,
       'stroke-linecap': 'round',
       'stroke-linejoin': 'round',
-      opacity: isRunning ? OPACITY_RUNNING : OPACITY_NORMAL,
+      opacity: isRunning ? OPACITY_RUNNING : (edgeKind === 'control' ? '0.72' : OPACITY_NORMAL),
       ...(isDashed ? { 'stroke-dasharray': '6 4' } : {}),
     })
 

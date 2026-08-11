@@ -332,6 +332,7 @@ public class DAGExecutor {
         List<String> ports = new ArrayList<>();
         for (com.trackflow.automation.node.model.WorkflowEdgeModel edge : edges) {
             if (edgeStates.get(edge.id()) == WorkflowExecutionPlanner.EdgeState.SUCCESS
+                    && !"__flow".equals(edge.sourcePortName())
                     && !ports.contains(edge.sourcePortName())) {
                 ports.add(edge.sourcePortName());
             }
