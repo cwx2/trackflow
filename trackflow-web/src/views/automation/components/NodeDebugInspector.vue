@@ -68,7 +68,12 @@
       </div>
 
       <div v-else-if="activeTab === 'output'" class="debug-content">
-        <template v-if="outputCollection?.items.length">
+        <section v-if="conditionResult" class="branch-result" :class="conditionResult.passed ? 'passed' : 'not-passed'">
+          <span>条件判断结果</span>
+          <strong>{{ conditionResult.passed ? '命中「成立」分支' : '命中「不成立」分支' }}</strong>
+          <p>成立：{{ conditionResult.trueValue ? '是' : '否' }}　不成立：{{ conditionResult.falseValue ? '是' : '否' }}</p>
+        </section>
+        <template v-else-if="outputCollection?.items.length">
           <div class="section-heading"><span>{{ outputCollection.label }}</span><small>共 {{ outputCollection.items.length }} 条</small></div>
           <div class="record-list full">
             <article v-for="(record, index) in outputCollection.items" :key="index" class="record-row" :style="{ animationDelay: `${Math.min(index, 8) * 24}ms` }">
@@ -110,6 +115,7 @@ type OutputCollection = { label: string; items: unknown[] }
 
 const props = defineProps<{
   nodeName?: string
+  nodeType?: string
   status?: 'idle' | 'running' | 'success' | 'failed' | 'skipped' | 'cancelled'
   detail?: DebugDetail
 }>()
@@ -125,6 +131,13 @@ const statusLabel = computed(() => ({
 const inputEntries = computed(() => objectEntries(props.detail?.input))
 const outputEntries = computed(() => objectEntries(props.detail?.output))
 const outputCollection = computed<OutputCollection | null>(() => findCollection(props.detail?.output))
+const conditionResult = computed(() => {
+  const output = props.detail?.output
+  if (props.nodeType !== 'condition' || !output || typeof output !== 'object' || Array.isArray(output)) return null
+  const values = output as Record<string, unknown>
+  if (typeof values.true !== 'boolean' || typeof values.false !== 'boolean') return null
+  return { passed: values.true, trueValue: values.true, falseValue: values.false }
+})
 
 function objectEntries(value: unknown): FieldEntry[] {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -145,6 +158,7 @@ function formatJson(value: unknown) {
 }
 
 function valueSummary(value: unknown) {
+  if (conditionResult.value) return conditionResult.value.passed ? '命中成立分支' : '命中不成立分支'
   const collection = findCollection(value)
   if (collection) return `${collection.label}：${collection.items.length} 条`
   if (value == null) return '无输出'
@@ -192,7 +206,7 @@ async function copyResult() {
 </script>
 
 <style scoped>
-.node-debug-inspector { display: flex; flex-direction: column; max-height: min(68vh, 720px); animation: inspector-enter 180ms ease-out both; }
+.node-debug-inspector { display: flex; flex: 1; flex-direction: column; min-height: 0; height: 100%; animation: inspector-enter 180ms ease-out both; }
 .node-debug-inspector.expanded { position: fixed; z-index: 1200; top: 64px; right: 20px; bottom: 20px; width: min(760px, calc(100vw - 48px)); max-height: none; padding: 18px; border: 1px solid var(--tf-border); border-radius: 12px; background: var(--tf-bg-surface); box-shadow: var(--tf-shadow-xl); }
 .debug-summary { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--tf-border); }
 .debug-title { display: flex; min-width: 0; align-items: center; gap: 8px; }
@@ -204,11 +218,12 @@ async function copyResult() {
 .debug-actions button { border: 1px solid var(--tf-border); border-radius: 5px; padding: 3px 7px; background: var(--tf-bg-body); color: var(--tf-text-secondary); cursor: pointer; font-size: 11px; transition: border-color .16s, color .16s, transform .16s; }
 .debug-actions button:hover { border-color: var(--tf-accent); color: var(--tf-accent); transform: translateY(-1px); }.debug-actions .danger:hover { border-color: var(--tf-danger); color: var(--tf-danger); }
 .debug-tabs { display: flex; gap: 2px; padding: 8px 12px 0; border-bottom: 1px solid var(--tf-border); }.debug-tabs button { border: none; border-bottom: 2px solid transparent; padding: 7px 9px; background: transparent; color: var(--tf-text-secondary); cursor: pointer; font-size: 12px; transition: color .16s, border-color .16s; }.debug-tabs button.active { border-bottom-color: var(--tf-accent); color: var(--tf-accent); font-weight: 600; }
-.debug-content { min-height: 0; overflow: auto; padding: 12px; animation: content-enter 160ms ease-out both; }.summary-content { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-content: start; gap: 8px; }
+.debug-content { flex: 1; min-height: 0; overflow: auto; padding: 12px; animation: content-enter 160ms ease-out both; }.summary-content { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-content: start; gap: 8px; }
 .summary-card { display: flex; flex-direction: column; gap: 5px; padding: 11px; border: 1px solid var(--tf-border); border-radius: 8px; background: linear-gradient(135deg, var(--tf-bg-body), var(--tf-bg-surface)); }.summary-card.success { border-color: color-mix(in srgb, var(--tf-success) 35%, var(--tf-border)); }.summary-card span, .summary-card small { color: var(--tf-text-tertiary); font-size: 11px; }.summary-card strong { color: var(--tf-text-primary); font-size: 13px; }
 .debug-message, .debug-error, .preview-section { grid-column: 1 / -1; }.debug-message, .debug-error { padding: 10px; border-radius: 8px; color: var(--tf-text-secondary); font-size: 12px; line-height: 1.55; background: var(--tf-bg-body); }.debug-message.simulated { background: var(--tf-accent-bg); }.debug-error { background: var(--tf-danger-bg); color: var(--tf-danger); }
 .section-heading { display: flex; align-items: baseline; justify-content: space-between; margin: 2px 0 8px; color: var(--tf-text-primary); font-size: 12px; font-weight: 600; }.section-heading small { color: var(--tf-text-tertiary); font-weight: 400; }.record-list { display: flex; flex-direction: column; gap: 6px; }.record-list.full { max-height: 420px; overflow-y: auto; padding-right: 2px; }.record-row { display: flex; flex-direction: column; gap: 3px; padding: 9px 10px; border: 1px solid var(--tf-border); border-radius: 7px; background: var(--tf-bg-body); animation: record-enter 180ms ease-out both; transition: border-color .16s, transform .16s; }.record-row:hover { border-color: var(--tf-accent); transform: translateX(2px); }.record-row strong { color: var(--tf-text-primary); font-size: 12px; }.record-row span { color: var(--tf-text-tertiary); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .field-list { display: flex; flex-direction: column; gap: 6px; }.field-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 9px 10px; border: 1px solid var(--tf-border); border-radius: 7px; background: var(--tf-bg-body); font-size: 12px; }.field-row span { color: var(--tf-text-tertiary); }.field-row strong { overflow: hidden; color: var(--tf-text-primary); font-weight: 500; text-align: right; text-overflow: ellipsis; white-space: nowrap; }
+.branch-result { display: flex; flex-direction: column; gap: 6px; padding: 14px; border: 1px solid var(--tf-border); border-radius: 9px; background: var(--tf-bg-body); animation: content-enter 160ms ease-out both; }.branch-result.passed { border-color: color-mix(in srgb, var(--tf-success) 40%, var(--tf-border)); background: linear-gradient(135deg, var(--tf-success-bg), var(--tf-bg-body)); }.branch-result.not-passed { border-color: color-mix(in srgb, var(--tf-accent) 40%, var(--tf-border)); background: linear-gradient(135deg, var(--tf-accent-bg), var(--tf-bg-body)); }.branch-result span, .branch-result p { color: var(--tf-text-secondary); font-size: 12px; }.branch-result strong { color: var(--tf-text-primary); font-size: 14px; }.branch-result p { margin: 0; }
 .json-block, .error-block { min-height: 190px; max-height: 460px; margin: 0; padding: 12px; overflow: auto; border: 1px solid var(--tf-border); border-radius: 8px; background: var(--tf-bg-body); color: var(--tf-text-secondary); font-size: 12px; line-height: 1.6; white-space: pre; }.error-block { color: var(--tf-danger); }.empty-data { padding: 18px; border: 1px dashed var(--tf-border); border-radius: 8px; color: var(--tf-text-tertiary); text-align: center; font-size: 12px; }.debug-empty { padding: 28px 18px; color: var(--tf-text-secondary); text-align: center; }.debug-empty strong { display: block; color: var(--tf-text-primary); font-size: 13px; }.debug-empty p { margin: 8px 0 0; font-size: 12px; line-height: 1.6; }
 @keyframes inspector-enter { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } } @keyframes content-enter { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } } @keyframes record-enter { from { opacity: 0; transform: translateX(-4px); } to { opacity: 1; transform: translateX(0); } } @keyframes status-pulse { 50% { box-shadow: 0 0 0 4px var(--tf-accent-bg); } }
 @media (prefers-reduced-motion: reduce) { .node-debug-inspector, .debug-content, .record-row, .debug-status.running { animation: none; }.debug-actions button, .record-row { transition: none; } }
