@@ -451,28 +451,34 @@ function onNodeClick() {
 .port-dot {
   width: 9px;
   height: 9px;
-  border: 2px solid var(--wf-node-bg);
+  /* 空心端口环是节点的“插座”；边端点的实心圆会从下层嵌入其中心。 */
+  border: 2px solid currentColor;
   border-radius: 50%;
   flex-shrink: 0;
+  background: transparent;
+  color: var(--wf-port-in);
   position: relative;
-  z-index: 2;
-  transition: transform 120ms ease, box-shadow 120ms ease;
+  z-index: 3;
+  transition: transform 120ms ease, box-shadow 120ms ease, background 120ms ease;
 }
 
-/* 输入圆点：负 margin 让圆心贴近节点左边框，与线条锚点位置对齐 */
+/* 输入/输出均为空心插座；颜色表达数据进入与流出方向。 */
 .port-dot.in {
-  background: var(--wf-port-in);
+  color: var(--wf-port-in);
   margin-left: -22px;  /* 圆心外伸 6px，与 BaseNodeModel 的锚点对齐 */
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--wf-port-in) 58%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--wf-port-in) 36%, transparent);
 }
 
-/* 输出圆点：负 margin 让圆心贴近节点右边框 */
+/* 输出端口以橙色空心环与输入端口区分。 */
 .port-dot.out {
-  background: var(--wf-port-out);
+  color: var(--wf-port-out);
   margin-right: -22px; /* 同理 */
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--wf-port-out) 58%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--wf-port-out) 36%, transparent);
 }
-.port-row:hover .port-dot { transform: scale(1.14); }
+.port-row:hover .port-dot {
+  transform: scale(1.14);
+  box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 18%, transparent);
+}
 .port-label {
   font-size: 11px;
   color: var(--wf-port-label);

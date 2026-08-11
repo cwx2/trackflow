@@ -11,8 +11,8 @@
  * 实现说明：
  * - Model 使用正交路由，在其他节点外保留安全间距
  * - View 将折线路径转成圆角 SVG Path，保留清晰的流向与可点击区域
- * - Model.getArrowStyle() offset=0 禁用默认箭头尺寸参数
- * - View.getEndArrow() 自绘小三角；View.getStartArrow() 返回 null（起点用圆点代替）
+ * - 边两端使用实心“插头”圆点，嵌入节点端口的空心“插座”圆环
+ * - Model.getArrowStyle() offset=0 禁用默认箭头，避免与端口插座重叠
  */
 import { PolylineEdge, PolylineEdgeModel, h } from '@logicflow/core'
 import type { ExecutionFlowStatus } from './ExecutionFlowAnimator'
@@ -116,7 +116,7 @@ export class FlowEdgeView extends PolylineEdge {
     const pathD  = buildRoundedPathD(model?.pointsList || [], 12)
     const color  = resolveEdgeColor(status, typeCompat, isSelected)
     const isDashed = typeCompat === 'warning' || typeCompat === 'incompatible'
-    const { startPoint } = model
+    const { startPoint, endPoint } = model
     const pathId = `flow-path-${model.id}`
 
     const hitArea = h('path', {
@@ -147,12 +147,10 @@ export class FlowEdgeView extends PolylineEdge {
       ...(isDashed ? { 'stroke-dasharray': '6 4' } : {}),
     })
 
-    const startDot = startPoint ? h('circle', {
-      cx: startPoint.x, cy: startPoint.y,
-      r: '3.5',
-      fill: color,
-      opacity: isRunning ? OPACITY_RUNNING : OPACITY_DOT_NORMAL,
-    }) : null
+    // 端点是边自己的实心“插头”，节点卡片的空心端口环覆盖在它上方；
+    // 二者中心共用同一真实锚点，连接后视觉上呈现为被端口扣住。
+    const startPlug = buildEndpointPlug(startPoint, color, isRunning)
+    const endPlug = buildEndpointPlug(endPoint, color, isRunning)
 
     const warningBadge = typeCompat === 'warning' ? buildWarningBadge(model) : null
 
@@ -167,24 +165,12 @@ export class FlowEdgeView extends PolylineEdge {
       )
     }
 
-    return h('g', {}, [hitArea, selectionHalo, mainPath, startDot, warningBadge, ...particles].filter(Boolean) as any)
+    return h('g', {}, [hitArea, selectionHalo, mainPath, startPlug, endPlug, warningBadge, ...particles].filter(Boolean) as any)
   }
 
-  /** 末端箭头：小实心三角（9×8） */
+  /** 端口插座已表达流向，避免默认箭头与终点圆环重叠。 */
   getEndArrow() {
-    const { model }  = this.props as any
-    const props      = model?.properties as any
-    const status     = props?.flowStatus || 'idle'
-    const typeCompat: TypeCompat = props?.typeCompat || 'compatible'
-    const isRunning  = status === 'running'
-    const color      = resolveEdgeColor(status, typeCompat, Boolean(model?.isSelected))
-
-    return h('polygon', {
-      points: '5,0 -4,4 -4,-4',
-      fill: color,
-      stroke: 'none',
-      opacity: isRunning ? OPACITY_RUNNING : OPACITY_DOT_NORMAL,
-    })
+    return null as any
   }
 
   /** 不显示起点箭头（由 getEdge 中的圆点代替） */
@@ -414,6 +400,18 @@ function buildWarningBadge(model: any) {
       fill: 'var(--wf-status-warning, #f59e0b)',
     }, '⚠')
   } catch { return null }
+}
+
+/** 边两端的实心插头；节点端口的空心环会与它同心叠合。 */
+function buildEndpointPlug(point: Point | undefined, color: string, isRunning: boolean) {
+  if (!point) return null
+  return h('circle', {
+    cx: point.x,
+    cy: point.y,
+    r: isRunning ? '3.7' : '3.2',
+    fill: color,
+    opacity: isRunning ? OPACITY_RUNNING : OPACITY_DOT_NORMAL,
+  })
 }
 
 /**
