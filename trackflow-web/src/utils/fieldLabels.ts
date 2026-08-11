@@ -83,9 +83,10 @@ export function localizeIssueType(type?: string | null): string {
 
 /**
  * 优先级英文值 → 中文映射
- * 
+ *
  * @deprecated 自 V274 数据迁移后，数据库中已存储中文值。
  * 保留此映射仅用于兼容可能残留的历史英文值。
+ * 中文值不需要在此列——localizePriority 的 fallback 直接原样返回。
  */
 export const priorityLabelMap: Record<string, string> = {
   'Show-stopper': '阻塞',
@@ -100,12 +101,6 @@ export const priorityLabelMap: Record<string, string> = {
   medium: '普通',
   normal: '普通',
   low: '低',
-  // 中文值映射到自身（确保无论输入格式如何都能正确返回）
-  '阻塞': '阻塞',
-  '紧急': '紧急',
-  '高': '高',
-  '普通': '普通',
-  '低': '低',
 }
 
 /**
@@ -378,16 +373,12 @@ export const queryFieldKeyToLabel: Record<string, string> = {
 
 /**
  * 优先级中文→存储值的反向映射（用于查询解析）
- * V274 后存储值也是中文，所以此映射变为中文→中文的直通映射。
- * 保留是为了兼容 useApplyCommand 等引用它的代码。
+ *
+ * V274 后数据库存储值已是中文，此 map 仅保留英文兼容条目。
+ * 中文输入直接作为存储值使用，不需要映射自身。
  */
 export const priorityReverseLabelMap: Record<string, string> = {
-  '阻塞': '阻塞',
-  '紧急': '紧急',
-  '高': '高',
-  '普通': '普通',
-  '低': '低',
-  // 兼容可能的英文输入
+  // 兼容可能的英文输入（如旧查询、API 参数）
   'Show-stopper': '阻塞',
   'Critical': '紧急',
   'High': '高',
