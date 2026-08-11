@@ -124,7 +124,7 @@
       />
 
       <!-- 整体运行才使用底部追踪抽屉；节点调试在右侧检查器中完成。 -->
-      <div v-if="executionPanelOpen && executionPanelMode === 'workflow'" class="execution-dock" :class="{ 'right-panel-open': rightPanelOpen }">
+      <div v-if="executionPanelOpen && executionPanelMode === 'workflow'" class="execution-dock" :class="{ 'right-panel-open': rightPanelOpen, 'is-collapsed': executionPanelCollapsed }">
         <ExecutionPanel
           :node-status-map="nodeStatusMap"
           :node-execution-details="nodeExecutionDetails"
@@ -132,7 +132,9 @@
           :is-running="isRunning || nodeTestLoading"
           :runtime-enabled="workflowRuntimeEnabled"
           :mode="executionPanelMode"
-          @close="executionPanelOpen = false"
+          :collapsed="executionPanelCollapsed"
+          @close="executionPanelOpen = false; executionPanelCollapsed = false"
+          @collapse-change="executionPanelCollapsed = $event"
           @go-history="router.push(`/automation/${workflowId}/executions`)"
           @rerun-debug="rerunLastNodeTest"
           @clear-debug="clearNodeDebugSession"
@@ -715,6 +717,7 @@ const nodeTestHasSideEffects = computed(() => NODE_TEST_SIDE_EFFECT_TYPES.has(no
 
 // 底部工具栏
 const executionPanelOpen = ref(false)
+const executionPanelCollapsed = ref(false)
 const zoomPercent = ref(100)
 
 // 新增：minimap / 调试 / 添加节点面板 状态
@@ -895,6 +898,7 @@ function toggleDebugMode() {
   debugMode.value = !debugMode.value
   if (debugMode.value) {
     executionPanelOpen.value = true
+    executionPanelCollapsed.value = false
     Message.info('调试模式已开启，可逐步查看节点执行日志')
   } else {
     Message.info('调试模式已关闭')
@@ -1503,6 +1507,7 @@ async function confirmRun() {
   nodeExecutionDetails.value = {}
   streamingOutput.value = {}
   executionPanelOpen.value = true
+  executionPanelCollapsed.value = false
 
   try {
     const res = await automationApi.execute(workflowId.value, runInputs)
@@ -1768,16 +1773,26 @@ onUnmounted(() => {
   border: 1px solid var(--wf-card-border);
   border-radius: 12px;
   box-shadow: 0 8px 32px rgba(0,0,0,0.5);
-  overflow: auto;
+  overflow: hidden;
   resize: vertical;
   pointer-events: all;
   display: flex;
   flex-direction: column;
-  transition: right 0.2s ease;
+  transition: right 0.2s ease, height 0.24s cubic-bezier(0.2, 0.8, 0.2, 1), min-height 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 .execution-dock.right-panel-open {
   right: 482px;
+}
+
+.execution-dock.is-collapsed {
+  height: 42px;
+  min-height: 42px;
+  resize: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .execution-dock { transition: none; }
 }
 
 /* 悬浮面板公共样式 */
