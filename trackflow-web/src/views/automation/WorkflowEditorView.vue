@@ -123,6 +123,7 @@
           @go-history="router.push(`/automation/${workflowId}/executions`)"
           @rerun-debug="rerunLastNodeTest"
           @clear-debug="clearNodeDebugSession"
+          @copy-debug-result="Message.success('调试结果已复制')"
         />
       </div>
     </div>
@@ -556,6 +557,7 @@ async function confirmNodeTest() {
   }
   lf?.setProperties(testedNode.id, { runStatus: 'running' })
   showNodeTestModal.value = false
+  const debugStartedAt = performance.now()
   nodeTestLoading.value = true
   try {
     const res = await automationApi.testNode(workflowId.value, nodeTestNode.value.id, {
@@ -583,16 +585,16 @@ async function confirmNodeTest() {
       if (res.data.status === 'success') Message.success('节点试运行成功')
       else if (res.data.status === 'simulated') Message.info('节点预演完成')
     } else {
-      recordNodeDebugFailure(testedNode, nodeName, res.message || '节点试运行失败')
+      recordNodeDebugFailure(testedNode, nodeName, res.message || '节点试运行失败', debugStartedAt)
     }
   } catch (error: any) {
-    recordNodeDebugFailure(testedNode, nodeName, error.response?.data?.message || '节点试运行失败')
+    recordNodeDebugFailure(testedNode, nodeName, error.response?.data?.message || '节点试运行失败', debugStartedAt)
   } finally {
     nodeTestLoading.value = false
   }
 }
 
-function recordNodeDebugFailure(node: any, nodeName: string, error: string) {
+function recordNodeDebugFailure(node: any, nodeName: string, error: string, startedAt: number) {
   nodeStatusMap.value = { [node.id]: 'failed' }
   nodeExecutionDetails.value = {
     [node.id]: {
@@ -600,6 +602,7 @@ function recordNodeDebugFailure(node: any, nodeName: string, error: string) {
       nodeName,
       errorInfo: error,
       mode: 'executed',
+      durationMs: Math.round(performance.now() - startedAt),
     },
   }
   lf?.setProperties(node.id, { runStatus: 'failed' })

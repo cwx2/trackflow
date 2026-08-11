@@ -3,12 +3,17 @@
     <!-- 面板标题栏 -->
     <div class="panel-header" @click="collapsed = !collapsed">
       <span class="panel-title">
-        执行日志
+        {{ mode === 'node-debug' ? '节点调试' : '执行日志' }}
         <span v-if="currentStatus" :class="['status-badge', currentStatus]">
           {{ statusLabel }}
         </span>
       </span>
       <div style="display:flex;align-items:center;gap:8px;">
+        <template v-if="mode === 'node-debug'">
+          <button class="debug-action-btn" @click.stop="emit('rerun-debug')">重新运行</button>
+          <button class="debug-action-btn" @click.stop="copySelectedResult">复制结果</button>
+          <button class="debug-action-btn" @click.stop="emit('clear-debug')">清空</button>
+        </template>
         <span class="toggle-icon">{{ collapsed ? '▲' : '▼' }}</span>
         <button class="close-btn" @click.stop="emit('close')" title="关闭">✕</button>
       </div>
@@ -31,7 +36,10 @@
           <span class="node-duration">{{ item.durationMs ? item.durationMs + 'ms' : '' }}</span>
         </div>
         <div v-if="nodeList.length === 0" class="empty-hint">
-          <template v-if="runtimeEnabled">
+          <template v-if="mode === 'node-debug'">
+            点击节点上的播放按钮，查看本次调试的输入、输出和错误信息。
+          </template>
+          <template v-else-if="runtimeEnabled">
             工作流运行中，等待触发事件<br />
             <a class="history-link" @click="emit('goHistory')">查看执行历史 →</a>
           </template>
@@ -55,6 +63,10 @@
           <div class="detail-label">错误</div>
           <pre class="detail-json error-text">{{ selectedDetail.errorInfo }}</pre>
         </div>
+        <div v-if="selectedDetail.message" class="detail-section debug-message">
+          <div class="detail-label">{{ selectedDetail.mode === 'simulated' ? '预演说明' : '调试提示' }}</div>
+          <p>{{ selectedDetail.message }}</p>
+        </div>
         <!-- 流式输出 -->
         <div v-if="streamingOutput[selectedDetail.nodeId]" class="detail-section">
           <div class="detail-label">实时输出</div>
@@ -76,6 +88,9 @@ interface NodeEntry {
   input?: unknown
   output?: unknown
   errorInfo?: string
+  message?: string
+  mode?: 'executed' | 'simulated'
+  startedAt?: string
 }
 
 const props = defineProps<{
@@ -84,11 +99,15 @@ const props = defineProps<{
   streamingOutput: Record<string, string>
   isRunning: boolean
   runtimeEnabled?: boolean
+  mode?: 'workflow' | 'node-debug'
 }>()
 
 const emit = defineEmits<{
   (e: 'close'): void
   (e: 'goHistory'): void
+  (e: 'rerun-debug'): void
+  (e: 'clear-debug'): void
+  (e: 'copy-debug-result'): void
 }>()
 
 const collapsed    = ref(false)
@@ -109,7 +128,7 @@ const selectedDetail = computed(() =>
 )
 
 const currentStatus = computed(() => {
-  if (props.isRunning) return 'running'
+  if (props.isRunning || Object.values(props.nodeStatusMap).some(s => s === 'running')) return 'running'
   if (Object.values(props.nodeStatusMap).some(s => s === 'failed')) return 'failed'
   if (Object.values(props.nodeStatusMap).some(s => s === 'cancelled')) return 'cancelled'
   if (Object.values(props.nodeStatusMap).length > 0 &&
@@ -144,6 +163,33 @@ function formatJson(val: unknown) {
   catch { return String(val) }
 }
 
+async function copySelectedResult() {
+  if (!selectedDetail.value) return
+  const value = JSON.stringify({
+    input: selectedDetail.value.input,
+    output: selectedDetail.value.output,
+    error: selectedDetail.value.errorInfo,
+    message: selectedDetail.value.message,
+  }, null, 2)
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(value)
+    } else {
+      const textarea = document.createElement('textarea')
+      textarea.value = value
+      textarea.style.position = 'fixed'
+      textarea.style.opacity = '0'
+      document.body.appendChild(textarea)
+      textarea.select()
+      document.execCommand('copy')
+      textarea.remove()
+    }
+    emit('copy-debug-result')
+  } catch {
+    // Clipboard permission can be disabled in local development. The result remains selectable in the panel.
+  }
+}
+
 // 流式输出自动滚动到底部
 watch(() => props.streamingOutput[selectedNodeId.value || ''], () => {
   nextTick(() => {
@@ -152,6 +198,12 @@ watch(() => props.streamingOutput[selectedNodeId.value || ''], () => {
     }
   })
 })
+
+watch(nodeList, (items) => {
+  if (props.mode === 'node-debug' && items.length > 0) {
+    selectedNodeId.value = items[items.length - 1].nodeId
+  }
+}, { immediate: true })
 </script>
 
 <style scoped>
@@ -193,6 +245,16 @@ watch(() => props.streamingOutput[selectedNodeId.value || ''], () => {
   line-height: 1;
 }
 .close-btn:hover { color: var(--tf-text-primary); }
+.debug-action-btn {
+  border: 1px solid var(--tf-border);
+  border-radius: 5px;
+  padding: 3px 6px;
+  background: var(--tf-bg-body);
+  color: var(--tf-text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+}
+.debug-action-btn:hover { color: var(--tf-accent); border-color: var(--tf-accent); }
 
 .status-badge {
   font-size: 10px;
@@ -250,6 +312,12 @@ watch(() => props.streamingOutput[selectedNodeId.value || ''], () => {
   gap: 10px;
 }
 .detail-section { display: flex; flex-direction: column; gap: 4px; }
+.debug-message p {
+  margin: 0;
+  color: var(--tf-text-secondary);
+  font-size: 12px;
+  line-height: 1.55;
+}
 .detail-label {
   font-size: 10px;
   font-weight: 600;
