@@ -278,11 +278,36 @@
       <a-checkbox v-if="nodeTestHasSideEffects" v-model="nodeTestConfirmSideEffects" class="node-test-confirm">
         我确认允许本次节点试运行产生真实副作用
       </a-checkbox>
-      <p class="run-input-hint">填写 JSON 对象可覆盖该节点本次运行的输入；留空字段继续使用节点当前配置。</p>
+      <a-alert v-else-if="nodeTestIsSimulation" type="info" :show-icon="true" class="run-input-guide">
+        <template #title>此节点将进行安全预演</template>
+        审批、循环和子工作流依赖完整编排上下文。这里会检查配置和输入是否可用，不会真正创建审批、循环或启动子流程。
+      </a-alert>
+      <a-alert v-else type="info" :show-icon="true" class="run-input-guide">
+        <template #title>{{ nodeTestInputFields.length ? '可直接运行，无需填写输入' : '此节点无需额外输入，可直接运行' }}</template>
+        {{ nodeTestInputFields.length
+          ? '系统会使用节点当前配置。只有想临时替换某个输入时，才需要填写下方的覆盖值。'
+          : '本次试运行将使用节点当前配置；结果不会修改工作流。' }}
+      </a-alert>
+      <div v-if="nodeTestInputFields.length" class="run-input-fields">
+        <span class="run-input-fields-label">可临时覆盖的输入（可选）</span>
+        <div class="run-input-field-tags">
+          <a-tag v-for="field in nodeTestInputFields" :key="field.name" color="arcoblue">
+            {{ field.label }}{{ field.required ? '（必填）' : '（可选）' }}
+          </a-tag>
+        </div>
+        <p v-for="field in nodeTestInputFields" :key="`${field.name}-description`" class="run-input-field-description">
+          <code>{{ field.name }}</code>：{{ field.description || `${field.valueType} 类型输入` }}
+        </p>
+      </div>
+      <div class="node-test-json-heading">
+        <span>临时覆盖值（高级，可选）</span>
+        <a-button v-if="nodeTestInputFields.length" type="text" size="mini" @click="nodeTestInputText = nodeTestInputExample">填入示例</a-button>
+      </div>
+      <p class="run-input-hint">保持 <code>{}</code> 即使用当前配置；填写内容仅作用于本次运行，不会保存到工作流。</p>
       <a-textarea
         v-model="nodeTestInputText"
         :auto-size="{ minRows: 6, maxRows: 12 }"
-        placeholder='例如：{ "issueId": 123, "content": "节点试运行" }'
+        :placeholder="nodeTestInputExample"
       />
     </a-modal>
 
@@ -663,6 +688,13 @@ type NodeDebugRecord = {
   inputText: string
   confirmSideEffects: boolean
 }
+type NodeTestInputField = {
+  name: string
+  label: string
+  valueType: string
+  description?: string
+  required: boolean
+}
 const nodeStatusMap = ref<Record<string, CanvasNodeStatus>>({})
 const nodeExecutionDetails = ref<Record<string, {
   input?: unknown
@@ -716,6 +748,25 @@ const NODE_TEST_SIDE_EFFECT_TYPES = new Set([
   'http-request', 'code', 'cli-agent', 'role-agent',
 ])
 const nodeTestHasSideEffects = computed(() => NODE_TEST_SIDE_EFFECT_TYPES.has(nodeTestNode.value?.properties?.nodeType))
+const NODE_TEST_SIMULATION_TYPES = new Set(['approval', 'loop', 'sub-workflow'])
+const nodeTestIsSimulation = computed(() => NODE_TEST_SIMULATION_TYPES.has(nodeTestNode.value?.properties?.nodeType))
+const nodeTestInputFields = computed<NodeTestInputField[]>(() => {
+  const node = nodeTestNode.value
+  const type = node?.properties?.nodeType || node?.type
+  const definition = getNodeDefinition(type)
+  const configuredInputs = new Map((node?.properties?.inputs || []).map((input: any) => [input.name, input]))
+  return (definition?.inputPorts || []).map(port => {
+    const configured = configuredInputs.get(port.name) as any
+    return {
+      name: port.name,
+      label: port.label || port.name,
+      valueType: port.valueType,
+      description: port.description,
+      required: configured?.required === true || port.required === true,
+    }
+  })
+})
+const nodeTestInputExample = computed(() => createNodeTestInputExample(nodeTestInputFields.value))
 
 // 底部工具栏
 const executionPanelOpen = ref(false)
@@ -1472,6 +1523,19 @@ function createRunInputExample(fields: RunInputRequirement[]): string {
   return JSON.stringify(example, null, 2)
 }
 
+/** 为单节点临时覆盖提供可直接粘贴的示例，避免要求用户猜测 JSON 字段名。 */
+function createNodeTestInputExample(fields: NodeTestInputField[]): string {
+  if (fields.length === 0) return '{}'
+  const example = Object.fromEntries(fields.map(field => [field.name,
+    field.valueType === 'number' ? 1
+      : field.valueType === 'boolean' ? true
+      : field.valueType === 'array' ? []
+      : field.valueType === 'object' ? {}
+      : '',
+  ]))
+  return JSON.stringify(example, null, 2)
+}
+
 async function handleRun() {
   if (isRunning.value || !lf) return
   const graphData = lf.getGraphData() as { nodes: any[]; edges: any[] }
@@ -1972,6 +2036,15 @@ onUnmounted(() => {
 
 .node-test-warning { margin-bottom: 12px; }
 .node-test-confirm { display: flex; margin: 0 0 12px; }
+.node-test-json-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 14px;
+  color: var(--tf-text-primary);
+  font-size: 13px;
+  font-weight: 600;
+}
 .node-test-result {
   margin-top: 14px;
   padding: 12px;
