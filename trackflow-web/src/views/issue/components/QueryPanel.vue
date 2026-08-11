@@ -651,6 +651,7 @@ defineExpose({
   loadProjects,
   loadTags,
   savedQueries,
+  projectList,
   startPanelResize,
   togglePanelCollapse,
   panelWidth,
