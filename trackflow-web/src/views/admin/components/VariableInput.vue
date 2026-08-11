@@ -6,14 +6,14 @@
       :model-value="modelValue ?? ''"
       :placeholder="placeholder"
       :auto-size="autoSize"
-      @update:model-value="$emit('update:modelValue', $event)"
+      @update:model-value="modelValue = $event"
     />
     <a-input
       v-else
       ref="inputRef"
       :model-value="modelValue ?? ''"
       :placeholder="placeholder"
-      @update:model-value="$emit('update:modelValue', $event)"
+      @update:model-value="modelValue = $event"
     />
     <a-dropdown trigger="click" @select="insertVariable">
       <a-button type="text" size="mini" class="insert-var-btn">
@@ -51,15 +51,12 @@
 <script setup lang="ts">
 import { ref, nextTick } from 'vue'
 
+const modelValue = defineModel<string | undefined>()
+
 defineProps<{
-  modelValue: string | undefined
   placeholder?: string
   type?: 'input' | 'textarea'
   autoSize?: { minRows?: number; maxRows?: number }
-}>()
-
-const emit = defineEmits<{
-  'update:modelValue': [value: string]
 }>()
 
 const inputRef = ref<any>(null)
@@ -96,7 +93,7 @@ function insertVariable(varName: string | number | Record<string, any> | undefin
   }
 
   const newVal = currentValue.slice(0, start) + varName + currentValue.slice(end)
-  emit('update:modelValue', newVal)
+  modelValue.value = newVal
 
   // Restore cursor position after the inserted variable
   nextTick(() => {

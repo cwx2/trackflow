@@ -433,7 +433,7 @@ function selectSuggestion(item: Suggestion) {
     newCursorPos = before.length + item.insertText.length
   }
 
-  emit('update:modelValue', newText)
+  modelValue.value = newText
   if (inputRef.value) {
     inputRef.value.value = newText
   }
