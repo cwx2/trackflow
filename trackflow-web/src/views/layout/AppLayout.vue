@@ -268,7 +268,14 @@
     <div class="main-area">
       <TabBar v-if="showTabBar" />
       <div class="main-content">
-        <router-view />
+        <!-- KeepAlive 缓存高频页面，避免来回切换时重建组件 -->
+        <!-- :include 列表与各页面 defineOptions({ name }) 保持一致 -->
+        <!-- :max="5" LRU 上限，防止内存无限增长 -->
+        <router-view v-slot="{ Component }">
+          <KeepAlive :include="['IssueListView', 'SprintView', 'ProjectListView']" :max="5">
+            <component :is="Component" :key="$route.path" />
+          </KeepAlive>
+        </router-view>
       </div>
     </div>
 

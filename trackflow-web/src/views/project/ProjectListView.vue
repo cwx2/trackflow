@@ -559,7 +559,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, onActivated, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { Message, Modal } from '@arco-design/web-vue'
 import { useConfirmDelete } from '@/composables/useConfirmDelete'
@@ -1339,9 +1339,17 @@ async function handleCopyBeforeOk(done: (closed: boolean) => void) {
   }
 }
 
+// KeepAlive 按 name 匹配缓存组件
+defineOptions({ name: 'ProjectListView' })
+
 onMounted(() => {
   loadProjects()
   loadArchivedCount()
+})
+
+// KeepAlive 激活时刷新项目列表（保留搜索条件，只刷新数据）
+onActivated(() => {
+  loadProjects()
 })
 
 // 项目列表变化时，加载对应项目的权限

@@ -229,7 +229,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onActivated, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useProjectStore } from '@/stores/project'
 import { usePermission, canEditSprintSync, canDeleteSprintSync } from '@/composables/usePermission'
@@ -506,6 +506,9 @@ useIssueProjectSubscription(
   }
 )
 
+// KeepAlive 按 name 匹配缓存组件
+defineOptions({ name: 'SprintView' })
+
 onMounted(async () => {
   await loadProjects()
 
@@ -527,6 +530,11 @@ onMounted(async () => {
   if (selectedProject.value) {
     syncUrlProjectParam()
   }
+})
+
+// KeepAlive 激活时刷新 Sprint 列表（保留筛选条件，只刷新数据）
+onActivated(() => {
+  loadSprints()
 })
 
 /**

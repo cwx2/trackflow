@@ -591,7 +591,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onUnmounted, watch, h, nextTick, provide } from 'vue'
+import { ref, reactive, computed, onMounted, onActivated, onUnmounted, watch, h, nextTick, provide } from 'vue'
 import { useRouter, useRoute, onBeforeRouteLeave } from 'vue-router'
 import { IconLoading, IconCheckCircle, IconEye, IconLayout, IconExpand, IconDownload, IconFile, IconCode, IconCopy, IconLink, IconCalendar, IconRight } from '@arco-design/web-vue/es/icon'
 import { Message, Modal } from '@arco-design/web-vue'
@@ -1435,6 +1435,10 @@ onMounted(async () => {
   document.addEventListener('keydown', onGlobalKeydownCtx)
 })
 onUnmounted(() => { window.removeEventListener('trackflow:issues-restored', handleIssuesRestored); document.removeEventListener('keydown', handleKeyboardNav); document.removeEventListener('keydown', onGlobalKeydownCtx) })
+
+// KeepAlive 激活时刷新列表数据（保留筛选条件、分页、滚动位置）
+onActivated(() => { refreshList() })
+
 function handleIssuesRestored() { refreshList() }
 
 // Route leave guard

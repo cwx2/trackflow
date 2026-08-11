@@ -23,4 +23,7 @@
  * - IssueListView.scss：样式
  */
 import IssueListViewImpl from './IssueListViewImpl.vue'
+
+// KeepAlive 按 name 匹配缓存组件，必须与 AppLayout 中 :include 配置一致
+defineOptions({ name: 'IssueListView' })
 </script>

@@ -1,7 +1,7 @@
-// @ts-nocheck
+﻿// @ts-nocheck
 // Kanban Board Implementation — full business logic orchestration.
 // Public API is in useKanbanBoard.ts; types are in types.ts.
-import { ref, computed, watch, onMounted, onUnmounted, h, nextTick } from 'vue'
+import { ref, shallowRef, computed, watch, onMounted, onUnmounted, h, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { Message, Modal, Notification } from '@arco-design/web-vue'
 import { issueApi, sprintApi, boardApi } from '@/api'
@@ -114,20 +114,18 @@ async function onCardSetAssignee(userId: string, issue: BoardIssue) {
   const member = projectMembers.value.find(m => m.userId === userId)
   if (!member) return
 
-  // 乐观更新
+  // 乐观更新：patchIssue 替换数组引用触发 shallowRef 视图更新
   const oldAssigneeId = issue.assigneeId
   const oldAssigneeName = issue.assigneeName
-  issue.assigneeId = userId
-  issue.assigneeName = member.displayName
+  patchIssue(issue.id, { assigneeId: userId, assigneeName: member.displayName })
 
   try {
     await issueApi.update(issue.id, { assigneeId: userId })
-    issue.version = (issue.version || 0) + 1
+    patchIssue(issue.id, { version: (issue.version || 0) + 1 })
     Message.success(`${issue.issueKey} 负责人已设置为「${member.displayName}」`)
   } catch (e: any) {
     // 回滚
-    issue.assigneeId = oldAssigneeId
-    issue.assigneeName = oldAssigneeName
+    patchIssue(issue.id, { assigneeId: oldAssigneeId, assigneeName: oldAssigneeName })
     Message.error(e.response?.data?.message || '设置负责人失败')
   }
 }
@@ -287,7 +285,45 @@ const selectedSprint = ref<string | undefined>(undefined)
 let userExplicitlySelectedAll = false
 const keyword = ref('')
 const loading = ref(false)
-const issues = ref<BoardIssue[]>([])
+// issues 用 shallowRef：看板数据每次 API 返回整体替换，无需递归代理每张卡片的字段
+// 注意：原地字段修改（乐观更新）必须通过 patchIssue() 来替换数组引用触发视图更新
+const issues = shallowRef<BoardIssue[]>([])
+
+/**
+ * 乐观更新单张卡片字段（适用于已知 patch 对象的简单场景）。
+ * 替换数组引用触发 shallowRef 视图更新。
+ */
+function patchIssue(issueId: string, patch: Partial<BoardIssue>): BoardIssue | null {
+  const idx = issues.value.findIndex(i => i.id === issueId)
+  if (idx === -1) return null
+  const updated = [...issues.value]
+  updated[idx] = { ...updated[idx], ...patch }
+  issues.value = updated
+  return updated[idx]
+}
+
+/**
+ * 通过回调函数对单张卡片做原地修改，修改完成后替换数组引用触发 shallowRef 视图更新。
+ * 适用于复杂的乐观更新 + 回滚场景（drag 状态机、WIP 确认流程）。
+ */
+function mutateIssue(issueId: string, mutateFn: (issue: BoardIssue) => void): BoardIssue | null {
+  const idx = issues.value.findIndex(i => i.id === issueId)
+  if (idx === -1) return null
+  const copy = { ...issues.value[idx] }
+  mutateFn(copy)
+  const updated = [...issues.value]
+  updated[idx] = copy
+  issues.value = updated
+  return copy
+}
+
+/**
+ * 在对 draggingIssue 做多次原地字段修改后，调用此函数替换数组引用触发 shallowRef 视图更新。
+ * 用于 drag 状态机（onDrop/handleBacklogDrop）中多步修改完成后的一次性刷新。
+ */
+function flushIssues() {
+  issues.value = [...issues.value]
+}
 // projects/loadProjects/projectLoadState are now provided by useBoardData (see below)
 
 // ===== 负责人筛选 =====
@@ -490,18 +526,18 @@ function onPreviewIssueUpdated(issueId: string, changes: Partial<Pick<IssueVO, '
   const issue = issues.value.find(i => i.id === issueId)
   if (!issue) return
 
-  // Apply changes to the local issue object
+  // patchIssue 替换数组引用，触发 shallowRef 视图更新
+  const patch: Partial<BoardIssue> = {}
   if (changes.statusId) {
-    issue.statusId = changes.statusId
-    issue.version = (issue.version || 0) + 1
+    patch.statusId = changes.statusId
+    patch.version = (issue.version || 0) + 1
   }
-  if (changes.priority) {
-    issue.priority = changes.priority
-  }
+  if (changes.priority) patch.priority = changes.priority
   if ('assigneeId' in changes) {
-    issue.assigneeId = changes.assigneeId || undefined
-    issue.assigneeName = changes.assigneeName || undefined
+    patch.assigneeId = changes.assigneeId || undefined
+    patch.assigneeName = changes.assigneeName || undefined
   }
+  patchIssue(issueId, patch)
 }
 
 function toggleBacklog() {
@@ -2212,13 +2248,16 @@ async function onDrop(event: DragEvent, targetStatusId: string) {
           onOk: async () => {
             // 用户确认后执行（带 forceWip=true）
             issue.priority = targetPriority
+            flushIssues()
             try {
               await issueApi.update(issue.id, { priority: targetPriority, forceWip: true })
               issue.version = (issue.version || 0) + 1
+              flushIssues()
               Message.success(`${issue.issueKey} 优先级已变更为「${localizePriority(targetPriority)}」`)
               await handleCrossSwimlaneUpdate(issue, targetLaneKey)
             } catch (e: any) {
               issue.priority = oldPriority
+              flushIssues()
               Message.error(`优先级变更失败：${e.response?.data?.message || '未知错误'}`)
             }
           }
@@ -2229,11 +2268,13 @@ async function onDrop(event: DragEvent, targetStatusId: string) {
 
     // Optimistic update
     issue.priority = targetPriority
+    flushIssues()
     draggingIssue.value = null
     allowedTargetStatuses.value.clear()
     try {
       await issueApi.update(issue.id, { priority: targetPriority })
       issue.version = (issue.version || 0) + 1
+      flushIssues()
       Message.success(`${issue.issueKey} 优先级已变更为「${localizePriority(targetPriority)}」`)
       // ★ Cross-swimlane field update in priority mode
       await handleCrossSwimlaneUpdate(issue, targetLaneKey)
@@ -2241,6 +2282,7 @@ async function onDrop(event: DragEvent, targetStatusId: string) {
       if (e.response?.data?.code === ERROR_CODES.WIP_LIMIT_EXCEEDED) {
         // 后端防御性 WIP 校验触发（前端遗漏的情况）
         issue.priority = oldPriority
+        flushIssues()
         Modal.warning({
           title: 'WIP 限制',
           content: e.response.data.message,
@@ -2249,19 +2291,23 @@ async function onDrop(event: DragEvent, targetStatusId: string) {
           hideCancel: false,
           onOk: async () => {
             issue.priority = targetPriority
+            flushIssues()
             try {
               await issueApi.update(issue.id, { priority: targetPriority, forceWip: true })
               issue.version = (issue.version || 0) + 1
+              flushIssues()
               Message.success(`${issue.issueKey} 优先级已变更为「${localizePriority(targetPriority)}」`)
               await handleCrossSwimlaneUpdate(issue, targetLaneKey)
             } catch (e2: any) {
               issue.priority = oldPriority
+              flushIssues()
               Message.error(`优先级变更失败：${e2.response?.data?.message || '未知错误'}`)
             }
           }
         })
       } else {
         issue.priority = oldPriority
+        flushIssues()
         Message.error(`优先级变更失败：${e.response?.data?.message || '未知错误'}`)
       }
     }
@@ -2302,6 +2348,7 @@ async function onDrop(event: DragEvent, targetStatusId: string) {
       },
       onOk: async () => {
         issue.statusId = targetStatusId
+        flushIssues()
         transitioningIssueIds.value.add(issue.id)
         try {
           const res = await issueApi.transitStatus(issue.id, targetStatusId, commentText.trim(), issue.version)
@@ -2316,10 +2363,12 @@ async function onDrop(event: DragEvent, targetStatusId: string) {
             await handleCrossSwimlaneUpdate(issue, targetLaneKey)
           } else {
             issue.statusId = oldStatusId
+            flushIssues()
             Message.error(res.message || '状态变更失败')
           }
         } catch (e: any) {
           issue.statusId = oldStatusId
+          flushIssues()
           Message.error(e.response?.data?.message || '状态变更失败')
         } finally {
           transitioningIssueIds.value.delete(issue.id)
@@ -2331,6 +2380,7 @@ async function onDrop(event: DragEvent, targetStatusId: string) {
 
   // 乐观更新
   issue.statusId = targetStatusId
+  flushIssues()
   transitioningIssueIds.value.add(issue.id)
 
   draggingIssue.value = null
@@ -2342,6 +2392,7 @@ async function onDrop(event: DragEvent, targetStatusId: string) {
     if (res.code === ERROR_CODES.WIP_LIMIT_EXCEEDED) {
       // WIP 超限：回滚乐观更新，弹确认框
       issue.statusId = oldStatusId
+      flushIssues()
       transitioningIssueIds.value.delete(issue.id)
       Modal.warning({
         title: 'WIP 限制',
@@ -2352,6 +2403,7 @@ async function onDrop(event: DragEvent, targetStatusId: string) {
         onOk: async () => {
           // 用户确认后重试（带 forceWip）
           issue.statusId = targetStatusId
+          flushIssues()
           transitioningIssueIds.value.add(issue.id)
           try {
             const forceRes = await issueApi.transitStatus(issue.id, targetStatusId, undefined, issue.version, undefined, true)
@@ -2366,10 +2418,12 @@ async function onDrop(event: DragEvent, targetStatusId: string) {
               await handleCrossSwimlaneUpdate(issue, targetLaneKey)
             } else {
               issue.statusId = oldStatusId
+              flushIssues()
               Message.error(forceRes.message || '状态变更失败')
             }
           } catch (e2: any) {
             issue.statusId = oldStatusId
+            flushIssues()
             Message.error(e2.response?.data?.message || '状态变更失败')
           } finally {
             transitioningIssueIds.value.delete(issue.id)
@@ -2382,6 +2436,7 @@ async function onDrop(event: DragEvent, targetStatusId: string) {
     if (res.code === ERROR_CODES.DESCRIPTION_EMPTY_WARNING) {
       // 描述为空警告：回滚乐观更新，弹确认框
       issue.statusId = oldStatusId
+      flushIssues()
       transitioningIssueIds.value.delete(issue.id)
       Modal.warning({
         title: '工单描述为空',
@@ -2392,6 +2447,7 @@ async function onDrop(event: DragEvent, targetStatusId: string) {
         onOk: async () => {
           // 用户确认后重试（带 forceDescEmpty）
           issue.statusId = targetStatusId
+          flushIssues()
           transitioningIssueIds.value.add(issue.id)
           try {
             const forceRes = await issueApi.transitStatus(issue.id, targetStatusId, undefined, issue.version, undefined, undefined, true)
@@ -2406,10 +2462,12 @@ async function onDrop(event: DragEvent, targetStatusId: string) {
               await handleCrossSwimlaneUpdate(issue, targetLaneKey)
             } else {
               issue.statusId = oldStatusId
+              flushIssues()
               Message.error(forceRes.message || '状态变更失败')
             }
           } catch (e2: any) {
             issue.statusId = oldStatusId
+            flushIssues()
             Message.error(e2.response?.data?.message || '状态变更失败')
           } finally {
             transitioningIssueIds.value.delete(issue.id)
@@ -2422,6 +2480,7 @@ async function onDrop(event: DragEvent, targetStatusId: string) {
     if (res.code !== 0) {
       // 其他非成功响应
       issue.statusId = oldStatusId
+      flushIssues()
       Message.error(res.message || '状态变更失败')
       transitioningIssueIds.value.delete(issue.id)
       return
@@ -2432,6 +2491,7 @@ async function onDrop(event: DragEvent, targetStatusId: string) {
     if (actionResult?.outcome === 'FIELD_VALIDATION_FAILED') {
       // 回滚乐观更新
       issue.statusId = oldStatusId
+      flushIssues()
       transitioningIssueIds.value.delete(issue.id)
       // 显示警告消息
       Modal.warning({
@@ -2446,9 +2506,11 @@ async function onDrop(event: DragEvent, targetStatusId: string) {
     const newVersion = extractVersion(res.data)
     if (newVersion != null) {
       issue.version = newVersion
+      flushIssues()
     } else {
       // fallback: 本地递增
       issue.version = (issue.version || 0) + 1
+      flushIssues()
     }
 
     // 显示自动分配反馈
@@ -2461,6 +2523,7 @@ async function onDrop(event: DragEvent, targetStatusId: string) {
     await handleCrossSwimlaneUpdate(issue, targetLaneKey)
   } catch (e: any) {
     issue.statusId = oldStatusId
+    flushIssues()
     const errMsg = e.response?.data?.message || '状态变更失败'
     Message.error(`${issue.issueKey} 移动失败：${errMsg}`)
   } finally {

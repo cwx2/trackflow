@@ -1,4 +1,4 @@
-import { ref, computed, onUnmounted } from 'vue'
+import { ref, shallowRef, computed, onUnmounted } from 'vue'
 import axios from 'axios'
 import { issueApi, queryApi } from '@/api'
 import type { IssueVO } from '@/api/types'
@@ -50,7 +50,8 @@ export interface IssueListFilters {
 }
 
 export function useIssueList() {
-  const issues = ref<IssueVO[]>([])
+  // issues 用 shallowRef：每次 loadIssues 替换整个数组引用，Vue 无需递归代理每条记录
+  const issues = shallowRef<IssueVO[]>([])
   const totalIssues = ref(0)
   const currentPage = ref(1)
   const pageSize = ref(20)
@@ -197,21 +198,25 @@ export function useIssueList() {
 
   /**
    * 更新本地单条 Issue 数据（内联编辑后刷新）
+   * shallowRef 下需替换整个数组引用才能触发视图更新
    */
   function updateLocalIssue(issueId: string, patch: Partial<IssueVO>) {
     const idx = issues.value.findIndex(i => i.id === issueId)
     if (idx !== -1) {
-      issues.value[idx] = { ...issues.value[idx], ...patch }
+      const updated = [...issues.value]
+      updated[idx] = { ...updated[idx], ...patch }
+      issues.value = updated
     }
   }
 
   /**
    * 从本地列表中移除工单（用于筛选视图中编辑后不满足条件的情况）
+   * shallowRef 下用 filter 返回新数组替换引用
    */
   function removeLocalIssue(issueId: string) {
     const idx = issues.value.findIndex(i => i.id === issueId)
     if (idx !== -1) {
-      issues.value.splice(idx, 1)
+      issues.value = issues.value.filter(i => i.id !== issueId)
       totalIssues.value = Math.max(0, totalIssues.value - 1)
     }
   }
