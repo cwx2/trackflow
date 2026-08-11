@@ -39,24 +39,30 @@ export interface MonthDayInfo {
   currentMonth: boolean
 }
 
-const WEEK_DAY_NAMES = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
-
 /**
  * 生成周视图的 7 天数组（周一 → 周日）。
  *
- * @param weekStart  周一的日期（Date 或 "YYYY-MM-DD"）
- * @returns          WeekDayInfo[7]
+ * @param weekStart     周一的日期（Date 或 "YYYY-MM-DD"）
+ * @param isWorkingDay  判断某个 ISO weekday（1=周一…7=周日）是否工作日的函数
+ *                      不传时默认周一到周五为工作日
+ * @returns             WeekDayInfo[7]
  */
-export function getWeekDays(weekStart: DateInput): WeekDayInfo[] {
+export function getWeekDays(
+  weekStart: DateInput,
+  isWorkingDay: (isoWeekday: number) => boolean = (d) => d >= 1 && d <= 5
+): WeekDayInfo[] {
   const result: WeekDayInfo[] = []
+  const DAY_NAMES = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
   for (let i = 0; i < 7; i++) {
     const dateStr = addDays(weekStart, i)
     const d = toDate(dateStr)!
+    const jsDow = d.getDay()
+    const isoDow = jsDow === 0 ? 7 : jsDow
     result.push({
       date:      dateStr,
       dateNum:   d.getDate(),
-      dayName:   WEEK_DAY_NAMES[d.getDay()],
-      isWeekend: d.getDay() === 0 || d.getDay() === 6,
+      dayName:   DAY_NAMES[jsDow],
+      isWeekend: !isWorkingDay(isoDow),
     })
   }
   return result
@@ -65,30 +71,31 @@ export function getWeekDays(weekStart: DateInput): WeekDayInfo[] {
 /**
  * 生成月视图的日历格子数组（固定 6 行 × 7 列 = 42 格，补位显示上下月的天）。
  *
- * @param year   年（如 2026）
- * @param month  月，1-indexed（如 8 = 8月）
- * @returns      MonthDayInfo[42]
+ * @param year          年（如 2026）
+ * @param month         月，1-indexed（如 8 = 8月）
+ * @param isWorkingDay  判断某个 ISO weekday 是否工作日的函数，默认周一到周五
+ * @returns             MonthDayInfo[42]
  */
-export function getMonthDays(year: number, month: number): MonthDayInfo[] {
+export function getMonthDays(
+  year: number,
+  month: number,
+  isWorkingDay: (isoWeekday: number) => boolean = (d) => d >= 1 && d <= 5
+): MonthDayInfo[] {
   const result: MonthDayInfo[] = []
-
-  // 该月第一天是周几（转为 ISO：0=周一, 6=周日）
   const firstDay = new Date(year, month - 1, 1)
   const firstDayOfWeek = (firstDay.getDay() + 6) % 7  // 0=周一
 
-  // 格子总数固定 42（6行×7列）
-  const totalCells = 42
-
-  for (let i = 0; i < totalCells; i++) {
-    // 相对于月份第一天的偏移（负数 = 上月，正数 = 本月）
+  for (let i = 0; i < 42; i++) {
     const dayOffset = i - firstDayOfWeek
     const date = new Date(year, month - 1, 1 + dayOffset)
+    const jsDow = date.getDay()
+    const isoDow = jsDow === 0 ? 7 : jsDow
     const currentMonth = date.getMonth() === month - 1
 
     result.push({
       date:         toDateKey(date),
       dateNum:      date.getDate(),
-      isWeekend:    date.getDay() === 0 || date.getDay() === 6,
+      isWeekend:    !isWorkingDay(isoDow),
       currentMonth,
     })
   }

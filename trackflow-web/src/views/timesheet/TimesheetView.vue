@@ -439,7 +439,7 @@
 
 <script setup lang="ts">
 import { formatDuration } from '@/utils/duration'
-import { toDateKey, formatDateDisplay, startOfWeek, addWeeks, addMonths, getWorkingDaysInRange, parseDuration, parseTimeToMinutes, formatDurationCompact } from '@/utils/timesheet'
+import { toDateKey, formatDateDisplay, startOfWeek, addWeeks, addMonths, getWorkingDaysInRange, getWeekDays, getMonthDays, parseDuration, parseTimeToMinutes, formatDurationCompact } from '@/utils/timesheet'
 import { ref, computed, onMounted, watch } from 'vue'
 import { Message, Modal } from '@arco-design/web-vue'
 import { useAuthStore } from '@/stores/auth'
@@ -521,51 +521,11 @@ const selectedUserDisplayName = computed(() => {
   return user?.displayName || currentUserName.value
 })
 
-const weekDays = computed(() => {
-  const days = []
-  const start = new Date(currentWeekStart.value)
-  const dayNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(start)
-    d.setDate(start.getDate() + i)
-    // Convert JS getDay() (0=Sun, 6=Sat) to ISO day-of-week (1=Mon, 7=Sun)
-    const jsDow = d.getDay()
-    const isoDow = jsDow === 0 ? 7 : jsDow
-    days.push({
-      date: toDateKey(d),
-      dateNum: d.getDate(),
-      dayName: dayNames[d.getDay()],
-      isWeekend: !isWorkingDay(isoDow)
-    })
-  }
-  return days
-})
+const weekDays = computed(() => getWeekDays(currentWeekStart.value, isWorkingDay))
 
 const monthDays = computed(() => {
   const [year, month] = currentMonthDate.value.split('-').map(Number)
-  const firstDay = new Date(year, month - 1, 1)
-
-  // Start from Monday of the week containing the first day
-  const startDate = new Date(firstDay)
-  const dayOfWeek = startDate.getDay()
-  const offset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek
-  startDate.setDate(startDate.getDate() + offset)
-
-  const days = []
-  const current = new Date(startDate)
-  // Generate 6 weeks (42 days) to cover all months
-  for (let i = 0; i < 42; i++) {
-    const jsDow = current.getDay()
-    const isoDow = jsDow === 0 ? 7 : jsDow
-    days.push({
-      date: toDateKey(current),
-      dateNum: current.getDate(),
-      isWeekend: !isWorkingDay(isoDow),
-      currentMonth: current.getMonth() === month - 1
-    })
-    current.setDate(current.getDate() + 1)
-  }
-  return days
+  return getMonthDays(year, month, isWorkingDay)
 })
 
 const dateRangeLabel = computed(() => {
