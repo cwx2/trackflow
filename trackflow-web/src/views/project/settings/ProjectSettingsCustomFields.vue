@@ -6,12 +6,8 @@
       <span>项目已归档，自定义字段设置为只读状态</span>
     </div>
 
-    <!-- 加载状态 -->
-    <div v-if="loading" class="loading-state">
-      <a-spin :size="24" />
-    </div>
-
-    <template v-else>
+    <!-- 三态容器 -->
+    <DataContainer :loading="loading" :error="loadError" :retry="loadFields">
       <!-- 顶部说明 + 添加按钮 -->
       <div class="section-header">
         <div class="section-info">
@@ -464,7 +460,7 @@
           </a-button>
         </template>
       </EmptyState>
-    </template>
+    </DataContainer>
 
     <!-- 添加字段弹窗 -->
     <a-modal
@@ -635,7 +631,7 @@ import {
 import { Message, Modal } from '@arco-design/web-vue'
 import { customFieldApi } from '@/api'
 import { workflowApi } from '@/api'
-import { EmptyState } from '@/components/base'
+import { EmptyState, DataContainer } from '@/components/base'
 import type { ProjectDetailVO, CustomFieldDefinitionVO, CustomFieldOptionVO, RoleVO, OptionSetStatusVO, ReplaceableFieldsVO } from '@/api/types'
 
 const props = defineProps<{
@@ -646,6 +642,7 @@ const props = defineProps<{
 
 // State
 const loading = ref(true)
+const loadError = ref<string | null>(null)
 const fieldList = ref<CustomFieldDefinitionVO[]>([])
 
 // Drag-and-drop reorder state
@@ -1277,12 +1274,12 @@ async function clearOverride() {
 // Load fields
 async function loadFields() {
   loading.value = true
+  loadError.value = null
   try {
     const res = await customFieldApi.listProjectSettingsFields(props.project.id)
     fieldList.value = res.data || []
   } catch (e: any) {
-    Message.error(e.response?.data?.message || '加载自定义字段失败')
-    fieldList.value = []
+    loadError.value = e.response?.data?.message || '加载自定义字段失败'
   } finally {
     loading.value = false
   }
@@ -1379,14 +1376,6 @@ onMounted(() => {
 .notice-icon {
   font-size: 16px;
   color: var(--tf-text-tertiary);
-}
-
-/* Loading */
-.loading-state {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 120px;
 }
 
 /* Section header */

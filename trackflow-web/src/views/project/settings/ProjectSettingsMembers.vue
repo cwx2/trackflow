@@ -52,12 +52,8 @@
         <span class="members-count">{{ members.length }} 名成员</span>
       </div>
 
-      <div v-if="membersLoading" class="loading-state">
-        <a-spin :size="20" />
-      </div>
-
-      <a-table
-        v-else
+      <DataContainer :loading="membersLoading" :error="membersError" :retry="loadMembers">
+        <a-table
         :data="members"
         :pagination="false"
         :bordered="false"
@@ -121,15 +117,14 @@
           </a-table-column>
         </template>
       </a-table>
+      </DataContainer>
     </div>
 
     <!-- 活动日志 Section -->
     <div class="activity-section">
       <h3 class="section-title">成员活动日志</h3>
-      <div v-if="activityLoading" class="loading-state">
-        <a-spin :size="20" />
-      </div>
-      <EmptyState v-else-if="activities.length === 0" icon="calendar" title="暂无活动记录" description="成员变动操作将记录在此处" :compact="true" />
+      <DataContainer :loading="activityLoading" :error="activityError" :retry="loadActivities">
+        <EmptyState v-if="activities.length === 0" icon="calendar" title="暂无活动记录" description="成员变动操作将记录在此处" :compact="true" />
       <div v-else class="activity-list">
         <div v-for="act in activities" :key="act.id" class="activity-item">
           <div class="activity-dot" :class="getActivityDotClass(act.action)"></div>
@@ -142,6 +137,7 @@
           <a-button type="text" size="small" @click="loadMoreActivities">加载更多</a-button>
         </div>
       </div>
+      </DataContainer>
     </div>
   </div>
 </template>
@@ -153,7 +149,7 @@ import { Message } from '@arco-design/web-vue'
 import { useConfirmDelete } from '@/composables/useConfirmDelete'
 import { projectApi, userApi, workflowApi } from '@/api'
 import type { ProjectDetailVO, ProjectMemberVO, ProjectActivityVO } from '@/api/types'
-import { UserAvatar, EmptyState } from '@/components/base'
+import { UserAvatar, EmptyState, DataContainer } from '@/components/base'
 
 const props = defineProps<{
   project: ProjectDetailVO
@@ -164,6 +160,7 @@ const props = defineProps<{
 // Members
 const members = ref<ProjectMemberVO[]>([])
 const membersLoading = ref(false)
+const membersError = ref<string | null>(null)
 
 // Add member form
 const addForm = reactive({
@@ -185,6 +182,7 @@ const rolesLoaded = ref(false)
 // Activity
 const activities = ref<ProjectActivityVO[]>([])
 const activityLoading = ref(false)
+const activityError = ref<string | null>(null)
 const activityPage = ref(1)
 const activityHasMore = ref(false)
 
@@ -288,11 +286,12 @@ function formatActivityText(act: ProjectActivityVO): string {
 // Load members
 async function loadMembers() {
   membersLoading.value = true
+  membersError.value = null
   try {
     const res = await projectApi.listMembers(props.project.key)
     members.value = res.data || []
-  } catch {
-    members.value = []
+  } catch (e: any) {
+    membersError.value = e.response?.data?.message || '加载成员列表失败'
   } finally {
     membersLoading.value = false
   }
@@ -440,6 +439,7 @@ async function confirmRemoveMember(member: ProjectMemberVO) {
 // Activity
 async function loadActivities() {
   activityLoading.value = true
+  activityError.value = null
   activityPage.value = 1
   try {
     const res = await projectApi.listActivities(props.project.id, { page: 1, pageSize: 15 })
@@ -447,8 +447,8 @@ async function loadActivities() {
     activities.value = data?.list || []
     const total = data?.pagination?.total || 0
     activityHasMore.value = activities.value.length < total
-  } catch {
-    activities.value = []
+  } catch (e: any) {
+    activityError.value = e.response?.data?.message || '加载活动日志失败'
   } finally {
     activityLoading.value = false
   }
@@ -528,12 +528,6 @@ onMounted(() => {
 .members-count {
   font-size: 13px;
   color: var(--tf-text-tertiary);
-}
-
-.loading-state {
-  display: flex;
-  justify-content: center;
-  padding: 32px;
 }
 
 .members-table :deep(.arco-table-th) {

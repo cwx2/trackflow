@@ -6,12 +6,8 @@
       <span>项目已归档，工作流设置为只读状态</span>
     </div>
 
-    <!-- 加载状态 -->
-    <div v-if="loading" class="loading-state">
-      <a-spin :size="24" />
-    </div>
-
-    <template v-else>
+    <!-- 三态容器 -->
+    <DataContainer :loading="loading" :error="loadError" :retry="loadData">
       <!-- 工作流定义附加 Section (YouTrack 风格) -->
       <div class="workflow-section">
         <div class="section-header">
@@ -233,7 +229,7 @@
         </EmptyState>
         </div>
       </div>
-    </template>
+    </DataContainer>
 
     <!-- 创建/编辑规则弹窗 -->
     <a-modal
@@ -513,7 +509,7 @@ import { useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
 import { IconLock, IconSettings, IconPlus, IconThunderbolt, IconInfoCircle, IconDelete, IconPlayArrow, IconMinus, IconBranch } from '@arco-design/web-vue/es/icon'
 import { workflowApi, workflowRuleApi, projectApi } from '@/api'
-import { EmptyState } from '@/components/base'
+import { EmptyState, DataContainer } from '@/components/base'
 import { workflowDefinitionApi } from '@/api/workflowDefinition'
 import type { WorkflowDefinitionVO } from '@/api/workflowDefinition'
 import type { WorkflowRuleVO, WorkflowRuleDTO } from '@/api/workflowRule'
@@ -537,6 +533,7 @@ const loadingAvailable = ref(false)
 
 // ==================== State ====================
 const loading = ref(false)
+const loadError = ref<string | null>(null)
 const rules = ref<WorkflowRuleVO[]>([])
 const ruleModalVisible = ref(false)
 const editingRule = ref<WorkflowRuleVO | null>(null)
@@ -606,8 +603,11 @@ async function loadProjects() {
 // ==================== Data Loading ====================
 async function loadData() {
   loading.value = true
+  loadError.value = null
   try {
     await Promise.all([loadAttachedWorkflows(), loadTransitionStats(), loadRules()])
+  } catch (e: any) {
+    loadError.value = e.response?.data?.message || '加载工作流配置失败'
   } finally {
     loading.value = false
   }
@@ -1003,13 +1003,6 @@ onMounted(loadData)
 .notice-icon {
   font-size: 16px;
   flex-shrink: 0;
-}
-
-.loading-state {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 200px;
 }
 
 /* Sections */
