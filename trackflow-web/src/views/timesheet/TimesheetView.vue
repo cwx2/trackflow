@@ -1293,8 +1293,11 @@ onMounted(async () => {
 .attr-value-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
 
 /* Tabs — 让 a-tabs 紧贴 header，去掉默认内边距 */
-.timesheet-tabs { margin: 0; }
-.timesheet-tabs :deep(.arco-tabs-nav) { padding: 0 24px; }
+.timesheet-tabs { margin: 0; flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.timesheet-tabs :deep(.arco-tabs-nav) { padding: 0 24px; flex-shrink: 0; }
+.timesheet-tabs :deep(.arco-tabs-content) { flex: 1; min-height: 0; overflow: hidden; }
+.timesheet-tabs :deep(.arco-tabs-content-list) { height: 100%; }
+.timesheet-tabs :deep(.arco-tabs-pane) { height: 100%; display: flex; flex-direction: column; overflow: hidden; }
 
 /* Controls */
 .timesheet-controls { padding: 12px 24px; display: flex; align-items: center; justify-content: space-between; }
