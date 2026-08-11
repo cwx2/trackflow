@@ -23,6 +23,7 @@ import com.trackflow.sprint.vo.CreationPreviewVO;
 import com.trackflow.sprint.vo.DeletionPreviewVO;
 import com.trackflow.sprint.vo.SprintCompleteResultVO;
 import com.trackflow.sprint.vo.SprintOverlapWarningVO;
+import com.trackflow.sprint.vo.StatusBreakdownItem;
 import com.trackflow.project.service.ProjectActivityService;
 import com.trackflow.project.service.ProjectService;
 import lombok.RequiredArgsConstructor;
@@ -71,6 +72,7 @@ public class SprintService {
         for (SprintStatsRow sprint : sprints) {
             computeStatusHint(sprint, today);
         }
+        populateStatusBreakdown(sprints);
         return sprints;
     }
 
@@ -97,6 +99,7 @@ public class SprintService {
         for (SprintStatsRow sprint : sprints) {
             computeStatusHint(sprint, today);
         }
+        populateStatusBreakdown(sprints);
         return new com.trackflow.common.model.PageResult<>(sprints, total, safePage, safePageSize);
     }
 
@@ -135,6 +138,7 @@ public class SprintService {
         for (SprintStatsRow sprint : sprints) {
             computeStatusHint(sprint, today);
         }
+        populateStatusBreakdown(sprints);
         return new com.trackflow.common.model.PageResult<>(sprints, total, safePage, safePageSize);
     }
 
@@ -162,6 +166,46 @@ public class SprintService {
         }
     }
 
+    /**
+     * 为 Sprint 列表填充按状态细分统计数据。
+     * 批量查询所有 Sprint 的 per-status 计数，然后分配到各 SprintStatsRow。
+     */
+    private void populateStatusBreakdown(List<SprintStatsRow> sprints) {
+        if (sprints == null || sprints.isEmpty()) {
+            return;
+        }
+        // 收集有工单的 Sprint ID（无工单的不需要查询）
+        List<Long> sprintIds = sprints.stream()
+                .filter(s -> s.getTotalIssues() > 0)
+                .map(s -> Long.parseLong(s.getId()))
+                .collect(Collectors.toList());
+        if (sprintIds.isEmpty()) {
+            return;
+        }
+
+        List<Map<String, Object>> rows = sprintMapper.selectStatusBreakdown(sprintIds);
+
+        // 按 sprint_id 分组
+        Map<String, List<StatusBreakdownItem>> grouped = new HashMap<>();
+        for (Map<String, Object> row : rows) {
+            String sprintId = String.valueOf(row.get("sprint_id"));
+            StatusBreakdownItem item = new StatusBreakdownItem(
+                    String.valueOf(row.get("status_id")),
+                    String.valueOf(row.get("status_name")),
+                    String.valueOf(row.get("status_color")),
+                    String.valueOf(row.get("category")),
+                    ((Number) row.get("count")).intValue(),
+                    ((Number) row.get("sort_order")).intValue()
+            );
+            grouped.computeIfAbsent(sprintId, k -> new ArrayList<>()).add(item);
+        }
+
+        // 分配到各 Sprint
+        for (SprintStatsRow sprint : sprints) {
+            sprint.setStatusBreakdown(grouped.getOrDefault(sprint.getId(), List.of()));
+        }
+    }
+
     public List<Sprint> listByProject(Long projectId) {
         return sprintMapper.selectList(
                 new LambdaQueryWrapper<Sprint>()
@@ -186,6 +230,7 @@ public class SprintService {
         SprintStatsRow row = sprintMapper.selectSprintWithStats(id);
         if (row == null) throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Sprint not found");
         computeStatusHint(row, LocalDate.now());
+        populateStatusBreakdown(List.of(row));
         return row;
     }
 

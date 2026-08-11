@@ -41,6 +41,24 @@ export interface SprintVO {
   startScopeHours?: number
   /** 激活时的工单数量快照 */
   startScopeIssues?: number
+  /** 按实际工作流状态逐一统计的工单数量（用于多段进度条） */
+  statusBreakdown?: StatusBreakdownItem[]
+}
+
+/** Sprint 中按实际工作流状态统计的工单数量项 */
+export interface StatusBreakdownItem {
+  /** 状态 ID */
+  statusId: string
+  /** 状态名称 */
+  statusName: string
+  /** 状态颜色（十六进制） */
+  statusColor: string
+  /** 状态类别（open / in_progress / done / cancelled） */
+  category: string
+  /** 该状态的工单数量 */
+  count: number
+  /** 排序序号 */
+  sortOrder: number
 }
 
 /** Sprint 燃尽图数据 */

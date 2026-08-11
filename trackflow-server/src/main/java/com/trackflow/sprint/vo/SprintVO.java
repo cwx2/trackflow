@@ -4,6 +4,7 @@ import lombok.Data;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
 public class SprintVO {
@@ -58,4 +59,8 @@ public class SprintVO {
     private double totalEstimatedHours;
     /** 该 Sprint 已完成工单的预估工时总和 */
     private double completedEstimatedHours;
+
+    // ===== 按状态细分统计 =====
+    /** 按实际工作流状态逐一统计的工单数量（用于多段进度条） */
+    private List<StatusBreakdownItem> statusBreakdown;
 }

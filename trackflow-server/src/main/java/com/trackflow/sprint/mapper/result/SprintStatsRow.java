@@ -1,9 +1,11 @@
 package com.trackflow.sprint.mapper.result;
 
+import com.trackflow.sprint.vo.StatusBreakdownItem;
 import lombok.Data;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * Sprint 列表查询的强类型结果行（含工单统计、项目信息）。
@@ -46,4 +48,7 @@ public class SprintStatsRow {
     // ===== 工时统计 =====
     private double totalEstimatedHours;
     private double completedEstimatedHours;
+
+    // ===== 按状态细分统计（Service 层填充） =====
+    private List<StatusBreakdownItem> statusBreakdown;
 }

@@ -398,4 +398,25 @@
         LIMIT #{limit} OFFSET #{offset}
     </select>
 
+    <!-- 按实际状态细分统计：获取指定 Sprint 列表中每个 Sprint 的工单按状态分组计数 -->
+    <select id="selectStatusBreakdown" resultType="java.util.HashMap">
+        SELECT
+            CAST(i.sprint_id AS VARCHAR) AS sprint_id,
+            CAST(ist.id AS VARCHAR) AS status_id,
+            ist.name AS status_name,
+            ist.color AS status_color,
+            ist.category AS category,
+            ist.sort_order AS sort_order,
+            COUNT(*) AS count
+        FROM issue i
+        JOIN issue_status ist ON ist.id = i.status_id
+        WHERE i.deleted_at IS NULL
+          AND i.sprint_id IN
+            <foreach item="sid" collection="sprintIds" open="(" separator="," close=")">
+                #{sid}
+            </foreach>
+        GROUP BY i.sprint_id, ist.id, ist.name, ist.color, ist.category, ist.sort_order
+        ORDER BY ist.sort_order ASC
+    </select>
+
 </mapper>

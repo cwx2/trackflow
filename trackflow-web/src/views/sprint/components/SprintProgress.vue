@@ -1,26 +1,82 @@
 <template>
   <div class="sprint-progress-section" v-if="sprint.totalIssues > 0">
+    <!-- ===== 多段进度条：按实际工作流状态着色 ===== -->
     <div class="progress-bar-container">
       <div class="progress-bar">
-        <div
-          class="progress-segment done"
-          :style="{ width: getProgressPercent('done') + '%' }"
-          :title="`已完成: ${sprint.doneIssues}`"
-        ></div>
-        <div
-          class="progress-segment in-progress"
-          :style="{ width: getProgressPercent('inProgress') + '%' }"
-          :title="`进行中: ${sprint.inProgressIssues}`"
-        ></div>
-        <div
-          class="progress-segment todo"
-          :style="{ width: getProgressPercent('todo') + '%' }"
-          :title="`待办: ${sprint.todoIssues}`"
-        ></div>
+        <template v-if="hasBreakdown">
+          <div
+            v-for="item in sprint.statusBreakdown"
+            :key="item.statusId"
+            class="progress-segment"
+            :style="{ width: getStatusPercent(item.count) + '%', backgroundColor: item.statusColor }"
+            :title="`${item.statusName}: ${item.count}`"
+            @click.stop="$emit('viewStatus', item.statusId, item.statusName)"
+          ></div>
+        </template>
+        <template v-else>
+          <div
+            class="progress-segment done"
+            :style="{ width: getProgressPercent('done') + '%' }"
+            :title="`已完成: ${sprint.doneIssues}`"
+          ></div>
+          <div
+            class="progress-segment in-progress"
+            :style="{ width: getProgressPercent('inProgress') + '%' }"
+            :title="`进行中: ${sprint.inProgressIssues}`"
+          ></div>
+          <div
+            class="progress-segment todo"
+            :style="{ width: getProgressPercent('todo') + '%' }"
+            :title="`待办: ${sprint.todoIssues}`"
+          ></div>
+        </template>
       </div>
       <span class="progress-percent">{{ completionPercent }}%</span>
     </div>
-    <div class="progress-stats">
+
+    <!-- ===== 按状态细分统计标签 ===== -->
+    <div class="progress-stats" v-if="hasBreakdown">
+      <span
+        v-for="item in visibleBreakdownItems"
+        :key="item.statusId"
+        class="stat-item stat-clickable"
+        @click.stop="$emit('viewStatus', item.statusId, item.statusName)"
+      >
+        <span class="stat-dot" :style="{ backgroundColor: item.statusColor }"></span>
+        {{ item.statusName }} {{ item.count }}
+      </span>
+      <span class="stat-item total stat-clickable" @click.stop="$emit('viewTotal')">
+        共 {{ sprint.totalIssues }} 个工单
+      </span>
+      <span
+        v-if="sprint.overdueIssues && sprint.overdueIssues > 0"
+        class="stat-item overdue stat-clickable"
+        @click.stop="$emit('viewOverdue')"
+      >
+        <span class="stat-dot"></span>
+        逾期 {{ sprint.overdueIssues }}
+      </span>
+      <span
+        v-if="sprint.unassignedIssues && sprint.unassignedIssues > 0"
+        class="stat-item unassigned stat-clickable"
+        @click.stop="$emit('viewUnassigned')"
+      >
+        <span class="stat-dot"></span>
+        未分配 {{ sprint.unassignedIssues }}
+      </span>
+      <span v-if="sprint.totalEstimatedHours && sprint.totalEstimatedHours > 0" class="stat-item estimation">
+        <span class="stat-icon">⏱</span>
+        <template v-if="sprint.completedEstimatedHours !== undefined">
+          已完成 {{ formatHours(sprint.completedEstimatedHours) }} / 共 {{ formatHours(sprint.totalEstimatedHours) }}
+        </template>
+        <template v-else>
+          共 {{ formatHours(sprint.totalEstimatedHours) }}
+        </template>
+      </span>
+    </div>
+
+    <!-- ===== 旧的三级统计标签（fallback，无 statusBreakdown 时） ===== -->
+    <div class="progress-stats" v-else>
       <span class="stat-item done stat-clickable" @click.stop="$emit('viewCategory', 'done')">
         <span class="stat-dot"></span>
         完成 {{ sprint.doneIssues }}
@@ -54,7 +110,7 @@
       </span>
       <span
         v-if="sprint.unassignedIssues && sprint.unassignedIssues > 0"
-        class="stat-item unassigned"
+        class="stat-item unassigned stat-clickable"
         @click.stop="$emit('viewUnassigned')"
       >
         <span class="stat-dot"></span>
@@ -77,6 +133,18 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * SprintProgress — Sprint 卡片进度统计组件
+ *
+ * 职责：
+ * - 展示多段进度条，按实际工作流状态着色（优先使用 statusBreakdown）
+ * - 展示每个状态的工单计数标签，支持点击跳转筛选
+ * - 向后兼容：无 statusBreakdown 时降级为三级（完成/进行中/待办）
+ *
+ * 对外接口：
+ * - Props：sprint 数据、显示控制
+ * - Emits：viewCategory（旧三级）、viewStatus（新按状态跳转）、viewTotal/viewOverdue/viewUnassigned
+ */
 import { computed } from 'vue'
 import type { SprintVO } from '@/api/types'
 
@@ -93,11 +161,25 @@ const props = withDefaults(defineProps<{
 
 defineEmits<{
   (e: 'viewCategory', category: string): void
+  (e: 'viewStatus', statusId: string, statusName: string): void
   (e: 'viewTotal'): void
   (e: 'viewOverdue'): void
   (e: 'viewUnassigned'): void
 }>()
 
+// ===== 是否有按状态细分数据 =====
+const hasBreakdown = computed(() =>
+  props.sprint.statusBreakdown && props.sprint.statusBreakdown.length > 0
+)
+
+// ===== 细分数据中可见的状态项（count > 0 的项；或 alwaysShowDetails 时全部显示） =====
+const visibleBreakdownItems = computed(() => {
+  if (!props.sprint.statusBreakdown) return []
+  if (props.alwaysShowDetails) return props.sprint.statusBreakdown
+  return props.sprint.statusBreakdown.filter(item => item.count > 0)
+})
+
+// ===== 旧三级模式的控制 =====
 const showInProgress = computed(() =>
   props.alwaysShowDetails || props.sprint.inProgressIssues > 0
 )
@@ -110,6 +192,11 @@ const completionPercent = computed(() => {
   if (props.sprint.totalIssues === 0) return 0
   return Math.round((props.sprint.doneIssues / props.sprint.totalIssues) * 100)
 })
+
+function getStatusPercent(count: number): number {
+  if (props.sprint.totalIssues === 0) return 0
+  return (count / props.sprint.totalIssues) * 100
+}
 
 function getProgressPercent(type: 'done' | 'inProgress' | 'todo'): number {
   if (props.sprint.totalIssues === 0) return 0
@@ -151,6 +238,11 @@ function formatHours(hours: number): string {
 .progress-segment {
   height: 100%;
   transition: width 0.3s;
+  cursor: pointer;
+}
+
+.progress-segment:hover {
+  opacity: 0.8;
 }
 
 .progress-segment.done {

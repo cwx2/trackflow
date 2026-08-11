@@ -29,6 +29,7 @@ public interface SprintConverter extends BaseConverter {
     @Mapping(target = "unassignedIssues", ignore = true)
     @Mapping(target = "totalEstimatedHours", ignore = true)
     @Mapping(target = "completedEstimatedHours", ignore = true)
+    @Mapping(target = "statusBreakdown", ignore = true)
     SprintVO toVO(Sprint entity);
 
     List<SprintVO> toVOList(List<Sprint> entities);
@@ -65,6 +66,7 @@ public interface SprintConverter extends BaseConverter {
         vo.setStartScopeIssues(row.getStartScopeIssues());
         vo.setTotalEstimatedHours(row.getTotalEstimatedHours());
         vo.setCompletedEstimatedHours(row.getCompletedEstimatedHours());
+        vo.setStatusBreakdown(row.getStatusBreakdown());
         return vo;
     }
 

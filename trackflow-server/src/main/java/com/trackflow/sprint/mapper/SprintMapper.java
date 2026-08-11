@@ -98,4 +98,12 @@ public interface SprintMapper extends BaseMapper<Sprint> {
      * @param projectIds 可访问的项目 ID 列表（null 或空表示查所有）
      */
     long countByProjectIds(@Param("projectIds") List<Long> projectIds);
+
+    /**
+     * 按实际工作流状态细分统计：获取指定 Sprint 列表中每个 Sprint 的工单按状态分组计数。
+     * 返回 Map 列表，每项包含 sprint_id, status_id, status_name, status_color, category, sort_order, count。
+     *
+     * @param sprintIds Sprint ID 列表
+     */
+    List<java.util.Map<String, Object>> selectStatusBreakdown(@Param("sprintIds") List<Long> sprintIds);
 }

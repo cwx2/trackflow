@@ -69,6 +69,7 @@
         @view-issues="viewSprintIssues"
         @view-on-board="viewSprintOnBoard"
         @view-category="viewIssuesByCategory"
+        @view-status="viewIssuesByStatus"
         @view-total="openIssueDrawer"
         @view-overdue="viewOverdueIssues"
         @view-unassigned="viewUnassignedIssues"
@@ -98,6 +99,7 @@
         @view-issues="viewSprintIssues"
         @view-on-board="viewSprintOnBoard"
         @view-category="viewIssuesByCategory"
+        @view-status="viewIssuesByStatus"
         @view-total="openIssueDrawer"
         @view-overdue="viewOverdueIssues"
         @view-unassigned="viewUnassignedIssues"
@@ -131,6 +133,7 @@
             @view-issues="viewSprintIssues"
             @view-on-board="viewSprintOnBoard"
             @view-category="viewIssuesByCategory"
+            @view-status="viewIssuesByStatus"
             @view-total="(s) => viewSprintIssues(s)"
             @edit="openEditModal"
             @archive-planned="archiveSprint"
@@ -278,7 +281,7 @@ function canDeleteSprintItem(sprint: SprintVO): boolean {
 }
 
 const { projects, projectLoadState, loadProjects } = useProjectList({ requiredPermission: 'sprint:view' })
-const { viewSprintIssues, viewSprintOnBoard, viewIssuesByCategory, viewOverdueIssues } = useSprintNavigation(selectedProject, projects)
+const { viewSprintIssues, viewSprintOnBoard, viewIssuesByCategory, viewIssuesByStatus, viewOverdueIssues } = useSprintNavigation(selectedProject, projects)
 const {
   sprints, loadingState, activeSprints, plannedSprints, completedSprints, archivedSprints,
   hasActiveSprint, nextStartableSprint, loadSprints,

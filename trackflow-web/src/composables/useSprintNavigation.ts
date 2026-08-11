@@ -46,6 +46,17 @@ export function useSprintNavigation(
     router.push({ path: '/issues', query })
   }
 
+  function viewIssuesByStatus(sprint: SprintVO, statusId: string, statusName: string) {
+    const projectKey = getProjectKey(sprint)
+    const query: Record<string, string> = {
+      sprint: sprint.id,
+      statusId: statusId,
+      label: `${sprint.name} - ${statusName}`
+    }
+    if (projectKey) query.project = projectKey
+    router.push({ path: '/issues', query })
+  }
+
   function viewOverdueIssues(sprint: SprintVO) {
     const projectKey = getProjectKey(sprint)
     const query: Record<string, string> = {
@@ -61,6 +72,7 @@ export function useSprintNavigation(
     viewSprintIssues,
     viewSprintOnBoard,
     viewIssuesByCategory,
+    viewIssuesByStatus,
     viewOverdueIssues
   }
 }

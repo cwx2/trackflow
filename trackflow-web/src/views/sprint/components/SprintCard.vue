@@ -98,6 +98,7 @@
       :show-empty-hint="isPlanned"
       :always-show-details="isActive || isPlanned"
       @view-category="(cat: string) => $emit('viewCategory', sprint, cat)"
+      @view-status="(statusId: string, statusName: string) => $emit('viewStatus', sprint, statusId, statusName)"
       @view-total="$emit('viewTotal', sprint)"
       @view-overdue="$emit('viewOverdue', sprint)"
       @view-unassigned="$emit('viewUnassigned', sprint)"
@@ -233,6 +234,7 @@ const emit = defineEmits<{
   (e: 'viewIssues', sprint: SprintVO): void
   (e: 'viewOnBoard', sprint: SprintVO): void
   (e: 'viewCategory', sprint: SprintVO, category: string): void
+  (e: 'viewStatus', sprint: SprintVO, statusId: string, statusName: string): void
   (e: 'viewTotal', sprint: SprintVO): void
   (e: 'viewOverdue', sprint: SprintVO): void
   (e: 'viewUnassigned', sprint: SprintVO): void
