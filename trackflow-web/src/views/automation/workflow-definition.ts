@@ -270,7 +270,11 @@ function normalizeLegacyInlineBatches(definition: WorkflowDefinition): WorkflowD
           if (value?.type !== 'ref' || value.nodeId !== batch.id) return input
           return {
             ...input,
-            value: targetOutputs.has(value.outputName)
+            // The inline downstream node's own input must be rebound from the
+            // original collection edge. Mapping it to its own summary would
+            // create a self-reference (summary -> issue) and only fail when
+            // the user tries to run the workflow.
+            value: node.id !== target.id && targetOutputs.has(value.outputName)
               ? { ...value, nodeId: target.id }
               : null,
           }

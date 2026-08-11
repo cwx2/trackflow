@@ -76,6 +76,13 @@ export function validateExecutableWorkflow(definition: WorkflowDefinition): stri
         && edge.targetNodeId === node.id
         && edge.targetPortName === input.name
         && edge.collectionBindingMode === 'each')
+      if (!ref.path && !itemBinding && !compatible(sourcePort.valueType, input.valueType)
+        && source.id === node.id) {
+        const title = node.nodeMeta?.title || node.id
+        const inputLabel = input.label || input.name
+        const outputLabel = sourcePort.label || ref.outputName
+        return `“${title}”的“${inputLabel}”错误地引用了自身输出“${outputLabel}”。请重新连接上游数据。`
+      }
       if (!ref.path && !itemBinding && !compatible(sourcePort.valueType, input.valueType)) {
         return `变量类型不兼容：${ref.nodeId}.${ref.outputName} → ${node.id}.${input.name}`
       }
