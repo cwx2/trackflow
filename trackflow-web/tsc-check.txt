@@ -1,3 +1,0 @@
-src/views/timesheet/TimesheetView.vue(999,19): error TS2552: Cannot find name 'formatDurationInput'. Did you mean 'formatDuration'?
-src/views/timesheet/TimesheetView.vue(1045,25): error TS2304: Cannot find name 'parseDuration'.
-src/views/timesheet/TimesheetView.vue(1051,47): error TS2304: Cannot find name 'parseTimeToMinutes'.
