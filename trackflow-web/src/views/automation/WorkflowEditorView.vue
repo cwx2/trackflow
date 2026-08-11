@@ -356,6 +356,7 @@ import { automationApi, type WorkflowDefinition, type WorkflowNode, type NodeTyp
 import { DRAGGABLE_NODES, findNodeContractDrift, getNodeDefinition } from './node-definitions'
 import { validateExecutableWorkflow } from './workflow-validator'
 import { FlowEdge } from './graph/edges/FlowEdge'
+import { ExecutionFlowAnimator, type WorkflowCanvasEdge } from './graph/edges/ExecutionFlowAnimator'
 import { registerAllNodes } from './graph/nodes/index'
 import CliAgentConfig from './components/config/CliAgentConfig.vue'
 import VariablesConfig from './components/config/VariablesConfig.vue'
@@ -709,6 +710,7 @@ const nodeTestConfirmSideEffects = ref(false)
 const nodeTestLoading = ref(false)
 let activeEvtSource: EventSource | null = null
 let executionPollTimer: ReturnType<typeof setInterval> | null = null
+let executionFlowAnimator: ExecutionFlowAnimator | null = null
 const NODE_TEST_SIDE_EFFECT_TYPES = new Set([
   'trackflow-issue-comment', 'trackflow-issue-update', 'trackflow-issue-transition',
   'http-request', 'code', 'cli-agent', 'role-agent',
@@ -999,6 +1001,14 @@ async function initLogicFlow() {
     }
   })
   resetTracking()
+
+  executionFlowAnimator = new ExecutionFlowAnimator(
+    () => {
+      if (!lf) return []
+      return (lf.getGraphData() as { edges: WorkflowCanvasEdge[] }).edges
+    },
+    (edgeId, properties) => lf?.setProperties(edgeId, properties),
+  )
 
   // 初始时把水印刻在当前画布世界坐标的中心；后续随画布矩阵一起移动和缩放
   watermarkCanvasPosition.value = {
@@ -1508,6 +1518,7 @@ async function confirmRun() {
   streamingOutput.value = {}
   executionPanelOpen.value = true
   executionPanelCollapsed.value = false
+  executionFlowAnimator?.begin()
 
   try {
     const res = await automationApi.execute(workflowId.value, runInputs)
@@ -1530,6 +1541,8 @@ async function confirmRun() {
       try {
         const event = JSON.parse(e.data)
         if (event.type === 'node_running') {
+          // 下游节点真正开始时，才表示这条数据路径被实际选中并抵达。
+          executionFlowAnimator?.flowIntoNode(event.nodeId)
           nodeStatusMap.value = { ...nodeStatusMap.value, [event.nodeId]: 'running' }
           lf?.setProperties(event.nodeId, { runStatus: 'running' })
         } else if (event.type === 'node_success') {
@@ -1540,6 +1553,7 @@ async function confirmRun() {
           }
           lf?.setProperties(event.nodeId, { runStatus: 'success' })
         } else if (event.type === 'node_failed') {
+          executionFlowAnimator?.failIntoNode(event.nodeId)
           nodeStatusMap.value = { ...nodeStatusMap.value, [event.nodeId]: 'failed' }
           nodeExecutionDetails.value = {
             ...nodeExecutionDetails.value,
@@ -1557,13 +1571,13 @@ async function confirmRun() {
           }
         } else if (event.type === 'workflow_success') {
           Message.success('工作流执行成功')
-          finishExecutionTracking()
+          finishExecutionTracking('success')
         } else if (event.type === 'workflow_failed') {
           Message.error(`工作流执行失败: ${event.error}`)
-          finishExecutionTracking()
+          finishExecutionTracking('failed')
         } else if (event.type === 'workflow_cancelled') {
           Message.info('工作流执行已取消')
-          finishExecutionTracking()
+          finishExecutionTracking('cancelled')
         }
       } catch (e) {
         console.error('[WorkflowEditor] SSE 事件解析失败:', e)
@@ -1602,13 +1616,18 @@ function applyExecutionDetail(detail: ExecutionDetailVO) {
   }
   nodeStatusMap.value = statuses
   nodeExecutionDetails.value = details
+  executionFlowAnimator?.restoreCompletedPaths(statuses)
 }
 
 async function refreshExecutionDetail(executionId: string) {
   const res = await automationApi.getExecution(executionId)
   if (res.code !== 0) return
   applyExecutionDetail(res.data)
-  if (['success', 'failed', 'cancelled'].includes(res.data.status)) finishExecutionTracking()
+  if (isTerminalExecutionStatus(res.data.status)) finishExecutionTracking(res.data.status)
+}
+
+function isTerminalExecutionStatus(status: ExecutionDetailVO['status']): status is 'success' | 'failed' | 'cancelled' {
+  return status === 'success' || status === 'failed' || status === 'cancelled'
 }
 
 function startExecutionPolling(executionId: string) {
@@ -1619,7 +1638,7 @@ function startExecutionPolling(executionId: string) {
   }, 800)
 }
 
-function finishExecutionTracking() {
+function finishExecutionTracking(outcome: 'success' | 'failed' | 'cancelled' = 'cancelled') {
   isRunning.value = false
   if (executionPollTimer) {
     clearInterval(executionPollTimer)
@@ -1627,6 +1646,7 @@ function finishExecutionTracking() {
   }
   activeEvtSource?.close()
   activeEvtSource = null
+  executionFlowAnimator?.settle(outcome)
 }
 
 async function handleCancelRun() {
@@ -1669,6 +1689,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   finishExecutionTracking()
+  executionFlowAnimator?.dispose()
   lf = null
 })
 </script>

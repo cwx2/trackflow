@@ -15,6 +15,7 @@
  * - View.getEndArrow() 自绘小三角；View.getStartArrow() 返回 null（起点用圆点代替）
  */
 import { PolylineEdge, PolylineEdgeModel, h } from '@logicflow/core'
+import type { ExecutionFlowStatus } from './ExecutionFlowAnimator'
 
 // ─── 类型定义 ─────────────────────────────────────────────────────────────────
 
@@ -193,9 +194,10 @@ export class FlowEdgeView extends PolylineEdge {
 // ─── 纯函数工具（无副作用，可单元测试） ────────────────────────────────────────
 
 /** 根据运行状态和类型兼容性计算边颜色（CSS 变量优先，硬编码兜底） */
-export function resolveEdgeColor(status: string, typeCompat: TypeCompat, selected = false): string {
+export function resolveEdgeColor(status: ExecutionFlowStatus | string, typeCompat: TypeCompat, selected = false): string {
   if (status === 'running')             return 'var(--wf-status-running, #3b82f6)'
   if (status === 'done')                return 'var(--wf-status-success, #22c55e)'
+  if (status === 'failed')              return 'var(--wf-status-failed, #ef4444)'
   if (typeCompat === 'warning')         return 'var(--wf-status-warning, #f59e0b)'
   if (typeCompat === 'incompatible')    return 'var(--wf-status-failed, #ef4444)'
   if (selected)                         return 'var(--wf-edge-color-hover, #60a5fa)'
