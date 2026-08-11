@@ -56,6 +56,7 @@ export function migrateWorkflowDefinition(raw: any): WorkflowDefinition {
       targetNodeId: edge.target || edge.targetNodeId,
       targetPortName: edge.targetHandle || edge.targetPortName || 'input',
       collectionBindingMode: edge.collectionBindingMode,
+      flowBranch: edge.flowBranch,
     })),
   } as WorkflowDefinition)))
 }
@@ -177,6 +178,7 @@ export function buildWorkflowDefinition(
       targetNodeId: edge.targetNodeId,
       targetPortName: edge.properties?.targetPortName || 'input',
       collectionBindingMode: edge.properties?.collectionBindingMode,
+      flowBranch: edge.properties?.flowBranch,
     })),
   } as WorkflowDefinition)))
 }
@@ -234,7 +236,9 @@ function normalizeFlowEdges(definition: WorkflowDefinition): WorkflowDefinition 
 function normalizeLegacyInlineBatches(definition: WorkflowDefinition): WorkflowDefinition {
   let nodes = definition.nodes
   let edges = definition.edges || []
-  for (const batch of definition.nodes.filter(node => node.type === 'batch'
+  // Iterate over the working node list: a legacy diagram can contain more
+  // than one independent inline batch boundary.
+  for (const batch of [...nodes].filter(node => node.type === 'batch'
     && !String(node.config?.workflowId || '').trim())) {
     const dataInput = edges.find(edge => edge.targetNodeId === batch.id
       && edge.sourcePortName !== '__flow' && edge.targetPortName !== '__flow')

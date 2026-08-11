@@ -498,6 +498,21 @@ function portCardinality(node: any, portName: string, direction: 'in' | 'out') {
   return port?.cardinality || (port?.valueType === 'array' ? 'collection' : 'single')
 }
 
+/** A branching node exposes boolean data outputs.  A control line records
+ * which one it represents while still connecting through the visual flow port. */
+function nextControlFlowBranch(source: any) {
+  const branchNames = (source?.properties?.outputs || [])
+    .filter((port: any) => port.valueType === 'boolean')
+    .map((port: any) => port.name)
+  if (branchNames.length < 2 || !lf) return undefined
+  const used = new Set((lf.getGraphData() as { edges: any[] }).edges
+    .filter(edge => edge.sourceNodeId === source.id
+      && edge.properties?.sourcePortName === FLOW_PORT)
+    .map(edge => edge.properties?.flowBranch)
+    .filter(Boolean))
+  return branchNames.find((name: string) => !used.has(name))
+}
+
 /**
  * 画布边不仅是视觉连线，也是运行时数据绑定：source.output -> target.input。
  * 把这一步放在编辑器基座，避免每个节点配置面板各自实现一次且遗漏保存/试运行。
@@ -514,9 +529,10 @@ function synchronizeEdgeBinding(edge: any) {
   if (!edgeKind) return
   if (edgeKind === 'control') {
     // 流程线只建立执行依赖，不覆写任何业务参数。
+    const source = lf.getNodeModelById(edge.sourceNodeId) as any
     lf.setProperties(edge.id, {
       ...(edge.properties || {}), sourcePortName, targetPortName,
-      edgeKind, connectionViewMode: connectionViewMode.value,
+      edgeKind, flowBranch: nextControlFlowBranch(source), connectionViewMode: connectionViewMode.value,
     })
     return
   }
@@ -1276,6 +1292,7 @@ async function loadWorkflow() {
             sourcePortName: e.sourcePortName,
             targetPortName: e.targetPortName,
             collectionBindingMode: e.collectionBindingMode,
+            flowBranch: e.flowBranch,
             edgeKind: e.sourcePortName === FLOW_PORT ? 'control' : 'data',
             connectionViewMode: connectionViewMode.value,
           }

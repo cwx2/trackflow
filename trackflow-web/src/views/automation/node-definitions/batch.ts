@@ -1,16 +1,17 @@
 import type { NodeDefinition } from './types'
 
 /**
- * Explicit collection-to-item boundary. The child workflow receives one item per execution.
- * Keeping this as a control-flow node prevents accidental array-to-object wiring.
+ * Explicit child-workflow fan-out. This is deliberately different from an
+ * `each` data binding: collection-to-single connections already execute the
+ * downstream node once per item and do not need this node.
  */
 export const batchDefinition: NodeDefinition = {
   type: 'batch',
   meta: {
-    title: '批处理',
+    title: '批量调用子流程',
     icon: '↻',
     color: '#7c3aed',
-    description: '将列表逐项交给子工作流，汇总成功、失败与跳过项',
+    description: '将列表逐项交给已发布子流程，用于触发可复用的独立处理流程',
     category: '控制流',
   },
   inputPorts: [

@@ -42,9 +42,16 @@ export function validateExecutableWorkflow(definition: WorkflowDefinition): stri
       if (edge.sourcePortName !== FLOW_PORT || edge.targetPortName !== FLOW_PORT) {
         return `流程线必须从流程出口连接到流程入口：${edge.id}`
       }
+      if (edge.flowBranch) {
+        const branch = getNodeDefinition(source.type)?.outputPorts.find(port => port.name === edge.flowBranch)
+        if (!branch || branch.valueType !== 'boolean') {
+          return `流程分支不存在或不是布尔输出：${source.nodeMeta?.title || source.id}.${edge.flowBranch}`
+        }
+      }
       // 流程端口是画布运行时提供的虚拟端口，不属于节点的数据端口契约。
       continue
     }
+    if (edge.flowBranch) return `只有流程线可以声明分支：${edge.id}`
     const sourcePort = getNodeDefinition(source.type)?.outputPorts.find(port => port.name === edge.sourcePortName)
     const targetPort = getNodeDefinition(target.type)?.inputPorts.find(port => port.name === edge.targetPortName)
     if (!sourcePort) return `连线来源端口不存在：${edge.sourcePortName}`

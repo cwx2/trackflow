@@ -164,7 +164,18 @@ public class WorkflowDefinitionValidator {
                 if (!"__flow".equals(edge.sourcePortName()) || !"__flow".equals(edge.targetPortName())) {
                     throw invalid("流程线必须从流程出口连接到流程入口: " + edge.id());
                 }
+                if (edge.flowBranch() != null) {
+                    NodeDefinition source = definitionByNodeId.get(edge.sourceNodeId());
+                    OutputPortDef branch = byOutputName(source.getOutputPorts()).get(edge.flowBranch());
+                    if (branch == null || !"boolean".equals(branch.valueType())) {
+                        throw invalid("流程分支不存在或不是布尔输出: "
+                                + edge.sourceNodeId() + "." + edge.flowBranch());
+                    }
+                }
                 continue;
+            }
+            if (edge.flowBranch() != null) {
+                throw invalid("只有流程线可以声明分支: " + edge.id());
             }
             NodeDefinition source = definitionByNodeId.get(edge.sourceNodeId());
             NodeDefinition target = definitionByNodeId.get(edge.targetNodeId());

@@ -23,10 +23,10 @@ import java.util.Map;
 @Component
 public class BatchNode implements NodeDefinition, NodeExecutor {
     @Override public String getType() { return "batch"; }
-    @Override public String getTitle() { return "批处理"; }
+    @Override public String getTitle() { return "批量调用子流程"; }
     @Override public String getIcon() { return "↻"; }
     @Override public String getColor() { return "#7c3aed"; }
-    @Override public String getDescription() { return "将集合逐项交给已发布的子工作流，并汇总成功与失败结果"; }
+    @Override public String getDescription() { return "将集合逐项交给已发布的子流程，并汇总成功与失败结果"; }
     @Override public String getCategory() { return "控制流"; }
     @Override public NodeRuntimePolicy getRuntimePolicy() { return NodeRuntimePolicy.orchestration(); }
 
@@ -34,7 +34,7 @@ public class BatchNode implements NodeDefinition, NodeExecutor {
         if (!executable) return;
         Object workflowId = node.config() != null ? node.config().get("workflowId") : null;
         if (workflowId == null || workflowId.toString().isBlank()) {
-            throw new IllegalArgumentException("批处理节点必须选择一个已发布的处理子工作流: " + node.id());
+            throw new IllegalArgumentException("批量调用子流程节点必须选择一个已发布的子流程: " + node.id());
         }
         try {
             if (Long.parseLong(workflowId.toString()) <= 0) {

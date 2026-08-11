@@ -31,6 +31,21 @@ class WorkflowExecutionPlannerTest {
     }
 
     @Test
+    void selectsOnlyTheMatchingControlFlowBranch() {
+        WorkflowEdgeModel accepted = new WorkflowEdgeModel(
+                "accepted", "condition", "__flow", "accepted-end", "__flow", null, "true");
+        WorkflowEdgeModel rejected = new WorkflowEdgeModel(
+                "rejected", "condition", "__flow", "rejected-end", "__flow", null, "false");
+        Map<String, WorkflowExecutionPlanner.EdgeState> states =
+                planner.initializeEdges(List.of(accepted, rejected));
+
+        planner.completeNode(List.of(accepted, rejected), Map.of("true", true, "false", false), states);
+
+        assertEquals(WorkflowExecutionPlanner.EdgeState.SUCCESS, states.get("accepted"));
+        assertEquals(WorkflowExecutionPlanner.EdgeState.SKIPPED, states.get("rejected"));
+    }
+
+    @Test
     void mergeNodeRunsWhenAtLeastOneCompletedInputSucceeded() {
         WorkflowEdgeModel selected = edge("selected", "left", "output", "merge");
         WorkflowEdgeModel skipped = edge("skipped", "right", "output", "merge");
@@ -54,6 +69,17 @@ class WorkflowExecutionPlannerTest {
 
         assertEquals(WorkflowExecutionPlanner.NodeDecision.WAITING,
                 planner.decide(List.of(completed, pending), states));
+    }
+
+    @Test
+    void continuesAnUnconditionalControlEdge() {
+        WorkflowEdgeModel edge = new WorkflowEdgeModel(
+                "next", "start", "__flow", "search", "__flow");
+        Map<String, WorkflowExecutionPlanner.EdgeState> states = planner.initializeEdges(List.of(edge));
+
+        planner.completeNode(List.of(edge), Map.of("trigger", Map.of()), states);
+
+        assertEquals(WorkflowExecutionPlanner.EdgeState.SUCCESS, states.get("next"));
     }
 
     private WorkflowEdgeModel edge(String id, String sourceNodeId, String sourcePort, String targetNodeId) {

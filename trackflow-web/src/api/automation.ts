@@ -198,6 +198,8 @@ export interface WorkflowEdge {
   targetPortName: string   // 连到哪个输入端口
   /** 集合输出映射到单项输入时，逐条建立并保持项目执行上下文。 */
   collectionBindingMode?: 'direct' | 'each'
+  /** 流程线的可选分支输出；例如 condition 的 true / false。 */
+  flowBranch?: string
 }
 
 /** 全局变量定义 */

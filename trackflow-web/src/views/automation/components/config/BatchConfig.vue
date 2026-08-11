@@ -1,11 +1,11 @@
 <template>
   <div class="node-config batch-config">
     <a-alert type="info" :show-icon="true">
-      批处理会把列表中的每一项分别传给一个已发布子工作流。每项完成后再继续下一项，刷新或重启后会从检查点继续。
+      此节点会把列表中的每一项交给一个已发布的子流程。如果只是想让数组自动逐项流入下游节点，直接连接“集合输出”和“单项输入”即可，无需添加本节点。
     </a-alert>
 
     <a-form :model="local" layout="vertical" size="small">
-      <a-form-item label="处理子工作流" required>
+      <a-form-item label="被调用的子流程" required>
         <a-select
           v-model="local.workflowId"
           placeholder="选择一个已发布的工作流"

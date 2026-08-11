@@ -62,7 +62,12 @@ public class WorkflowExecutionPlanner {
                              Map<String, Object> outputs,
                              Map<String, EdgeState> edgeStates) {
         for (WorkflowEdgeModel edge : outgoingEdges) {
-            Object portValue = outputs.get(edge.sourcePortName());
+            // A control edge normally continues unconditionally. Branching
+            // control edges carry the boolean output which selected them,
+            // because their persisted source port is the virtual __flow port.
+            String selectionPort = "__flow".equals(edge.sourcePortName())
+                    ? edge.flowBranch() : edge.sourcePortName();
+            Object portValue = selectionPort == null ? null : outputs.get(selectionPort);
             boolean selected = !(portValue instanceof Boolean booleanValue) || booleanValue;
             edgeStates.put(edge.id(), selected ? EdgeState.SUCCESS : EdgeState.SKIPPED);
         }

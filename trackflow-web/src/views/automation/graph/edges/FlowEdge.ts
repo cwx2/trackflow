@@ -167,6 +167,9 @@ export class FlowEdgeView extends PolylineEdge {
     const iterationBadge = props?.collectionBindingMode === 'each'
       ? buildIterationBadge(model?.pointsList || [], isVisible || isSelected)
       : null
+    const branchBadge = edgeKind === 'control' && props?.flowBranch
+      ? buildFlowBranchBadge(model?.pointsList || [], props.flowBranch, isVisible || isSelected)
+      : null
 
     // LogicFlow 的 h() 与 Vue VNode 泛型不同，边子元素只在 SVG 渲染期使用。
     const particles: any[] = []
@@ -179,7 +182,7 @@ export class FlowEdgeView extends PolylineEdge {
       )
     }
 
-    return h('g', {}, [hitArea, selectionHalo, mainPath, startPlug, endPlug, directionMarker, warningBadge, iterationBadge, ...particles].filter(Boolean) as any)
+    return h('g', {}, [hitArea, selectionHalo, mainPath, startPlug, endPlug, directionMarker, warningBadge, iterationBadge, branchBadge, ...particles].filter(Boolean) as any)
   }
 
   /** 端口插座已表达流向，避免默认箭头与终点圆环重叠。 */
@@ -208,6 +211,26 @@ function buildIterationBadge(points: Array<{ x: number; y: number }>, visible: b
       x: 24, y: 12.5, 'text-anchor': 'middle',
       fill: 'var(--wf-edge-data, #38bdf8)', 'font-size': '10', 'font-weight': '600',
     }, '逐项'),
+  ])
+}
+
+function buildFlowBranchBadge(points: Array<{ x: number; y: number }>, branch: string, visible: boolean) {
+  if (!visible || points.length < 2) return null
+  const midpoint = points[Math.floor(points.length / 2)]
+  if (!midpoint) return null
+  const label = branch === 'true' ? '成立' : branch === 'false' ? '不成立' : branch
+  const width = Math.max(38, label.length * 12 + 16)
+  return h('g', { transform: `translate(${midpoint.x - width / 2}, ${midpoint.y - 11})`, 'pointer-events': 'none' }, [
+    h('rect', {
+      x: 0, y: 0, width, height: 18, rx: 9,
+      fill: 'var(--wf-surface-elevated, #24134a)',
+      stroke: 'var(--wf-edge-control, #a78bfa)',
+      'stroke-width': '1', opacity: '0.94',
+    }),
+    h('text', {
+      x: width / 2, y: 12.5, 'text-anchor': 'middle',
+      fill: 'var(--wf-edge-control, #a78bfa)', 'font-size': '10', 'font-weight': '600',
+    }, label),
   ])
 }
 
