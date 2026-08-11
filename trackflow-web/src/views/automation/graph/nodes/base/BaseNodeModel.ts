@@ -4,12 +4,12 @@
  * 职责：
  * - 统一管理节点尺寸（根据端口数量动态计算）
  * - 根据输入/输出端口列表动态计算具名锚点坐标
- * - 支持可选端口折叠（optional ports shown when optionalExpanded=true）
+ * - 仅展示必填/已使用的参数，其他能力按需展开
  * - 提供 runStatus 状态管理
  */
 import { HtmlNodeModel } from '@logicflow/core'
-import { getNodeDefinition } from '../../../node-definitions'
 import { FLOW_PORT } from '../../connection-semantics'
+import { getNodePortPresentation } from './node-presentation'
 
 export { FLOW_PORT } from '../../connection-semantics'
 
@@ -23,6 +23,8 @@ export interface PortDef {
   description?: string
   cardinality?: 'single' | 'collection'
   semanticType?: string
+  /** 当前输入值；输出端口不会使用此字段。 */
+  value?: unknown
 }
 
 /** 节点运行状态 */
@@ -42,7 +44,7 @@ export const PORT_ROW_H         = 28   // 每个端口行高
 export const HEADER_H                 = 49 // 标题区（含底部分隔线）高度
 export const PORT_SECTION_PADDING_V   = 4  // 每个输入/输出分区的上下内边距
 export const PORT_DIVIDER_H           = 1  // 输入、输出分区之间的分隔线
-export const OPTIONAL_TOGGLE_H        = 24 // 可选参数开关行高
+export const COLLAPSED_INPUT_TOGGLE_H = 28 // 收纳参数开关行高
 export const PORT_HANDLE_OFFSET       = 6  // 锚点相对卡片边缘的外伸距离
 /** 可拖拽热区半径；大于视觉插座，保证端口在稠密行中仍易于命中。 */
 export const PORT_CONNECT_HIT_RADIUS  = 12
@@ -83,36 +85,6 @@ export abstract class BaseNodeModel extends HtmlNodeModel {
     super.setProperty(key, val)
   }
 
-  /** 返回和 NodeCard 第一段输入区完全一致的必显端口。 */
-  _getVisibleInputs(props: any): PortDef[] {
-    const inputs: PortDef[] = props?.inputs || []
-    const nodeType: string | undefined = props?.nodeType
-
-    if (!nodeType) return inputs
-
-    const def = getNodeDefinition(nodeType)
-    if (!def) return inputs
-
-    const optionalNames = new Set(def.inputPorts.filter(p => p.optional).map(p => p.name))
-    if (optionalNames.size === 0) return inputs
-
-    return inputs.filter(p => !optionalNames.has(p.name))
-  }
-
-  /** 返回 NodeCard 第二段输入区中的可选端口。 */
-  _getOptionalInputs(props: any): PortDef[] {
-    const inputs: PortDef[] = props?.inputs || []
-    const nodeType: string | undefined = props?.nodeType
-
-    if (!nodeType) return []
-
-    const def = getNodeDefinition(nodeType)
-    if (!def) return []
-
-    const optionalNames = new Set(def.inputPorts.filter(p => p.optional).map(p => p.name))
-    return inputs.filter(p => optionalNames.has(p.name))
-  }
-
   /**
    * 计算 NodeCard 的真实布局。
    *
@@ -120,32 +92,30 @@ export abstract class BaseNodeModel extends HtmlNodeModel {
    * 粗略推算，否则分区 padding、折叠行和分隔线会令连线偏离视觉端口。
    */
   _getPortLayout(props: any) {
-    const visibleInputs = this._getVisibleInputs(props)
-    const optionalInputs = this._getOptionalInputs(props)
-    const outputs: PortDef[] = props?.outputs || []
-    const optionalExpanded: boolean = props?.optionalExpanded ?? false
+    const presentation = getNodePortPresentation(props)
+    const visibleInputs = presentation.visibleInputs as PortDef[]
+    const outputs = presentation.outputs as PortDef[]
 
     const inputGroups: PortDef[][] = []
     if (visibleInputs.length) inputGroups.push(visibleInputs)
-    if (optionalExpanded && optionalInputs.length) inputGroups.push(optionalInputs)
 
     return {
       inputGroups,
       outputs,
-      // 折叠时显示“+ N 个可选参数”；展开时显示“收起可选参数”。
-      hasOptionalToggle: optionalInputs.length > 0,
+      // 紧凑态显示“更多配置”；展开态显示“收起参数”。
+      hasCollapsedInputToggle: presentation.collapsibleInputCount > 0,
     }
   }
 
   /** 根据 NodeCard 的实际分区高度计算节点高度。 */
   _calcHeight(props: any): number {
-    const { inputGroups, outputs, hasOptionalToggle } = this._getPortLayout(props)
+    const { inputGroups, outputs, hasCollapsedInputToggle } = this._getPortLayout(props)
     let height = HEADER_H
 
     inputGroups.forEach(group => {
       height += PORT_SECTION_PADDING_V * 2 + group.length * PORT_ROW_H
     })
-    if (hasOptionalToggle) height += OPTIONAL_TOGGLE_H
+    if (hasCollapsedInputToggle) height += COLLAPSED_INPUT_TOGGLE_H
     if (inputGroups.length && outputs.length) height += PORT_DIVIDER_H
     if (outputs.length) height += PORT_SECTION_PADDING_V * 2 + outputs.length * PORT_ROW_H
 
@@ -155,7 +125,7 @@ export abstract class BaseNodeModel extends HtmlNodeModel {
   /** 动态生成具名锚点（只为可见端口生成） */
   getDefaultAnchor() {
     const { x, y, width, height, id, properties } = this
-    const { inputGroups, outputs, hasOptionalToggle } = this._getPortLayout(properties as any)
+    const { inputGroups, outputs, hasCollapsedInputToggle } = this._getPortLayout(properties as any)
 
     // 标题栏两侧是独立的流程端口，用于表达执行顺序，不会绑定业务参数。
     const anchors: any[] = [
@@ -194,7 +164,7 @@ export abstract class BaseNodeModel extends HtmlNodeModel {
       cursorY += PORT_SECTION_PADDING_V
     })
 
-    if (hasOptionalToggle) cursorY += OPTIONAL_TOGGLE_H
+    if (hasCollapsedInputToggle) cursorY += COLLAPSED_INPUT_TOGGLE_H
     if (inputGroups.length && outputs.length) cursorY += PORT_DIVIDER_H
 
     if (outputs.length) {

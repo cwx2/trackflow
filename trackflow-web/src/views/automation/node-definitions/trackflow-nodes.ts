@@ -10,6 +10,7 @@ export const issueGetDefinition: NodeDefinition = {
 export const issueSearchDefinition: NodeDefinition = {
   type: 'trackflow-issue-search',
   meta: { title: '查找待办需求', icon: '🔎', color: '#0ea5e9', description: '按项目、状态、优先级、类型和关键词筛选', category: 'TrackFlow' },
+  presentation: { collapsedInputsLabel: '筛选与运行选项' },
   inputPorts: [
     { name: 'projectId', label: '项目 ID', valueType: 'number', required: false },
     { name: 'statusIds', label: '状态 ID', valueType: 'string', required: false },
@@ -32,6 +33,7 @@ export const issueSearchDefinition: NodeDefinition = {
 export const issueContextDefinition: NodeDefinition = {
   type: 'trackflow-issue-context',
   meta: { title: '准备工单上下文', icon: '📝', color: '#8b5cf6', description: '将工单聚合为 Markdown 文本供 Agent 读取', category: 'TrackFlow' },
+  presentation: { collapsedInputsLabel: '上下文选项' },
   inputPorts: [
     { name: 'issue', label: '工单对象', valueType: 'object', required: true, semanticType: 'issue' },
     { name: 'includeComments', label: '包含评论', valueType: 'boolean', required: false },
@@ -72,6 +74,7 @@ export const issueCommentDefinition: NodeDefinition = {
 export const issueUpdateDefinition: NodeDefinition = {
   type: 'trackflow-issue-update',
   meta: { title: '更新工单字段', icon: '✏️', color: '#ec4899', description: '更新优先级、负责人、标签或自定义字段', category: 'TrackFlow' },
+  presentation: { collapsedInputsLabel: '可更新字段' },
   inputPorts: [
     { name: 'issueId', label: '工单 ID', valueType: 'number', required: true },
     { name: 'priority', label: '优先级', valueType: 'string', required: false },

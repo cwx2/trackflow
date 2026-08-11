@@ -63,41 +63,43 @@
 
     <!-- ── 端口区 ── -->
     <div class="node-body">
-      <!-- 输入端口（只显示非 optional 的，或 optionalExpanded 时全显） -->
+      <!-- 紧凑态只展示必填和已使用的输入；展开后才显示节点的全部能力。 -->
       <div v-if="visibleInputs.length" class="port-section">
-        <div v-for="port in visibleInputs" :key="port.name" class="port-row port-in">
+        <div
+          v-for="port in visibleInputs"
+          :key="port.name"
+          class="port-row port-in"
+          :class="`source-${port.sourceKind}`"
+        >
           <div class="port-dot in" />
           <span class="port-label">{{ port.label || port.name }}</span>
+          <span v-if="sourceLabel(port.sourceKind)" class="port-source">{{ sourceLabel(port.sourceKind) }}</span>
           <span class="port-type">{{ typeLabel(port.valueType) }}</span>
         </div>
       </div>
-      <!-- 可选端口折叠提示 -->
-      <div
-        v-if="hiddenOptionalCount > 0 && !optionalExpanded"
+      <!-- 未使用能力不伪装成必填项；用户需要连线或配置时再一次性展开。 -->
+      <button
+        v-if="collapsibleInputCount > 0 && !portsExpanded"
+        type="button"
         class="optional-toggle"
-        @click.stop="setOptionalExpanded(true)"
+        @click.stop="setPortsExpanded(true)"
       >
-        <span>+ {{ hiddenOptionalCount }} 个可选参数</span>
-      </div>
-      <!-- 展开的可选输入端口 -->
-      <div v-if="optionalExpanded && optionalInputs.length" class="port-section optional-ports">
-        <div v-for="port in optionalInputs" :key="port.name" class="port-row port-in">
-          <div class="port-dot in" />
-          <span class="port-label">{{ port.label || port.name }}</span>
-          <span class="port-type">{{ typeLabel(port.valueType) }}</span>
-          <button
-            class="port-collapse-btn"
-            title="收起此参数"
-            @click.stop="setOptionalExpanded(false)"
-          >×</button>
-        </div>
-        <div class="optional-toggle collapse" @click.stop="setOptionalExpanded(false)">
-          <span>收起可选参数</span>
-        </div>
-      </div>
+        <span>{{ collapsedLabel }}</span>
+        <span class="optional-toggle-count">{{ collapsibleInputCount }} 项可用</span>
+        <span class="optional-toggle-icon">⌄</span>
+      </button>
+      <button
+        v-else-if="collapsibleInputCount > 0"
+        type="button"
+        class="optional-toggle collapse"
+        @click.stop="setPortsExpanded(false)"
+      >
+        <span>收起未使用参数</span>
+        <span class="optional-toggle-icon">⌃</span>
+      </button>
       <!-- 输入/输出分隔线 -->
       <div
-        v-if="(visibleInputs.length || optionalExpanded) && outputs.length"
+        v-if="(visibleInputs.length || collapsibleInputCount > 0) && outputs.length"
         class="port-divider"
       />
       <!-- 输出端口 -->
@@ -122,7 +124,7 @@ import {
   IconPlayArrow, IconMore,
 } from '@arco-design/web-vue/es/icon'
 import type { PortDef, NodeMeta, NodeRunStatus } from './BaseNodeModel'
-import { getNodeDefinition } from '../../../node-definitions'
+import { getNodePortPresentation, type InputSourceKind, type PresentedInput } from './node-presentation'
 
 /** icon 字段 → Arco 图标组件映射（不在此表的直接渲染文本） */
 const ICON_MAP: Record<string, any> = {
@@ -151,44 +153,33 @@ const emit = defineEmits<{
 }>()
 
 const runStatus = computed<NodeRunStatus>(() => props.properties?.runStatus ?? 'idle')
-const inputs    = computed<PortDef[]>(() => props.properties?.inputs  ?? [])
-const outputs   = computed<PortDef[]>(() => props.properties?.outputs ?? [])
 const nodeMeta  = computed<NodeMeta>(() => props.properties?.nodeMeta ?? {
   title: '节点', icon: '⬡', color: '#6366f1', description: '',
 })
 const connectionViewMode = computed<'all' | 'flow' | 'data'>(() => props.properties?.connectionViewMode || 'all')
 const connectionDragKind = computed<'control' | 'data' | null>(() => props.properties?.connectionDragKind || null)
 
-// ── 可选端口折叠逻辑 ──
-const optionalExpanded = computed(() => props.properties?.optionalExpanded ?? false)
+// ── 端口呈现：能力在配置面板，画布只突出实际参与流程的参数。 ──
+const portPresentation = computed(() => getNodePortPresentation(props.properties))
+const visibleInputs = computed<PresentedInput[]>(() => portPresentation.value.visibleInputs)
+const outputs = computed<PortDef[]>(() => portPresentation.value.outputs as PortDef[])
+const portsExpanded = computed(() => portPresentation.value.expanded)
+const collapsibleInputCount = computed(() => portPresentation.value.collapsibleInputCount)
+const collapsedLabel = computed(() => portPresentation.value.collapsedLabel)
 
-function setOptionalExpanded(val: boolean) {
-  props.onSetProperty?.('optionalExpanded', val)
+function setPortsExpanded(expanded: boolean) {
+  props.onSetProperty?.('portDisplayMode', expanded ? 'expanded' : 'compact')
 }
 
-const nodeDefinition = computed(() => {
-  const nodeType = props.properties?.nodeType
-  return nodeType ? getNodeDefinition(nodeType) : undefined
-})
-
-/** 非可选的输入端口（始终显示） */
-const visibleInputs = computed<PortDef[]>(() => {
-  const def = nodeDefinition.value
-  if (!def) return inputs.value
-  const optionalNames = new Set(def.inputPorts.filter(p => p.optional).map(p => p.name))
-  if (optionalNames.size === 0) return inputs.value
-  return inputs.value.filter(p => !optionalNames.has(p.name))
-})
-
-/** 可选的输入端口 */
-const optionalInputs = computed<PortDef[]>(() => {
-  const def = nodeDefinition.value
-  if (!def) return []
-  const optionalNames = new Set(def.inputPorts.filter(p => p.optional).map(p => p.name))
-  return inputs.value.filter(p => optionalNames.has(p.name))
-})
-
-const hiddenOptionalCount = computed(() => optionalInputs.value.length)
+function sourceLabel(source: InputSourceKind) {
+  return ({
+    upstream: '上游',
+    expression: '表达式',
+    fixed: '固定值',
+    missing: '待连接',
+    default: '',
+  } as Record<InputSourceKind, string>)[source]
+}
 
 // ── 更多菜单 ──
 const moreMenuOpen = ref(false)
@@ -595,6 +586,20 @@ function onNodeClick() {
 }
 .port-row.port-out .port-label { text-align: right; }
 
+.port-source {
+  flex-shrink: 0;
+  padding: 1px 5px;
+  border-radius: 4px;
+  color: var(--wf-port-label);
+  background: color-mix(in srgb, var(--wf-port-label) 8%, transparent);
+  font-size: 9px;
+  line-height: 15px;
+}
+.source-upstream .port-source { color: var(--wf-port-in); background: color-mix(in srgb, var(--wf-port-in) 12%, transparent); }
+.source-expression .port-source { color: #a78bfa; background: color-mix(in srgb, #a78bfa 13%, transparent); }
+.source-fixed .port-source { color: #eab308; background: color-mix(in srgb, #eab308 12%, transparent); }
+.source-missing .port-source { color: var(--wf-status-failed); background: color-mix(in srgb, var(--wf-status-failed) 10%, transparent); }
+
 .port-type {
   font-size: 10px;
   color: var(--wf-port-type);
@@ -610,8 +615,12 @@ function onNodeClick() {
   box-sizing: border-box;
   display: flex;
   align-items: center;
+  width: 100%;
   height: 24px;
   padding: 0 10px;
+  border: 0;
+  background: transparent;
+  text-align: left;
   font-size: 11px;
   color: var(--wf-port-label);
   cursor: pointer;
@@ -620,28 +629,7 @@ function onNodeClick() {
 }
 .optional-toggle:hover { color: var(--wf-node-title); }
 .optional-toggle.collapse { padding-top: 0; }
+.optional-toggle-count { margin-left: auto; color: var(--wf-port-type); font-size: 10px; }
+.optional-toggle-icon { margin-left: 6px; color: var(--wf-port-type); font-size: 13px; line-height: 1; }
 
-.optional-ports {
-  border-left: 2px dashed var(--wf-node-border-hover);
-  margin-left: 6px;
-}
-
-.port-collapse-btn {
-  width: 16px;
-  height: 16px;
-  border: none;
-  background: none;
-  color: var(--wf-port-label);
-  cursor: pointer;
-  font-size: 12px;
-  border-radius: 3px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  opacity: 0;
-  transition: opacity 150ms, background 150ms;
-  flex-shrink: 0;
-}
-.port-row:hover .port-collapse-btn { opacity: 1; }
-.port-collapse-btn:hover { background: var(--wf-node-border); color: var(--wf-status-failed); }
 </style>

@@ -60,4 +60,8 @@ export interface NodeDefinition {
   inputPorts: InputPortDef[]
   outputPorts: OutputPortDef[]
   configFields: ConfigFieldDef[]
+  /** 画布紧凑态的呈现文案；不影响服务端节点执行契约。 */
+  presentation?: {
+    collapsedInputsLabel?: string
+  }
 }
