@@ -25,6 +25,19 @@
       </a-skeleton>
     </div>
 
+    <!-- 加载失败 -->
+    <EmptyState
+      v-else-if="loadError"
+      type="error"
+      icon="exclamation-circle"
+      title="加载失败"
+      :description="loadError"
+    >
+      <template #action>
+        <a-button type="primary" size="small" @click="loadData">重试</a-button>
+      </template>
+    </EmptyState>
+
     <!-- 空状态 -->
     <EmptyState
       v-else-if="!reportData || reportData.pagination.total === 0"
@@ -142,6 +155,7 @@ const props = defineProps<{
 }>()
 
 const loading = ref(false)
+const loadError = ref<string | null>(null)
 const reportData = ref<EstimationReportData | null>(null)
 const selectedProjectId = ref<string | undefined>(undefined)
 const currentPage = ref(1)
@@ -241,12 +255,13 @@ function deviationLabel(d: string): string {
 
 async function loadData() {
   loading.value = true
+  loadError.value = null
   reportData.value = null
   try {
     const res = await reportStatisticsApi.estimationReport(selectedProjectId.value, currentPage.value, currentPageSize.value)
     reportData.value = res.data
   } catch (e: any) {
-    Message.error(e.response?.data?.message || '加载预估报表失败')
+    loadError.value = e.response?.data?.message || '加载预估报表失败'
   } finally {
     loading.value = false
   }

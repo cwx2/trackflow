@@ -70,6 +70,19 @@
         </a-skeleton>
       </div>
 
+      <!-- 加载失败 -->
+      <EmptyState
+        v-else-if="loadError"
+        type="error"
+        icon="exclamation-circle"
+        title="加载失败"
+        :description="loadError"
+      >
+        <template #action>
+          <a-button type="primary" size="small" @click="loadChartData">重试</a-button>
+        </template>
+      </EmptyState>
+
       <!-- 空状态 -->
       <EmptyState
         v-else-if="!chartData || chartData.totalMinutes === 0"
@@ -188,6 +201,19 @@
           <a-skeleton-shape shape="square" :style="{ width: '100%', height: '40px' }" />
         </a-skeleton>
       </div>
+
+      <!-- 加载失败 -->
+      <EmptyState
+        v-else-if="tableLoadError"
+        type="error"
+        icon="exclamation-circle"
+        title="加载失败"
+        :description="tableLoadError"
+      >
+        <template #action>
+          <a-button type="primary" size="small" @click="loadTableData">重试</a-button>
+        </template>
+      </EmptyState>
 
       <!-- 空状态 -->
       <EmptyState
@@ -336,7 +362,9 @@ const activeView = ref<'charts' | 'issue' | 'user' | 'work_item'>('charts')
 
 // ─── 筛选状态 ─────────────────────────────────────
 const loading = ref(false)
+const loadError = ref<string | null>(null)
 const tableLoading = ref(false)
+const tableLoadError = ref<string | null>(null)
 const chartData = ref<TimeReportData | null>(null)
 const tableData = ref<TimeReportGroupedData | null>(null)
 const selectedProjectId = ref<string | undefined>(undefined)
@@ -598,12 +626,13 @@ function buildParams() {
 
 async function loadChartData() {
   loading.value = true
+  loadError.value = null
   chartData.value = null
   try {
     const res = await reportStatisticsApi.timeReport(buildParams())
     chartData.value = res.data
   } catch (e: any) {
-    Message.error(e.response?.data?.message || '加载时间报表失败')
+    loadError.value = e.response?.data?.message || '加载时间报表失败'
   } finally {
     loading.value = false
   }
@@ -612,6 +641,7 @@ async function loadChartData() {
 async function loadTableData() {
   if (activeView.value === 'charts') return
   tableLoading.value = true
+  tableLoadError.value = null
   tableData.value = null
   try {
     const res = await reportStatisticsApi.timeReportGrouped({
@@ -622,7 +652,7 @@ async function loadTableData() {
     })
     tableData.value = res.data
   } catch (e: any) {
-    Message.error(e.response?.data?.message || '加载时间报表失败')
+    tableLoadError.value = e.response?.data?.message || '加载时间报表失败'
   } finally {
     tableLoading.value = false
   }
