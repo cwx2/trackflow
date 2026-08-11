@@ -431,52 +431,16 @@
       @expand-to-fullscreen="onCreatePanelExpand"
     />
 
-    <!-- 新建 Sprint 弹窗 -->
-    <a-modal v-model:visible="showSprintCreate" title="新建迭代" :width="480" @ok="handleSprintCreate" :ok-loading="sprintCreating" :esc-to-close="false" :on-before-cancel="handleSprintCreateBeforeClose">
-      <a-form :model="sprintCreateForm" layout="vertical">
-        <a-form-item label="名称" required>
-          <a-input v-model="sprintCreateForm.name" placeholder="如：Sprint 25" />
-        </a-form-item>
-        <a-form-item label="目标">
-          <a-textarea v-model="sprintCreateForm.goal" placeholder="本迭代目标（可选）" :auto-size="{ minRows: 2, maxRows: 4 }" />
-        </a-form-item>
-        <a-form-item label="开始日期">
-          <a-date-picker v-model="sprintCreateForm.startDate" style="width: 100%" />
-        </a-form-item>
-        <a-form-item label="结束日期">
-          <a-date-picker v-model="sprintCreateForm.endDate" style="width: 100%" />
-        </a-form-item>
-
-        <!-- 可选操作区域 -->
-        <div class="create-options-section" v-if="sprintCreationPreview">
-          <div
-            class="create-option-item"
-            v-if="sprintCreationPreview.activeSprintId && sprintCreationPreview.unresolvedIssueCount > 0"
-          >
-            <a-checkbox v-model="sprintCreateForm.moveUnresolvedIssues">
-              <span class="option-label">添加当前 Sprint 未完成工单</span>
-            </a-checkbox>
-            <span class="option-desc">
-              将 <strong>{{ sprintCreationPreview.activeSprintName }}</strong> 中的
-              {{ sprintCreationPreview.unresolvedIssueCount }} 个未完成工单移入新迭代
-            </span>
-          </div>
-          <div class="create-option-item">
-            <a-checkbox v-model="sprintCreateForm.setAsDefault">
-              <span class="option-label">设为默认 Sprint</span>
-            </a-checkbox>
-            <span class="option-desc">
-              <template v-if="sprintCreationPreview.hasDefaultSprint">
-                当前默认为 <strong>{{ sprintCreationPreview.defaultSprintName }}</strong>，替换后新建工单将自动归属此迭代
-              </template>
-              <template v-else>
-                启用后，该项目新创建的工单将自动分配到此迭代
-              </template>
-            </span>
-          </div>
-        </div>
-      </a-form>
-    </a-modal>
+    <!-- Sprint 新建弹窗：复用 SprintFormModal 组件 -->
+    <SprintFormModal
+      v-model:show-create="showSprintCreate"
+      :show-edit="false"
+      :editing-sprint="null"
+      :project-id="selectedProject"
+      :can-edit-fn="() => false"
+      :can-delete-fn="() => false"
+      @created="loadSprints"
+    />
   </div>
 </template>
 
@@ -484,10 +448,9 @@
 import { formatDate, formatDueDate, getDueDateStatus } from '@/utils/date'
 import { ref, computed, watch, reactive, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
-import { Message, Modal } from '@arco-design/web-vue'
+import { Message } from '@arco-design/web-vue'
 import { IconSearch, IconPlus, IconList, IconFilter, IconDown, IconUp, IconClockCircle, IconTrophy } from '@arco-design/web-vue/es/icon'
 import { issueApi, sprintApi, projectApi } from '@/api'
-import { ERROR_CODES } from '@/api/error-codes'
 import { useProjectStore } from '@/stores/project'
 import { useProjectList } from '@/composables/useProjectList'
 import { usePermission } from '@/composables/usePermission'
@@ -497,8 +460,8 @@ import IssuePriorityBadge from '@/components/base/IssuePriorityBadge.vue'
 import IssueCreatePanel from '@/components/IssueCreatePanel.vue'
 import { EmptyState } from '@/components/base'
 import { useDrafts } from '@/composables/useDrafts'
-import { useModalEscapeHandler } from '@/composables/useModalEscapeGuard'
-import type { IssueVO, SprintVO, ProjectMemberVO, SprintVelocityVO, CreationPreviewVO, SprintOverlapWarning } from '@/api/types'
+import type { IssueVO, SprintVO, ProjectMemberVO, SprintVelocityVO } from '@/api/types'
+import SprintFormModal from './components/SprintFormModal.vue'
 
 const router = useRouter()
 const projectStore = useProjectStore()
@@ -556,19 +519,7 @@ const sprintQuickAddLoadingId = ref<string | null>(null)
 const showCreatePanel = ref(false)
 const createPanelSprintId = ref<string | null>(null)
 const createPanelLockSprint = ref(false)
-
-// ===== Sprint Creation Modal =====
 const showSprintCreate = ref(false)
-const sprintCreating = ref(false)
-const sprintCreationPreview = ref<CreationPreviewVO | null>(null)
-const sprintCreateForm = reactive({
-  name: '',
-  goal: '',
-  startDate: '',
-  endDate: '',
-  moveUnresolvedIssues: false,
-  setAsDefault: false
-})
 
 let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -1045,119 +996,12 @@ function goToSprintPage() {
 }
 
 // ===== Sprint Creation =====
+// 弹窗逻辑完全由 SprintFormModal 内部处理（表单重置/creationPreview/脏检查/Escape）
 
-async function openSprintCreateModal() {
-  sprintCreateForm.name = ''
-  sprintCreateForm.goal = ''
-  sprintCreateForm.startDate = ''
-  sprintCreateForm.endDate = ''
-  sprintCreateForm.moveUnresolvedIssues = false
-  sprintCreateForm.setAsDefault = false
-  sprintCreationPreview.value = null
+function openSprintCreateModal() {
   showSprintCreate.value = true
-
-  if (selectedProject.value) {
-    try {
-      const res = await sprintApi.creationPreview(selectedProject.value)
-      sprintCreationPreview.value = res.data
-    } catch {
-      sprintCreationPreview.value = null
-    }
-  }
 }
 
-async function handleSprintCreate() {
-  if (!sprintCreateForm.name.trim()) {
-    Message.warning('请输入迭代名称')
-    return
-  }
-  if (sprintCreateForm.startDate && sprintCreateForm.endDate && sprintCreateForm.startDate >= sprintCreateForm.endDate) {
-    Message.warning('开始日期必须早于结束日期')
-    return
-  }
-  await doSprintCreate(false)
-}
-
-async function doSprintCreate(confirmOverlap: boolean) {
-  sprintCreating.value = true
-  try {
-    await sprintApi.create(selectedProject.value!, {
-      name: sprintCreateForm.name.trim(),
-      goal: sprintCreateForm.goal || undefined,
-      startDate: sprintCreateForm.startDate || undefined,
-      endDate: sprintCreateForm.endDate || undefined,
-      moveUnresolvedIssues: sprintCreateForm.moveUnresolvedIssues || undefined,
-      setAsDefault: sprintCreateForm.setAsDefault || undefined,
-      confirmOverlap: confirmOverlap || undefined
-    })
-    Message.success('迭代创建成功')
-    showSprintCreate.value = false
-    // Refresh sprints so new one appears in the panel
-    await loadSprints()
-  } catch (e: any) {
-    const code = e.response?.data?.code
-    if (code === ERROR_CODES.SPRINT_DATE_OVERLAP) {
-      const warning = e.response.data.data as SprintOverlapWarning
-      const overlapNames = warning.overlappingSprints.map(s => s.name).join('、')
-      Modal.warning({
-        title: '日期重叠提醒',
-        content: `新迭代的日期与以下迭代重叠：${overlapNames}。确定继续创建吗？`,
-        okText: '继续创建',
-        cancelText: '取消',
-        hideCancel: false,
-        onOk: () => doSprintCreate(true)
-      })
-    } else {
-      Message.error(e.response?.data?.message || '创建失败')
-    }
-  } finally {
-    sprintCreating.value = false
-  }
-}
-
-/**
- * 新建迭代弹窗关闭前拦截：如有已填写内容则弹出确认提示。
- */
-function handleSprintCreateBeforeCancel(): boolean {
-  const dirty = !!(sprintCreateForm.name.trim() || sprintCreateForm.goal.trim() || sprintCreateForm.startDate || sprintCreateForm.endDate)
-  if (!dirty) {
-    showSprintCreate.value = false
-    return true
-  }
-  Modal.confirm({
-    title: '确认放弃',
-    content: '表单中有未保存的内容，确定要放弃吗？',
-    okText: '放弃',
-    cancelText: '继续编辑',
-    onOk: () => { showSprintCreate.value = false }
-  })
-  return true
-}
-
-// 注册 Modal Escape handler：按 Escape 时检查表单脏状态
-useModalEscapeHandler(showSprintCreate, handleSprintCreateBeforeCancel)
-
-/**
- * X 按钮 / 遮罩点击的关闭前检查（onBeforeCancel）。
- * Escape 键由 useModalEscapeHandler 处理，此函数仅处理非 Escape 的关闭触发。
- * 返回 true 允许关闭，返回 false 阻止并弹确认。
- */
-function handleSprintCreateBeforeClose(): boolean {
-  const dirty = !!(sprintCreateForm.name.trim() || sprintCreateForm.goal.trim() || sprintCreateForm.startDate || sprintCreateForm.endDate)
-  if (!dirty) return true
-  Modal.confirm({
-    title: '确认放弃',
-    content: '表单中有未保存的内容，确定要放弃吗？',
-    okText: '放弃',
-    cancelText: '继续编辑',
-    onOk: () => { showSprintCreate.value = false }
-  })
-  return false
-}
-
-/**
- * 跳转到工单列表，自动应用当前 Sprint 过滤器
- */
 function viewSprintIssues(sprint: SprintVO) {
   const currentProject = projects.value.find(p => p.id === selectedProject.value)
   const query: Record<string, string> = { sprint: sprint.id, label: sprint.name }
