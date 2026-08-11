@@ -1,0 +1,14 @@
+﻿src/composables/useNotification.ts(1,10): error TS2300: Duplicate identifier 'ref'.
+src/composables/useNotification.ts(1,25): error TS2300: Duplicate identifier 'watch'.
+src/composables/useNotification.ts(2,10): error TS2300: Duplicate identifier 'ref'.
+src/composables/useNotification.ts(2,15): error TS2300: Duplicate identifier 'watch'.
+src/views/board/KanbanBoardViewImpl.vue(443,42): error TS2339: Property 'updatedAt' does not exist on type 'BoardIssue'.
+  Property 'updatedAt' does not exist on type 'BoardCardVO'.
+src/views/board/KanbanBoardViewImpl.vue(682,48): error TS2339: Property 'updatedAt' does not exist on type 'BoardIssue'.
+  Property 'updatedAt' does not exist on type 'BoardCardVO'.
+src/views/issue/composables/useColumnConfig.ts(40,25): error TS2304: Cannot find name 'customFieldApi'.
+src/views/issue/composables/useColumnConfig.ts(41,25): error TS2304: Cannot find name 'AvailableColumnVO'.
+src/views/issue/composables/useColumnConfig.ts(154,11): error TS2769: No overload matches this call.
+  The last overload gave the following error.
+    Argument of type 'string | ComputedRef<string | undefined> | Ref<string | undefined, string | undefined> | ShallowRef<string | undefined, string | undefined> | WritableComputedRef<...> | (() => string | undefined)' is not assignable to parameter of type 'object'.
+      Type 'string' is not assignable to type 'object'.
