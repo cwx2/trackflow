@@ -736,6 +736,9 @@ const sidebarFields = computed<SidebarField[]>(() => {
   const userOptions = canAssign ? members.value.map(m => ({ value: m.userId, label: m.displayName })) : []
   const sprintOptions = canSprint ? buildSprintOptions(sprints.value, i.projectId) : []
   const sprintDisplayName = i.sprintName || (i.sprintId ? sprints.value.find(s => s.id === i.sprintId)?.name : null) || '未排期'
+  // 判断当前 Sprint 是否已完成（用于字段面板视觉标识）
+  const sprintCompleted = i.sprintStatus?.toLowerCase() === 'completed' ||
+    (i.sprintId ? sprints.value.find(s => s.id === i.sprintId)?.status?.toLowerCase() === 'completed' : false)
   return [
     { key: 'project', label: '项目', value: projectName.value, readonly: true, readonlyReason: '工单创建后不可变更项目' },
     { key: 'priority', label: '优先级', value: localizePriority(i.priority), dot: priorityDot(i.priority), editType: 'select' as const, rawValue: i.priority, readonly: !canEdit, options: dynamicPriorityOptions.value.map(o => ({ value: o.value, label: o.label })) },
@@ -743,7 +746,7 @@ const sidebarFields = computed<SidebarField[]>(() => {
     { key: 'issueType', label: '类型', value: getDetailIssueTypeLabel(i.issueType), dot: getDetailIssueTypeColor(i.issueType), editType: 'select' as const, rawValue: i.issueType, readonly: !canEdit, options: dynamicIssueTypeOptions.value.map(o => ({ value: o.value, label: o.label })) },
     { key: 'assignee', label: '负责人', value: i.assigneeName || '未分配', editType: 'user-select' as const, rawValue: i.assigneeId || '', readonly: !canAssign, options: userOptions },
     { key: 'reporter', label: '报告人', value: reporterName.value, readonly: true, readonlyReason: '报告人为工单创建者，不可修改', userId: i.reporterId || undefined },
-    { key: 'sprint', label: '迭代', value: sprintDisplayName, editType: 'select' as const, rawValue: i.sprintId || '', readonly: !canSprint, options: sprintOptions },
+    { key: 'sprint', label: '迭代', value: sprintDisplayName, editType: 'select' as const, rawValue: i.sprintId || '', readonly: !canSprint, options: sprintOptions, class: sprintCompleted ? 'sprint-completed' : undefined, badge: sprintCompleted ? '已结束' : undefined, badgeColor: sprintCompleted ? 'var(--tf-warning, #d29922)' : undefined, tooltip: sprintCompleted ? '该迭代已完成，工单仍未关闭。建议移至当前活跃迭代或 Backlog' : undefined },
     { key: 'dueDate', label: '截止日期', value: i.dueDate || '-', editType: 'date' as const, rawValue: i.dueDate || '', readonly: !canEdit, class: getDueDateStatus(i.dueDate) !== 'normal' ? `due-${getDueDateStatus(i.dueDate)}` : undefined, tooltip: getDueDateStatus(i.dueDate) !== 'normal' ? getDueDateTooltip(i.dueDate) : undefined },
     ...(projectTimeTrackingEnabled.value ? [
       { key: 'estimatedHours', label: '预估工时', value: i.estimatedHours ? `${i.estimatedHours}h` : '-', editType: 'number' as const, rawValue: i.estimatedHours ? String(i.estimatedHours) : '', readonly: !canEdit, progress: i.estimatedHours ? { spent: i.spentHours || 0, estimated: i.estimatedHours } : undefined },

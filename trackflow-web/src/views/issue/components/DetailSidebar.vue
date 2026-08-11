@@ -68,6 +68,7 @@
               <span class="val-text editable" :class="[field.class, { 'prompt-text': field.isSetValuePrompt }]">{{ field.value }}</span>
             </a-tooltip>
             <span v-else class="val-text editable" :class="[field.class, { 'prompt-text': field.isSetValuePrompt }]">{{ field.value }}</span>
+            <span v-if="field.badge" class="val-badge" :style="{ background: field.badgeColor || 'var(--tf-text-quaternary)' }">{{ field.badge }}</span>
             <span class="val-chevron" aria-hidden="true">‹</span>
           </div>
           <template #content>
@@ -1238,6 +1239,27 @@ defineExpose({ highlightField })
 .val-text.time-over-budget {
   color: var(--tf-danger) !important;
   font-weight: 500;
+}
+
+/* ========== 字段值 badge 徽标（如"已结束"） ========== */
+.val-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 10px;
+  line-height: 1.4;
+  color: var(--tf-bg-body, #1b1d21);
+  font-weight: 500;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ========== 已完成 Sprint 字段弱化样式 ========== */
+.val-text.sprint-completed {
+  color: var(--tf-text-quaternary, rgba(128,128,128,0.6)) !important;
+  text-decoration: line-through;
 }
 
 /* ========== 显示更多字段按钮 ========== */
