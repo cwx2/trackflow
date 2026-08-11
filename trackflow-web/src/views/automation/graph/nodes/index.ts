@@ -50,7 +50,12 @@ class StartModel extends HtmlNodeModel {
     this.text = { value: '', x: 0, y: 0, draggable: false, editable: false }
   }
   getDefaultAnchor() {
-    return [{ id: `${this.id}-out-trigger`, x: this.x + 62, y: this.y, type: 'output', edgeAddable: true, connectable: true }]
+    return [{ id: `${this.id}-out-trigger`, x: this.x + 62, y: this.y, type: 'output', edgeAddable: true, connectable: true, _portName: 'trigger' }]
+  }
+  isAllowConnectedAsSource(target: any, sourceAnchor?: any, targetAnchor?: any, edgeId?: string) {
+    const inherited = super.isAllowConnectedAsSource(target, sourceAnchor, targetAnchor, edgeId)
+    if (!inherited.isAllPass) return inherited
+    return validateDirectPortBinding(this, target, sourceAnchor, targetAnchor)
   }
   getOutlineStyle() {
     const s = super.getOutlineStyle()
@@ -72,7 +77,12 @@ class EndModel extends HtmlNodeModel {
     this.text = { value: '', x: 0, y: 0, draggable: false, editable: false }
   }
   getDefaultAnchor() {
-    return [{ id: `${this.id}-in-result`, x: this.x - 62, y: this.y, type: 'input', edgeAddable: true, connectable: true }]
+    return [{ id: `${this.id}-in-result`, x: this.x - 62, y: this.y, type: 'input', edgeAddable: true, connectable: true, _portName: 'result' }]
+  }
+  isAllowConnectedAsTarget(source: any, sourceAnchor?: any, targetAnchor?: any, edgeId?: string) {
+    const inherited = super.isAllowConnectedAsTarget(source, sourceAnchor, targetAnchor, edgeId)
+    if (!inherited.isAllPass) return inherited
+    return validateDirectPortBinding(source, this, sourceAnchor, targetAnchor)
   }
   getOutlineStyle() {
     const s = super.getOutlineStyle()
@@ -82,6 +92,30 @@ class EndModel extends HtmlNodeModel {
 }
 
 export const EndNodeDef = { type: 'end', view: EndView, model: EndModel }
+
+/** Start/End 与通用卡片走同一数据边规则，只是外观和尺寸不同。 */
+function validateDirectPortBinding(source: any, target: any, sourceAnchor?: any, targetAnchor?: any) {
+  if (sourceAnchor?.type !== 'output' || targetAnchor?.type !== 'input') {
+    return { isAllPass: false, msg: '请从输出端口连接到输入端口' }
+  }
+  const sourceType = sourcePortType(source, sourceAnchor._portName)
+  const targetType = targetPortType(target, targetAnchor._portName)
+  if (!sourceType || !targetType) return { isAllPass: false, msg: '端口信息不完整，无法建立数据绑定' }
+  if (sourceType !== targetType && sourceType !== 'any' && targetType !== 'any') {
+    return { isAllPass: false, msg: `类型不兼容：${sourceType} 不能直接连接到 ${targetType}` }
+  }
+  return { isAllPass: true }
+}
+
+function sourcePortType(node: any, name: string) {
+  const ports = node?.properties?.outputs || getNodeDefinition(node?.properties?.nodeType || node?.type)?.outputPorts || []
+  return ports.find((port: any) => port.name === name)?.valueType
+}
+
+function targetPortType(node: any, name: string) {
+  const ports = node?.properties?.inputs || getNodeDefinition(node?.properties?.nodeType || node?.type)?.inputPorts || []
+  return ports.find((port: any) => port.name === name)?.valueType
+}
 
 // ─── Comment 注释节点 ─────────────────────────────────────────────────────────
 

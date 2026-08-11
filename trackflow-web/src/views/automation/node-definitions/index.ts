@@ -62,12 +62,27 @@ export function findNodeContractDrift(serverDefinitions: AutomationNodeDefinitio
       (port) => `${port.name}:${port.valueType}:${port.required}:${Boolean(port.optional)}`)
     comparePorts(type, '输出', local.outputPorts, server.outputPorts, drift,
       (port) => `${port.name}:${port.valueType}`)
+    for (const localPort of local.inputPorts) {
+      const serverPort = server.inputPorts.find(port => port.name === localPort.name)
+      if (!serverPort) continue
+      const localModes = defaultBindingModes(localPort.valueType).join(',')
+      const serverModes = [...(serverPort.bindingModes || [])].sort().join(',')
+      if (localModes !== serverModes) {
+        drift.push(`${type}.${localPort.name} 的输入来源契约与后端不一致`)
+      }
+    }
     serverByType.delete(type)
   }
   for (const type of serverByType.keys()) {
     drift.push(`后端节点 ${type} 没有前端画布定义`)
   }
   return drift
+}
+
+function defaultBindingModes(valueType: string) {
+  return (valueType === 'string' || valueType === 'any'
+    ? ['literal', 'reference', 'template']
+    : ['literal', 'reference']).sort()
 }
 
 function comparePorts<T extends { name: string }>(

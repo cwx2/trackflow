@@ -661,10 +661,15 @@ public class DAGExecutor {
 
     @SuppressWarnings("unchecked")
     private RetryPolicy resolveRetryPolicy(WorkflowNodeModel node) {
-        if (node.config() == null) return RetryPolicy.NONE;
+        var contract = nodeRegistry.getContract(node.type());
+        int defaultMaxAttempts = contract == null ? 1 : contract.runtime().defaultMaxAttempts();
+        if (contract != null && !contract.runtime().retrySafe()) {
+            return RetryPolicy.NONE;
+        }
+        if (node.config() == null) return new RetryPolicy(defaultMaxAttempts, 0, 1.0, 0);
         Object rawPolicy = node.config().get("retryPolicy");
-        if (!(rawPolicy instanceof Map<?, ?> policy)) return RetryPolicy.NONE;
-        int maxAttempts = intValue(policy.get("maxAttempts"), 1, 1, 10);
+        if (!(rawPolicy instanceof Map<?, ?> policy)) return new RetryPolicy(defaultMaxAttempts, 0, 1.0, 0);
+        int maxAttempts = intValue(policy.get("maxAttempts"), defaultMaxAttempts, 1, 10);
         int initialDelay = intValue(policy.get("initialDelaySeconds"), 2, 0, 3600);
         double multiplier = doubleValue(policy.get("backoffMultiplier"), 2.0, 1.0, 10.0);
         int maxDelay = intValue(policy.get("maxDelaySeconds"), 300, 0, 86400);

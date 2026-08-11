@@ -7,6 +7,7 @@ import com.trackflow.automation.node.ProcessExecutionSupport;
 import com.trackflow.automation.node.NodeExecutor;
 import com.trackflow.automation.node.model.InputPortDef;
 import com.trackflow.automation.node.model.OutputPortDef;
+import com.trackflow.automation.node.model.NodeRuntimePolicy;
 import com.trackflow.automation.node.model.WorkflowNodeModel;
 import org.springframework.stereotype.Component;
 
@@ -27,6 +28,7 @@ public class CodeNode implements NodeDefinition, NodeExecutor {
     @Override public String getColor()       { return "#7c3aed"; }
     @Override public String getDescription() { return "执行 Shell/Python 脚本，处理自定义逻辑"; }
     @Override public String getCategory()    { return "业务逻辑"; }
+    @Override public NodeRuntimePolicy getRuntimePolicy() { return NodeRuntimePolicy.sideEffect(); }
 
     @Override
     public List<InputPortDef> getInputPorts() {

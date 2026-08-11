@@ -44,6 +44,8 @@ export interface AutomationNodeDefinitionVO {
     required: boolean
     description?: string
     optional?: boolean
+    /** 该输入允许的来源：固定值、上游引用或模板表达式。 */
+    bindingModes: Array<'literal' | 'reference' | 'template'>
   }>
   outputPorts: Array<{
     name: string
@@ -51,6 +53,16 @@ export interface AutomationNodeDefinitionVO {
     valueType: ValueType
     description?: string
   }>
+  runtime: {
+    defaultMaxAttempts: number
+    retrySafe: boolean
+    testMode: 'safe' | 'confirm' | 'simulated'
+  }
+  observability: {
+    inputSummaryFields: string[]
+    outputSummaryFields: string[]
+    sensitiveInputFields: string[]
+  }
 }
 
 export interface CreateWorkflowDTO {

@@ -8,6 +8,7 @@ import com.trackflow.automation.node.NodeExecutionException;
 import com.trackflow.automation.node.ProcessExecutionSupport;
 import com.trackflow.automation.node.model.InputPortDef;
 import com.trackflow.automation.node.model.OutputPortDef;
+import com.trackflow.automation.node.model.NodeRuntimePolicy;
 import com.trackflow.automation.node.model.WorkflowNodeModel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,6 +34,7 @@ public class CliAgentNode implements NodeDefinition, NodeExecutor {
     @Override public String getIcon()        { return "🤖"; }
     @Override public String getColor()       { return "#6366f1"; }
     @Override public String getDescription() { return "执行 AI 命令行任务"; }
+    @Override public NodeRuntimePolicy getRuntimePolicy() { return NodeRuntimePolicy.sideEffect(); }
     @Override public List<InputPortDef> getInputPorts() {
         return List.of(
             new InputPortDef("prompt",  "string", true,  "提示词"),

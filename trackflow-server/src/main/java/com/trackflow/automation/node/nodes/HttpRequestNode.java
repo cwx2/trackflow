@@ -7,6 +7,7 @@ import com.trackflow.automation.node.NodeExecutionException;
 import com.trackflow.automation.node.NodeExecutor;
 import com.trackflow.automation.node.model.InputPortDef;
 import com.trackflow.automation.node.model.OutputPortDef;
+import com.trackflow.automation.node.model.NodeRuntimePolicy;
 import com.trackflow.automation.node.model.WorkflowNodeModel;
 import org.springframework.stereotype.Component;
 
@@ -36,6 +37,7 @@ public class HttpRequestNode implements NodeDefinition, NodeExecutor {
     @Override public String getColor()       { return "#0891b2"; }
     @Override public String getDescription() { return "发送 HTTP 请求，调用外部 API 或服务"; }
     @Override public String getCategory()    { return "业务逻辑"; }
+    @Override public NodeRuntimePolicy getRuntimePolicy() { return NodeRuntimePolicy.sideEffect(); }
 
     @Override
     public List<InputPortDef> getInputPorts() {

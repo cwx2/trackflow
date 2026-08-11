@@ -6,6 +6,7 @@ import com.trackflow.automation.node.NodeExecutionException;
 import com.trackflow.automation.node.NodeExecutor;
 import com.trackflow.automation.node.model.InputPortDef;
 import com.trackflow.automation.node.model.OutputPortDef;
+import com.trackflow.automation.node.model.NodeRuntimePolicy;
 import com.trackflow.automation.node.model.WorkflowNodeModel;
 import org.springframework.stereotype.Component;
 
@@ -21,6 +22,7 @@ public class ApprovalNode implements NodeDefinition, NodeExecutor {
     @Override public String getColor() { return "#dc2626"; }
     @Override public String getDescription() { return "高风险写操作前挂起，审批后从检查点恢复"; }
     @Override public String getCategory() { return "控制流"; }
+    @Override public NodeRuntimePolicy getRuntimePolicy() { return NodeRuntimePolicy.orchestration(); }
     @Override public List<InputPortDef> getInputPorts() {
         return List.of(
                 new InputPortDef("title", "string", true, "审批标题"),

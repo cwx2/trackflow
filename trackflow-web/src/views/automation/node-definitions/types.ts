@@ -14,6 +14,8 @@ export interface InputPortDef {
   defaultValue?: InputValue
   /** 是否可选折叠（true=默认折叠，用户主动展开才显示） */
   optional?: boolean
+  /** 允许的运行时值来源；缺省时采用通用输入契约。 */
+  bindingModes?: Array<'literal' | 'reference' | 'template'>
 }
 
 /** 输出端口定义 */

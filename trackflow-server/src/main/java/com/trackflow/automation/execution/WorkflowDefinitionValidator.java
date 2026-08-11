@@ -5,8 +5,11 @@ import com.trackflow.automation.node.NodeRegistry;
 import com.trackflow.automation.node.model.InputParameter;
 import com.trackflow.automation.node.model.InputPortDef;
 import com.trackflow.automation.node.model.InputValue;
+import com.trackflow.automation.node.model.InputBindingMode;
+import com.trackflow.automation.node.model.LiteralValue;
 import com.trackflow.automation.node.model.OutputPortDef;
 import com.trackflow.automation.node.model.VariableRef;
+import com.trackflow.automation.node.model.TemplateValue;
 import com.trackflow.automation.node.model.WorkflowDefinitionModel;
 import com.trackflow.automation.node.model.WorkflowEdgeModel;
 import com.trackflow.automation.node.model.WorkflowNodeModel;
@@ -113,6 +116,9 @@ public class WorkflowDefinitionValidator {
             if (!VALUE_TYPES.contains(actual.valueType())) {
                 throw invalid("节点输入端口类型不支持: " + node.id() + "." + actual.name());
             }
+            if (actual.value() != null && !expectedInput.bindingModes().contains(bindingMode(actual.value()))) {
+                throw invalid("节点输入不允许该值来源: " + node.id() + "." + actual.name());
+            }
             if (executable && expectedInput.required() && actual.value() == null) {
                 throw invalid("缺少必填输入: " + node.id() + "." + actual.name());
             }
@@ -184,6 +190,13 @@ public class WorkflowDefinitionValidator {
             throw invalid("只有 object、array 或 any 输出可以使用 path: "
                     + ref.nodeId() + "." + ref.outputName());
         }
+    }
+
+    private InputBindingMode bindingMode(InputValue value) {
+        if (value instanceof LiteralValue) return InputBindingMode.literal;
+        if (value instanceof VariableRef) return InputBindingMode.reference;
+        if (value instanceof TemplateValue) return InputBindingMode.template;
+        throw invalid("不支持的输入值类型");
     }
 
     private void validateExecutionTopology(List<WorkflowNodeModel> nodes, List<WorkflowEdgeModel> edges) {

@@ -8,6 +8,7 @@ import com.trackflow.automation.node.NodeExecutionException;
 import com.trackflow.automation.node.NodeExecutor;
 import com.trackflow.automation.node.model.InputPortDef;
 import com.trackflow.automation.node.model.OutputPortDef;
+import com.trackflow.automation.node.model.NodeRuntimePolicy;
 import com.trackflow.automation.node.model.WorkflowNodeModel;
 import com.trackflow.automation.service.AutomationIssueFacade;
 import lombok.RequiredArgsConstructor;
@@ -32,6 +33,7 @@ public class IssueUpdateNode implements NodeDefinition, NodeExecutor {
     @Override public String getColor() { return "#ec4899"; }
     @Override public String getDescription() { return "更新工单的优先级、负责人、标签或自定义字段"; }
     @Override public String getCategory() { return "TrackFlow"; }
+    @Override public NodeRuntimePolicy getRuntimePolicy() { return NodeRuntimePolicy.sideEffect(); }
 
     @Override
     public List<InputPortDef> getInputPorts() {

@@ -6,6 +6,7 @@ import com.trackflow.automation.node.NodeExecutionException;
 import com.trackflow.automation.node.NodeExecutor;
 import com.trackflow.automation.node.model.InputPortDef;
 import com.trackflow.automation.node.model.OutputPortDef;
+import com.trackflow.automation.node.model.NodeRuntimePolicy;
 import com.trackflow.automation.node.model.WorkflowNodeModel;
 import com.trackflow.automation.service.AutomationIssueFacade;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +26,7 @@ public class IssueTransitionNode implements NodeDefinition, NodeExecutor {
     @Override public String getColor() { return "#f59e0b"; }
     @Override public String getDescription() { return "按 TrackFlow 状态机安全流转工单"; }
     @Override public String getCategory() { return "TrackFlow"; }
+    @Override public NodeRuntimePolicy getRuntimePolicy() { return NodeRuntimePolicy.sideEffect(); }
     @Override public List<InputPortDef> getInputPorts() {
         return List.of(
                 new InputPortDef("issueId", "number", true, "工单 ID", false),

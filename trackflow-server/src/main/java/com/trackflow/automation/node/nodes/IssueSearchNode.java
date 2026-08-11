@@ -6,6 +6,8 @@ import com.trackflow.automation.node.NodeExecutionException;
 import com.trackflow.automation.node.NodeExecutor;
 import com.trackflow.automation.node.model.InputPortDef;
 import com.trackflow.automation.node.model.OutputPortDef;
+import com.trackflow.automation.node.model.NodeObservabilityPolicy;
+import com.trackflow.automation.node.model.NodeRuntimePolicy;
 import com.trackflow.automation.node.model.WorkflowNodeModel;
 import com.trackflow.automation.service.AutomationIssueFacade;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +30,11 @@ public class IssueSearchNode implements NodeDefinition, NodeExecutor {
     @Override public String getColor() { return "#0ea5e9"; }
     @Override public String getDescription() { return "按项目、状态、优先级、类型和关键词筛选需求"; }
     @Override public String getCategory() { return "TrackFlow"; }
+    @Override public NodeRuntimePolicy getRuntimePolicy() { return new NodeRuntimePolicy(2, true, com.trackflow.automation.node.model.NodeTestMode.safe); }
+    @Override public NodeObservabilityPolicy getObservabilityPolicy() {
+        return new NodeObservabilityPolicy(List.of("projectId", "savedQueryId", "limit"),
+                List.of("count", "hasWork"), List.of());
+    }
 
     @Override
     public List<InputPortDef> getInputPorts() {

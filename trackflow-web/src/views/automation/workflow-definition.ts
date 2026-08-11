@@ -7,13 +7,13 @@ const RESERVED_NODE_PROPERTIES = new Set(['nodeType', 'nodeMeta', 'inputs', 'out
 /** 将历史存量定义升级为当前节点注册表的正式端口契约。 */
 export function migrateWorkflowDefinition(raw: any): WorkflowDefinition {
   if (raw.globalVariables !== undefined) {
-    return {
+    return synchronizeDefinitionBindings({
       ...raw,
       nodes: (raw.nodes || []).map((node: any) => upgradeNodeContract(node)),
-    } as WorkflowDefinition
+    } as WorkflowDefinition)
   }
 
-  return {
+  return synchronizeDefinitionBindings({
     globalVariables: Object.fromEntries(
       Object.entries(raw.variables || {}).map(([key, value]) => [key, { type: 'string' as const, defaultValue: value }]),
     ),
@@ -50,7 +50,7 @@ export function migrateWorkflowDefinition(raw: any): WorkflowDefinition {
       targetNodeId: edge.target || edge.targetNodeId,
       targetPortName: edge.targetHandle || edge.targetPortName || 'input',
     })),
-  }
+  } as WorkflowDefinition)
 }
 
 /**
@@ -142,7 +142,7 @@ export function buildWorkflowDefinition(
   globalVariables: Record<string, GlobalVariable>,
   graphData: { nodes: any[]; edges: any[] },
 ): WorkflowDefinition {
-  return {
+  return synchronizeDefinitionBindings({
     globalVariables,
     nodes: graphData.nodes.map(normalizeCanvasNode),
     edges: graphData.edges.map((edge: any) => ({
@@ -152,7 +152,30 @@ export function buildWorkflowDefinition(
       targetNodeId: edge.targetNodeId,
       targetPortName: edge.properties?.targetPortName || 'input',
     })),
+  } as WorkflowDefinition)
+}
+
+/**
+ * 兼容历史草稿的单向修复：具名端口边是数据绑定的可视表达。
+ * 仅在源、目标端口类型可直接赋值时补齐缺失的 ref；对象取字段需要用户明确 path，
+ * 因而绝不在这里猜测字段或覆盖用户已有的输入值。
+ */
+export function synchronizeDefinitionBindings(definition: WorkflowDefinition): WorkflowDefinition {
+  const nodes = definition.nodes.map(node => ({ ...node, inputs: node.inputs.map(input => ({ ...input })) }))
+  const nodesById = new Map(nodes.map(node => [node.id, node]))
+  for (const edge of definition.edges || []) {
+    const source = nodesById.get(edge.sourceNodeId)
+    const target = nodesById.get(edge.targetNodeId)
+    const sourcePort = source?.outputs.find(port => port.name === edge.sourcePortName)
+    const targetInput = target?.inputs.find(input => input.name === edge.targetPortName)
+    if (!sourcePort || !targetInput || targetInput.value != null || !isDirectlyCompatible(sourcePort.valueType, targetInput.valueType)) continue
+    targetInput.value = { type: 'ref', nodeId: source!.id, outputName: sourcePort.name }
   }
+  return { ...definition, nodes }
+}
+
+function isDirectlyCompatible(source: string, target: string) {
+  return source === target || source === 'any' || target === 'any'
 }
 
 export function extractNodeConfig(properties: Record<string, any>) {

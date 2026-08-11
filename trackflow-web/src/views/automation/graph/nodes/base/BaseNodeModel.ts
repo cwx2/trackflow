@@ -194,6 +194,27 @@ export abstract class BaseNodeModel extends HtmlNodeModel {
     return anchors
   }
 
+  /**
+   * 连线即数据绑定，只允许 output -> input 的直接类型赋值。
+   * object 到字段、数组元素等转换必须显式使用路径或转换节点，不能静默猜测。
+   */
+  isAllowConnectedAsSource(target: any, sourceAnchor?: any, targetAnchor?: any, edgeId?: string) {
+    const inherited = super.isAllowConnectedAsSource(target, sourceAnchor, targetAnchor, edgeId)
+    if (!inherited.isAllPass) return inherited
+    if (sourceAnchor?.type !== 'output' || targetAnchor?.type !== 'input') {
+      return { isAllPass: false, msg: '请从输出端口连接到输入端口' }
+    }
+    const sourceOutputs = (this.properties?.outputs || []) as PortDef[]
+    const targetInputs = (target?.properties?.inputs || []) as PortDef[]
+    const sourcePort = sourceOutputs.find(port => port.name === sourceAnchor._portName)
+    const targetPort = targetInputs.find(port => port.name === targetAnchor._portName)
+    if (!sourcePort || !targetPort) return { isAllPass: false, msg: '端口信息不完整，无法建立数据绑定' }
+    if (!isDirectlyAssignable(sourcePort.valueType, targetPort.valueType)) {
+      return { isAllPass: false, msg: `类型不兼容：${sourcePort.valueType} 不能直接连接到 ${targetPort.valueType}` }
+    }
+    return inherited
+  }
+
   /** 禁用默认外框（由 NodeCard 自己的 border 替代） */
   getOutlineStyle() {
     const style = super.getOutlineStyle()
@@ -201,4 +222,8 @@ export abstract class BaseNodeModel extends HtmlNodeModel {
     if (style.hover) style.hover.stroke = 'none'
     return style
   }
+}
+
+function isDirectlyAssignable(source?: string, target?: string) {
+  return !source || !target || source === target || source === 'any' || target === 'any'
 }

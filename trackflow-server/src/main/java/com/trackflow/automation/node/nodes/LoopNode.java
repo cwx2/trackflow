@@ -6,6 +6,7 @@ import com.trackflow.automation.node.NodeExecutionException;
 import com.trackflow.automation.node.NodeExecutor;
 import com.trackflow.automation.node.model.InputPortDef;
 import com.trackflow.automation.node.model.OutputPortDef;
+import com.trackflow.automation.node.model.NodeRuntimePolicy;
 import com.trackflow.automation.node.model.WorkflowNodeModel;
 import org.springframework.stereotype.Component;
 
@@ -21,6 +22,7 @@ public class LoopNode implements NodeDefinition, NodeExecutor {
     @Override public String getColor() { return "#10b981"; }
     @Override public String getDescription() { return "重复执行子工作流，直到满足条件或达到上限"; }
     @Override public String getCategory() { return "控制流"; }
+    @Override public NodeRuntimePolicy getRuntimePolicy() { return NodeRuntimePolicy.orchestration(); }
     @Override public List<InputPortDef> getInputPorts() {
         return List.of(new InputPortDef("input", "object", false, "每轮传给子工作流的输入"));
     }

@@ -6,6 +6,7 @@ import com.trackflow.automation.node.NodeExecutionException;
 import com.trackflow.automation.node.NodeExecutor;
 import com.trackflow.automation.node.model.InputPortDef;
 import com.trackflow.automation.node.model.OutputPortDef;
+import com.trackflow.automation.node.model.NodeRuntimePolicy;
 import com.trackflow.automation.node.model.WorkflowNodeModel;
 import org.springframework.stereotype.Component;
 
@@ -20,6 +21,7 @@ public class SubWorkflowNode implements NodeDefinition, NodeExecutor {
     @Override public String getColor() { return "#d97706"; }
     @Override public String getDescription() { return "调用已发布工作流并持久化等待结果"; }
     @Override public String getCategory() { return "业务逻辑"; }
+    @Override public NodeRuntimePolicy getRuntimePolicy() { return NodeRuntimePolicy.orchestration(); }
     @Override public List<InputPortDef> getInputPorts() {
         return List.of(new InputPortDef("input", "object", false, "传给子工作流的输入"));
     }

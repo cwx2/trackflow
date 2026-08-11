@@ -282,7 +282,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
 import LogicFlow from '@logicflow/core'
 import { Control, MiniMap, Snapshot } from '@logicflow/extension'
-import { automationApi, type WorkflowDefinition, type GlobalVariable, type ExecutionDetailVO } from '@/api'
+import { automationApi, type WorkflowDefinition, type GlobalVariable, type ExecutionDetailVO, type AutomationNodeDefinitionVO } from '@/api'
 import { DRAGGABLE_NODES, findNodeContractDrift, getNodeDefinition } from './node-definitions'
 import { validateExecutableWorkflow } from './workflow-validator'
 import { buildWorkflowDefinition, createInitialWorkflowDefinition, getWorkflowNodeTitle, migrateWorkflowDefinition, normalizeCanvasNode } from './workflow-definition'
@@ -467,6 +467,73 @@ function updateSelectedNodeProperties(properties: Record<string, unknown>) {
   selectedNode.value = { ...current, properties: nextProperties }
 }
 
+/** 从具名锚点提取端口。锚点格式由 BaseNodeModel 统一生成，不能在各节点各自猜测。 */
+function getAnchorPortName(anchorId: unknown, nodeId: string, direction: 'in' | 'out'): string | null {
+  const prefix = `${nodeId}-${direction}-`
+  return typeof anchorId === 'string' && anchorId.startsWith(prefix)
+    ? anchorId.slice(prefix.length) || null
+    : null
+}
+
+/**
+ * 画布边不仅是视觉连线，也是运行时数据绑定：source.output -> target.input。
+ * 把这一步放在编辑器基座，避免每个节点配置面板各自实现一次且遗漏保存/试运行。
+ */
+function synchronizeEdgeBinding(edge: any) {
+  if (!lf) return
+  const sourcePortName = getAnchorPortName(edge.sourceAnchorId, edge.sourceNodeId, 'out')
+  const targetPortName = getAnchorPortName(edge.targetAnchorId, edge.targetNodeId, 'in')
+  if (!sourcePortName || !targetPortName) {
+    // 旧草稿没有具名 anchor 时不得伪造默认端口；保存校验会明确指出问题。
+    return
+  }
+  const target = lf.getNodeModelById(edge.targetNodeId) as any
+  if (!target) return
+  const inputs = (target.properties?.inputs || []).map((input: any) => input.name === targetPortName
+    ? { ...input, value: { type: 'ref', nodeId: edge.sourceNodeId, outputName: sourcePortName } }
+    : input)
+  if (!inputs.some((input: any) => input.name === targetPortName)) return
+
+  // 每个输入槽只能有一个数据来源。保留同一端口的多条线会让“当前实际使用哪条”不可解释。
+  const graphData = lf.getGraphData() as { edges: any[] }
+  graphData.edges
+    .filter(candidate => candidate.id !== edge.id
+      && candidate.targetNodeId === edge.targetNodeId
+      && (candidate.properties?.targetPortName === targetPortName || candidate.targetAnchorId === edge.targetAnchorId))
+    .forEach(candidate => lf?.deleteEdge(candidate.id))
+
+  const properties = { ...(target.properties || {}), inputs }
+  lf.setProperties(edge.targetNodeId, properties)
+  lf.setProperties(edge.id, { ...(edge.properties || {}), sourcePortName, targetPortName })
+  if (selectedNode.value?.id === edge.targetNodeId) {
+    selectedNode.value = { ...selectedNode.value, properties }
+  }
+}
+
+/** 删除边时仅解除由该边建立的引用，避免误清除用户后来改成的其他输入。 */
+function clearEdgeBinding(edge: any) {
+  if (!lf) return
+  const sourcePortName = edge.properties?.sourcePortName
+    || getAnchorPortName(edge.sourceAnchorId, edge.sourceNodeId, 'out')
+  const targetPortName = edge.properties?.targetPortName
+    || getAnchorPortName(edge.targetAnchorId, edge.targetNodeId, 'in')
+  if (!sourcePortName || !targetPortName) return
+  const target = lf.getNodeModelById(edge.targetNodeId) as any
+  if (!target) return
+  const inputs = (target.properties?.inputs || []).map((input: any) => {
+    const value = input.value
+    return input.name === targetPortName && value?.type === 'ref'
+      && value.nodeId === edge.sourceNodeId && value.outputName === sourcePortName
+      ? { ...input, value: null }
+      : input
+  })
+  const properties = { ...(target.properties || {}), inputs }
+  lf.setProperties(edge.targetNodeId, properties)
+  if (selectedNode.value?.id === edge.targetNodeId) {
+    selectedNode.value = { ...selectedNode.value, properties }
+  }
+}
+
 async function openNodeTest(node: any) {
   if (!workflowId.value || !lf) return
   // 单节点试运行必须与整张草稿保存隔离：画布里其他旧边或未完成节点不能阻断当前节点调试。
@@ -640,13 +707,13 @@ const nodeTestLoading = ref(false)
 let activeEvtSource: EventSource | null = null
 let executionPollTimer: ReturnType<typeof setInterval> | null = null
 let executionFlowAnimator: ExecutionFlowAnimator | null = null
-const NODE_TEST_SIDE_EFFECT_TYPES = new Set([
-  'trackflow-issue-comment', 'trackflow-issue-update', 'trackflow-issue-transition',
-  'http-request', 'code', 'cli-agent', 'role-agent',
-])
-const nodeTestHasSideEffects = computed(() => NODE_TEST_SIDE_EFFECT_TYPES.has(nodeTestNode.value?.properties?.nodeType))
-const NODE_TEST_SIMULATION_TYPES = new Set(['approval', 'loop', 'sub-workflow'])
-const nodeTestIsSimulation = computed(() => NODE_TEST_SIMULATION_TYPES.has(nodeTestNode.value?.properties?.nodeType))
+const serverNodeContracts = ref<Record<string, AutomationNodeDefinitionVO>>({})
+const currentNodeTestMode = computed(() => {
+  const type = nodeTestNode.value?.properties?.nodeType || nodeTestNode.value?.type
+  return serverNodeContracts.value[type]?.runtime?.testMode || 'safe'
+})
+const nodeTestHasSideEffects = computed(() => currentNodeTestMode.value === 'confirm')
+const nodeTestIsSimulation = computed(() => currentNodeTestMode.value === 'simulated')
 const nodeTestInputFields = computed<NodeTestInputField[]>(() => {
   const node = nodeTestNode.value
   const type = node?.properties?.nodeType || node?.type
@@ -886,6 +953,9 @@ async function initLogicFlow() {
   if (!containerRef.value) return
   try {
     const definitionRes = await automationApi.getNodeDefinitions()
+    if (definitionRes.code === 0) {
+      serverNodeContracts.value = Object.fromEntries((definitionRes.data || []).map(definition => [definition.type, definition]))
+    }
     const drift = definitionRes.code === 0 ? findNodeContractDrift(definitionRes.data || [])
       : ['无法读取后端节点执行目录']
     if (drift.length > 0) {
@@ -1000,6 +1070,14 @@ async function initLogicFlow() {
   // 监听节点删除
   lf.on('node:delete', () => {
     selectedNode.value = null
+  })
+
+  lf.on('edge:add', ({ data }: any) => {
+    synchronizeEdgeBinding(data)
+  })
+
+  lf.on('edge:delete', ({ data }: any) => {
+    clearEdgeBinding(data)
   })
 
   // 同步缩放比例到底部工具条

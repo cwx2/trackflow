@@ -9,6 +9,8 @@ import com.trackflow.automation.node.NodeExecutor;
 import com.trackflow.automation.node.NodeRegistry;
 import com.trackflow.automation.node.model.WorkflowDefinitionModel;
 import com.trackflow.automation.node.model.WorkflowNodeModel;
+import com.trackflow.automation.node.model.NodeRuntimePolicy;
+import com.trackflow.automation.node.model.NodeTestMode;
 import com.trackflow.automation.service.AutomationWorkflowService;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
@@ -16,7 +18,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.Map;
-import java.util.Set;
 
 /**
  * 节点级试运行：复用节点生产执行器，但不创建工作流执行记录，也不会修改工作流定义。
@@ -25,12 +26,6 @@ import java.util.Set;
 @Service
 @RequiredArgsConstructor
 public class AutomationNodeTestService {
-    private static final Set<String> SIDE_EFFECT_NODE_TYPES = Set.of(
-            "trackflow-issue-comment", "trackflow-issue-update", "trackflow-issue-transition",
-            "http-request", "code", "cli-agent", "role-agent");
-    private static final Set<String> ORCHESTRATION_NODE_TYPES = Set.of(
-            "approval", "loop", "sub-workflow");
-
     private final AutomationWorkflowService workflowService;
     private final NodeRegistry nodeRegistry;
     private final ObjectMapper objectMapper;
@@ -54,12 +49,14 @@ public class AutomationNodeTestService {
         Map<String, Object> resolvedInput = context.resolveInputs(node.inputs());
         resolvedInput.putAll(overrides);
 
-        if (SIDE_EFFECT_NODE_TYPES.contains(node.type())
+        NodeRuntimePolicy runtimePolicy = nodeRegistry.getContract(node.type()).runtime();
+
+        if (runtimePolicy.testMode() == NodeTestMode.confirm
                 && !Boolean.TRUE.equals(request != null ? request.getConfirmSideEffects() : null)) {
             throw new BusinessException(ErrorCode.INVALID_PARAMETER,
                     "此节点试运行会产生外部副作用，请确认后再执行");
         }
-        if (ORCHESTRATION_NODE_TYPES.contains(node.type())) {
+        if (runtimePolicy.testMode() == NodeTestMode.simulated) {
             return NodeTestResultVO.builder()
                     .nodeId(node.id()).status("simulated").input(resolvedInput).output(Map.of())
                     .message("已完成节点配置与输入预演；该节点依赖持久化编排上下文，请通过完整工作流试运行验证挂起、循环或子流程恢复行为。")

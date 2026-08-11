@@ -7,6 +7,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import com.trackflow.automation.node.model.NodeContract;
 
 @Component
 public class NodeRegistry {
@@ -43,8 +44,15 @@ public class NodeRegistry {
 
     public NodeDefinition getDefinition(String type)       { return definitions.get(type); }
     public NodeExecutor   getExecutor(String type)         { return executors.get(type); }
+    public NodeContract getContract(String type) {
+        NodeDefinition definition = getDefinition(type);
+        return definition == null ? null : definition.getContract();
+    }
     public Collection<NodeDefinition> getAllDefinitions()   {
         return definitions.entrySet().stream().sorted(Map.Entry.comparingByKey())
                 .map(Map.Entry::getValue).toList();
+    }
+    public Collection<NodeContract> getAllContracts() {
+        return getAllDefinitions().stream().map(NodeDefinition::getContract).toList();
     }
 }

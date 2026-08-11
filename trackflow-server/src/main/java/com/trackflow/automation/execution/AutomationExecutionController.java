@@ -7,6 +7,7 @@ import com.trackflow.automation.execution.vo.ExecutionStartedVO;
 import com.trackflow.automation.execution.vo.ExecutionSummaryVO;
 import com.trackflow.automation.execution.vo.NodeTestResultVO;
 import com.trackflow.automation.node.NodeRegistry;
+import com.trackflow.automation.node.model.NodeContract;
 import com.trackflow.common.model.PageResult;
 import com.trackflow.common.model.R;
 import com.trackflow.common.util.SecurityUtils;
@@ -18,7 +19,6 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 @Slf4j
 @RestController
@@ -36,20 +36,8 @@ public class AutomationExecutionController {
 
     @GetMapping("/node-definitions")
     @PreAuthorize("@perm.checkGlobal('system:admin')")
-    public R<List<Map<String, Object>>> getNodeDefinitions() {
-        List<Map<String, Object>> defs = nodeRegistry.getAllDefinitions().stream()
-            .map(d -> Map.<String, Object>of(
-                "type",        d.getType(),
-                "title",       d.getTitle(),
-                "icon",        d.getIcon(),
-                "color",       d.getColor(),
-                "description", d.getDescription(),
-                "category",    d.getCategory(),
-                "inputPorts",  d.getInputPorts(),
-                "outputPorts", d.getOutputPorts()
-            ))
-            .collect(Collectors.toList());
-        return R.ok(defs);
+    public R<List<NodeContract>> getNodeDefinitions() {
+        return R.ok(List.copyOf(nodeRegistry.getAllContracts()));
     }
 
     // ── 执行触发 ──────────────────────────────────────────────────

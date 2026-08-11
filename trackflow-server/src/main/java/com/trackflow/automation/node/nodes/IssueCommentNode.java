@@ -6,6 +6,7 @@ import com.trackflow.automation.node.NodeExecutionException;
 import com.trackflow.automation.node.NodeExecutor;
 import com.trackflow.automation.node.model.InputPortDef;
 import com.trackflow.automation.node.model.OutputPortDef;
+import com.trackflow.automation.node.model.NodeRuntimePolicy;
 import com.trackflow.automation.node.model.WorkflowNodeModel;
 import com.trackflow.automation.service.AutomationIssueFacade;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +26,7 @@ public class IssueCommentNode implements NodeDefinition, NodeExecutor {
     @Override public String getColor() { return "#14b8a6"; }
     @Override public String getDescription() { return "向需求添加 Agent 的计划、进度或测试结果"; }
     @Override public String getCategory() { return "TrackFlow"; }
+    @Override public NodeRuntimePolicy getRuntimePolicy() { return NodeRuntimePolicy.sideEffect(); }
     @Override public List<InputPortDef> getInputPorts() {
         return List.of(
                 new InputPortDef("issueId", "number", true, "工单 ID"),

@@ -7,6 +7,7 @@ import com.trackflow.automation.node.NodeExecutionException;
 import com.trackflow.automation.node.NodeExecutor;
 import com.trackflow.automation.node.model.InputPortDef;
 import com.trackflow.automation.node.model.OutputPortDef;
+import com.trackflow.automation.node.model.NodeRuntimePolicy;
 import com.trackflow.automation.node.model.WorkflowNodeModel;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -25,6 +26,7 @@ public class RoleAgentNode implements NodeDefinition, NodeExecutor {
     @Override public String getColor() { return "#7c3aed"; }
     @Override public String getDescription() { return "以可复用角色、工具白名单和输出协议执行任务"; }
     @Override public String getCategory() { return "Agent"; }
+    @Override public NodeRuntimePolicy getRuntimePolicy() { return NodeRuntimePolicy.sideEffect(); }
     @Override public List<InputPortDef> getInputPorts() {
         return List.of(
                 new InputPortDef("roleId", "number", true, "Agent 角色 ID", false),
