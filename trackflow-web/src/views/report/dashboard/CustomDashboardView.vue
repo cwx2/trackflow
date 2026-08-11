@@ -373,7 +373,7 @@ import { userApi } from '@/api/user'
 import type { DashboardListVO, DashboardDetailVO, DashboardWidgetVO } from '@/api/customDashboard'
 import type { ReportDefinitionVO } from '@/api/report'
 import type { SprintVO } from '@/api/types'
-import WidgetCard from './WidgetCard.vue'
+import WidgetCard from '@/components/base/WidgetCard.vue'
 import ShareDashboardModal from './ShareDashboardModal.vue'
 import { getAllWidgets, getWidget, WidgetConfigForm } from '@/widgets'
 
