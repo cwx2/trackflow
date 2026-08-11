@@ -21,25 +21,9 @@
       </div>
 
       <!-- 模式切换 Tab -->
-      <div class="mode-tabs">
-        <button
-          class="mode-tab"
-          :class="{ active: mode === 'search' }"
-          @click="mode = 'search'"
-        >
-          关联现有工单
-        </button>
-        <button
-          class="mode-tab"
-          :class="{ active: mode === 'create' }"
-          @click="mode = 'create'"
-        >
-          创建新工单
-        </button>
-      </div>
+      <a-tabs v-model:active-key="mode" class="mode-tabs">
+        <a-tab-pane key="search" title="关联现有工单">
 
-      <!-- 搜索模式 -->
-      <template v-if="mode === 'search'">
         <!-- 搜索工单 -->
         <div class="form-row">
           <label class="form-label">搜索工单</label>
@@ -81,10 +65,9 @@
             </div>
           </a-spin>
         </div>
-      </template>
+        </a-tab-pane>
 
-      <!-- 创建模式 -->
-      <template v-if="mode === 'create'">
+        <a-tab-pane key="create" title="创建新工单">
         <div class="form-row">
           <label class="form-label">新工单标题 <span class="required">*</span></label>
           <a-input
@@ -116,7 +99,8 @@
             />
           </div>
         </div>
-      </template>
+        </a-tab-pane>
+      </a-tabs>
     </div>
 
     <template #footer>
@@ -462,38 +446,8 @@ async function handleCreateAndLink() {
 }
 
 /* 模式切换 Tab */
-.mode-tabs {
-  display: flex;
-  gap: 0;
-  border: 1px solid var(--tf-border);
-  border-radius: 6px;
-  overflow: hidden;
-}
-
-.mode-tab {
-  flex: 1;
-  padding: 8px 12px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  border: none;
-  background: transparent;
-  color: var(--tf-text-secondary);
-  transition: all 150ms;
-}
-
-.mode-tab:hover:not(.active) {
-  background: var(--tf-bg-hover);
-}
-
-.mode-tab.active {
-  background: color-mix(in srgb, var(--tf-accent) 12%, transparent);
-  color: var(--tf-accent);
-}
-
-.mode-tab + .mode-tab {
-  border-left: 1px solid var(--tf-border);
-}
+.mode-tabs :deep(.arco-tabs-content) { padding: 0; margin-top: 12px; }
+.mode-tabs :deep(.arco-tabs-pane) { padding: 0; }
 
 /* 搜索模式样式 */
 .issue-list-wrapper {
