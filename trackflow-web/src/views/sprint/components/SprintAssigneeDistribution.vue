@@ -14,20 +14,24 @@
     </div>
 
     <div class="distribution-content" v-if="expanded">
-      <!-- 加载中 -->
-      <div v-if="loading" class="distribution-loading">
-        <a-spin :size="16" />
-        <span>加载中…</span>
-      </div>
+      <DataContainer
+        :loading="loading"
+        :error="error ? '加载失败' : null"
+        :is-empty="!!(distribution && distribution.assignees.length === 0 && distribution.unassignedCount === 0)"
+        empty-title="暂无工单数据"
+        :retry="loadDistribution"
+        class="distribution-container"
+      >
+        <!-- 自定义 loading slot：更小更紧凑 -->
+        <template #loading>
+          <div class="distribution-loading">
+            <a-spin :size="16" />
+            <span>加载中…</span>
+          </div>
+        </template>
 
-      <!-- 加载失败 -->
-      <div v-else-if="error" class="distribution-error">
-        <span>加载失败</span>
-        <a-link @click="loadDistribution">重试</a-link>
-      </div>
-
-      <!-- 分布数据 -->
-      <div v-else-if="distribution" class="distribution-body">
+        <!-- 分布数据 -->
+        <div v-if="distribution" class="distribution-body">
         <!-- 未分配行：用 UserAvatar 替代手写 ? 头像 -->
         <div
           v-if="distribution.unassignedCount > 0"
@@ -89,9 +93,8 @@
           v-if="distribution.assignees.length === 0 && distribution.unassignedCount === 0"
           icon="user-group"
           title="暂无工单数据"
-          :compact="true"
-        />
-      </div>
+        </div>
+      </DataContainer>
     </div>
   </div>
 </template>
@@ -100,7 +103,7 @@
 import { ref, watch } from 'vue'
 import { sprintApi } from '@/api'
 import type { SprintAssigneeDistributionVO } from '@/api/types'
-import { UserAvatar, EmptyState } from '@/components/base'
+import { UserAvatar, DataContainer } from '@/components/base'
 import { IconDown, IconRight } from '@arco-design/web-vue/es/icon'
 
 const props = defineProps<{
@@ -212,6 +215,11 @@ function handleClickAssignee(userId: string | null) {
   padding: 12px 4px;
   font-size: 12px;
   color: var(--color-text-3);
+}
+
+/* DataContainer 在紧凑卡片场景里去掉最小高度 */
+.distribution-container :deep(.data-container) {
+  min-height: unset;
 }
 
 .distribution-body {
