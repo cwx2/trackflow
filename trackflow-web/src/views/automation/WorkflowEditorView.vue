@@ -41,7 +41,7 @@
       <div ref="containerRef" class="canvas-container"></div>
 
       <!-- 右侧悬浮：配置面板 -->
-      <div class="config-panel" :class="{ collapsed: !rightPanelOpen }">
+      <div class="config-panel" :class="{ collapsed: !rightPanelOpen, debugging: selectedNode && inspectorTab === 'debug' }">
         <!-- 收起/展开 tab -->
         <button class="panel-toggle panel-toggle-right" @click="rightPanelOpen = !rightPanelOpen">
           <span>{{ rightPanelOpen ? '▶' : '◀' }}</span>
@@ -1798,6 +1798,17 @@ onUnmounted(() => {
 
 .config-panel.collapsed {
   transform: translateX(calc(100% - 28px));
+}
+
+/* 节点调试按内容收起；配置表单仍保持全高，避免两种面板互相影响。 */
+.config-panel.debugging {
+  bottom: auto;
+  max-height: calc(100% - 24px);
+}
+
+.config-panel.debugging .panel-inner {
+  height: auto;
+  max-height: min(72vh, 760px);
 }
 
 /* 面板内容区 */

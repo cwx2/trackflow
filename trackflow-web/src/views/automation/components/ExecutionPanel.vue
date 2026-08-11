@@ -1,348 +1,111 @@
 <template>
   <div class="execution-panel">
-    <!-- 面板标题栏 -->
     <div class="panel-header" @click="collapsed = !collapsed">
-      <span class="panel-title">
-        {{ mode === 'node-debug' ? '节点调试' : '执行日志' }}
-        <span v-if="currentStatus" :class="['status-badge', currentStatus]">
-          {{ statusLabel }}
-        </span>
-      </span>
-      <div style="display:flex;align-items:center;gap:8px;">
-        <template v-if="mode === 'node-debug'">
-          <button class="debug-action-btn" @click.stop="emit('rerun-debug')">重新运行</button>
-          <button class="debug-action-btn" @click.stop="copySelectedResult">复制结果</button>
-          <button class="debug-action-btn" @click.stop="emit('clear-debug')">清空</button>
-        </template>
-        <span class="toggle-icon">{{ collapsed ? '▲' : '▼' }}</span>
-        <button class="close-btn" @click.stop="emit('close')" title="关闭">✕</button>
+      <div class="title-cluster">
+        <span class="panel-title">执行追踪</span>
+        <span v-if="currentStatus" :class="['status-badge', currentStatus]">{{ statusLabel }}</span>
+        <span v-if="nodeList.length" class="trace-count">{{ nodeList.length }} 个节点</span>
+      </div>
+      <div class="header-actions">
+        <span class="toggle-icon">{{ collapsed ? '▲ 展开' : '▼ 收起' }}</span>
+        <button class="close-btn" @click.stop="emit('close')" title="关闭执行追踪">✕</button>
       </div>
     </div>
 
-    <!-- 展开内容 -->
     <div v-if="!collapsed" class="panel-body">
-      <!-- 节点状态列表 -->
-      <div class="node-list">
-        <div
-          v-for="item in nodeList"
-          :key="item.nodeId"
-          :class="['node-row', item.status, selectedNodeId === item.nodeId ? 'selected' : '']"
-          @click="selectNode(item)"
-        >
-          <span class="node-status-icon">
-            {{ statusIcon(item.status) }}
-          </span>
+      <aside class="node-list" aria-label="执行节点列表">
+        <div v-for="(item, index) in nodeList" :key="item.nodeId" :class="['node-row', item.status, selectedNodeId === item.nodeId ? 'selected' : '']" @click="selectNode(item)">
+          <span class="timeline-marker"><i>{{ statusIcon(item.status) }}</i></span>
+          <span class="node-order">{{ String(index + 1).padStart(2, '0') }}</span>
           <span class="node-name">{{ item.nodeName || item.nodeId }}</span>
-          <span class="node-duration">{{ item.durationMs ? item.durationMs + 'ms' : '' }}</span>
+          <span class="node-duration">{{ item.durationMs != null ? `${item.durationMs}ms` : '—' }}</span>
         </div>
         <div v-if="nodeList.length === 0" class="empty-hint">
-          <template v-if="mode === 'node-debug'">
-            点击节点上的播放按钮，查看本次调试的输入、输出和错误信息。
-          </template>
-          <template v-else-if="runtimeEnabled">
-            工作流运行中，等待触发事件<br />
-            <a class="history-link" @click="emit('goHistory')">查看执行历史 →</a>
-          </template>
-          <template v-else>
-            点击「试运行」查看执行日志
-          </template>
+          <template v-if="runtimeEnabled">工作流运行中，正在等待节点返回结果。</template>
+          <template v-else>点击「试运行」后，这里会按执行顺序展示节点与耗时。</template>
         </div>
-      </div>
+      </aside>
 
-      <!-- 选中节点的输入/输出详情 -->
-      <div v-if="selectedDetail" class="node-detail">
-        <div class="detail-section">
-          <div class="detail-label">输入</div>
-          <pre class="detail-json">{{ formatJson(selectedDetail.input) }}</pre>
+      <main v-if="selectedDetail" class="node-detail">
+        <div class="detail-heading">
+          <div><span class="detail-kicker">当前节点</span><strong>{{ selectedDetail.nodeName || selectedDetail.nodeId }}</strong></div>
+          <span :class="['node-state', selectedDetail.status]">{{ nodeStateLabel(selectedDetail.status) }}</span>
         </div>
-        <div class="detail-section">
-          <div class="detail-label">输出</div>
-          <pre class="detail-json">{{ formatJson(selectedDetail.output) }}</pre>
+        <div class="detail-stats">
+          <div><span>输入</span><strong>{{ valueSummary(selectedDetail.input) }}</strong></div>
+          <div><span>输出</span><strong>{{ valueSummary(selectedDetail.output) }}</strong></div>
+          <div><span>耗时</span><strong>{{ selectedDetail.durationMs != null ? `${selectedDetail.durationMs}ms` : '—' }}</strong></div>
         </div>
-        <div v-if="selectedDetail.errorInfo" class="detail-section error">
-          <div class="detail-label">错误</div>
-          <pre class="detail-json error-text">{{ selectedDetail.errorInfo }}</pre>
+        <div class="data-tabs" role="tablist" aria-label="节点执行数据">
+          <button :class="{ active: activeDataTab === 'input' }" @click="activeDataTab = 'input'">输入</button>
+          <button :class="{ active: activeDataTab === 'output' }" @click="activeDataTab = 'output'">输出</button>
+          <button :class="{ active: activeDataTab === 'raw' }" @click="activeDataTab = 'raw'">原始数据</button>
+          <button v-if="selectedDetail.errorInfo" :class="{ active: activeDataTab === 'error' }" @click="activeDataTab = 'error'">错误</button>
+          <button v-if="streamingOutput[selectedDetail.nodeId]" :class="{ active: activeDataTab === 'stream' }" @click="activeDataTab = 'stream'">实时输出</button>
         </div>
-        <div v-if="selectedDetail.message" class="detail-section debug-message">
-          <div class="detail-label">{{ selectedDetail.mode === 'simulated' ? '预演说明' : '调试提示' }}</div>
-          <p>{{ selectedDetail.message }}</p>
-        </div>
-        <!-- 流式输出 -->
-        <div v-if="streamingOutput[selectedDetail.nodeId]" class="detail-section">
-          <div class="detail-label">实时输出</div>
-          <pre class="detail-json streaming" ref="streamOutputRef">{{ streamingOutput[selectedDetail.nodeId] }}</pre>
-        </div>
-      </div>
+        <section class="data-content">
+          <template v-if="activeDataTab === 'input' || activeDataTab === 'output'">
+            <div v-if="activeEntries.length" class="field-grid" :key="`${selectedDetail.nodeId}-${activeDataTab}`">
+              <article v-for="entry in activeEntries" :key="entry.key" class="field-card"><span>{{ entry.key }}</span><strong>{{ displayValue(entry.value) }}</strong></article>
+            </div>
+            <div v-else class="empty-data">{{ activeDataTab === 'input' ? '此节点没有额外输入。' : '此节点没有返回业务数据。' }}</div>
+          </template>
+          <pre v-else-if="activeDataTab === 'raw'" class="detail-json" :key="`${selectedDetail.nodeId}-raw`">{{ formatJson({ input: selectedDetail.input, output: selectedDetail.output, error: selectedDetail.errorInfo }) }}</pre>
+          <pre v-else-if="activeDataTab === 'error'" class="detail-json error-text">{{ selectedDetail.errorInfo }}</pre>
+          <pre v-else ref="streamOutputRef" class="detail-json streaming">{{ streamingOutput[selectedDetail.nodeId] }}</pre>
+        </section>
+      </main>
+      <main v-else class="node-detail empty-detail"><strong>选择一个已执行的节点</strong><span>输入、输出、错误和耗时会集中显示在这里。</span></main>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, nextTick } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 
-interface NodeEntry {
-  nodeId: string
-  nodeName?: string
-  status: 'idle' | 'running' | 'success' | 'failed' | 'skipped' | 'cancelled'
-  durationMs?: number
-  input?: unknown
-  output?: unknown
-  errorInfo?: string
-  message?: string
-  mode?: 'executed' | 'simulated'
-  startedAt?: string
-}
+type NodeStatus = 'idle' | 'running' | 'success' | 'failed' | 'skipped' | 'cancelled'
+interface NodeEntry { nodeId: string; nodeName?: string; status: NodeStatus; durationMs?: number; input?: unknown; output?: unknown; errorInfo?: string; message?: string; mode?: 'executed' | 'simulated'; startedAt?: string }
+type DataTab = 'input' | 'output' | 'raw' | 'error' | 'stream'
 
 const props = defineProps<{
-  nodeStatusMap: Record<string, 'idle' | 'running' | 'success' | 'failed' | 'skipped' | 'cancelled'>
-  nodeExecutionDetails: Record<string, { input?: unknown; output?: unknown; errorInfo?: string; durationMs?: number; nodeName?: string }>
+  nodeStatusMap: Record<string, NodeStatus>
+  nodeExecutionDetails: Record<string, { input?: unknown; output?: unknown; errorInfo?: string; durationMs?: number; nodeName?: string; message?: string; mode?: 'executed' | 'simulated'; startedAt?: string }>
   streamingOutput: Record<string, string>
   isRunning: boolean
   runtimeEnabled?: boolean
   mode?: 'workflow' | 'node-debug'
 }>()
+const emit = defineEmits<{ (e: 'close'): void; (e: 'goHistory'): void; (e: 'rerun-debug'): void; (e: 'clear-debug'): void; (e: 'copy-debug-result'): void }>()
 
-const emit = defineEmits<{
-  (e: 'close'): void
-  (e: 'goHistory'): void
-  (e: 'rerun-debug'): void
-  (e: 'clear-debug'): void
-  (e: 'copy-debug-result'): void
-}>()
-
-const collapsed    = ref(false)
+const collapsed = ref(false)
 const selectedNodeId = ref<string | null>(null)
+const activeDataTab = ref<DataTab>('output')
 const streamOutputRef = ref<HTMLPreElement | null>(null)
-
-// 从外部状态构建节点列表
-const nodeList = computed<NodeEntry[]>(() =>
-  Object.entries(props.nodeStatusMap).map(([nodeId, status]) => ({
-    nodeId,
-    status,
-    ...props.nodeExecutionDetails[nodeId],
-  }))
-)
-
-const selectedDetail = computed(() =>
-  nodeList.value.find(n => n.nodeId === selectedNodeId.value) || null
-)
-
-const currentStatus = computed(() => {
-  if (props.isRunning || Object.values(props.nodeStatusMap).some(s => s === 'running')) return 'running'
-  if (Object.values(props.nodeStatusMap).some(s => s === 'failed')) return 'failed'
-  if (Object.values(props.nodeStatusMap).some(s => s === 'cancelled')) return 'cancelled'
-  if (Object.values(props.nodeStatusMap).length > 0 &&
-      Object.values(props.nodeStatusMap).every(s => s === 'success' || s === 'skipped')) return 'success'
-  return null
+const nodeList = computed<NodeEntry[]>(() => Object.entries(props.nodeStatusMap).map(([nodeId, status]) => ({ nodeId, status, ...props.nodeExecutionDetails[nodeId] })))
+const selectedDetail = computed(() => nodeList.value.find(node => node.nodeId === selectedNodeId.value) || null)
+const activeEntries = computed(() => objectEntries(activeDataTab.value === 'input' ? selectedDetail.value?.input : selectedDetail.value?.output))
+const currentStatus = computed<'running' | 'success' | 'failed' | 'cancelled' | null>(() => {
+  const statuses = Object.values(props.nodeStatusMap)
+  if (props.isRunning || statuses.some(status => status === 'running')) return 'running'
+  if (statuses.some(status => status === 'failed')) return 'failed'
+  if (statuses.some(status => status === 'cancelled')) return 'cancelled'
+  return statuses.length && statuses.every(status => status === 'success' || status === 'skipped') ? 'success' : null
 })
+const statusLabels: Record<NonNullable<typeof currentStatus.value>, string> = { running: '运行中', success: '已完成', failed: '失败', cancelled: '已取消' }
+const statusLabel = computed(() => currentStatus.value ? statusLabels[currentStatus.value] : '')
 
-const statusLabel = computed(() => {
-  const map: Record<string, string> = {
-    running: '运行中...',
-    success: '成功',
-    failed:  '失败',
-    cancelled: '已取消',
-  }
-  return currentStatus.value ? (map[currentStatus.value] || '') : ''
-})
+function objectEntries(value: unknown) { return value && typeof value === 'object' && !Array.isArray(value) ? Object.entries(value as Record<string, unknown>).map(([key, item]) => ({ key, value: item })) : Array.isArray(value) ? [{ key: '记录数量', value: value.length }] : [] }
+function selectNode(item: NodeEntry) { selectedNodeId.value = item.nodeId; activeDataTab.value = item.errorInfo ? 'error' : 'output' }
+function statusIcon(status: NodeStatus) { return ({ idle: '○', running: '•', success: '✓', failed: '×', skipped: '−', cancelled: '■' })[status] }
+function nodeStateLabel(status: NodeStatus) { return ({ idle: '等待', running: '运行中', success: '成功', failed: '失败', skipped: '已跳过', cancelled: '已取消' })[status] }
+function valueSummary(value: unknown) { if (value == null) return '—'; if (Array.isArray(value)) return `${value.length} 条记录`; if (typeof value === 'object') { const arrays = Object.values(value as Record<string, unknown>).filter(Array.isArray); return arrays.length ? `${(arrays[0] as unknown[]).length} 条记录` : `${Object.keys(value as Record<string, unknown>).length} 个字段` }; return String(value) }
+function displayValue(value: unknown) { if (value == null || value === '') return '—'; if (Array.isArray(value)) return `${value.length} 项`; if (typeof value === 'object') return `${Object.keys(value as Record<string, unknown>).length} 个字段`; const text = String(value); return text.length > 120 ? `${text.slice(0, 120)}…` : text }
+function formatJson(value: unknown) { if (value == null) return '—'; try { return JSON.stringify(value, null, 2) } catch { return String(value) } }
 
-function selectNode(item: NodeEntry) {
-  selectedNodeId.value = item.nodeId
-}
-
-function statusIcon(status: NodeEntry['status']) {
-  const icons: Record<NodeEntry['status'], string> = {
-    idle: '○', running: '⏳', success: '✓', failed: '✗', skipped: '−', cancelled: '■',
-  }
-  return icons[status]
-}
-
-function formatJson(val: unknown) {
-  if (val == null) return '—'
-  try { return JSON.stringify(val, null, 2) }
-  catch { return String(val) }
-}
-
-async function copySelectedResult() {
-  if (!selectedDetail.value) return
-  const value = JSON.stringify({
-    input: selectedDetail.value.input,
-    output: selectedDetail.value.output,
-    error: selectedDetail.value.errorInfo,
-    message: selectedDetail.value.message,
-  }, null, 2)
-  try {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(value)
-    } else {
-      const textarea = document.createElement('textarea')
-      textarea.value = value
-      textarea.style.position = 'fixed'
-      textarea.style.opacity = '0'
-      document.body.appendChild(textarea)
-      textarea.select()
-      document.execCommand('copy')
-      textarea.remove()
-    }
-    emit('copy-debug-result')
-  } catch {
-    // Clipboard permission can be disabled in local development. The result remains selectable in the panel.
-  }
-}
-
-// 流式输出自动滚动到底部
-watch(() => props.streamingOutput[selectedNodeId.value || ''], () => {
-  nextTick(() => {
-    if (streamOutputRef.value) {
-      streamOutputRef.value.scrollTop = streamOutputRef.value.scrollHeight
-    }
-  })
-})
-
-watch(nodeList, (items) => {
-  if (props.mode === 'node-debug' && items.length > 0) {
-    selectedNodeId.value = items[items.length - 1].nodeId
-  }
-}, { immediate: true })
+watch(nodeList, items => { if (items.length && !items.some(item => item.nodeId === selectedNodeId.value)) selectedNodeId.value = items[items.length - 1].nodeId }, { immediate: true })
+watch(() => props.streamingOutput[selectedNodeId.value || ''], () => nextTick(() => { if (activeDataTab.value === 'stream' && streamOutputRef.value) streamOutputRef.value.scrollTop = streamOutputRef.value.scrollHeight }))
 </script>
 
 <style scoped>
-.execution-panel {
-  border-top: 1px solid var(--tf-border);
-  background: var(--tf-bg-surface);
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-height: 0;
-}
-
-.panel-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 14px;
-  cursor: pointer;
-  user-select: none;
-}
-.panel-header:hover { background: var(--tf-bg-hover); }
-
-.panel-title {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--tf-text-primary);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.toggle-icon { font-size: 10px; color: var(--tf-text-tertiary); }
-
-.close-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: var(--tf-text-tertiary);
-  font-size: 12px;
-  padding: 0 2px;
-  line-height: 1;
-}
-.close-btn:hover { color: var(--tf-text-primary); }
-.debug-action-btn {
-  border: 1px solid var(--tf-border);
-  border-radius: 5px;
-  padding: 3px 6px;
-  background: var(--tf-bg-body);
-  color: var(--tf-text-secondary);
-  font-size: 11px;
-  cursor: pointer;
-}
-.debug-action-btn:hover { color: var(--tf-accent); border-color: var(--tf-accent); }
-
-.status-badge {
-  font-size: 10px;
-  padding: 1px 6px;
-  border-radius: 10px;
-  font-weight: 500;
-}
-.status-badge.running { background: var(--tf-accent-bg); color: var(--tf-accent); }
-.status-badge.success { background: var(--tf-success-bg); color: var(--tf-success); }
-.status-badge.failed  { background: var(--tf-danger-bg); color: var(--tf-danger); }
-.status-badge.cancelled { background: var(--tf-bg-elevated); color: var(--tf-text-secondary); }
-
-.panel-body {
-  display: flex;
-  flex: 1;
-  overflow: hidden;
-  min-height: 120px;
-}
-
-.node-list {
-  width: 260px;
-  flex-shrink: 0;
-  border-right: 1px solid var(--tf-border);
-  overflow-y: auto;
-}
-
-.node-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
-  cursor: pointer;
-  font-size: 12px;
-  transition: background 0.1s;
-  border-left: 2px solid transparent;
-}
-.node-row:hover           { background: var(--tf-bg-hover); }
-.node-row.selected        { background: var(--tf-bg-elevated); border-left-color: var(--tf-accent); }
-.node-row.running .node-status-icon { color: var(--tf-accent); }
-.node-row.success .node-status-icon { color: var(--tf-success); }
-.node-row.failed  .node-status-icon { color: var(--tf-danger); }
-.node-row.skipped .node-status-icon,
-.node-row.cancelled .node-status-icon { color: var(--tf-text-tertiary); }
-
-.node-status-icon { font-size: 11px; width: 14px; flex-shrink: 0; }
-.node-name { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.node-duration { color: var(--tf-text-tertiary); font-size: 10px; }
-
-.node-detail {
-  flex: 1;
-  overflow-y: auto;
-  padding: 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.detail-section { display: flex; flex-direction: column; gap: 4px; }
-.debug-message p {
-  margin: 0;
-  color: var(--tf-text-secondary);
-  font-size: 12px;
-  line-height: 1.55;
-}
-.detail-label {
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--tf-text-tertiary);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-.detail-json {
-  font-size: 11px;
-  color: var(--tf-text-secondary);
-  background: var(--tf-bg-body);
-  border: 1px solid var(--tf-border);
-  border-radius: 6px;
-  padding: 8px;
-  margin: 0;
-  max-height: 280px;
-  overflow-y: auto;
-  white-space: pre-wrap;
-  word-break: break-all;
-}
-.detail-json.streaming { max-height: 140px; color: var(--tf-streaming); }
-.error-text { color: var(--tf-danger); }
-
-.empty-hint { padding: 16px 10px; text-align: center; color: var(--tf-text-tertiary); font-size: 12px; line-height: 1.8; }
-.history-link { color: var(--tf-accent); cursor: pointer; text-decoration: none; }
-.history-link:hover { text-decoration: underline; }
+.execution-panel { display: flex; flex-direction: column; min-height: 0; height: 100%; background: var(--tf-bg-surface); }.panel-header { display: flex; align-items: center; justify-content: space-between; min-height: 42px; padding: 0 14px; border-bottom: 1px solid var(--tf-border); cursor: pointer; user-select: none; }.panel-header:hover { background: var(--tf-bg-hover); }.title-cluster, .header-actions { display: flex; align-items: center; gap: 8px; }.panel-title { color: var(--tf-text-primary); font-size: 13px; font-weight: 650; }.trace-count, .toggle-icon { color: var(--tf-text-tertiary); font-size: 11px; }.status-badge, .node-state { padding: 2px 7px; border-radius: 999px; font-size: 11px; font-weight: 600; }.status-badge.running, .node-state.running { color: var(--tf-accent); background: var(--tf-accent-bg); animation: status-pulse 1.7s ease-in-out infinite; }.status-badge.success, .node-state.success { color: var(--tf-success); background: var(--tf-success-bg); }.status-badge.failed, .node-state.failed { color: var(--tf-danger); background: var(--tf-danger-bg); }.status-badge.cancelled, .node-state.cancelled { color: var(--tf-text-secondary); background: var(--tf-bg-elevated); }.close-btn { padding: 2px; border: none; background: transparent; color: var(--tf-text-tertiary); cursor: pointer; }.close-btn:hover { color: var(--tf-text-primary); }.panel-body { display: flex; flex: 1; min-height: 0; overflow: hidden; }.node-list { width: 280px; flex-shrink: 0; overflow-y: auto; padding: 8px 0; border-right: 1px solid var(--tf-border); }.node-row { position: relative; display: flex; align-items: center; gap: 7px; min-height: 36px; padding: 0 11px 0 14px; cursor: pointer; color: var(--tf-text-secondary); font-size: 12px; transition: background .16s, color .16s; }.node-row:hover { background: var(--tf-bg-hover); }.node-row.selected { color: var(--tf-text-primary); background: linear-gradient(90deg, var(--tf-accent-bg), transparent); }.timeline-marker { position: relative; z-index: 1; display: grid; width: 16px; height: 16px; place-items: center; border-radius: 50%; background: var(--tf-bg-surface); border: 1px solid var(--tf-border); }.timeline-marker::after { position: absolute; top: 15px; left: 7px; width: 1px; height: 26px; background: var(--tf-border); content: ''; }.node-row:last-child .timeline-marker::after { display: none; }.timeline-marker i { font-size: 10px; font-style: normal; }.node-row.running .timeline-marker { border-color: var(--tf-accent); color: var(--tf-accent); }.node-row.success .timeline-marker { border-color: var(--tf-success); color: var(--tf-success); }.node-row.failed .timeline-marker { border-color: var(--tf-danger); color: var(--tf-danger); }.node-row.skipped .timeline-marker, .node-row.cancelled .timeline-marker { color: var(--tf-text-tertiary); }.node-order { color: var(--tf-text-tertiary); font-size: 10px; }.node-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.node-duration { color: var(--tf-text-tertiary); font-size: 10px; }.node-detail { display: flex; flex: 1; flex-direction: column; min-width: 0; overflow: auto; padding: 14px 16px; }.detail-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }.detail-heading > div { display: flex; align-items: baseline; gap: 8px; min-width: 0; }.detail-kicker { color: var(--tf-text-tertiary); font-size: 11px; }.detail-heading strong { overflow: hidden; color: var(--tf-text-primary); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }.detail-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 12px 0; }.detail-stats > div { display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: 9px 10px; border: 1px solid var(--tf-border); border-radius: 8px; background: linear-gradient(135deg, var(--tf-bg-body), var(--tf-bg-surface)); }.detail-stats span { color: var(--tf-text-tertiary); font-size: 10px; }.detail-stats strong { overflow: hidden; color: var(--tf-text-primary); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }.data-tabs { display: flex; gap: 3px; border-bottom: 1px solid var(--tf-border); }.data-tabs button { padding: 7px 10px; border: none; border-bottom: 2px solid transparent; background: transparent; color: var(--tf-text-secondary); cursor: pointer; font-size: 12px; }.data-tabs button.active { border-bottom-color: var(--tf-accent); color: var(--tf-accent); font-weight: 600; }.data-content { min-height: 0; padding-top: 10px; animation: content-enter .18s ease-out both; }.field-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; }.field-card { display: flex; flex-direction: column; gap: 5px; min-height: 58px; padding: 10px; border: 1px solid var(--tf-border); border-radius: 8px; background: var(--tf-bg-body); transition: border-color .16s, transform .16s; }.field-card:hover { border-color: var(--tf-accent); transform: translateY(-1px); }.field-card span { color: var(--tf-text-tertiary); font-size: 11px; }.field-card strong { overflow: hidden; color: var(--tf-text-primary); font-size: 12px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }.detail-json { max-height: 360px; margin: 0; padding: 12px; overflow: auto; border: 1px solid var(--tf-border); border-radius: 8px; background: var(--tf-bg-body); color: var(--tf-text-secondary); font-size: 12px; line-height: 1.6; white-space: pre; }.detail-json.streaming { color: var(--tf-streaming); }.error-text { color: var(--tf-danger); }.empty-data { padding: 22px; border: 1px dashed var(--tf-border); border-radius: 8px; color: var(--tf-text-tertiary); text-align: center; font-size: 12px; }.empty-detail { align-items: center; justify-content: center; gap: 6px; color: var(--tf-text-tertiary); font-size: 12px; }.empty-detail strong { color: var(--tf-text-primary); font-size: 13px; }.empty-hint { padding: 18px 16px; color: var(--tf-text-tertiary); font-size: 12px; line-height: 1.7; text-align: center; } @keyframes content-enter { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } } @keyframes status-pulse { 50% { box-shadow: 0 0 0 4px var(--tf-accent-bg); } } @media (max-width: 900px) { .node-list { width: 220px; }.detail-stats { grid-template-columns: 1fr; } } @media (prefers-reduced-motion: reduce) { .status-badge.running, .node-state.running, .data-content { animation: none; }.node-row, .field-card { transition: none; } }
 </style>
