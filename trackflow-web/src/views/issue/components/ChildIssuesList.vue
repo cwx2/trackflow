@@ -7,9 +7,12 @@
 
     <!-- 进度条 -->
     <div v-if="progress" class="progress-bar-wrap">
-      <div class="progress-bar">
-        <div class="progress-fill" :style="{ width: progress.percent + '%' }"></div>
-      </div>
+      <a-progress
+        :percent="progress.percent / 100"
+        :show-text="false"
+        size="mini"
+        style="flex: 1"
+      />
       <span class="progress-text">{{ progress.closed }}/{{ progress.total }} 完成 ({{ progress.percent }}%)</span>
     </div>
 
@@ -95,21 +98,6 @@ defineProps<{
   align-items: center;
   gap: 10px;
   margin-bottom: 12px;
-}
-
-.progress-bar {
-  flex: 1;
-  height: 4px;
-  background: var(--tf-bg-elevated);
-  border-radius: 2px;
-  overflow: hidden;
-}
-
-.progress-fill {
-  height: 100%;
-  background: var(--tf-accent);
-  border-radius: 2px;
-  transition: width 300ms ease;
 }
 
 .progress-text {
