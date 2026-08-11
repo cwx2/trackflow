@@ -44,7 +44,7 @@
       <!-- 项目信息区域 -->
       <div class="project-hero">
         <div class="project-icon" :style="{ background: getProjectColor() }">
-          <span class="icon-text">{{ project.key?.substring(0, 3) }}</span>
+          <span class="icon-text">{{ project.key }}</span>
         </div>
         <div class="project-main-info">
           <h1 class="project-title">{{ project.name }}</h1>
@@ -339,8 +339,9 @@ onMounted(() => {
 }
 
 .project-icon {
-  width: 56px;
+  min-width: 56px;
   height: 56px;
+  padding: 0 12px;
   border-radius: 12px;
   display: flex;
   align-items: center;
@@ -353,6 +354,7 @@ onMounted(() => {
   font-weight: 700;
   color: var(--tf-text-on-accent);
   text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .project-main-info { flex: 1; min-width: 0; }

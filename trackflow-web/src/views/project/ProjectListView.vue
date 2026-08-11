@@ -492,7 +492,7 @@
       <!-- 源项目信息 -->
       <div class="copy-source-info" v-if="copySourceProject">
         <div class="copy-source-header">
-          <div class="project-icon" :style="{ background: getProjectColor(copySourceProject), width: '28px', height: '28px' }">
+          <div class="project-icon" :style="{ background: getProjectColor(copySourceProject), minWidth: '28px', height: '28px', width: 'auto', padding: '0 4px' }">
             <span class="icon-text" style="font-size: 9px">{{ getProjectAbbr(copySourceProject) }}</span>
           </div>
           <div class="copy-source-detail">
@@ -694,7 +694,7 @@ function getProjectColor(project: any) {
 }
 
 function getProjectAbbr(project: any) {
-  return project.key?.substring(0, 3) || project.name?.charAt(0) || '?'
+  return project.key || project.name?.charAt(0) || '?'
 }
 
 const filteredProjects = computed(() => {
@@ -1477,8 +1477,9 @@ watch(projects, () => {
 }
 
 .project-icon {
-  width: 36px;
+  min-width: 36px;
   height: 36px;
+  padding: 0 8px;
   border-radius: 6px;
   display: flex;
   align-items: center;
@@ -1491,6 +1492,7 @@ watch(projects, () => {
   font-weight: 700;
   color: var(--tf-text-on-accent);
   text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .project-info {
