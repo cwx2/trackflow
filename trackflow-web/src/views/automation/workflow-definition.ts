@@ -255,7 +255,27 @@ function normalizeLegacyInlineBatches(definition: WorkflowDefinition): WorkflowD
       && (!sourcePort?.semanticType || !input.semanticType || input.semanticType === sourcePort.semanticType))
     if (!source || !target || !sourcePort || !targetInput) continue
 
-    nodes = nodes.filter(node => node.id !== batch.id)
+    // A legacy inline batch may also have been used as the old end-result
+    // source (for example batch.summary -> end.result).  The node is removed
+    // below, so every reference must either move to the inline downstream
+    // node's equivalent output or be explicitly cleared.  Leaving it behind
+    // creates an invisible dangling reference which only fails at run time.
+    const targetOutputs = new Set(target.outputs.map(output => output.name))
+    nodes = nodes
+      .filter(node => node.id !== batch.id)
+      .map(node => ({
+        ...node,
+        inputs: node.inputs.map(input => {
+          const value: any = input.value
+          if (value?.type !== 'ref' || value.nodeId !== batch.id) return input
+          return {
+            ...input,
+            value: targetOutputs.has(value.outputName)
+              ? { ...value, nodeId: target.id }
+              : null,
+          }
+        }),
+      }))
     edges = edges
       .filter(edge => edge.sourceNodeId !== batch.id && edge.targetNodeId !== batch.id)
       .concat([
