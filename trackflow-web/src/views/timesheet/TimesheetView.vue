@@ -164,6 +164,19 @@
         </div>
       </div>
 
+      <!-- 加载失败 -->
+      <EmptyState
+        v-if="loadError && !loading"
+        type="error"
+        icon="exclamation-circle"
+        title="加载失败"
+        :description="loadError"
+      >
+        <template #action>
+          <a-button type="primary" size="small" @click="refresh">重试</a-button>
+        </template>
+      </EmptyState>
+
       <!-- Project Overview (no project selected) -->
       <div v-if="!selectedProjectId" class="project-overview">
         <EmptyState
@@ -446,6 +459,7 @@ const viewMode = ref<'week' | 'month'>('week')
 const currentWeekStart = ref(getMonday(new Date()))
 const currentMonthDate = ref(new Date().toISOString().slice(0, 7)) // YYYY-MM
 const loading = ref(false)
+const loadError = ref<string | null>(null)
 const showDialog = ref(false)
 const editingEntry = ref<TimeEntryVO | null>(null)
 const saving = ref(false)
@@ -577,6 +591,12 @@ const groupViewTotal = computed(() => {
 })
 
 // Tab switching
+function refresh() {
+  if (activeTab.value === 'people') loadEntries()
+  else if (activeTab.value === 'projects') loadProjectSummaries()
+  else if (activeTab.value === 'workgroups') loadGroupSummaries()
+}
+
 function switchTab(tab: 'people' | 'projects' | 'workgroups') {
   activeTab.value = tab
   // Persist to URL query for refresh preservation
@@ -593,6 +613,7 @@ function switchTab(tab: 'people' | 'projects' | 'workgroups') {
 // Data loading - People view
 async function loadEntries() {
   loading.value = true
+  loadError.value = null
   try {
     const { startDate, endDate } = getDateRange()
     const params: { userId?: string; startDate: string; endDate: string; projectId?: string; activityId?: string } = { startDate, endDate }
@@ -610,8 +631,8 @@ async function loadEntries() {
     if (res.code === 0 && res.data) {
       timeEntries.value = res.data
     }
-  } catch {
-    Message.error({ content: '加载工时数据失败', duration: 3000 })
+  } catch (e: any) {
+    loadError.value = e.response?.data?.message || '加载工时数据失败'
   } finally {
     loading.value = false
   }
@@ -620,6 +641,7 @@ async function loadEntries() {
 // Data loading - Work Groups view
 async function loadGroupSummaries() {
   loading.value = true
+  loadError.value = null
   try {
     const { startDate, endDate } = getDateRange()
     const res = await timeEntryApi.listByGroup({ startDate, endDate })
@@ -635,8 +657,8 @@ async function loadGroupSummaries() {
         }
       }
     }
-  } catch {
-    Message.error({ content: '加载工作组工时数据失败', duration: 3000 })
+  } catch (e: any) {
+    loadError.value = e.response?.data?.message || '加载工作组工时数据失败'
   } finally {
     loading.value = false
   }
@@ -653,14 +675,15 @@ function toggleGroupExpand(groupId: string) {
 // Data loading - Project view
 async function loadProjectSummaries() {
   loading.value = true
+  loadError.value = null
   try {
     const { startDate, endDate } = getDateRange()
     const res = await timeEntryApi.listByProject({ startDate, endDate })
     if (res.code === 0 && res.data) {
       projectSummaries.value = res.data
     }
-  } catch {
-    Message.error({ content: '加载项目工时数据失败', duration: 3000 })
+  } catch (e: any) {
+    loadError.value = e.response?.data?.message || '加载项目工时数据失败'
   } finally {
     loading.value = false
   }
