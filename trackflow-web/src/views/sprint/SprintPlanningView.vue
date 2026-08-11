@@ -1666,7 +1666,7 @@ onMounted(async () => {
 
 /* 即将到期（≤3天）：警告色 */
 .card-due--due-soon {
-  color: var(--color-warning-6, #f59e0b);
+  color: var(--tf-warning);
 }
 
 /* 正常未来日期：三级文字色 */

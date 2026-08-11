@@ -18,7 +18,7 @@
     </div>
     <!-- 星期表头 -->
     <div class="calendar-weekdays">
-      <span v-for="wd in ['日','一','二','三','四','五','六']" :key="wd" class="calendar-wd">{{ wd }}</span>
+      <span v-for="wd in ['一','二','三','四','五','六','日']" :key="wd" class="calendar-wd">{{ wd }}</span>
     </div>
     <!-- 日期格子 -->
     <div class="calendar-grid">
