@@ -123,6 +123,14 @@
       <!-- 分隔线 -->
       <div class="toolbar-divider" />
 
+      <!-- 连线视图：流程与数据是两张不同的图，切换只影响阅读，不影响配置。 -->
+      <ConnectionViewSwitcher
+        :model-value="connectionViewMode"
+        @update:model-value="emit('connection-view-change', $event)"
+      />
+
+      <div class="toolbar-divider" />
+
       <!-- 6. + 添加节点 -->
       <button
         class="toolbar-add-btn"
@@ -159,6 +167,8 @@
 
 <script setup lang="ts">
 import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
+import ConnectionViewSwitcher from './ConnectionViewSwitcher.vue'
+import type { ConnectionViewMode } from '../graph/connection-semantics'
 
 interface NodeItem {
   type: string
@@ -178,6 +188,7 @@ const props = defineProps<{
   zoomPercent: number
   minimapOpen: boolean
   debugMode: boolean
+  connectionViewMode: ConnectionViewMode
   isRunning: boolean
   nodeCategories: NodeCategory[]
   allNodes: NodeItem[]
@@ -193,6 +204,7 @@ const emit = defineEmits<{
   'export-image': []
   'toggle-minimap': []
   'toggle-debug': []
+  'connection-view-change': [mode: ConnectionViewMode]
   'run': []
   'cancel': []
   'drag-start': [event: MouseEvent, node: NodeItem]

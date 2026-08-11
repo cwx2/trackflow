@@ -112,6 +112,7 @@
         :zoom-percent="zoomPercent"
         :minimap-open="minimapOpen"
         :debug-mode="debugMode"
+        :connection-view-mode="connectionViewMode"
         :is-running="isRunning"
         :node-categories="nodeCategories"
         :all-nodes="basicNodes"
@@ -126,6 +127,7 @@
         @drag-start="onDragStart"
         @quick-add="quickAddNode"
         @toggle-debug="toggleDebugMode"
+        @connection-view-change="setConnectionViewMode"
         @run="handleRun"
         @cancel="handleCancelRun"
       />
@@ -297,6 +299,12 @@ import { FlowEdge } from './graph/edges/FlowEdge'
 import { ExecutionFlowAnimator, type WorkflowCanvasEdge } from './graph/edges/ExecutionFlowAnimator'
 import { registerAllNodes } from './graph/nodes/index'
 import { PORT_CONNECT_HIT_RADIUS } from './graph/nodes/base/BaseNodeModel'
+import {
+  FLOW_PORT,
+  resolveConnectionKind,
+  type ConnectionKind,
+  type ConnectionViewMode,
+} from './graph/connection-semantics'
 import CliAgentConfig from './components/config/CliAgentConfig.vue'
 import VariablesConfig from './components/config/VariablesConfig.vue'
 import ConditionConfig from './components/config/ConditionConfig.vue'
@@ -496,11 +504,14 @@ function synchronizeEdgeBinding(edge: any) {
     // 旧草稿没有具名 anchor 时不得伪造默认端口；保存校验会明确指出问题。
     return
   }
-  if (sourcePortName === '__flow' || targetPortName === '__flow') {
+  const edgeKind = resolveConnectionKind(sourcePortName, targetPortName)
+  if (!edgeKind) return
+  if (edgeKind === 'control') {
     // 流程线只建立执行依赖，不覆写任何业务参数。
-    if (sourcePortName === '__flow' && targetPortName === '__flow') {
-      lf.setProperties(edge.id, { ...(edge.properties || {}), sourcePortName, targetPortName, edgeKind: 'control' })
-    }
+    lf.setProperties(edge.id, {
+      ...(edge.properties || {}), sourcePortName, targetPortName,
+      edgeKind, connectionViewMode: connectionViewMode.value,
+    })
     return
   }
   const target = lf.getNodeModelById(edge.targetNodeId) as any
@@ -520,7 +531,10 @@ function synchronizeEdgeBinding(edge: any) {
 
   const properties = { ...(target.properties || {}), inputs }
   lf.setProperties(edge.targetNodeId, properties)
-  lf.setProperties(edge.id, { ...(edge.properties || {}), sourcePortName, targetPortName, edgeKind: 'data' })
+  lf.setProperties(edge.id, {
+    ...(edge.properties || {}), sourcePortName, targetPortName,
+    edgeKind, connectionViewMode: connectionViewMode.value,
+  })
   if (selectedNode.value?.id === edge.targetNodeId) {
     selectedNode.value = { ...selectedNode.value, properties }
   }
@@ -534,7 +548,7 @@ function clearEdgeBinding(edge: any) {
   const targetPortName = edge.properties?.targetPortName
     || getAnchorPortName(edge.targetAnchorId, edge.targetNodeId, 'in')
   if (!sourcePortName || !targetPortName) return
-  if (sourcePortName === '__flow' || targetPortName === '__flow') return
+  if (resolveConnectionKind(sourcePortName, targetPortName) === 'control') return
   const target = lf.getNodeModelById(edge.targetNodeId) as any
   if (!target) return
   const inputs = (target.properties?.inputs || []).map((input: any) => {
@@ -781,6 +795,44 @@ const zoomPercent = ref(100)
 // 新增：minimap / 调试 / 添加节点面板 状态
 const minimapOpen = ref(false)
 const debugMode = ref(false)
+const connectionViewMode = ref<ConnectionViewMode>('all')
+const activeConnectionKind = ref<ConnectionKind | null>(null)
+
+/**
+ * 将阅读模式和正在拖拽的连接类型下发到节点/边视图。
+ * 这是纯展示状态：序列化层会主动排除，保存和执行不会受到影响。
+ */
+function syncConnectionPresentation() {
+  if (!lf) return
+  const graphData = lf.getGraphData() as { nodes: any[]; edges: any[] }
+  graphData.nodes.forEach(node => {
+    const current = node.properties || {}
+    if (current.connectionViewMode === connectionViewMode.value
+      && current.connectionDragKind === activeConnectionKind.value) return
+    lf?.setProperties(node.id, {
+      ...current,
+      connectionViewMode: connectionViewMode.value,
+      connectionDragKind: activeConnectionKind.value,
+    })
+  })
+  graphData.edges.forEach(edge => {
+    const current = edge.properties || {}
+    if (current.connectionViewMode === connectionViewMode.value) return
+    lf?.setProperties(edge.id, { ...current, connectionViewMode: connectionViewMode.value })
+  })
+}
+
+function setConnectionViewMode(mode: ConnectionViewMode) {
+  if (connectionViewMode.value === mode) return
+  connectionViewMode.value = mode
+  syncConnectionPresentation()
+}
+
+function setConnectionDragKind(kind: ConnectionKind | null) {
+  if (activeConnectionKind.value === kind) return
+  activeConnectionKind.value = kind
+  syncConnectionPresentation()
+}
 
 function syncCanvasWorldTransform() {
   const transform = (lf as any)?.graphModel?.transformModel
@@ -1117,6 +1169,17 @@ async function initLogicFlow() {
     synchronizeEdgeBinding(data)
   })
 
+  // 拖动流程端口时突出标题栏通道；拖动数据端口时突出参数通道。
+  // 即使松开失败也会在 dragend 清理，避免画布残留错误高亮状态。
+  lf.on('anchor:dragstart', ({ data }: any) => {
+    const portName = typeof data?._portName === 'string' ? data._portName : null
+    const kind = resolveConnectionKind(portName)
+      || (data?._edgeKind === 'control' || String(data?.id || '').endsWith(`-${FLOW_PORT}`)
+        ? 'control' : 'data')
+    setConnectionDragKind(kind)
+  })
+  lf.on('anchor:dragend', () => setConnectionDragKind(null))
+
   // LogicFlow 会拦截无效连接；把底层的校验原因转成用户可见反馈，避免“拖了没反应”。
   lf.on('connection:not-allowed', ({ msg }: { msg?: string }) => {
     Message.warning(msg || '这两个端口不能直接连接。流程线请连接标题栏端口，参数线请连接字段端口。')
@@ -1184,7 +1247,12 @@ async function loadWorkflow() {
           x: n.position.x + 100,
           y: n.position.y + 30,
           text: n.nodeMeta?.title || n.type,
-          properties: { ...n.config, config: n.config || {}, nodeType: n.type, inputs: n.inputs, outputs: n.outputs, nodeMeta: n.nodeMeta }
+          properties: {
+            ...n.config,
+            config: n.config || {}, nodeType: n.type, inputs: n.inputs, outputs: n.outputs, nodeMeta: n.nodeMeta,
+            connectionViewMode: connectionViewMode.value,
+            connectionDragKind: null,
+          }
         })),
         edges: (def.edges || []).map(e => ({
           id: e.id,
@@ -1197,7 +1265,8 @@ async function loadWorkflow() {
           properties: {
             sourcePortName: e.sourcePortName,
             targetPortName: e.targetPortName,
-            edgeKind: e.sourcePortName === '__flow' ? 'control' : 'data',
+            edgeKind: e.sourcePortName === FLOW_PORT ? 'control' : 'data',
+            connectionViewMode: connectionViewMode.value,
           }
         }))
       }
@@ -1205,6 +1274,7 @@ async function loadWorkflow() {
       pauseTracking()
       lf?.render(graphData)
       resetTracking()
+      syncConnectionPresentation()
     } else {
       Message.error(res.message || '加载失败')
     }

@@ -9,6 +9,9 @@
  */
 import { HtmlNodeModel } from '@logicflow/core'
 import { getNodeDefinition } from '../../../node-definitions'
+import { FLOW_PORT } from '../../connection-semantics'
+
+export { FLOW_PORT } from '../../connection-semantics'
 
 /** 端口定义（与 node-definitions 保持一致） */
 export interface PortDef {
@@ -44,7 +47,6 @@ export const PORT_HANDLE_OFFSET       = 6  // 锚点相对卡片边缘的外伸�
 /** 可拖拽热区半径；大于视觉插座，保证端口在稠密行中仍易于命中。 */
 export const PORT_CONNECT_HIT_RADIUS  = 12
 /** 执行顺序与参数数据是两种不同的关系，不能共用业务端口。 */
-export const FLOW_PORT = '__flow'
 
 export abstract class BaseNodeModel extends HtmlNodeModel {
   /** 子类需覆盖：提供节点类型名（用于从 node-definitions 读取默认值） */

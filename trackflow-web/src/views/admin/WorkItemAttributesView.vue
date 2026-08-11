@@ -11,7 +11,7 @@
       :loading="loading"
       :is-empty="attributes.length === 0"
       empty-title="暂无工作项属性"
-      empty-description="创建属性来对工时记录进行分类，例如"工作类型"、"计费类别"等。"
+      empty-description="创建属性来对工时记录进行分类，例如“工作类型”、“计费类别”等。"
       create-action="创建第一个属性"
       @create="showCreateDialog = true"
     >

@@ -1,13 +1,19 @@
 <template>
   <div
     class="node-card"
-    :class="`status-${runStatus}`"
+    :class="[
+      `status-${runStatus}`,
+      `connection-view-${connectionViewMode}`,
+      connectionDragKind ? `is-connecting-${connectionDragKind}` : '',
+    ]"
     :style="{ '--node-color': nodeMeta.color }"
     @click.stop="onNodeClick"
   >
     <!-- ── 标题区 ── -->
     <div class="node-header">
-      <span class="flow-port flow-port-in" title="流程入口：连接上一个节点" aria-label="流程入口" />
+      <span class="flow-port flow-port-in" aria-label="流程入口">
+        <span class="flow-port-label">流程进入</span>
+      </span>
       <div class="color-bar" />
       <div class="node-icon" :style="{ background: nodeMeta.color + '22' }">
         <component
@@ -50,7 +56,9 @@
           </div>
         </div>
       </div>
-      <span class="flow-port flow-port-out" title="流程出口：连接下一个节点" aria-label="流程出口" />
+      <span class="flow-port flow-port-out" aria-label="流程出口">
+        <span class="flow-port-label">流程继续</span>
+      </span>
     </div>
 
     <!-- ── 端口区 ── -->
@@ -148,6 +156,8 @@ const outputs   = computed<PortDef[]>(() => props.properties?.outputs ?? [])
 const nodeMeta  = computed<NodeMeta>(() => props.properties?.nodeMeta ?? {
   title: '节点', icon: '⬡', color: '#6366f1', description: '',
 })
+const connectionViewMode = computed<'all' | 'flow' | 'data'>(() => props.properties?.connectionViewMode || 'all')
+const connectionDragKind = computed<'control' | 'data' | null>(() => props.properties?.connectionDragKind || null)
 
 // ── 可选端口折叠逻辑 ──
 const optionalExpanded = computed(() => props.properties?.optionalExpanded ?? false)
@@ -246,6 +256,28 @@ function onNodeClick() {
 .node-card.status-failed   { box-shadow: var(--wf-glow-failed);  border-color: var(--wf-status-failed); }
 .node-card.status-skipped  { opacity: 0.58; border-style: dashed; }
 .node-card.status-cancelled { opacity: 0.72; border-style: dashed; }
+
+/* 阅读与连线状态只改变信息层级，不改变节点尺寸，避免锚点位置发生跳动。 */
+.connection-view-flow .node-body,
+.is-connecting-control .node-body {
+  opacity: .18;
+  filter: saturate(.5);
+  transition: opacity 180ms ease, filter 180ms ease;
+}
+.connection-view-data .flow-port,
+.is-connecting-data .flow-port {
+  opacity: .16;
+  transform: scale(.82);
+}
+.connection-view-flow .flow-port,
+.is-connecting-control .flow-port {
+  animation: flow-port-breathe 1.45s ease-in-out infinite;
+}
+
+@keyframes flow-port-breathe {
+  0%, 100% { box-shadow: 0 0 0 1px color-mix(in srgb, var(--wf-flow-port) 40%, transparent); }
+  50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--wf-flow-port) 17%, transparent); }
+}
 
 /* ── 标题区 ── */
 .node-header {
@@ -482,10 +514,10 @@ function onNodeClick() {
   box-sizing: border-box;
   width: 14px;
   height: 14px;
-  border: 2px solid var(--wf-flow-port, #94a3b8);
+  border: 2px solid var(--wf-flow-port, #a78bfa);
   border-radius: 50%;
   background: var(--wf-node-bg);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--wf-flow-port, #94a3b8) 36%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--wf-flow-port, #a78bfa) 36%, transparent);
   pointer-events: none;
   transition: transform 120ms ease, box-shadow 120ms ease;
 }
@@ -493,8 +525,48 @@ function onNodeClick() {
 .flow-port-out { right: -14px; }
 .node-card:hover .flow-port {
   transform: scale(1.14);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--wf-flow-port, #94a3b8) 18%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--wf-flow-port, #a78bfa) 18%, transparent);
 }
+
+.flow-port::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--wf-flow-port, #a78bfa);
+}
+.flow-port-in::after { left: 3px; }
+.flow-port-out::after { right: 3px; }
+.flow-port-label {
+  position: absolute;
+  top: -29px;
+  padding: 4px 6px;
+  border: 1px solid color-mix(in srgb, var(--wf-flow-port, #a78bfa) 42%, var(--wf-node-border));
+  border-radius: 5px;
+  background: var(--wf-node-bg);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, .22);
+  color: var(--wf-flow-port, #a78bfa);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  opacity: 0;
+  pointer-events: none;
+  white-space: nowrap;
+  transition: opacity 150ms ease, transform 150ms ease;
+}
+.flow-port-in .flow-port-label { left: -2px; transform: translateX(-100%) translateY(3px); }
+.flow-port-out .flow-port-label { right: -2px; transform: translateX(100%) translateY(3px); }
+.node-card:hover .flow-port-label,
+.connection-view-flow .flow-port-label,
+.is-connecting-control .flow-port-label {
+  opacity: 1;
+}
+.connection-view-flow .flow-port-in .flow-port-label,
+.is-connecting-control .flow-port-in .flow-port-label { transform: translateX(-100%); }
+.connection-view-flow .flow-port-out .flow-port-label,
+.is-connecting-control .flow-port-out .flow-port-label { transform: translateX(100%); }
 
 /* 输入/输出均为空心插座；颜色表达数据进入与流出方向。 */
 .port-dot.in {

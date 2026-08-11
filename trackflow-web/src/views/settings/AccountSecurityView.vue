@@ -27,7 +27,6 @@
           <a-button type="primary" size="small" @click="showCreateDialog = true">创建第一个令牌</a-button>
         </template>
       </EmptyState>
-      </div>
 
       <!-- Token List Table -->
       <div v-else class="token-table-wrapper">

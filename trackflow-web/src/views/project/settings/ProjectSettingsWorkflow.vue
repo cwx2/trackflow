@@ -228,7 +228,6 @@
           </template>
         </EmptyState>
         </div>
-      </div>
     </DataContainer>
 
     <!-- 创建/编辑规则弹窗 -->

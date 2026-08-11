@@ -694,6 +694,7 @@ a:hover { text-decoration: underline; }
   /* 端口 */
   --wf-port-in:          #3b82f6;
   --wf-port-out:         #f59e0b;
+  --wf-flow-port:        #a78bfa;
   --wf-port-label:       #94a3b8;
   --wf-port-type:        #4b5568;
 
@@ -712,6 +713,10 @@ a:hover { text-decoration: underline; }
   /* 默认连线是低对比度的蓝灰，只有选择和运行态才使用强调蓝。 */
   --wf-edge-color:       #7890b2;
   --wf-edge-color-hover: #60a5fa;
+  --wf-flow-edge:        #a78bfa;
+  --wf-flow-edge-hover:  #c4b5fd;
+  --wf-data-edge:        #38bdf8;
+  --wf-data-edge-hover:  #7dd3fc;
   --wf-edge-width:       2;
 
   /* 数据流动画粒子 */
@@ -741,6 +746,7 @@ a:hover { text-decoration: underline; }
 
   --wf-port-in:          #2563eb;
   --wf-port-out:         #d97706;
+  --wf-flow-port:        #7c3aed;
   --wf-port-label:       #57606a;
   --wf-port-type:        #8b949e;
 
@@ -755,6 +761,10 @@ a:hover { text-decoration: underline; }
 
   --wf-edge-color:       #7182a0;
   --wf-edge-color-hover: #1d4ed8;
+  --wf-flow-edge:        #7c3aed;
+  --wf-flow-edge-hover:  #8b5cf6;
+  --wf-data-edge:        #0284c7;
+  --wf-data-edge-hover:  #0ea5e9;
   --wf-edge-width:       2;
 
   --wf-flow-particle:    #2563eb;
@@ -783,6 +793,7 @@ a:hover { text-decoration: underline; }
 
   --wf-port-in:          #A7C080;
   --wf-port-out:         #DBBC7F;
+  --wf-flow-port:        #D699B6;
   --wf-port-label:       #859289;
   --wf-port-type:        #7A8478;
 
@@ -797,6 +808,10 @@ a:hover { text-decoration: underline; }
 
   --wf-edge-color:       #A7C080;
   --wf-edge-color-hover: #B8C2AA;
+  --wf-flow-edge:        #D699B6;
+  --wf-flow-edge-hover:  #E7B9CA;
+  --wf-data-edge:        #7FBBB3;
+  --wf-data-edge-hover:  #A7D4CE;
   --wf-edge-width:       2;
 
   --wf-flow-particle:    #D3C6AA;

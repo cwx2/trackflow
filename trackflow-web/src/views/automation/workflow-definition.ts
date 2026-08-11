@@ -2,7 +2,11 @@ import type { GlobalVariable, NodeMeta, NodeType, WorkflowDefinition, WorkflowNo
 import { getNodeDefinition } from './node-definitions'
 
 const CANVAS_OFFSET = { x: 100, y: 30 }
-const RESERVED_NODE_PROPERTIES = new Set(['nodeType', 'nodeMeta', 'inputs', 'outputs', 'runStatus', 'label'])
+const RESERVED_NODE_PROPERTIES = new Set([
+  'nodeType', 'nodeMeta', 'inputs', 'outputs', 'runStatus', 'label',
+  // 仅用于画布呈现与拖拽反馈，绝不持久化到节点 config。
+  'connectionViewMode', 'connectionDragKind',
+])
 
 /** 将历史存量定义升级为当前节点注册表的正式端口契约。 */
 export function migrateWorkflowDefinition(raw: any): WorkflowDefinition {

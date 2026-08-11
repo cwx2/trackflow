@@ -16,6 +16,7 @@
  */
 import { PolylineEdge, PolylineEdgeModel, h } from '@logicflow/core'
 import type { ExecutionFlowStatus } from './ExecutionFlowAnimator'
+import { isConnectionVisible, type ConnectionKind, type ConnectionViewMode } from '../connection-semantics'
 
 // ─── 类型定义 ─────────────────────────────────────────────────────────────────
 
@@ -44,6 +45,7 @@ export function checkTypeCompatibility(sourceType: string, targetType: string): 
 // ─── 常量 ─────────────────────────────────────────────────────────────────────
 
 const STROKE_WIDTH_NORMAL  = '1.5'
+const STROKE_WIDTH_CONTROL = '2.2'
 const STROKE_WIDTH_RUNNING = '2.5'
 const OPACITY_NORMAL       = '0.48'
 const OPACITY_RUNNING      = '1'
@@ -70,10 +72,10 @@ export class FlowEdgeModel extends PolylineEdgeModel {
 
   private _resolveColor(): string {
     const props = this.properties as any
-    if (props?.edgeKind === 'control') return 'var(--wf-flow-edge, #94a3b8)'
     const status    = props?.flowStatus || 'idle'
     const typeCompat: TypeCompat = props?.typeCompat || 'compatible'
-    return resolveEdgeColor(status, typeCompat)
+    const edgeKind: ConnectionKind = props?.edgeKind || 'data'
+    return resolveConnectionColor(edgeKind, status, typeCompat)
   }
 
   /**
@@ -110,16 +112,16 @@ export class FlowEdgeView extends PolylineEdge {
     const { model }  = this.props as any
     const props      = model?.properties as any
     const status     = props?.flowStatus || 'idle'
-    const edgeKind   = props?.edgeKind || 'data'
+    const edgeKind: ConnectionKind = props?.edgeKind || 'data'
+    const viewMode: ConnectionViewMode = props?.connectionViewMode || 'all'
     const typeCompat: TypeCompat = props?.typeCompat || 'compatible'
     const isRunning  = status === 'running'
     const isSelected = Boolean(model?.isSelected)
 
     const pathD  = buildRoundedPathD(model?.pointsList || [], 12)
-    const color  = edgeKind === 'control'
-      ? 'var(--wf-flow-edge, #94a3b8)'
-      : resolveEdgeColor(status, typeCompat, isSelected)
+    const color  = resolveConnectionColor(edgeKind, status, typeCompat, isSelected)
     const isDashed = typeCompat === 'warning' || typeCompat === 'incompatible'
+    const isVisible = isConnectionVisible(edgeKind, viewMode)
     const { startPoint, endPoint } = model
     const pathId = `flow-path-${model.id}`
 
@@ -144,23 +146,28 @@ export class FlowEdgeView extends PolylineEdge {
       d: pathD,
       fill: 'none',
       stroke: color,
-      'stroke-width': isRunning ? STROKE_WIDTH_RUNNING : STROKE_WIDTH_NORMAL,
+      'stroke-width': isRunning ? STROKE_WIDTH_RUNNING : edgeKind === 'control' ? STROKE_WIDTH_CONTROL : STROKE_WIDTH_NORMAL,
       'stroke-linecap': 'round',
       'stroke-linejoin': 'round',
-      opacity: isRunning ? OPACITY_RUNNING : (edgeKind === 'control' ? '0.72' : OPACITY_NORMAL),
+      opacity: isVisible || isSelected
+        ? (isRunning ? OPACITY_RUNNING : edgeKind === 'control' ? '0.82' : OPACITY_NORMAL)
+        : '0.055',
       ...(isDashed ? { 'stroke-dasharray': '6 4' } : {}),
     })
 
     // 端点是边自己的实心“插头”，节点卡片的空心端口环覆盖在它上方；
     // 二者中心共用同一真实锚点，连接后视觉上呈现为被端口扣住。
-    const startPlug = buildEndpointPlug(startPoint, color, isRunning)
-    const endPlug = buildEndpointPlug(endPoint, color, isRunning)
+    const startPlug = buildEndpointPlug(startPoint, color, isRunning, edgeKind)
+    const endPlug = buildEndpointPlug(endPoint, color, isRunning, edgeKind)
+    const directionMarker = edgeKind === 'control'
+      ? buildControlDirectionMarker(model?.pointsList || [], color, isVisible || isSelected)
+      : null
 
     const warningBadge = typeCompat === 'warning' ? buildWarningBadge(model) : null
 
     // LogicFlow 的 h() 与 Vue VNode 泛型不同，边子元素只在 SVG 渲染期使用。
     const particles: any[] = []
-    if (isRunning) {
+    if (isRunning && (isVisible || isSelected)) {
       particles.push(
         h('defs', {}, [h('path', { id: pathId, d: pathD, fill: 'none', stroke: 'none' })]),
         buildParticle(pathId, color, 0),
@@ -169,7 +176,7 @@ export class FlowEdgeView extends PolylineEdge {
       )
     }
 
-    return h('g', {}, [hitArea, selectionHalo, mainPath, startPlug, endPlug, warningBadge, ...particles].filter(Boolean) as any)
+    return h('g', {}, [hitArea, selectionHalo, mainPath, startPlug, endPlug, directionMarker, warningBadge, ...particles].filter(Boolean) as any)
   }
 
   /** 端口插座已表达流向，避免默认箭头与终点圆环重叠。 */
@@ -406,16 +413,56 @@ function buildWarningBadge(model: any) {
   } catch { return null }
 }
 
+/** 控制流与数据流拥有固定色彩语义；运行状态仅在实际运行时临时覆盖它。 */
+function resolveConnectionColor(kind: ConnectionKind, status: ExecutionFlowStatus | string,
+                                typeCompat: TypeCompat, selected = false) {
+  if (status !== 'idle') return resolveEdgeColor(status, typeCompat, selected)
+  if (kind === 'control') return selected
+    ? 'var(--wf-flow-edge-hover, #c4b5fd)'
+    : 'var(--wf-flow-edge, #a78bfa)'
+  return selected
+    ? 'var(--wf-data-edge-hover, #7dd3fc)'
+    : 'var(--wf-data-edge, #38bdf8)'
+}
+
 /** 边两端的实心插头；节点端口的空心环会与它同心叠合。 */
-function buildEndpointPlug(point: Point | undefined, color: string, isRunning: boolean) {
+function buildEndpointPlug(point: Point | undefined, color: string, isRunning: boolean, kind: ConnectionKind) {
   if (!point) return null
   return h('circle', {
     cx: point.x,
     cy: point.y,
-    r: isRunning ? '3.7' : '3.2',
+    r: isRunning ? '3.7' : kind === 'control' ? '3.5' : '3.2',
     fill: color,
     opacity: isRunning ? OPACITY_RUNNING : OPACITY_DOT_NORMAL,
   })
+}
+
+/** 控制流在靠近目标节点前显示方向标记；数据线只通过字段端口表达方向。 */
+function buildControlDirectionMarker(points: Point[], color: string, visible: boolean) {
+  if (!visible || points.length < 2) return null
+  const end = points[points.length - 1]
+  const previous = points[points.length - 2]
+  const dx = end.x - previous.x
+  const dy = end.y - previous.y
+  const markerDistance = 12
+  const size = 4
+  let x = end.x
+  let y = end.y
+  let path = ''
+  if (Math.abs(dx) >= Math.abs(dy)) {
+    const direction = Math.sign(dx) || 1
+    x -= direction * markerDistance
+    path = direction > 0
+      ? `M ${x - size} ${y - size} L ${x + size} ${y} L ${x - size} ${y + size} Z`
+      : `M ${x + size} ${y - size} L ${x - size} ${y} L ${x + size} ${y + size} Z`
+  } else {
+    const direction = Math.sign(dy) || 1
+    y -= direction * markerDistance
+    path = direction > 0
+      ? `M ${x - size} ${y - size} L ${x} ${y + size} L ${x + size} ${y - size} Z`
+      : `M ${x - size} ${y + size} L ${x} ${y - size} L ${x + size} ${y + size} Z`
+  }
+  return h('path', { d: path, fill: color, opacity: '0.95' })
 }
 
 /**
