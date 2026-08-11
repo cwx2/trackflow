@@ -10,26 +10,13 @@
       <span class="breadcrumb-current">{{ report?.name || '加载中...' }}</span>
     </div>
 
-    <!-- 加载状态 -->
-    <div v-if="loading" class="detail-loading">
-      <a-skeleton :animation="true">
-        <a-skeleton-line :rows="1" :widths="['40%']" />
-      </a-skeleton>
-      <a-skeleton :animation="true" style="margin-top: 24px">
-        <a-skeleton-line :rows="4" :widths="['100%', '80%', '60%', '90%']" />
-      </a-skeleton>
-    </div>
-
-    <!-- 错误状态 -->
-    <div v-else-if="errorMsg" class="detail-error">
-      <div class="error-icon"><icon-exclamation-circle /></div>
-      <h3 class="error-title">加载报表失败</h3>
-      <p class="error-desc">{{ errorMsg }}</p>
-      <a-button type="primary" size="small" @click="loadReport">重试</a-button>
-    </div>
-
-    <!-- 报表内容 -->
-    <template v-else-if="report">
+    <!-- 三态容器 -->
+    <DataContainer
+      :loading="loading"
+      :error="errorMsg || undefined"
+      :retry="loadReport"
+    >
+      <template v-if="report">
       <!-- 标题区 -->
       <div class="detail-title-area">
         <div class="title-left">
@@ -151,7 +138,8 @@
           </template>
         </EmptyState>
       </div>
-    </template>
+      </template>
+    </DataContainer>
 
     <!-- 编辑报表弹窗 -->
     <a-modal
@@ -233,11 +221,11 @@ import { useRoute, useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
 import { useConfirmDelete } from '@/composables/useConfirmDelete'
 import { reportApi } from '@/api/report'
-import { EmptyState } from '@/components/base'
+import { EmptyState, DataContainer } from '@/components/base'
 import { useAuthStore } from '@/stores/auth'
 import ShareReportModal from './ShareReportModal.vue'
 import ReportChart from './ReportChart.vue'
-import { IconExclamationCircle, IconUser, IconShareAlt, IconDesktop, IconClockCircle, IconEdit, IconRefresh, IconDownload, IconFile, IconSubscribe, IconCopy, IconDelete } from '@arco-design/web-vue/es/icon'
+import { IconUser, IconShareAlt, IconDesktop, IconClockCircle, IconEdit, IconRefresh, IconDownload, IconFile, IconSubscribe, IconCopy, IconDelete } from '@arco-design/web-vue/es/icon'
 import type { ReportDefinitionVO, ReportDataVO, UpdateReportParams } from '@/api/report'
 
 const route = useRoute()
@@ -721,38 +709,6 @@ function formatRelativeTime(time?: string) {
   font-weight: 600;
   color: var(--tf-accent) !important;
   border-left: 1px solid var(--tf-border-light);
-}
-
-/* 加载/错误状态 */
-.detail-loading {
-  padding: 24px 0;
-}
-
-.detail-error {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 80px 24px;
-  text-align: center;
-}
-
-.error-icon {
-  font-size: 48px;
-  margin-bottom: 16px;
-}
-
-.error-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--tf-text-primary);
-  margin: 0 0 8px;
-}
-
-.error-desc {
-  font-size: 13px;
-  color: var(--tf-text-secondary);
-  margin: 0 0 24px;
 }
 
 /* 菜单项 */
