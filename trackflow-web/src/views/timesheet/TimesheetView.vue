@@ -461,7 +461,7 @@ const { loadSettings: loadTTSettings, minutesPerDay, isWorkingDay, quotaText } =
 // State
 const activeTab = ref<'people' | 'projects' | 'workgroups'>((route.query.view as any) || 'people')
 const viewMode = ref<'week' | 'month'>('week')
-const currentWeekStart = ref(getMonday(new Date()))
+const currentWeekStart = ref(startOfWeek(new Date()))
 const currentMonthDate = ref(new Date().toISOString().slice(0, 7)) // YYYY-MM
 const loading = ref(false)
 const loadError = ref<string | null>(null)
@@ -532,7 +532,7 @@ const weekDays = computed(() => {
     const jsDow = d.getDay()
     const isoDow = jsDow === 0 ? 7 : jsDow
     days.push({
-      date: formatDateKey(d),
+      date: toDateKey(d),
       dateNum: d.getDate(),
       dayName: dayNames[d.getDay()],
       isWeekend: !isWorkingDay(isoDow)
@@ -558,7 +558,7 @@ const monthDays = computed(() => {
     const jsDow = current.getDay()
     const isoDow = jsDow === 0 ? 7 : jsDow
     days.push({
-      date: formatDateKey(current),
+      date: toDateKey(current),
       dateNum: current.getDate(),
       isWeekend: !isWorkingDay(isoDow),
       currentMonth: current.getMonth() === month - 1
@@ -861,12 +861,12 @@ function getDateRange(): { startDate: string; endDate: string } {
     const startDate = currentWeekStart.value
     const end = new Date(currentWeekStart.value)
     end.setDate(end.getDate() + 6)
-    return { startDate, endDate: formatDateKey(end) }
+    return { startDate, endDate: toDateKey(end) }
   } else {
     const [year, month] = currentMonthDate.value.split('-').map(Number)
     const startDate = `${year}-${String(month).padStart(2, '0')}-01`
     const lastDay = new Date(year, month, 0)
-    return { startDate, endDate: formatDateKey(lastDay) }
+    return { startDate, endDate: toDateKey(lastDay) }
   }
 }
 
@@ -914,19 +914,15 @@ async function loadAttributesForIssue(issueId: string) {
 
 function navigate(delta: number) {
   if (viewMode.value === 'week') {
-    const d = new Date(currentWeekStart.value)
-    d.setDate(d.getDate() + delta * 7)
-    currentWeekStart.value = formatDateKey(d)
+    currentWeekStart.value = addWeeks(currentWeekStart.value, delta)
   } else {
-    const [year, month] = currentMonthDate.value.split('-').map(Number)
-    const d = new Date(year, month - 1 + delta, 1)
-    currentMonthDate.value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+    currentMonthDate.value = addMonths(currentMonthDate.value, delta)
   }
 }
 
 function goToday() {
-  currentWeekStart.value = getMonday(new Date())
   const now = new Date()
+  currentWeekStart.value = startOfWeek(now)
   currentMonthDate.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 }
 
@@ -956,7 +952,7 @@ function openAddDialog(date?: string) {
   formAttributeValues.value = {}
   form.value = {
     issueId: undefined,
-    workDate: date || formatDateKey(new Date()),
+    workDate: date || toDateKey(new Date()),
     dateRange: undefined,
     durationText: '',
     startTimeStr: undefined,
@@ -1122,24 +1118,6 @@ async function saveEntry() {
 /**
  * 获取日期范围内的工作日列表（排除周六和周日）
  */
-function getWorkingDaysInRange(startDateStr: string, endDateStr: string): string[] {
-  const workingDays: string[] = []
-  const start = new Date(startDateStr)
-  const end = new Date(endDateStr)
-  const current = new Date(start)
-
-  while (current <= end) {
-    const dayOfWeek = current.getDay()
-    // 排除周六(6)和周日(0)
-    if (dayOfWeek !== 0 && dayOfWeek !== 6) {
-      workingDays.push(formatDateKey(current))
-    }
-    current.setDate(current.getDate() + 1)
-  }
-
-  return workingDays
-}
-
 async function deleteEntry() {
   if (!editingEntry.value) return
 
@@ -1166,25 +1144,6 @@ async function deleteEntry() {
 }
 
 // Helpers
-
-function formatDateKey(d: Date): string {
-  const year = d.getFullYear()
-  const month = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
-
-function formatDateDisplay(d: Date): string {
-  return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`
-}
-
-function getMonday(d: Date): string {
-  const date = new Date(d)
-  const day = date.getDay()
-  const diff = date.getDate() - day + (day === 0 ? -6 : 1)
-  date.setDate(diff)
-  return formatDateKey(date)
-}
 
 // Watchers - reload data on date navigation
 watch(currentWeekStart, () => { if (viewMode.value === 'week') reloadCurrentTab() })
