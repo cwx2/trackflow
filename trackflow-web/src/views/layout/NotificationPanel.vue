@@ -56,21 +56,18 @@
           </div>
 
           <!-- 分类标签页 -->
-          <div class="panel-tabs">
-            <button
-              v-for="tab in visibleTabs"
-              :key="tab.key"
-              class="tab-item"
-              :class="{ active: activeCategory === tab.key }"
-              @click="setCategory(tab.key)"
-            >
-              <span class="tab-label">{{ tab.label }}</span>
-              <span
-                v-if="getCategoryCount(tab.key) > 0"
-                class="tab-badge"
-              >{{ getCategoryCount(tab.key) }}</span>
-            </button>
-          </div>
+          <a-tabs
+            v-model:active-key="activeCategory"
+            class="panel-tabs"
+            @change="(key) => setCategory(key as NotificationCategory)"
+          >
+            <a-tab-pane v-for="tab in visibleTabs" :key="tab.key">
+              <template #title>
+                {{ tab.label }}
+                <span v-if="getCategoryCount(tab.key) > 0" class="tab-badge">{{ getCategoryCount(tab.key) }}</span>
+              </template>
+            </a-tab-pane>
+          </a-tabs>
 
           <!-- 面板内容 -->
           <div ref="panelBodyRef" class="panel-body">
@@ -605,47 +602,10 @@ function handleDeleteAllRead() {
   color: var(--tf-text-tertiary);
 }
 
-/* Category Tabs */
-.panel-tabs {
-  display: flex;
-  align-items: center;
-  gap: 0;
-  padding: 0 12px;
-  border-bottom: 1px solid var(--tf-border-light);
-  flex-shrink: 0;
-  overflow-x: auto;
-}
-
-.tab-item {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 8px 10px;
-  border: none;
-  background: transparent;
-  color: var(--tf-text-secondary);
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  white-space: nowrap;
-  position: relative;
-  transition: color 0.15s;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
-}
-
-.tab-item:hover {
-  color: var(--tf-text-primary);
-}
-
-.tab-item.active {
-  color: var(--tf-accent);
-  border-bottom-color: var(--tf-accent);
-}
-
-.tab-label {
-  line-height: 1;
-}
+/* Category Tabs — 去掉 a-tabs 默认内容区，只保留 nav bar */
+.panel-tabs { padding: 0 4px; }
+.panel-tabs :deep(.arco-tabs-nav) { padding: 0; border-bottom: none; }
+.panel-tabs :deep(.arco-tabs-content) { display: none; }
 
 .tab-badge {
   display: inline-flex;
@@ -660,12 +620,11 @@ function handleDeleteAllRead() {
   color: var(--tf-text-on-accent, #fff);
   background: var(--tf-accent);
   border-radius: 8px;
+  margin-left: 2px;
 }
-
-.tab-item:not(.active) .tab-badge {
+:deep(.arco-tabs-tab:not(.arco-tabs-tab-active)) .tab-badge {
   background: var(--tf-bg-active, #3a3d42);
   color: var(--tf-text-secondary);
-  opacity: 1;
 }
 
 /* Panel Body */
