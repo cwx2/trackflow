@@ -117,7 +117,9 @@
           :node-execution-details="nodeExecutionDetails"
           :streaming-output="streamingOutput"
           :is-running="isRunning"
+          :runtime-enabled="workflowRuntimeEnabled"
           @close="executionPanelOpen = false"
+          @go-history="router.push(`/automation/${workflowId}/executions`)"
         />
       </div>
     </div>

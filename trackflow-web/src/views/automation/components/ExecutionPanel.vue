@@ -31,7 +31,13 @@
           <span class="node-duration">{{ item.durationMs ? item.durationMs + 'ms' : '' }}</span>
         </div>
         <div v-if="nodeList.length === 0" class="empty-hint">
-          点击「试运行」查看执行日志
+          <template v-if="runtimeEnabled">
+            工作流运行中，等待触发事件<br />
+            <a class="history-link" @click="emit('goHistory')">查看执行历史 →</a>
+          </template>
+          <template v-else>
+            点击「试运行」查看执行日志
+          </template>
         </div>
       </div>
 
@@ -77,10 +83,12 @@ const props = defineProps<{
   nodeExecutionDetails: Record<string, { input?: unknown; output?: unknown; errorInfo?: string; durationMs?: number; nodeName?: string }>
   streamingOutput: Record<string, string>
   isRunning: boolean
+  runtimeEnabled?: boolean
 }>()
 
 const emit = defineEmits<{
   (e: 'close'): void
+  (e: 'goHistory'): void
 }>()
 
 const collapsed    = ref(false)
@@ -265,5 +273,7 @@ watch(() => props.streamingOutput[selectedNodeId.value || ''], () => {
 .detail-json.streaming { max-height: 140px; color: var(--tf-streaming); }
 .error-text { color: var(--tf-danger); }
 
-.empty-hint { padding: 16px 10px; text-align: center; color: var(--tf-text-tertiary); font-size: 12px; }
+.empty-hint { padding: 16px 10px; text-align: center; color: var(--tf-text-tertiary); font-size: 12px; line-height: 1.8; }
+.history-link { color: var(--tf-accent); cursor: pointer; text-decoration: none; }
+.history-link:hover { text-decoration: underline; }
 </style>
