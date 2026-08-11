@@ -222,3 +222,44 @@ export function formatDurationCompact(minutes: number): string {
 
 export { toDateKey, isToday, isWeekend, addDays, addWeeks, addMonths, startOfWeek, formatDate, formatDateDisplay } from './date'
 export type { DateInput }
+
+
+// ─── 工时条目查询（WeekGrid/MonthGrid 共用） ─────────────────────────────────
+
+import type { TimeEntryVO } from '@/api/timeEntry'
+
+/**
+ * 从条目列表中筛选出指定日期的所有条目。
+ * @param entries  全部工时条目
+ * @param dateKey  "YYYY-MM-DD" 格式的日期键
+ */
+export function getDayEntries(entries: TimeEntryVO[], dateKey: string): TimeEntryVO[] {
+  return entries.filter(e => e.workDate === dateKey)
+}
+
+/**
+ * 计算指定日期的总工时（分钟）。
+ */
+export function getDayTotal(entries: TimeEntryVO[], dateKey: string): number {
+  return getDayEntries(entries, dateKey).reduce((sum, e) => sum + (e.duration || 0), 0)
+}
+
+// ─── 工时类型标签 ────────────────────────────────────────────────────────────
+
+const WORK_TYPE_LABELS: Record<string, string> = {
+  Development:   '开发',
+  Testing:       '测试',
+  Documentation: '文档',
+  Design:        '设计',
+  Review:        '代码审查',
+  Meeting:       '会议',
+  Other:         '其他',
+}
+
+/**
+ * 将工时类型英文 key 转换为中文标签。
+ * 未知类型直接返回原值。
+ */
+export function workTypeLabel(type: string): string {
+  return WORK_TYPE_LABELS[type] ?? type
+}

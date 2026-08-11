@@ -8,13 +8,13 @@
       @click="$emit('dayClick', day.date)"
     >
       <div class="day-header">
-        <span class="day-hours">{{ formatDuration(getDayTotal(day.date)) }}</span>
+        <span class="day-hours">{{ formatDuration(dayTotal(day.date)) }}</span>
         <span class="day-name">{{ day.dayName }}</span>
         <span class="day-date">{{ day.dateNum }}</span>
       </div>
       <div class="day-entries">
         <div
-          v-for="entry in getDayEntries(day.date)"
+          v-for="entry in dayEntries(day.date)"
           :key="entry.id"
           class="time-entry"
           @click.stop="$emit('entryClick', entry)"
@@ -36,9 +36,9 @@
       <div class="day-footer">
         <span
           class="day-total"
-          :class="{ insufficient: showQuota && getDayTotal(day.date) > 0 && getDayTotal(day.date) < quotaMinutes && !day.isWeekend }"
+          :class="{ insufficient: showQuota && dayTotal(day.date) > 0 && dayTotal(day.date) < quotaMinutes && !day.isWeekend }"
         >
-          {{ formatDuration(getDayTotal(day.date)) }}{{ showQuota && !day.isWeekend ? ` / ${quotaLabel}` : '' }}
+          {{ formatDuration(dayTotal(day.date)) }}{{ showQuota && !day.isWeekend ? ` / ${quotaLabel}` : '' }}
         </span>
       </div>
     </div>
@@ -48,17 +48,12 @@
 <script setup lang="ts">
 import { formatDuration } from '@/utils/duration'
 import { computed } from 'vue'
+import { isToday, getDayEntries, getDayTotal, workTypeLabel } from '@/utils/timesheet'
+import type { WeekDayInfo } from '@/utils/timesheet'
 import type { TimeEntryVO } from '@/api/timeEntry'
 
-interface DayInfo {
-  date: string
-  dateNum: number
-  dayName: string
-  isWeekend: boolean
-}
-
 const props = defineProps<{
-  weekDays: DayInfo[]
+  weekDays: WeekDayInfo[]
   entries: TimeEntryVO[]
   showUser?: boolean
   showQuota?: boolean
@@ -77,31 +72,8 @@ defineEmits<{
   issueClick: [entry: TimeEntryVO]
 }>()
 
-function getDayEntries(dateKey: string): TimeEntryVO[] {
-  return props.entries.filter(e => e.workDate === dateKey)
-}
-
-function getDayTotal(dateKey: string): number {
-  return getDayEntries(dateKey).reduce((sum, e) => sum + (e.duration || 0), 0)
-}
-
-function isToday(dateKey: string): boolean {
-  const now = new Date()
-  const year = now.getFullYear()
-  const month = String(now.getMonth() + 1).padStart(2, '0')
-  const day = String(now.getDate()).padStart(2, '0')
-  return dateKey === `${year}-${month}-${day}`
-}
-
-
-
-function workTypeLabel(type: string): string {
-  const map: Record<string, string> = {
-    Development: '开发', Testing: '测试', Documentation: '文档',
-    Design: '设计', Review: '代码审查', Meeting: '会议', Other: '其他'
-  }
-  return map[type] || type
-}
+const dayEntries = (date: string) => getDayEntries(props.entries, date)
+const dayTotal   = (date: string) => getDayTotal(props.entries, date)
 </script>
 
 <style scoped>

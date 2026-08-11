@@ -13,11 +13,11 @@
       >
         <div class="month-cell-header">
           <span class="month-cell-date">{{ day.dateNum }}</span>
-          <span v-if="getDayTotal(day.date) > 0" class="month-cell-total">{{ formatDuration(getDayTotal(day.date)) }}</span>
+          <span v-if="dayTotal(day.date) > 0" class="month-cell-total">{{ formatDuration(dayTotal(day.date)) }}</span>
         </div>
         <div class="month-cell-entries">
           <div
-            v-for="entry in getDayEntries(day.date).slice(0, 2)"
+            v-for="entry in dayEntries(day.date).slice(0, 2)"
             :key="entry.id"
             class="month-entry"
             @click.stop="$emit('entryClick', entry)"
@@ -26,8 +26,8 @@
             <span v-if="entry.ongoing" class="month-entry-dur month-entry-ongoing">⏱</span>
             <span v-else class="month-entry-dur">{{ formatDuration(entry.duration ?? 0) }}</span>
           </div>
-          <div v-if="getDayEntries(day.date).length > 2" class="month-entry-more">
-            +{{ getDayEntries(day.date).length - 2 }} 更多
+          <div v-if="dayEntries(day.date).length > 2" class="month-entry-more">
+            +{{ dayEntries(day.date).length - 2 }} 更多
           </div>
         </div>
       </div>
@@ -37,14 +37,9 @@
 
 <script setup lang="ts">
 import { formatDuration } from '@/utils/duration'
+import { isToday, getDayEntries, getDayTotal } from '@/utils/timesheet'
+import type { MonthDayInfo } from '@/utils/timesheet'
 import type { TimeEntryVO } from '@/api/timeEntry'
-
-interface MonthDayInfo {
-  date: string
-  dateNum: number
-  isWeekend: boolean
-  currentMonth: boolean
-}
 
 const props = defineProps<{
   monthDays: MonthDayInfo[]
@@ -56,23 +51,8 @@ defineEmits<{
   entryClick: [entry: TimeEntryVO]
 }>()
 
-function getDayEntries(dateKey: string): TimeEntryVO[] {
-  return props.entries.filter(e => e.workDate === dateKey)
-}
-
-function getDayTotal(dateKey: string): number {
-  return getDayEntries(dateKey).reduce((sum, e) => sum + (e.duration || 0), 0)
-}
-
-function isToday(dateKey: string): boolean {
-  const now = new Date()
-  const year = now.getFullYear()
-  const month = String(now.getMonth() + 1).padStart(2, '0')
-  const day = String(now.getDate()).padStart(2, '0')
-  return dateKey === `${year}-${month}-${day}`
-}
-
-
+const dayEntries = (date: string) => getDayEntries(props.entries, date)
+const dayTotal   = (date: string) => getDayTotal(props.entries, date)
 </script>
 
 <style scoped>
