@@ -155,10 +155,10 @@
       :show-progress="true"
     />
 
-    <!-- 关联 Issue -->
+    <!-- 关联工单 -->
     <section class="section" v-if="links.length > 0">
       <div class="section-head">
-        <h3>关联 ISSUE</h3>
+        <h3>关联工单</h3>
         <button v-if="!readonly" class="section-link" @click="$emit('add-link')">添加</button>
       </div>
       <!-- 按类型分组显示 -->
