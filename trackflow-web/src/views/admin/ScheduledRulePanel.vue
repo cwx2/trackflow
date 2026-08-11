@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="scheduled-rules">
     <!-- 工具栏 -->
     <div class="rules-toolbar">
@@ -58,7 +58,7 @@
             </div>
             <div class="rule-meta">
               <span v-if="rule.lastExecutedAt" class="meta-item">
-                <icon-history /> 上次: {{ formatTime(rule.lastExecutedAt) }}
+                <icon-history /> 上次: {{ formatDateTime(rule.lastExecutedAt) }}
               </span>
               <span v-else class="meta-item">尚未执行</span>
               <span v-if="getNextExecution(rule.cronExpression)" class="meta-item meta-next">
@@ -297,7 +297,7 @@
         <div v-if="executionLogs.length > 0" class="logs-list">
           <div v-for="logEntry in executionLogs" :key="logEntry.id" class="log-entry">
             <div class="log-header">
-              <span class="log-time">{{ formatTime(logEntry.executedAt) }}</span>
+              <span class="log-time">{{ formatDateTime(logEntry.executedAt) }}</span>
               <span class="log-duration">{{ logEntry.durationMs }}ms</span>
             </div>
             <div class="log-stats">
@@ -319,6 +319,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDateTime } from '@/utils/date'
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import cronstrue from 'cronstrue/i18n'
@@ -413,7 +414,7 @@ function parseCronExpression() {
     const times: string[] = []
     for (let i = 0; i < 5; i++) {
       const next = interval.next()
-      times.push(formatDateTime(next.toDate()))
+      times.push(formatDateTime(next.toDate().toISOString()))
     }
     nextExecutions.value = times
     cronError.value = false
@@ -442,22 +443,13 @@ function getNextExecution(cronExpr: string | null): string {
   }
   try {
     const interval = CronExpressionParser.parse(cronExpr)
-    return formatDateTime(interval.next().toDate())
+    return formatDateTime(interval.next().toDate().toISOString())
   } catch {
     return ''
   }
 }
 
-function formatDateTime(date: Date): string {
-  const weekDays = ['日', '一', '二', '三', '四', '五', '六']
-  const y = date.getFullYear()
-  const m = String(date.getMonth() + 1).padStart(2, '0')
-  const d = String(date.getDate()).padStart(2, '0')
-  const h = String(date.getHours()).padStart(2, '0')
-  const min = String(date.getMinutes()).padStart(2, '0')
-  const w = weekDays[date.getDay()]
-  return `${y}-${m}-${d} ${h}:${min} (周${w})`
-}
+
 
 // ==================== Data Loading ====================
 async function loadRules() {
@@ -697,14 +689,7 @@ function fieldLabel(field: string) {
   return map[field] || field
 }
 
-function formatTime(dateStr: string) {
-  if (!dateStr) return ''
-  const d = new Date(dateStr)
-  return d.toLocaleString('zh-CN', {
-    month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit'
-  })
-}
+
 
 function parseJson(str: string, fallback: any[]): any[] {
   try {

@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <AdminPageLayout title="规则引擎" subtitle="配置自动化规则，实现工单计分与统计">
     <template #actions>
       <a-button type="primary" @click="showCreateForm">
@@ -61,7 +61,7 @@
               <a-table-column title="最近执行" :width="150">
                 <template #cell="{ record }">
                   <span v-if="record.lastExecutedAt" class="time-text">
-                    {{ formatTime(record.lastExecutedAt) }}
+                    {{ formatDateTime(record.lastExecutedAt) }}
                   </span>
                   <span v-else class="time-text empty">从未执行</span>
                 </template>
@@ -138,7 +138,7 @@
             </a-table-column>
             <a-table-column title="执行时间" :width="150">
               <template #cell="{ record }">
-                <span class="time-text">{{ formatTime(record.executedAt) }}</span>
+                <span class="time-text">{{ formatDateTime(record.executedAt) }}</span>
               </template>
             </a-table-column>
             <a-table-column title="操作" :width="80" align="center">
@@ -312,6 +312,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDateTime } from '@/utils/date'
 import { ref, reactive, computed, onMounted } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { useRouter } from 'vue-router'
@@ -392,11 +393,7 @@ function formulaLabel(formula: string) {
   return map[formula] || formula
 }
 
-function formatTime(dt: string) {
-  if (!dt) return ''
-  const d = new Date(dt)
-  return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`
-}
+
 
 function goToIssue(issueId: string) {
   router.push(`/issues/${issueId}`)

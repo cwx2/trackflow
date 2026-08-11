@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="month-grid">
     <div class="month-header-row">
       <div v-for="name in ['周一','周二','周三','周四','周五','周六','周日']" :key="name" class="month-header-cell">{{ name }}</div>
@@ -36,6 +36,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDuration } from '@/utils/duration'
 import type { TimeEntryVO } from '@/api/timeEntry'
 
 interface MonthDayInfo {
@@ -71,14 +72,7 @@ function isToday(dateKey: string): boolean {
   return dateKey === `${year}-${month}-${day}`
 }
 
-function formatDuration(minutes: number): string {
-  if (!minutes || minutes === 0) return '0h'
-  const h = Math.floor(minutes / 60)
-  const m = minutes % 60
-  if (h === 0) return `${m}m`
-  if (m === 0) return `${h}h`
-  return `${h}h${m}m`
-}
+
 </script>
 
 <style scoped>

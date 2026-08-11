@@ -167,7 +167,7 @@
           <span v-if="reportData[report.id]?.calculatedAt" class="meta-calculated">
             ⏱ {{ formatRelativeTime(reportData[report.id].calculatedAt) }}
           </span>
-          <span v-else class="meta-time">{{ formatTime(report.createdAt) }}</span>
+          <span v-else class="meta-time">{{ formatDateTime(report.createdAt) }}</span>
           <button
             v-if="reportData[report.id]"
             class="card-refresh-btn"
@@ -338,6 +338,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDateTime } from '@/utils/date'
 import { ref, reactive, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { useConfirmDelete } from '@/composables/useConfirmDelete'
@@ -929,11 +930,7 @@ function resetForm() {
 }
 
 
-function formatTime(time: string) {
-  if (!time) return ''
-  const d = new Date(time)
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
+
 
 /** 格式化相对时间（"刚刚"/"X分钟前"/"X小时前"等） */
 function formatRelativeTime(time?: string) {

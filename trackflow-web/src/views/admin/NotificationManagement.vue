@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="notification-management">
     <!-- Header -->
     <div class="settings-header">
@@ -75,7 +75,7 @@
                 >
                   重试
                 </a-button>
-                <span class="outbox-item-time">{{ formatTime(item.createdAt) }}</span>
+                <span class="outbox-item-time">{{ formatDateTime(item.createdAt) }}</span>
               </div>
             </div>
           </div>
@@ -402,6 +402,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDateTime } from '@/utils/date'
 import { ref, reactive, onMounted, watch, computed } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { notificationAdminApi } from '@/api/notificationAdmin'
@@ -653,11 +654,7 @@ function resetForm() {
   }
 }
 
-function formatTime(dateStr: string): string {
-  if (!dateStr) return ''
-  const d = new Date(dateStr)
-  return d.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
-}
+
 
 async function loadOutboxData() {
   try {

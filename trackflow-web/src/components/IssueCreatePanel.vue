@@ -709,6 +709,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatFileSize } from '@/utils/attachment'
 import { ref, reactive, computed, onMounted, onBeforeUnmount, onUnmounted, watch } from 'vue'
 import { Message, Modal } from '@arco-design/web-vue'
 import { IconDown, IconAttachment, IconClose, IconPlus, IconUp, IconLink, IconSearch, IconCheck, IconFullscreen, IconFile, IconCloseCircleFill } from '@arco-design/web-vue/es/icon'
@@ -795,11 +796,7 @@ function removeAttachment(idx: number) {
 }
 
 /** 格式化文件大小 */
-function formatFileSize(size: number): string {
-  if (size < 1024) return `${size} B`
-  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`
-  return `${(size / (1024 * 1024)).toFixed(1)} MB`
-}
+
 
 /** 根据文件名返回 emoji 图标 */
 function getFileIcon(name: string): string {

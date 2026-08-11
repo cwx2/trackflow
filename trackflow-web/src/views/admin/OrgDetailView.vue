@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="org-detail-page">
     <!-- 顶部导航 -->
     <div class="page-nav">
@@ -217,6 +217,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDateTime } from '@/utils/date'
 import { ref, reactive, computed, onMounted, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
@@ -461,10 +462,7 @@ function revokeAccess(access: OrgAccessVO) {
   })
 }
 
-function formatDateTime(dt: string | undefined) {
-  if (!dt) return '—'
-  return new Date(dt).toLocaleString('zh-CN')
-}
+
 
 onMounted(loadOrg)
 </script>

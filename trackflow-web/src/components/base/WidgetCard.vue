@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="widget-card" v-if="widget">
     <!-- Widget 头部 -->
     <div class="widget-header">
@@ -93,8 +93,8 @@
 </template>
 
 <script setup lang="ts">
+import { copyToClipboard } from '@/utils/clipboard'
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
-import { Message } from '@arco-design/web-vue'
 import {
   IconMore, IconEdit, IconDelete, IconRefresh, IconLink, IconSwap,
   IconExclamationCircleFill, IconQuestionCircle, IconLock
@@ -269,18 +269,7 @@ async function handleCopyLink() {
   if (!props.widget) return
   const baseUrl = window.location.origin
   const link = `${baseUrl}/dashboard?id=${props.widget.dashboardId}&widget=${props.widget.id}`
-  try {
-    await navigator.clipboard.writeText(link)
-    Message.success('链接已复制到剪贴板')
-  } catch {
-    const textarea = document.createElement('textarea')
-    textarea.value = link
-    document.body.appendChild(textarea)
-    textarea.select()
-    document.execCommand('copy')
-    document.body.removeChild(textarea)
-    Message.success('链接已复制到剪贴板')
-  }
+  await copyToClipboard(link, { successMessage: '链接已复制到剪贴板' })
 }
 
 // ─── 自动刷新 ──────────────────────────────────────────

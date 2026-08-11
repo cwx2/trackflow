@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 /**
  * NotificationItem — 单条通知渲染组件
  *
@@ -11,6 +11,7 @@
  * - Emits: 'click', 'mark-read', 'mark-unread', 'reply'
  */
 import { UserAvatar } from '@/components/base'
+import { formatRelativeTime } from '@/utils/date'
 import { IconCheck, IconRecord, IconCommon } from '@arco-design/web-vue/es/icon'
 import type { NotificationVO } from '@/api/notification'
 
@@ -31,17 +32,7 @@ const emit = defineEmits<{
   reply: [item: NotificationVO]
 }>()
 
-function formatTime(dateStr: string): string {
-  if (!dateStr) return ''
-  const d = new Date(dateStr)
-  const now = new Date()
-  const diff = (now.getTime() - d.getTime()) / 1000
-  if (diff < 60) return '刚刚'
-  if (diff < 3600) return `${Math.floor(diff / 60)} 分钟前`
-  if (diff < 86400) return `${Math.floor(diff / 3600)} 小时前`
-  if (diff < 604800) return `${Math.floor(diff / 86400)} 天前`
-  return d.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
-}
+
 </script>
 
 <template>
@@ -80,7 +71,7 @@ function formatTime(dateStr: string): string {
       <div class="item-body">{{ item.content }}</div>
       <div class="item-footer">
         <span v-if="item.reasonLabel" class="item-reason">{{ item.reasonLabel }}</span>
-        <span class="item-time">{{ formatTime(item.updatedAt || item.createdAt) }}</span>
+        <span class="item-time">{{ formatRelativeTime(item.updatedAt || item.createdAt) }}</span>
       </div>
     </div>
 

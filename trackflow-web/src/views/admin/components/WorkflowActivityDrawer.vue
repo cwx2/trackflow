@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <a-drawer
     :visible="visible"
     :width="520"
@@ -43,7 +43,7 @@
         >
           <div class="activity-header">
             <span class="activity-user">{{ activity.userDisplayName }}</span>
-            <span class="activity-time">{{ formatTime(activity.createdAt) }}</span>
+            <span class="activity-time">{{ formatDateTime(activity.createdAt) }}</span>
           </div>
           <div class="activity-context">
             <span class="context-tag">{{ activity.roleName || '—' }}</span>
@@ -95,6 +95,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDateTime } from '@/utils/date'
 import { ref, watch } from 'vue'
 import { IconPlusCircle, IconMinusCircle } from '@arco-design/web-vue/es/icon'
 import { workflowApi } from '@/api'
@@ -135,12 +136,7 @@ const dateRange = ref<string[]>([])
 const filterUserId = ref<string | undefined>(undefined)
 const users = ref<{ id: string; displayName: string }[]>([])
 
-function formatTime(isoStr: string): string {
-  if (!isoStr) return ''
-  const d = new Date(isoStr)
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
-}
+
 
 function onFilterChange() {
   activityFilters.userId = filterUserId.value || ''

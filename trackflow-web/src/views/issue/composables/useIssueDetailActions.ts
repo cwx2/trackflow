@@ -1,4 +1,4 @@
-/**
+﻿/**
  * useIssueDetailActions — 工单详情页所有操作处理函数
  *
  * 从 IssueDetailView.vue 提取，负责：
@@ -9,6 +9,7 @@
  * - 工单删除/移动/克隆/子任务创建
  * - 工时记录
  */
+import { copyToClipboard } from '@/utils/clipboard'
 import { ref, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { Message, Modal } from '@arco-design/web-vue'
@@ -168,14 +169,12 @@ export function useIssueDetailActions(deps: ActionDeps) {
 
   // ============ Copy / Clone ============
   function copyIssue() {
-    navigator.clipboard.writeText(`${deps.issue.value?.issueKey} ${deps.issue.value?.title}`)
-    Message.success('已复制')
+    copyToClipboard(`${deps.issue.value?.issueKey} ${deps.issue.value?.title}`, { successMessage: '已复制' })
   }
 
   function onCopyId() {
     if (!deps.issue.value) return
-    navigator.clipboard.writeText(deps.issue.value.issueKey)
-    Message.success(`已复制 ${deps.issue.value.issueKey}`)
+    copyToClipboard(deps.issue.value.issueKey, { successMessage: '已复制工单号' })
   }
 
   function onCloneIssue() {

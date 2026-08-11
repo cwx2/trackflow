@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="trash-page">
     <div class="trash-header">
       <div class="header-left">

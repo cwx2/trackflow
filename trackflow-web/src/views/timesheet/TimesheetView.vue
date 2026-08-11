@@ -438,6 +438,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDuration } from '@/utils/duration'
 import { ref, computed, onMounted, watch } from 'vue'
 import { Message, Modal } from '@arco-design/web-vue'
 import { useAuthStore } from '@/stores/auth'
@@ -1164,14 +1165,7 @@ async function deleteEntry() {
 }
 
 // Helpers
-function formatDuration(minutes: number): string {
-  if (!minutes || minutes === 0) return '0h'
-  const h = Math.floor(minutes / 60)
-  const m = minutes % 60
-  if (h === 0) return `${m}m`
-  if (m === 0) return `${h}h`
-  return `${h}h${m}m`
-}
+
 
 function formatDurationInput(minutes: number): string {
   const h = Math.floor(minutes / 60)

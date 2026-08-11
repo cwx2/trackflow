@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <AdminPageLayout title="工作流">
     <template #actions>
       <a-button type="primary" @click="showCreateModal = true">
@@ -241,6 +241,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDate } from '@/utils/date'
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
@@ -475,11 +476,7 @@ async function handleToggleDefault(def: WorkflowDefinitionVO) {
   }
 }
 
-function formatDate(dateStr: string | null): string {
-  if (!dateStr) return '-'
-  const d = new Date(dateStr)
-  return d.toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' })
-}
+
 
 function formatRelativeDate(dateStr: string | null): string {
   if (!dateStr) return '-'

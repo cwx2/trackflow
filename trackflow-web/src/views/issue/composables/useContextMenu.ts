@@ -1,3 +1,4 @@
+﻿import { copyToClipboard } from '@/utils/clipboard'
 import { ref, reactive, computed } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { issueApi, sprintApi } from '@/api'
@@ -85,16 +86,14 @@ export function useContextMenu(options: ContextMenuOptions) {
 
   function ctxCopyIssueKey() {
     if (!contextMenu.issue) return
-    navigator.clipboard.writeText(contextMenu.issue.issueKey || '')
-    Message.success(`已复制工单 ID: ${contextMenu.issue.issueKey}`)
+    copyToClipboard(contextMenu.issue.issueKey || '', { successMessage: `已复制工单 ID: ${contextMenu.issue.issueKey}` })
     closeContextMenu()
   }
 
   function ctxCopyLink() {
     if (!contextMenu.issue) return
     const url = `${window.location.origin}/issues/${contextMenu.issue.issueKey}`
-    navigator.clipboard.writeText(url)
-    Message.success('已复制工单链接')
+    copyToClipboard(url, { successMessage: '已复制工单链接' })
     closeContextMenu()
   }
 

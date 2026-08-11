@@ -143,6 +143,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDate } from '@/utils/date'
 import { ref, reactive, onMounted } from 'vue'
 import { IconLock } from '@arco-design/web-vue/es/icon'
 import { Message } from '@arco-design/web-vue'
@@ -196,11 +197,7 @@ function getMemberRoleNames(member: ProjectMemberVO): string[] {
   return ['未分配']
 }
 
-function formatDate(dateStr: string): string {
-  if (!dateStr) return '-'
-  const d = new Date(dateStr)
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
+
 
 function formatRelativeTime(dateStr: string): string {
   const now = new Date()

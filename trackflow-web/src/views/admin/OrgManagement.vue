@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <AdminPageLayout title="组织管理">
     <template #actions>
       <a-button type="primary" size="small" @click="openCreateDialog">
@@ -85,6 +85,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDate } from '@/utils/date'
 import { ref, reactive, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
@@ -180,10 +181,7 @@ async function deleteOrg(org: OrgVO) {
   })
 }
 
-function formatDate(dt: string) {
-  if (!dt) return '—'
-  return new Date(dt).toLocaleDateString('zh-CN')
-}
+
 
 onMounted(loadOrgs)
 </script>

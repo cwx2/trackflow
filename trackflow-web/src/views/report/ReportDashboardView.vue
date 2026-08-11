@@ -353,6 +353,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDate } from '@/utils/date'
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
@@ -1195,11 +1196,7 @@ async function loadDashboard() {
   }
 }
 
-function formatDate(val: any): string {
-  if (typeof val === 'string') return val.substring(0, 10)
-  if (val instanceof Date) return val.toISOString().substring(0, 10)
-  return ''
-}
+
 
 // ─── 导出功能 ─────────────────────────────────────────
 

@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div
     class="sprint-card"
     :class="[
@@ -185,6 +185,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDate } from '@/utils/date'
 import { ref, computed, nextTick } from 'vue'
 import { IconEdit } from '@arco-design/web-vue/es/icon'
 import type { SprintVO } from '@/api/types'
@@ -349,11 +350,7 @@ function cancelInlineEdit() {
   inlineEditName.value = ''
 }
 
-function formatDate(dateStr?: string): string {
-  if (!dateStr) return ''
-  const d = new Date(dateStr)
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
+
 </script>
 
 <style scoped>

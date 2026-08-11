@@ -61,20 +61,20 @@
             </a-table-column>
             <a-table-column title="创建时间" data-index="createdAt" :width="160">
               <template #cell="{ record }">
-                <span class="token-time">{{ formatTime(record.createdAt) }}</span>
+                <span class="token-time">{{ formatDateTime(record.createdAt) }}</span>
               </template>
             </a-table-column>
             <a-table-column title="最近使用" data-index="lastUsedAt" :width="160">
               <template #cell="{ record }">
                 <span class="token-time">
-                  {{ record.lastUsedAt ? formatTime(record.lastUsedAt) : '从未使用' }}
+                  {{ record.lastUsedAt ? formatDateTime(record.lastUsedAt) : '从未使用' }}
                 </span>
               </template>
             </a-table-column>
             <a-table-column title="过期时间" :width="140">
               <template #cell="{ record }">
                 <span :class="['token-time', { 'token-expired': isExpired(record.expiresAt) }]">
-                  {{ record.expiresAt ? formatTime(record.expiresAt) : '永不过期' }}
+                  {{ record.expiresAt ? formatDateTime(record.expiresAt) : '永不过期' }}
                 </span>
               </template>
             </a-table-column>
@@ -209,7 +209,7 @@
             </div>
             <div class="meta-item">
               <span class="meta-label">过期时间</span>
-              <span class="meta-value">{{ createdToken.expiresAt ? formatTime(createdToken.expiresAt) : '永不过期' }}</span>
+              <span class="meta-value">{{ createdToken.expiresAt ? formatDateTime(createdToken.expiresAt) : '永不过期' }}</span>
             </div>
           </div>
           <div class="dialog-close-actions">
@@ -248,6 +248,8 @@
 </template>
 
 <script setup lang="ts">
+import { copyToClipboard } from '@/utils/clipboard'
+import { formatDateTime } from '@/utils/date'
 import { ref, computed, onMounted } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { apiKeyApi } from '@/api'
@@ -347,13 +349,10 @@ function closeCreateDialog() {
 // Copy token
 async function copyToken() {
   if (!createdToken.value) return
-  try {
-    await navigator.clipboard.writeText(createdToken.value.key)
+  const ok = await copyToClipboard(createdToken.value.key, { successMessage: '令牌已复制到剪贴板' })
+  if (ok) {
     copied.value = true
-    Message.success('令牌已复制到剪贴板')
     setTimeout(() => { copied.value = false }, 3000)
-  } catch {
-    Message.error('复制失败，请手动选择复制')
   }
 }
 
@@ -384,17 +383,7 @@ async function confirmRevoke() {
 }
 
 // Format time
-function formatTime(dateStr: string): string {
-  if (!dateStr) return '-'
-  const date = new Date(dateStr)
-  return date.toLocaleDateString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit'
-  })
-}
+
 
 function isExpired(expiresAt?: string): boolean {
   if (!expiresAt) return false

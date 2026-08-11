@@ -68,11 +68,8 @@ export function useSprintNavigation(
 /**
  * Sprint 日期/状态工具函数
  */
-export function formatDate(dateStr?: string): string {
-  if (!dateStr) return ''
-  const d = new Date(dateStr)
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
+// 统一从 utils/date 导出，保持此模块的 API 兼容
+export { formatDate } from '@/utils/date'
 
 /**
  * 判断 Sprint 是否不可启动。

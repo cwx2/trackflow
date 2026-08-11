@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <a-drawer
     :visible="visible"
     title="执行详情"
@@ -15,10 +15,10 @@
             {{ statusLabel(detail.status) }}
           </a-tag>
           <span class="overview-item">
-            <span class="overview-label">开始：</span>{{ formatTime(detail.startedAt) }}
+            <span class="overview-label">开始：</span>{{ formatDateTime(detail.startedAt) }}
           </span>
           <span v-if="detail.durationMs" class="overview-item">
-            <span class="overview-label">耗时：</span>{{ formatDuration(detail.durationMs) }}
+            <span class="overview-label">耗时：</span>{{ formatDurationMs(detail.durationMs) }}
           </span>
           <span v-if="detail.errorMessage" class="overview-item error-msg">
             {{ detail.errorMessage }}
@@ -42,7 +42,7 @@
                 <div class="node-item-name">{{ ne.nodeName || ne.nodeType }}</div>
                 <div class="node-item-meta">
                   <a-tag :color="statusColor(ne.status)" size="small">{{ statusLabel(ne.status) }}</a-tag>
-                  <span v-if="ne.durationMs" class="node-duration">{{ formatDuration(ne.durationMs) }}</span>
+                  <span v-if="ne.durationMs" class="node-duration">{{ formatDurationMs(ne.durationMs) }}</span>
                 </div>
               </div>
             </div>
@@ -76,6 +76,8 @@
 </template>
 
 <script setup lang="ts">
+import { formatDurationMs } from '@/utils/duration'
+import { formatDateTime } from '@/utils/date'
 import { ref, watch, computed } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { automationApi, type ExecutionDetailVO, type NodeExecutionVO } from '@/api'
@@ -109,19 +111,9 @@ function statusLabel(status: string) {
   return { running: '运行中', success: '成功', failed: '失败', cancelled: '已取消', skipped: '已跳过' }[status] || status
 }
 
-function formatTime(dateStr: string) {
-  if (!dateStr) return '-'
-  const d = new Date(dateStr)
-  const p = (n: number) => String(n).padStart(2, '0')
-  return `${d.getMonth()+1}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
-}
 
-function formatDuration(ms?: number): string {
-  if (!ms) return '-'
-  if (ms < 1000) return `${ms}ms`
-  if (ms < 60000) return `${(ms/1000).toFixed(1)}s`
-  return `${Math.floor(ms/60000)}m ${Math.floor((ms%60000)/1000)}s`
-}
+
+
 
 function formatJson(val: unknown): string {
   if (val === null || val === undefined) return '(空)'

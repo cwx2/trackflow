@@ -33,7 +33,7 @@
               class="issue-status"
               :style="{ color: issue.statusColor || 'var(--tf-text-tertiary)' }"
             >{{ issue.statusName }}</span>
-            <span class="issue-time">{{ formatTime(issue.updatedAt) }}</span>
+            <span class="issue-time">{{ formatRelativeTime(issue.updatedAt) }}</span>
           </div>
         </div>
 
@@ -80,7 +80,7 @@
               class="issue-status"
               :style="{ color: issue.statusColor || 'var(--tf-text-tertiary)' }"
             >{{ issue.statusName }}</span>
-            <span class="issue-time">{{ formatTime(issue.createdAt) }}</span>
+            <span class="issue-time">{{ formatRelativeTime(issue.createdAt) }}</span>
           </div>
         </div>
 
@@ -97,6 +97,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatRelativeTime } from '@/utils/date'
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { issueApi } from '@/api/issue'
@@ -132,25 +133,7 @@ function extractProjectKey(issueKey: string): string {
   return idx > 0 ? issueKey.substring(0, idx) : issueKey
 }
 
-function formatTime(dateStr?: string): string {
-  if (!dateStr) return ''
-  try {
-    const date = new Date(dateStr)
-    const now = new Date()
-    const diffMs = now.getTime() - date.getTime()
-    const diffMin = Math.floor(diffMs / 60000)
-    const diffHour = Math.floor(diffMs / 3600000)
-    const diffDay = Math.floor(diffMs / 86400000)
 
-    if (diffMin < 1) return '刚刚'
-    if (diffMin < 60) return `${diffMin} 分钟前`
-    if (diffHour < 24) return `${diffHour} 小时前`
-    if (diffDay < 7) return `${diffDay} 天前`
-    return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
-  } catch {
-    return dateStr
-  }
-}
 
 function navigateToIssue(issueKey: string) {
   router.push(`/issues/${issueKey}`)

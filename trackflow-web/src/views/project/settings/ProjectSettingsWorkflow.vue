@@ -180,7 +180,7 @@
               <!-- on_schedule 规则显示上次执行时间 -->
               <div v-if="rule.ruleType === 'on_schedule'" class="rule-meta">
                 <span v-if="rule.lastExecutedAt" class="meta-item">
-                  上次执行: {{ formatTime(rule.lastExecutedAt) }}
+                  上次执行: {{ formatDateTime(rule.lastExecutedAt) }}
                 </span>
                 <span v-else class="meta-item">尚未执行</span>
               </div>
@@ -504,6 +504,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDateTime } from '@/utils/date'
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
@@ -928,14 +929,7 @@ function scheduleLabel(cron: string | null) {
   return cron ? (map[cron] || `cron: ${cron}`) : '未设置'
 }
 
-function formatTime(dateStr: string) {
-  if (!dateStr) return ''
-  const d = new Date(dateStr)
-  return d.toLocaleString('zh-CN', {
-    month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit'
-  })
-}
+
 
 function fieldLabel(field: string) {
   const map: Record<string, string> = {

@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <AdminPageLayout title="用户组管理">
     <template #actions>
       <a-button type="primary" size="small" @click="openCreateDialog">
@@ -258,6 +258,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDate } from '@/utils/date'
 import { ref, computed, onMounted, reactive } from 'vue'
 import { groupApi, userApi, projectApi } from '@/api'
 import type { UserGroupVO, UserGroupDetailVO } from '@/api/group'
@@ -525,11 +526,7 @@ async function executeDelete() {
   }
 }
 
-// ===== Utils =====
-function formatDate(dateStr: string) {
-  if (!dateStr) return '—'
-  return new Date(dateStr).toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' })
-}
+
 
 onMounted(async () => {
   await loadGroups()

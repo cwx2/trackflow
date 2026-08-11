@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <AdminPageLayout title="第三方集成" subtitle="管理外部系统适配器的启用状态、配置和事件日志">
     <a-tabs v-model:active-key="activeTab" class="integration-tabs">
       <!-- 适配器列表 Tab -->
@@ -43,7 +43,7 @@
                   </div>
                   <div class="stat-item">
                     <span class="stat-label">最近活动</span>
-                    <span class="stat-value">{{ formatTime(adapter.lastActivityAt) }}</span>
+                    <span class="stat-value">{{ formatDateTime(adapter.lastActivityAt) }}</span>
                   </div>
                 </div>
 
@@ -234,6 +234,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDateTime } from '@/utils/date'
 import { ref, reactive, onMounted } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { integrationAdminApi } from '@/api'
@@ -435,22 +436,9 @@ function formatEventType(eventType: string): string {
   return names[eventType] || eventType
 }
 
-function formatTime(datetime: string | null): string {
-  if (!datetime) return '无'
-  const d = new Date(datetime)
-  const now = new Date()
-  const diff = now.getTime() - d.getTime()
-  if (diff < 60000) return '刚刚'
-  if (diff < 3600000) return `${Math.floor(diff / 60000)} 分钟前`
-  if (diff < 86400000) return `${Math.floor(diff / 3600000)} 小时前`
-  return d.toLocaleDateString('zh-CN')
-}
 
-function formatDateTime(datetime: string): string {
-  if (!datetime) return '-'
-  const d = new Date(datetime)
-  return d.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' })
-}
+
+
 
 function getStatusColor(status: string): string {
   const colors: Record<string, string> = {

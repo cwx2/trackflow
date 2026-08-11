@@ -55,7 +55,7 @@
             <span class="workflow-desc">{{ record.description || '-' }}</span>
           </template>
           <template #updatedAt="{ record }">
-            <span class="workflow-time">{{ formatTime(record.updatedAt) }}</span>
+            <span class="workflow-time">{{ formatDateTime(record.updatedAt) }}</span>
           </template>
           <template #status="{ record }">
             <a-tag :color="record.status === 'published' ? 'green' : record.status === 'disabled' ? 'gray' : 'orange'">
@@ -181,6 +181,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDateTime } from '@/utils/date'
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { Message, Modal } from '@arco-design/web-vue'
@@ -401,15 +402,7 @@ function confirmDelete(workflow: WorkflowVO) {
 }
 
 // 格式化时间
-function formatTime(dateStr: string): string {
-  if (!dateStr) return '-'
-  const date = new Date(dateStr)
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  const hours = String(date.getHours()).padStart(2, '0')
-  const minutes = String(date.getMinutes()).padStart(2, '0')
-  return `${month}-${day} ${hours}:${minutes}`
-}
+
 
 onMounted(() => {
   loadWorkflows()

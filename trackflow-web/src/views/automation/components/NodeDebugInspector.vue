@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <section class="node-debug-inspector" :class="{ expanded }">
     <header class="debug-summary">
       <div class="debug-title">
@@ -106,6 +106,7 @@
 </template>
 
 <script setup lang="ts">
+import { copyToClipboard } from '@/utils/clipboard'
 import { computed, ref } from 'vue'
 import JsonDataViewer from './JsonDataViewer.vue'
 
@@ -197,18 +198,7 @@ function recordMeta(record: unknown) {
 
 async function copyResult() {
   const value = formatJson({ input: props.detail?.input, output: props.detail?.output, error: props.detail?.errorInfo, message: props.detail?.message })
-  try {
-    await navigator.clipboard.writeText(value)
-  } catch {
-    const textarea = document.createElement('textarea')
-    textarea.value = value
-    textarea.style.position = 'fixed'
-    textarea.style.opacity = '0'
-    document.body.appendChild(textarea)
-    textarea.select()
-    document.execCommand('copy')
-    textarea.remove()
-  }
+  await copyToClipboard(value, { successMessage: '已复制调试数据' })
   emit('copied')
 }
 </script>

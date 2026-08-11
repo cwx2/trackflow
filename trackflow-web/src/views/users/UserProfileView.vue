@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="user-profile-page">
     <!-- 加载状态 -->
     <div v-if="loading" class="profile-loading">
@@ -134,6 +134,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDate } from '@/utils/date'
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
@@ -161,15 +162,7 @@ const statusLabel = computed(() => {
   return profile.value?.status || '-'
 })
 
-function formatDate(dateStr?: string) {
-  if (!dateStr) return '-'
-  try {
-    const d = new Date(dateStr)
-    return d.toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' })
-  } catch {
-    return dateStr
-  }
-}
+
 
 function goToProject(projectKey: string) {
   router.push(`/projects/${projectKey}`)

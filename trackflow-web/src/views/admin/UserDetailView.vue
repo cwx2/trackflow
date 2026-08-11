@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="user-detail-page">
     <!-- 顶部导航 -->
     <div class="page-nav">
@@ -53,15 +53,15 @@
                 <span v-if="profile.banReason" class="ban-reason">{{ profile.banReason }}</span>
                 <span class="ban-meta">
                   <span v-if="profile.bannedByName">由 {{ profile.bannedByName }} 操作</span>
-                  <span v-if="profile.bannedAt">{{ formatDate(profile.bannedAt) }}</span>
+                  <span v-if="profile.bannedAt">{{ formatDateTime(profile.bannedAt) }}</span>
                 </span>
               </div>
             </div>
           </div>
           <div class="user-timestamps">
-            <span v-if="profile.createdAt">注册于 {{ formatDate(profile.createdAt) }}</span>
+            <span v-if="profile.createdAt">注册于 {{ formatDateTime(profile.createdAt) }}</span>
             <span v-if="profile.lastLoginAt" class="separator">·</span>
-            <span v-if="profile.lastLoginAt">最近登录 {{ formatDate(profile.lastLoginAt) }}</span>
+            <span v-if="profile.lastLoginAt">最近登录 {{ formatDateTime(profile.lastLoginAt) }}</span>
           </div>
         </div>
         <div class="actions-section">
@@ -255,6 +255,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDateTime } from '@/utils/date'
 import { ref, computed, onMounted, h } from 'vue'
 import { useRoute } from 'vue-router'
 import { Modal, Message } from '@arco-design/web-vue'
@@ -451,13 +452,7 @@ function statusLabel(status: string, banStatus?: string) {
   return '禁用'
 }
 
-function formatDate(dt: string) {
-  if (!dt) return ''
-  return new Date(dt).toLocaleString('zh-CN', {
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit'
-  })
-}
+
 
 function formatRelativeTime(dt: string) {
   if (!dt) return ''
@@ -471,7 +466,7 @@ function formatRelativeTime(dt: string) {
   if (hours < 24) return `${hours} 小时前`
   const days = Math.floor(hours / 24)
   if (days < 30) return `${days} 天前`
-  return formatDate(dt)
+  return formatDateTime(dt)
 }
 
 /**

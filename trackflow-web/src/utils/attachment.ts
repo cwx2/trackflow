@@ -76,3 +76,15 @@ function getExtension(filename: string): string {
   if (dot < 0) return ''
   return filename.substring(dot + 1).toLowerCase()
 }
+
+
+/**
+ * 将字节数格式化为人类可读的文件大小。
+ * 例：1536 → "1.5 KB"，2097152 → "2.0 MB"
+ */
+export function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`
+}

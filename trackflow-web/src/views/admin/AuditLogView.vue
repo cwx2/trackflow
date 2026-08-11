@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <AdminPageLayout title="审计日志">
     <template #actions>
       <a-button size="small" @click="exportJson" :loading="exporting">
@@ -131,6 +131,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDateTime } from '@/utils/date'
 import { ref, computed } from 'vue'
 import { auditLogApi } from '@/api'
 import type { AuditLogVO } from '@/api/auditLog'
@@ -208,13 +209,7 @@ async function exportJson() {
   }
 }
 
-function formatDateTime(dt: string) {
-  if (!dt) return '—'
-  return new Date(dt).toLocaleString('zh-CN', {
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', second: '2-digit'
-  })
-}
+
 
 // === 操作类型完整映射（覆盖数据库中所有 action） ===
 const ACTION_LABELS: Record<string, string> = {

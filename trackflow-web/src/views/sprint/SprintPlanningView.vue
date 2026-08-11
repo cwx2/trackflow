@@ -473,6 +473,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDate } from '@/utils/date'
 import { ref, computed, watch, reactive, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { Message, Modal } from '@arco-design/web-vue'
@@ -597,11 +598,7 @@ function formatHours(hours: number): string {
   return `${Math.round(hours * 60)}m`
 }
 
-function formatDate(dateStr?: string): string {
-  if (!dateStr) return ''
-  const d = new Date(dateStr)
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
+
 
 /**
  * 计算当前已规划工时占历史平均速率的百分比（用于进度条宽度）

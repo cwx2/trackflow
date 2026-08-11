@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <section class="activity-stream">
     <div class="stream-toolbar">
       <h3 class="stream-title">活动</h3>
@@ -106,7 +106,7 @@
                 <template v-if="item.detail && item.detail.type === 'time_entry'">
                   记录了工时
                   <span class="time-entry-table">
-                    <span class="te-cell te-duration">{{ formatDurationMin(item.detail.duration) }}</span>
+                    <span class="te-cell te-duration">{{ formatDuration(item.detail.duration) }}</span>
                     <span v-if="item.detail.workDate" class="te-cell te-date">{{ formatWorkDate(item.detail.workDate) }}</span>
                     <span v-if="item.detail.workType" class="te-cell te-type">{{ item.detail.workType }}</span>
                     <span v-if="item.detail.description" class="te-cell te-desc">{{ item.detail.description }}</span>
@@ -121,7 +121,7 @@
                 <template v-if="item.detail && item.detail.type === 'time_entry'">
                   删除了工时
                   <span class="time-entry-table">
-                    <span class="te-cell te-duration te-old">{{ formatDurationMin(item.detail.duration) }}</span>
+                    <span class="te-cell te-duration te-old">{{ formatDuration(item.detail.duration) }}</span>
                     <span v-if="item.detail.workDate" class="te-cell te-date te-old">{{ formatWorkDate(item.detail.workDate) }}</span>
                     <span v-if="item.detail.workType" class="te-cell te-type te-old">{{ item.detail.workType }}</span>
                     <span v-if="item.detail.description" class="te-cell te-desc te-old">{{ item.detail.description }}</span>
@@ -136,7 +136,7 @@
                 <template v-if="item.detail && item.detail.type === 'time_entry'">
                   修改了工时
                   <span class="time-entry-table">
-                    <span class="te-cell te-duration">{{ formatDurationMin(item.detail.duration) }}</span>
+                    <span class="te-cell te-duration">{{ formatDuration(item.detail.duration) }}</span>
                     <span v-if="item.detail.workDate" class="te-cell te-date">{{ formatWorkDate(item.detail.workDate) }}</span>
                     <span v-if="item.detail.workType" class="te-cell te-type">{{ item.detail.workType }}</span>
                     <span v-if="item.detail.description" class="te-cell te-desc">{{ item.detail.description }}</span>
@@ -228,6 +228,8 @@
 </template>
 
 <script setup lang="ts">
+import { copyToClipboard } from '@/utils/clipboard'
+import { formatDuration } from '@/utils/duration'
 import { ref, computed, watch, nextTick } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { localizeAction, localizeLinkType } from '@/utils/fieldLabels'
@@ -496,14 +498,7 @@ function formatPreciseTime(ts: number): string {
 }
 
 /** 将分钟数格式化为 "Xh Ym" 或 "Xm" */
-function formatDurationMin(minutes?: number): string {
-  if (minutes == null || isNaN(minutes)) return ''
-  const h = Math.floor(minutes / 60)
-  const m = minutes % 60
-  if (h === 0) return `${m}m`
-  if (m === 0) return `${h}h`
-  return `${h}h ${m}m`
-}
+
 
 /** 将 ISO 日期字符串（"2026-07-20"）格式化为中文日期形式（"2026/07/20"） */
 function formatWorkDate(dateStr?: string): string {
@@ -538,7 +533,7 @@ function formatAutoAssignSkipped(detail?: Record<string, any>): string {
  */
 function handleCopyLink(item: ActivityItem) {
   const url = `${window.location.origin}${window.location.pathname}#${item.id}`
-  navigator.clipboard.writeText(url).then(() => {
+  copyToClipboard(url, { successMessage: '已复制链接' }).then(() => {
     Message.success({ content: '链接已复制', duration: 2000 })
   }).catch(() => {
     Message.error('复制链接失败')

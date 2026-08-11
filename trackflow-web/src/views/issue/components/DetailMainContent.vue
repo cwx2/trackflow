@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <main class="detail-main">
     <!-- Issue Key + Type -->
     <div class="sticky-header">
@@ -207,8 +207,9 @@
 </template>
 
 <script setup lang="ts">
+import { copyToClipboard } from '@/utils/clipboard'
 import { ref, computed, nextTick } from 'vue'
-import { Message } from '@arco-design/web-vue'
+
 import { IconCopy, IconDelete, IconBranch, IconSwap, IconPrinter, IconClockCircle, IconUpload, IconLock, IconSearch, IconPlus, IconEdit, IconLink, IconMore, IconAttachment, IconClose } from '@arco-design/web-vue/es/icon'
 import { renderMarkdown } from '@/utils/markdown'
 import { localizeIssueType } from '@/utils/fieldLabels'
@@ -327,8 +328,7 @@ function createNewTag() {
 // --- Show More menu actions ---
 function onCopyIdAndSummary() {
   const text = `${props.issueKey} ${props.title}`
-  navigator.clipboard.writeText(text)
-  Message.success('已复制 ID 和摘要')
+  copyToClipboard(text, { successMessage: '已复制 ID 和摘要' })
 }
 
 function handlePrint() {

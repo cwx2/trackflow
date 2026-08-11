@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="work-time-form">
     <!-- 记录人（有权限时显示） -->
     <div v-if="canLogForOthers && projectMembers.length > 0" class="wtf-field">
@@ -73,6 +73,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDuration } from '@/utils/duration'
 import { reactive } from 'vue'
 import { UserAvatar } from '@/components/base'
 import type { WorkItemAttributeVO } from '@/api/timeEntry'
@@ -187,13 +188,7 @@ function reset() {
 }
 
 /** 将分钟数格式化为 Xh Ym 字符串 */
-function formatDuration(minutes: number): string {
-  const h = Math.floor(minutes / 60)
-  const m = minutes % 60
-  if (h === 0) return `${m}m`
-  if (m === 0) return `${h}h`
-  return `${h}h ${m}m`
-}
+
 
 defineExpose({ validate, getFormData, fill, reset })
 </script>

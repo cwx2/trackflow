@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="execution-history-view">
     <!-- 顶部标题栏 -->
     <div class="page-header">
@@ -45,10 +45,10 @@
             </a-tag>
           </template>
           <template #startedAt="{ record }">
-            <span class="time-text">{{ formatTime(record.startedAt) }}</span>
+            <span class="time-text">{{ formatDateTime(record.startedAt) }}</span>
           </template>
           <template #duration="{ record }">
-            <span class="time-text">{{ formatDuration(record.durationMs) }}</span>
+            <span class="time-text">{{ formatDurationMs(record.durationMs) }}</span>
           </template>
           <template #createdBy="{ record }">
             <span class="user-text">{{ record.createdBy || '手动触发' }}</span>
@@ -71,6 +71,8 @@
 </template>
 
 <script setup lang="ts">
+import { formatDurationMs } from '@/utils/duration'
+import { formatDateTime } from '@/utils/date'
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { automationApi, type ExecutionVO } from '@/api'
@@ -116,19 +118,9 @@ function statusLabel(status: string) {
   return map[status] || status
 }
 
-function formatTime(dateStr: string): string {
-  if (!dateStr) return '-'
-  const d = new Date(dateStr)
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getMonth()+1}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
-}
 
-function formatDuration(ms?: number): string {
-  if (!ms) return '-'
-  if (ms < 1000) return `${ms}ms`
-  if (ms < 60000) return `${(ms/1000).toFixed(1)}s`
-  return `${Math.floor(ms/60000)}m ${Math.floor((ms%60000)/1000)}s`
-}
+
+
 
 async function loadWorkflowName() {
   try {

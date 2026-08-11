@@ -326,6 +326,8 @@
 </template>
 
 <script setup lang="ts">
+import { formatDuration } from '@/utils/duration'
+import { formatDate } from '@/utils/date'
 import { ref, computed, onMounted } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { use } from 'echarts/core'
@@ -587,14 +589,7 @@ const workTypeChartOption = computed(() => {
 
 // ─── 工具方法 ─────────────────────────────
 
-function formatDuration(minutes: number): string {
-  if (!minutes || minutes <= 0) return '0m'
-  if (minutes < 60) return `${minutes}m`
-  const h = Math.floor(minutes / 60)
-  const m = minutes % 60
-  if (m === 0) return `${h}h`
-  return `${h}h ${m}m`
-}
+
 
 function formatDurationShort(minutes: number): string {
   if (minutes < 60) return `${minutes}m`
@@ -606,11 +601,7 @@ function crossBarWidth(minutes: number): string {
   return Math.max(4, (minutes / chartData.value.totalMinutes) * 100) + '%'
 }
 
-function formatDate(val: any): string {
-  if (typeof val === 'string') return val.substring(0, 10)
-  if (val instanceof Date) return val.toISOString().substring(0, 10)
-  return ''
-}
+
 
 function buildParams() {
   const params: any = {}

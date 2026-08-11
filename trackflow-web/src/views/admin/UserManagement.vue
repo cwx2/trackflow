@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <AdminPageLayout title="用户管理">
     <template #actions>
       <div class="header-filters">
@@ -359,6 +359,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDate } from '@/utils/date'
 import { ref, reactive, computed, onMounted, h } from 'vue'
 import { useRouter } from 'vue-router'
 import { Modal, Message } from '@arco-design/web-vue'
@@ -842,10 +843,7 @@ async function loadAllProjects() {
   } catch (e) { allProjects.value = [] }
 }
 
-function formatDate(dt: string) {
-  if (!dt) return '—'
-  return new Date(dt).toLocaleString('zh-CN')
-}
+
 
 /** 禁用状态标签映射 */
 const BAN_STATUS_LABELS: Record<string, string> = {

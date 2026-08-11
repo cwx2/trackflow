@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <section class="att-section">
     <!-- Header -->
     <div class="att-header" @click="toggleCollapse">
@@ -188,6 +188,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDate } from '@/utils/date'
 import { ref, computed, watch } from 'vue'
 import { useConfirmDelete } from '@/composables/useConfirmDelete'
 import {
@@ -368,10 +369,7 @@ function formatSize(bytes: number): string {
   return (bytes / 1048576).toFixed(1) + ' MB'
 }
 
-function formatDate(dt: string): string {
-  if (!dt) return ''
-  return new Date(dt).toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' })
-}
+
 
 // ========== Image Lightbox (multi-image preview) ==========
 const imagePreviewVisible = ref(false)

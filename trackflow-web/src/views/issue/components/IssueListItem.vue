@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div
     class="issue-list-item"
     :class="{
@@ -93,7 +93,7 @@
     />
 
     <!-- Right side: updated time -->
-    <span class="item-time">{{ formatTime(issue.updatedAt) }}</span>
+    <span class="item-time">{{ formatRelativeTime(issue.updatedAt) }}</span>
 
     <!-- Status badge -->
     <span class="item-status" :style="{ background: issue.statusColor || '#666' }">
@@ -197,6 +197,7 @@
 
 <script setup lang="ts">
 import { computed, ref, inject } from 'vue'
+import { formatRelativeTime } from '@/utils/date'
 import type { Ref } from 'vue'
 import { IconRight, IconDown, IconLayers, IconDragDotVertical, IconThumbUp, IconLoading } from '@arco-design/web-vue/es/icon'
 import type { IssueVO, CustomFieldValueVO, SprintVO } from '@/api/types'
@@ -374,19 +375,7 @@ const effectiveSpent = computed(() => {
   return props.issue.spentHours || 0
 })
 
-function formatTime(dt: string) {
-  if (!dt) return ''
-  const d = new Date(dt)
-  const now = new Date()
-  const diff = now.getTime() - d.getTime()
-  const mins = Math.floor(diff / 60000)
-  if (mins < 60) return `${mins}分钟前`
-  const hours = Math.floor(mins / 60)
-  if (hours < 24) return `${hours}小时前`
-  const days = Math.floor(hours / 24)
-  if (days < 30) return `${days}天前`
-  return d.toLocaleDateString('zh-CN')
-}
+
 
 function truncateDescription(desc?: string): string {
   if (!desc) return ''

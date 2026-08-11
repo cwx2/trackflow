@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="issue-detail-page" v-if="issue">
     <!-- 实时更新提示 banner（活动流不在视口时显示） -->
 
@@ -241,6 +241,7 @@
  * - composables/useIssueDetailActions.ts：所有操作处理函数
  * - 本文件：模板 + 计算属性 + 样式
  */
+import { formatDateTime } from '@/utils/date'
 import { computed, ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRoute, onBeforeRouteLeave } from 'vue-router'
 import { Modal } from '@arco-design/web-vue'
@@ -824,10 +825,7 @@ function timeAgo(dt: string | number) {
   return `${Math.floor(hrs / 24)} 天前`
 }
 
-function formatDateTime(dt?: string) {
-  if (!dt) return '-'
-  return new Date(dt).toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
-}
+
 
 // Route guard
 onBeforeRouteLeave((_to, _from, next) => {

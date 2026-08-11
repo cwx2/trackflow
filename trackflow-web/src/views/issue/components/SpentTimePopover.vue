@@ -62,6 +62,8 @@
 </template>
 
 <script setup lang="ts">
+import { formatDuration } from '@/utils/duration'
+import { formatDate } from '@/utils/date'
 import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { timeEntryApi } from '@/api'
 import type { TimeEntryVO } from '@/api/timeEntry'
@@ -124,24 +126,9 @@ async function loadEntries() {
   }
 }
 
-function formatDuration(minutes: number | null | undefined): string {
-  if (minutes == null || minutes <= 0) return '0m'
-  const h = Math.floor(minutes / 60)
-  const m = minutes % 60
-  if (h === 0) return `${m}m`
-  if (m === 0) return `${h}h`
-  return `${h}h ${m}m`
-}
 
-function formatDate(dateStr?: string): string {
-  if (!dateStr) return ''
-  try {
-    const d = new Date(dateStr + 'T00:00:00')
-    return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`
-  } catch {
-    return dateStr
-  }
-}
+
+
 </script>
 
 <style scoped>
