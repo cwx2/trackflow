@@ -79,12 +79,11 @@
  * Emits：
  *   close — 浮层关闭时通知父级（用于点击外部关闭）
  */
-import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useTimerStore } from '@/stores/timer'
 
-const props = defineProps<{ collapsed: boolean }>()
-const emit = defineEmits<{ close: [] }>()
+defineProps<{ collapsed: boolean }>()
+defineEmits<{ close: [] }>()
 
 const router = useRouter()
 const timerStore = useTimerStore()

@@ -67,7 +67,7 @@
  *   badgeTitle — hover badge 时的 title 提示
  *   iconComponent — 图标组件（与 #icon slot 二选一）
  */
-import { computed, inject } from 'vue'
+import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import type { Component } from 'vue'
 
