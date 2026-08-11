@@ -83,7 +83,7 @@
     :model-value="modelValue"
     placeholder="可选"
     :auto-size="{ minRows: 2, maxRows: 5 }"
-    @update:model-value="$emit('update:modelValue', $event)"
+    @update:model-value="modelValue = $event"
   />
 
   <!-- period 类型：时间周期 -->
@@ -92,7 +92,7 @@
     :model-value="modelValue"
     placeholder="如: 2h30m, 1d, 1w2d（分钟数）"
     style="width: 200px"
-    @update:model-value="$emit('update:modelValue', $event)"
+    @update:model-value="modelValue = $event"
   />
 
   <!-- string 类型和其他：普通文本输入 -->
@@ -100,7 +100,7 @@
     v-else
     :model-value="modelValue"
     placeholder="可选"
-    @update:model-value="$emit('update:modelValue', $event)"
+    @update:model-value="modelValue = $event"
   />
 </template>
 
@@ -109,44 +109,37 @@ import { ref, computed, watch } from 'vue'
 import { userApi } from '@/api'
 import type { UserVO } from '@/api/types'
 
-const props = defineProps<{
-  modelValue: string
-  fieldFormat: string
-}>()
+const modelValue = defineModel<string>({ default: '' })
 
-const emit = defineEmits<{
-  (e: 'update:modelValue', value: string): void
+const props = defineProps<{
+  fieldFormat: string
 }>()
 
 // ========== Number handling ==========
 const intValue = computed(() => {
-  if (!props.modelValue) return undefined
-  const n = parseInt(props.modelValue, 10)
+  if (!modelValue.value) return undefined
+  const n = parseInt(modelValue.value, 10)
   return isNaN(n) ? undefined : n
 })
 
 const floatValue = computed(() => {
-  if (!props.modelValue) return undefined
-  const n = parseFloat(props.modelValue)
+  if (!modelValue.value) return undefined
+  const n = parseFloat(modelValue.value)
   return isNaN(n) ? undefined : n
 })
 
 function handleNumberChange(val: number | undefined) {
-  emit('update:modelValue', val !== undefined && val !== null ? String(val) : '')
+  modelValue.value = val !== undefined && val !== null ? String(val) : ''
 }
 
 // ========== Bool handling ==========
 function handleBoolChange(val: string | number | boolean) {
-  if (val === 'unset') {
-    emit('update:modelValue', '')
-  } else {
-    emit('update:modelValue', String(val))
-  }
+  modelValue.value = val === 'unset' ? '' : String(val)
 }
 
 // ========== Date handling ==========
 function handleDateChange(val: string | Date | undefined) {
-  emit('update:modelValue', val ? String(val) : '')
+  modelValue.value = val ? String(val) : ''
 }
 
 // ========== User handling ==========
@@ -154,7 +147,7 @@ const userOptions = ref<UserVO[]>([])
 const userLoading = ref(false)
 
 // Load initial user if there's a value
-watch(() => props.modelValue, async (val) => {
+watch(() => modelValue.value, async (val) => {
   if (props.fieldFormat === 'user' && val && userOptions.value.length === 0) {
     await loadInitialUser(val)
   }
@@ -183,7 +176,7 @@ async function handleUserSearch(keyword: string) {
 }
 
 function handleUserChange(val: any) {
-  emit('update:modelValue', val || '')
+  modelValue.value = val || ''
 }
 
 // When field format changes, reset value if incompatible

@@ -446,8 +446,8 @@ async function handleCreateAndLink() {
 }
 
 /* 模式切换 Tab */
-.mode-tabs :deep(.arco-tabs-content) { padding: 0; margin-top: 12px; }
-.mode-tabs :deep(.arco-tabs-pane) { padding: 0; }
+/* arco-tabs-content padding:0 已在 components.css 全局设置 */
+.mode-tabs :deep(.arco-tabs-content) { margin-top: 12px; }
 
 /* 搜索模式样式 */
 .issue-list-wrapper {

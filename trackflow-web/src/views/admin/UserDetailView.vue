@@ -111,9 +111,8 @@
             <a-button type="text" size="small" @click="showRoleDialog = true">管理</a-button>
           </div>
           <div class="section-body">
-            <div v-if="profile.globalRoles.length === 0" class="empty-hint">
-              <span class="empty-icon">👤</span>
-              <span>未分配系统角色</span>
+            <div v-if="profile.globalRoles.length === 0">
+              <EmptyState icon="user" title="未分配系统角色" :compact="true" />
             </div>
             <div v-else class="role-tags">
               <span v-for="role in profile.globalRoles" :key="role.id" class="role-tag">
@@ -133,9 +132,8 @@
             </div>
           </div>
           <div class="section-body">
-            <div v-if="profile.projectRoles.length === 0" class="empty-hint">
-              <span class="empty-icon">📁</span>
-              <span>未加入任何项目</span>
+            <div v-if="profile.projectRoles.length === 0">
+              <EmptyState icon="folder" title="未加入任何项目" :compact="true" />
             </div>
             <div v-else class="project-role-list">
               <div v-for="pr in profile.projectRoles" :key="`${pr.projectId}-${pr.roleCode}`" class="project-role-item">
@@ -170,9 +168,8 @@
             <h2 class="section-title">最近活动</h2>
           </div>
           <div class="section-body">
-            <div v-if="profile.recentActivities.length === 0" class="empty-hint">
-              <span class="empty-icon">📝</span>
-              <span>暂无操作记录</span>
+            <div v-if="profile.recentActivities.length === 0">
+              <EmptyState icon="ordered-list" title="暂无操作记录" :compact="true" />
             </div>
             <div v-else class="activity-list">
               <div v-for="activity in profile.recentActivities" :key="activity.id" class="activity-item">
@@ -265,7 +262,7 @@ import { useConfirmDelete } from '@/composables/useConfirmDelete'
 import { userApi, projectApi, roleApi } from '@/api'
 import type { UserProfileVO, UserProfileProjectRoleInfo } from '@/api/user'
 import { localizeActionShort, fieldLabelMap, localizeLinkType } from '@/utils/fieldLabels'
-import { UserAvatar, IssueStatusTag } from '@/components/base'
+import { UserAvatar, IssueStatusTag, EmptyState } from '@/components/base'
 import DataContainer from '@/components/base/DataContainer.vue'
 
 const route = useRoute()
