@@ -109,24 +109,24 @@
         启动
       </a-button>
 
-      <!-- 保存（下拉） -->
-      <a-dropdown trigger="hover" @select="handleMoreAction">
-        <a-button type="primary" :loading="saving" :disabled="runtimeEnabled">
+      <!-- 主操作必须直接生效；更多保存操作收进独立的箭头菜单。 -->
+      <a-button-group class="save-actions">
+        <a-button type="primary" :loading="saving" :disabled="runtimeEnabled" @click="emit('save')">
           <template #icon><icon-save /></template>
           保存
-          <icon-down class="dropdown-caret" />
         </a-button>
-        <template #content>
-          <a-doption value="save">
-            <template #icon><icon-save /></template>
-            保存
-          </a-doption>
-          <a-doption value="saveAsTemplate">
-            <template #icon><icon-copy /></template>
-            另存为模板
-          </a-doption>
-        </template>
-      </a-dropdown>
+        <a-dropdown trigger="click" @select="handleMoreAction">
+          <a-button type="primary" aria-label="更多保存操作" :disabled="runtimeEnabled">
+            <template #icon><icon-down class="dropdown-caret" /></template>
+          </a-button>
+          <template #content>
+            <a-doption value="saveAsTemplate">
+              <template #icon><icon-copy /></template>
+              另存为模板
+            </a-doption>
+          </template>
+        </a-dropdown>
+      </a-button-group>
     </div>
   </div>
 </template>
@@ -332,7 +332,7 @@ function finishEdit() {
 /* 保存按钮 caret */
 .dropdown-caret {
   font-size: 11px;
-  margin-left: 2px;
-  opacity: 0.7;
+  opacity: 0.8;
 }
+.save-actions { display: inline-flex; }
 </style>

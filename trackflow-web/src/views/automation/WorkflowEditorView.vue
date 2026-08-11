@@ -123,6 +123,7 @@
         @export-image="exportImage"
         @toggle-minimap="toggleMinimap"
         @drag-start="onDragStart"
+        @quick-add="quickAddNode"
         @toggle-debug="toggleDebugMode"
         @run="handleRun"
         @cancel="handleCancelRun"
@@ -1350,8 +1351,22 @@ function goBack() {
   router.push('/automation')
 }
 
+type PaletteNode = { type: string; label: string; icon: string; color: string }
+
+function createNodeProperties(node: PaletteNode) {
+  const definition = getNodeDefinition(node.type)
+  return {
+    nodeType: node.type,
+    nodeMeta: { title: node.label, icon: node.icon, color: node.color,
+      description: definition?.meta.description || '' },
+    inputs: (definition?.inputPorts || []).map(port => ({ ...port, value: port.defaultValue ?? null })),
+    outputs: definition?.outputPorts || [],
+    config: Object.fromEntries((definition?.configFields || []).map(field => [field.key, field.defaultValue ?? ''])),
+  }
+}
+
 // 拖拽添加节点
-function onDragStart(_e: MouseEvent, node: { type: string; label: string; icon: string; color: string }) {
+function onDragStart(_e: MouseEvent, node: PaletteNode) {
   if (!lf) return
   
   const panelInners = document.querySelectorAll('.panel-inner, .panel-toggle')
@@ -1362,19 +1377,29 @@ function onDragStart(_e: MouseEvent, node: { type: string; label: string; icon: 
   }
   document.addEventListener('mouseup', onMouseUp)
 
-  const def = getNodeDefinition(node.type)
   lf.dnd.startDrag({
     type: node.type,
     text: node.label,
-    properties: {
-      nodeType: node.type,
-      nodeMeta: { title: node.label, icon: node.icon, color: node.color,
-        description: def?.meta.description || '', category: def?.meta.category },
-      inputs:  (def?.inputPorts  || []).map(p => ({ ...p, value: p.defaultValue ?? null })),
-      outputs: def?.outputPorts  || [],
-      config:  Object.fromEntries((def?.configFields || []).map(f => [f.key, f.defaultValue ?? ''])),
-    }
+    properties: createNodeProperties(node)
   })
+}
+
+/** 点击节点库时放入当前视口中心：无需先学习拖拽，也不会落到看不见的位置。 */
+function quickAddNode(node: PaletteNode) {
+  if (!lf || !containerRef.value) return
+  const rect = containerRef.value.getBoundingClientRect()
+  const point = lf.getPointByClient(rect.left + rect.width / 2, rect.top + rect.height / 2)
+  const created = lf.addNode({
+    type: node.type,
+    x: point.canvasOverlayPosition.x,
+    y: point.canvasOverlayPosition.y,
+    properties: createNodeProperties(node),
+  }) as any
+  if (!created?.id) return
+  selectedNode.value = JSON.parse(JSON.stringify(created.getData?.() || created))
+  rightPanelOpen.value = true
+  inspectorTab.value = 'config'
+  Message.success(`已添加「${node.label}」，可继续配置或拖动调整位置`)
 }
 
 // ── 试运行 ────────────────────────────────────────────────

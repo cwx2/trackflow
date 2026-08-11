@@ -1,4 +1,4 @@
-import type { GlobalVariable, NodeType, WorkflowDefinition, WorkflowNode } from '@/api'
+import type { GlobalVariable, NodeMeta, NodeType, WorkflowDefinition, WorkflowNode } from '@/api'
 import { getNodeDefinition } from './node-definitions'
 
 const CANVAS_OFFSET = { x: 100, y: 30 }
@@ -103,7 +103,10 @@ export function upgradeNodeContract(node: any) {
   const existingInputs = new Map<string, any>((node.inputs || []).map((input: any) => [input.name, input]))
   return {
     ...node,
-    nodeMeta: { ...definition.meta, ...(node.nodeMeta || {}), category: definition.meta.category },
+    // category belongs to the editor palette, not the persisted NodeMeta contract.
+    // Keep this boundary strict so every definition accepted by the editor is
+    // accepted by the backend without relying on unknown-property tolerance.
+    nodeMeta: createNodeMeta(definition.meta, node.nodeMeta),
     inputs: definition.inputPorts.map(port => {
       const existing = existingInputs.get(port.name)
       return {
@@ -135,6 +138,16 @@ export function normalizeCanvasNode(canvasNode: any): WorkflowNode {
     outputs: canvasNode.properties?.outputs || [],
     config: extractNodeConfig(canvasNode.properties || {}),
   }) as WorkflowNode
+}
+
+/** Convert editor metadata into the exact backend NodeMeta contract. */
+function createNodeMeta(definitionMeta: NodeMeta & { category?: string }, savedMeta?: Partial<NodeMeta>): NodeMeta {
+  return {
+    title: savedMeta?.title || definitionMeta.title,
+    icon: savedMeta?.icon || definitionMeta.icon,
+    description: savedMeta?.description || definitionMeta.description || '',
+    color: savedMeta?.color || definitionMeta.color,
+  }
 }
 
 /** 统一从画布生成定义，保存和试运行使用同一份序列化规则。 */

@@ -18,6 +18,7 @@
           >
             <template #prefix><span class="search-icon">🔍</span></template>
           </a-input>
+          <p class="node-add-hint">拖动可精确放置；点击会添加到当前可见画布中央。</p>
         </div>
 
         <!-- 节点列表（搜索 or 分类） -->
@@ -195,6 +196,7 @@ const emit = defineEmits<{
   'run': []
   'cancel': []
   'drag-start': [event: MouseEvent, node: NodeItem]
+  'quick-add': [node: NodeItem]
 }>()
 
 // 弹层状态（自包含）
@@ -203,6 +205,7 @@ const nodeSearchKeyword = ref('')
 const zoomMenuOpen = ref(false)
 const zoomBtnRef = ref<HTMLElement | null>(null)
 const wrapRef = ref<HTMLElement | null>(null)
+let didDragNode = false
 
 const filteredNodes = computed(() => {
   const kw = nodeSearchKeyword.value.trim().toLowerCase()
@@ -228,6 +231,19 @@ function toggleAddNodePanel() {
 
 function onNodeMouseDown(e: MouseEvent, node: NodeItem) {
   addNodePanelOpen.value = false
+  const startX = e.clientX
+  const startY = e.clientY
+  const onMove = (event: MouseEvent) => {
+    if (Math.abs(event.clientX - startX) + Math.abs(event.clientY - startY) > 4) didDragNode = true
+  }
+  const onUp = () => {
+    document.removeEventListener('mousemove', onMove)
+    document.removeEventListener('mouseup', onUp)
+    if (!didDragNode) emit('quick-add', node)
+    didDragNode = false
+  }
+  document.addEventListener('mousemove', onMove)
+  document.addEventListener('mouseup', onUp)
   emit('drag-start', e, node)
 }
 
@@ -444,6 +460,7 @@ onUnmounted(() => {
   border-bottom: 1px solid var(--tf-border);
   flex-shrink: 0;
 }
+.node-add-hint { margin: 7px 2px 0; color: var(--tf-text-tertiary); font-size: 11px; line-height: 1.4; }
 .search-icon { font-size: 11px; }
 
 /* 滚动区 */
