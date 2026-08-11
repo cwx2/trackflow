@@ -1,14 +1,12 @@
 ﻿<template>
   <div class="report-detail">
     <!-- 面包屑导航 -->
-    <div class="detail-breadcrumb">
-      <router-link to="/reports/list" class="breadcrumb-link">
-        <span class="breadcrumb-icon">←</span>
-        报表列表
-      </router-link>
-      <span class="breadcrumb-sep">/</span>
-      <span class="breadcrumb-current">{{ report?.name || '加载中...' }}</span>
-    </div>
+    <a-breadcrumb style="margin-bottom: 20px">
+      <a-breadcrumb-item>
+        <router-link to="/reports/list">报表列表</router-link>
+      </a-breadcrumb-item>
+      <a-breadcrumb-item>{{ report?.name || '加载中...' }}</a-breadcrumb-item>
+    </a-breadcrumb>
 
     <!-- 三态容器 -->
     <DataContainer
@@ -517,40 +515,6 @@ function formatRelativeTime(time?: string) {
 }
 
 /* 面包屑 */
-.detail-breadcrumb {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 20px;
-  font-size: 13px;
-}
-
-.breadcrumb-link {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  color: var(--tf-text-secondary);
-  text-decoration: none;
-  transition: color 0.15s;
-}
-
-.breadcrumb-link:hover {
-  color: var(--tf-accent);
-}
-
-.breadcrumb-icon {
-  font-size: 14px;
-}
-
-.breadcrumb-sep {
-  color: var(--tf-text-tertiary);
-}
-
-.breadcrumb-current {
-  color: var(--tf-text-primary);
-  font-weight: 500;
-}
-
 /* 标题区 */
 .detail-title-area {
   margin-bottom: 16px;
