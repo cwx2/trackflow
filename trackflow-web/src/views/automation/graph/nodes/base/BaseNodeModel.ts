@@ -34,10 +34,11 @@ export interface NodeMeta {
 // 布局常量
 export const NODE_WIDTH         = 280  // 节点宽度
 export const PORT_ROW_H         = 28   // 每个端口行高
-export const HEADER_H           = 48   // 标题区高度
-export const PADDING_V          = 8    // 端口区上下 padding
-export const OPTIONAL_TOGGLE_H  = 24   // "可选参数"提示行高
-export const PORT_HANDLE_OFFSET = 6    // 端口外伸距离，让连线落在卡片前沿而不是被节点遮住
+export const HEADER_H                 = 49 // 标题区（含底部分隔线）高度
+export const PORT_SECTION_PADDING_V   = 4  // 每个输入/输出分区的上下内边距
+export const PORT_DIVIDER_H           = 1  // 输入、输出分区之间的分隔线
+export const OPTIONAL_TOGGLE_H        = 24 // 可选参数开关行高
+export const PORT_HANDLE_OFFSET       = 6  // 锚点相对卡片边缘的外伸距离
 
 export abstract class BaseNodeModel extends HtmlNodeModel {
   /** 子类需覆盖：提供节点类型名（用于从 node-definitions 读取默认值） */
@@ -74,18 +75,12 @@ export abstract class BaseNodeModel extends HtmlNodeModel {
     super.setProperty(key, val)
   }
 
-  /**
-   * 获取当前可见的输入端口（考虑可选折叠状态）
-   * - 若节点定义无 optional 端口，返回全部
-   * - optionalExpanded=false 时，只返回非 optional 端口
-   * - optionalExpanded=true 时，返回全部
-   */
+  /** 返回和 NodeCard 第一段输入区完全一致的必显端口。 */
   _getVisibleInputs(props: any): PortDef[] {
     const inputs: PortDef[] = props?.inputs || []
-    const optionalExpanded: boolean = props?.optionalExpanded ?? false
     const nodeType: string | undefined = props?.nodeType
 
-    if (optionalExpanded || !nodeType) return inputs
+    if (!nodeType) return inputs
 
     const def = getNodeDefinition(nodeType)
     if (!def) return inputs
@@ -96,84 +91,103 @@ export abstract class BaseNodeModel extends HtmlNodeModel {
     return inputs.filter(p => !optionalNames.has(p.name))
   }
 
-  /** 获取隐藏的可选端口数量 */
-  _getHiddenOptionalCount(props: any): number {
+  /** 返回 NodeCard 第二段输入区中的可选端口。 */
+  _getOptionalInputs(props: any): PortDef[] {
     const inputs: PortDef[] = props?.inputs || []
-    const optionalExpanded: boolean = props?.optionalExpanded ?? false
     const nodeType: string | undefined = props?.nodeType
 
-    if (optionalExpanded || !nodeType) return 0
+    if (!nodeType) return []
 
     const def = getNodeDefinition(nodeType)
-    if (!def) return 0
+    if (!def) return []
 
     const optionalNames = new Set(def.inputPorts.filter(p => p.optional).map(p => p.name))
-    return inputs.filter(p => optionalNames.has(p.name)).length
+    return inputs.filter(p => optionalNames.has(p.name))
   }
 
-  /** 根据端口数量和可选折叠状态计算节点高度 */
-  _calcHeight(props: any): number {
+  /**
+   * 计算 NodeCard 的真实布局。
+   *
+   * 模型锚点和 Vue 卡片必须遵循同一套分区规则：不能再以“端口数量 × 行高”
+   * 粗略推算，否则分区 padding、折叠行和分隔线会令连线偏离视觉端口。
+   */
+  _getPortLayout(props: any) {
     const visibleInputs = this._getVisibleInputs(props)
+    const optionalInputs = this._getOptionalInputs(props)
     const outputs: PortDef[] = props?.outputs || []
-    const hiddenOptionalCount = this._getHiddenOptionalCount(props)
     const optionalExpanded: boolean = props?.optionalExpanded ?? false
 
-    let portRows = visibleInputs.length + outputs.length
-    let extraHeight = 0
+    const inputGroups: PortDef[][] = []
+    if (visibleInputs.length) inputGroups.push(visibleInputs)
+    if (optionalExpanded && optionalInputs.length) inputGroups.push(optionalInputs)
 
-    if (optionalExpanded) {
-      const allInputs: PortDef[] = props?.inputs || []
-      portRows = allInputs.length + outputs.length
-      extraHeight += OPTIONAL_TOGGLE_H // "收起可选参数" toggle
-    } else if (hiddenOptionalCount > 0) {
-      extraHeight += OPTIONAL_TOGGLE_H // "+ N 个可选参数" toggle
+    return {
+      inputGroups,
+      outputs,
+      // 折叠时显示“+ N 个可选参数”；展开时显示“收起可选参数”。
+      hasOptionalToggle: optionalInputs.length > 0,
     }
+  }
 
-    return HEADER_H + Math.max(portRows, 1) * PORT_ROW_H + PADDING_V * 2 + extraHeight
+  /** 根据 NodeCard 的实际分区高度计算节点高度。 */
+  _calcHeight(props: any): number {
+    const { inputGroups, outputs, hasOptionalToggle } = this._getPortLayout(props)
+    let height = HEADER_H
+
+    inputGroups.forEach(group => {
+      height += PORT_SECTION_PADDING_V * 2 + group.length * PORT_ROW_H
+    })
+    if (hasOptionalToggle) height += OPTIONAL_TOGGLE_H
+    if (inputGroups.length && outputs.length) height += PORT_DIVIDER_H
+    if (outputs.length) height += PORT_SECTION_PADDING_V * 2 + outputs.length * PORT_ROW_H
+
+    return height
   }
 
   /** 动态生成具名锚点（只为可见端口生成） */
   getDefaultAnchor() {
     const { x, y, width, height, id, properties } = this
-    const optionalExpanded: boolean = (properties as any)?.optionalExpanded ?? false
-    const outputs: PortDef[] = (properties as any)?.outputs || []
-
-    const inputsForAnchors = optionalExpanded
-      ? ((properties as any)?.inputs || []) as PortDef[]
-      : this._getVisibleInputs(properties as any)
+    const { inputGroups, outputs, hasOptionalToggle } = this._getPortLayout(properties as any)
 
     const anchors: any[] = []
+    let cursorY = y - height / 2 + HEADER_H
 
-    // 输入/输出端口锚点外伸到卡片边界之外，与悬浮端口圆点的中心对齐。
-    // 边仍处于节点图层下方，但连接终点不会被卡片本体遮住。
-    const startY = y - height / 2 + HEADER_H + PADDING_V + PORT_ROW_H / 2
-    inputsForAnchors.forEach((p, i) => {
-      anchors.push({
-        id:          `${id}-in-${p.name}`,
-        x:           x - width / 2 - PORT_HANDLE_OFFSET,
-        y:           startY + i * PORT_ROW_H,
-        type:        'input',
-        edgeAddable: true,
-        connectable: true,
-        _portName:   p.name,
+    // 每个输入分区都有自己的上下 padding，锚点圆心取端口行的精确中心。
+    inputGroups.forEach(group => {
+      cursorY += PORT_SECTION_PADDING_V
+      group.forEach(p => {
+        anchors.push({
+          id:          `${id}-in-${p.name}`,
+          x:           x - width / 2 - PORT_HANDLE_OFFSET,
+          y:           cursorY + PORT_ROW_H / 2,
+          type:        'input',
+          edgeAddable: true,
+          connectable: true,
+          _portName:   p.name,
+        })
+        cursorY += PORT_ROW_H
       })
+      cursorY += PORT_SECTION_PADDING_V
     })
 
-    const hiddenOptionalCount = this._getHiddenOptionalCount(properties as any)
-    const toggleHeight = (hiddenOptionalCount > 0 && !optionalExpanded) || optionalExpanded
-      ? OPTIONAL_TOGGLE_H : 0
-    const outStartY = startY + inputsForAnchors.length * PORT_ROW_H + toggleHeight
-    outputs.forEach((p, i) => {
-      anchors.push({
-        id:          `${id}-out-${p.name}`,
-        x:           x + width / 2 + PORT_HANDLE_OFFSET,
-        y:           outStartY + i * PORT_ROW_H,
-        type:        'output',
-        edgeAddable: true,
-        connectable: true,
-        _portName:   p.name,
+    if (hasOptionalToggle) cursorY += OPTIONAL_TOGGLE_H
+    if (inputGroups.length && outputs.length) cursorY += PORT_DIVIDER_H
+
+    if (outputs.length) {
+      cursorY += PORT_SECTION_PADDING_V
+      outputs.forEach(p => {
+        anchors.push({
+          id:          `${id}-out-${p.name}`,
+          x:           x + width / 2 + PORT_HANDLE_OFFSET,
+          y:           cursorY + PORT_ROW_H / 2,
+          type:        'output',
+          edgeAddable: true,
+          connectable: true,
+          _portName:   p.name,
+        })
+        cursorY += PORT_ROW_H
       })
-    })
+    }
 
     return anchors
   }
