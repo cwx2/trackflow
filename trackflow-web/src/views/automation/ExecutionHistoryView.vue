@@ -4,15 +4,17 @@
     <div class="page-header">
       <div class="header-left">
         <a-button type="text" class="back-btn" @click="router.back()">
-          <template #icon><span>←</span></template>
+          <template #icon><icon-left /></template>
           返回
         </a-button>
+        <div class="header-divider" />
         <div class="header-info">
-          <h1 class="page-title">执行历史</h1>
+          <span class="page-title">执行历史</span>
           <span v-if="workflowName" class="workflow-name">{{ workflowName }}</span>
         </div>
       </div>
-      <a-button type="primary" @click="router.push(`/automation/${workflowId}`)">
+      <a-button type="primary" size="small" @click="router.push(`/automation/${workflowId}`)">
+        <template #icon><icon-edit /></template>
         打开编辑器
       </a-button>
     </div>
@@ -75,6 +77,7 @@ import { automationApi, type ExecutionVO } from '@/api'
 import ExecutionDetailDrawer from './components/ExecutionDetailDrawer.vue'
 import { usePagedList } from '@/composables/usePagedList'
 import DataContainer from '@/components/base/DataContainer.vue'
+import { IconLeft, IconEdit } from '@arco-design/web-vue/es/icon'
 
 const route = useRoute()
 const router = useRouter()
@@ -158,39 +161,58 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 24px;
+  height: 48px;
+  padding: 0 12px;
   border-bottom: 1px solid var(--tf-border);
   background: var(--tf-bg-surface);
   flex-shrink: 0;
+  gap: 8px;
 }
 
 .header-left {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
 }
 
 .back-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
   color: var(--tf-text-secondary);
+  padding: 0 8px;
+  border-radius: 6px;
+  transition: background 0.15s, color 0.15s;
+}
+.back-btn:hover {
+  color: var(--tf-text-primary);
+  background: var(--tf-bg-hover);
+}
+
+.header-divider {
+  width: 1px;
+  height: 16px;
+  background: var(--tf-border);
+  flex-shrink: 0;
 }
 
 .header-info {
   display: flex;
-  flex-direction: column;
+  align-items: baseline;
+  gap: 8px;
 }
 
 .page-title {
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--tf-text-primary);
-  margin: 0;
   line-height: 1.3;
 }
 
 .workflow-name {
   font-size: 12px;
   color: var(--tf-text-tertiary);
-  margin-top: 2px;
 }
 
 .page-content {
