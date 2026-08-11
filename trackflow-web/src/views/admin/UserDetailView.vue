@@ -497,6 +497,13 @@ function formatAction(activity: { action: string; fieldName?: string; oldValue?:
     const value = activity.oldValue ? localizeLinkValue(activity.oldValue) : ''
     return value ? `移除了关联 ${value}` : '移除了关联'
   }
+  // 特殊 action：迭代变更（sprint_added / sprint_removed）
+  if (activity.fieldName === 'sprint_added') {
+    return activity.newValue ? `添加到迭代 ${activity.newValue}` : '添加到迭代'
+  }
+  if (activity.fieldName === 'sprint_removed') {
+    return activity.oldValue ? `从迭代 ${activity.oldValue} 移除` : '从迭代移除'
+  }
   // 通用 update：拼接字段中文名
   if ((activity.action === 'update' || activity.action === 'updated' || activity.action === 'field_changed') && activity.fieldName) {
     return `修改了${fieldLabelMap[activity.fieldName] || activity.fieldName}`

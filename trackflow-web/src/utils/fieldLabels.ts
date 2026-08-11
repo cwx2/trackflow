@@ -17,6 +17,8 @@ export const fieldLabelMap: Record<string, string> = {
   sprint: '迭代',
   sprintId: '迭代',
   sprint_id: '迭代',
+  sprint_added: '迭代（添加）',
+  sprint_removed: '迭代（移除）',
   dueDate: '截止日期',
   due_date: '截止日期',
   estimatedHours: '预估工时',
@@ -39,6 +41,8 @@ export const fieldLabelMap: Record<string, string> = {
   project_id: '项目',
   projectId: '项目',
   link: '关联',
+  visibility: '可见性',
+  comment: '评论',
 }
 
 /**

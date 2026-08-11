@@ -27,6 +27,7 @@
 import { ref, onMounted } from 'vue'
 import { IconNotification } from '@arco-design/web-vue/es/icon'
 import { dashboardApi } from '@/api/dashboard'
+import { fieldLabelMap } from '@/utils/fieldLabels'
 
 const props = defineProps<{
   config: Record<string, any>
@@ -94,9 +95,12 @@ const activityActionLabels: Record<string, string> = {
 }
 
 function formatActivityAction(action: string, fieldName?: string): string {
+  // 特殊处理迭代变更
+  if (fieldName === 'sprint_added') return '添加到迭代'
+  if (fieldName === 'sprint_removed') return '从迭代移除'
   const label = activityActionLabels[action] || action
-  if (action === 'field_change' && fieldName) {
-    return `修改了 ${fieldName}`
+  if ((action === 'field_change' || action === 'update' || action === 'updated') && fieldName) {
+    return `修改了 ${fieldLabelMap[fieldName] || fieldName}`
   }
   return label
 }
