@@ -6,6 +6,7 @@ import com.trackflow.automation.node.NodeExecutionException;
 import com.trackflow.automation.node.NodeExecutor;
 import com.trackflow.automation.node.model.InputPortDef;
 import com.trackflow.automation.node.model.OutputPortDef;
+import com.trackflow.automation.node.model.PortCardinality;
 import com.trackflow.automation.node.model.NodeObservabilityPolicy;
 import com.trackflow.automation.node.model.NodeRuntimePolicy;
 import com.trackflow.automation.node.model.WorkflowNodeModel;
@@ -56,7 +57,8 @@ public class IssueSearchNode implements NodeDefinition, NodeExecutor {
     @Override
     public List<OutputPortDef> getOutputPorts() {
         return List.of(
-                new OutputPortDef("issues", "array", "工单列表"),
+                new OutputPortDef("issues", "需求列表", "array", "工单列表",
+                        PortCardinality.collection, "issue"),
                 new OutputPortDef("count", "number", "返回数量"),
                 new OutputPortDef("hasWork", "boolean", "是否存在待处理工单")
         );

@@ -13,5 +13,11 @@ public record InputParameter(
         boolean required,
         String description,
         boolean optional,
-        InputValue value
-) {}
+        InputValue value,
+        PortCardinality cardinality,
+        String semanticType
+) {
+    public InputParameter {
+        cardinality = cardinality == null ? PortCardinality.fromValueType(valueType) : cardinality;
+    }
+}

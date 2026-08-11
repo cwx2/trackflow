@@ -6,6 +6,7 @@ import com.trackflow.automation.node.NodeExecutionException;
 import com.trackflow.automation.node.NodeExecutor;
 import com.trackflow.automation.node.model.InputPortDef;
 import com.trackflow.automation.node.model.OutputPortDef;
+import com.trackflow.automation.node.model.PortCardinality;
 import com.trackflow.automation.node.model.WorkflowNodeModel;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -35,7 +36,9 @@ public class IssueContextNode implements NodeDefinition, NodeExecutor {
     @Override
     public List<InputPortDef> getInputPorts() {
         return List.of(
-                new InputPortDef("issue", "object", true, "来自 IssueGetNode 输出的完整工单对象"),
+                new InputPortDef("issue", "工单对象", "object", true,
+                        "来自获取需求或批处理当前项的完整工单对象", false,
+                        PortCardinality.single, "issue"),
                 new InputPortDef("includeComments", "boolean", false, "是否包含评论（默认 true）"),
                 new InputPortDef("includeCustomFields", "boolean", false, "是否包含自定义字段（默认 true）"),
                 new InputPortDef("maxLength", "number", false, "最大字符数（默认 4000）")

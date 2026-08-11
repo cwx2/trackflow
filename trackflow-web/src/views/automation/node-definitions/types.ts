@@ -16,6 +16,10 @@ export interface InputPortDef {
   optional?: boolean
   /** 允许的运行时值来源；缺省时采用通用输入契约。 */
   bindingModes?: Array<'literal' | 'reference' | 'template'>
+  /** 单条值或集合；集合流入单条节点会触发批处理配置。 */
+  cardinality?: 'single' | 'collection'
+  /** 业务语义用于给出更可靠的自动映射建议。 */
+  semanticType?: string
 }
 
 /** 输出端口定义 */
@@ -25,6 +29,8 @@ export interface OutputPortDef {
   label?: string
   valueType: ValueType
   description?: string
+  cardinality?: 'single' | 'collection'
+  semanticType?: string
 }
 
 /** 配置项定义（节点的特有执行参数，不参与变量流） */

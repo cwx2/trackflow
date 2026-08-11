@@ -44,6 +44,8 @@ export interface AutomationNodeDefinitionVO {
     required: boolean
     description?: string
     optional?: boolean
+    cardinality: 'single' | 'collection'
+    semanticType?: string
     /** 该输入允许的来源：固定值、上游引用或模板表达式。 */
     bindingModes: Array<'literal' | 'reference' | 'template'>
   }>
@@ -52,6 +54,8 @@ export interface AutomationNodeDefinitionVO {
     label?: string
     valueType: ValueType
     description?: string
+    cardinality: 'single' | 'collection'
+    semanticType?: string
   }>
   runtime: {
     defaultMaxAttempts: number
@@ -123,6 +127,8 @@ export interface InputParameter {
   required: boolean
   optional?: boolean
   description?: string
+  cardinality?: 'single' | 'collection'
+  semanticType?: string
   value: InputValue
 }
 
@@ -133,6 +139,8 @@ export interface OutputPort {
   label?: string
   valueType: ValueType
   description?: string
+  cardinality?: 'single' | 'collection'
+  semanticType?: string
 }
 
 /** 节点元数据（展示信息） */

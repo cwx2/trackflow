@@ -4,7 +4,7 @@ export const issueGetDefinition: NodeDefinition = {
   type: 'trackflow-issue-get',
   meta: { title: '获取需求', icon: '📋', color: '#2563eb', description: '按 ID 或编号读取需求（含评论、标签、自定义字段）', category: 'TrackFlow' },
   inputPorts: [{ name: 'issue', label: '工单 ID / 编号', valueType: 'string', required: true }],
-  outputPorts: [{ name: 'issue', label: '工单（完整）', valueType: 'object' }], configFields: [],
+  outputPorts: [{ name: 'issue', label: '工单（完整）', valueType: 'object', semanticType: 'issue' }], configFields: [],
 }
 
 export const issueSearchDefinition: NodeDefinition = {
@@ -23,7 +23,7 @@ export const issueSearchDefinition: NodeDefinition = {
     { name: 'limit', label: '数量上限', valueType: 'number', required: false, optional: true, defaultValue: { type: 'literal', value: 20 } },
   ],
   outputPorts: [
-    { name: 'issues', label: '需求列表', valueType: 'array' },
+    { name: 'issues', label: '需求列表', valueType: 'array', cardinality: 'collection', semanticType: 'issue' },
     { name: 'count', label: '数量', valueType: 'number' },
     { name: 'hasWork', label: '有待办', valueType: 'boolean' },
   ], configFields: [],
@@ -33,7 +33,7 @@ export const issueContextDefinition: NodeDefinition = {
   type: 'trackflow-issue-context',
   meta: { title: '准备工单上下文', icon: '📝', color: '#8b5cf6', description: '将工单聚合为 Markdown 文本供 Agent 读取', category: 'TrackFlow' },
   inputPorts: [
-    { name: 'issue', label: '工单对象', valueType: 'object', required: true },
+    { name: 'issue', label: '工单对象', valueType: 'object', required: true, semanticType: 'issue' },
     { name: 'includeComments', label: '包含评论', valueType: 'boolean', required: false },
     { name: 'includeCustomFields', label: '包含自定义字段', valueType: 'boolean', required: false },
     { name: 'maxLength', label: '最大字符数', valueType: 'number', required: false, defaultValue: { type: 'literal', value: 4000 } },

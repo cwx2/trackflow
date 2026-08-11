@@ -6,6 +6,7 @@ import com.trackflow.automation.node.NodeExecutionException;
 import com.trackflow.automation.node.NodeExecutor;
 import com.trackflow.automation.node.model.InputPortDef;
 import com.trackflow.automation.node.model.OutputPortDef;
+import com.trackflow.automation.node.model.PortCardinality;
 import com.trackflow.automation.node.model.WorkflowNodeModel;
 import com.trackflow.automation.service.AutomationIssueFacade;
 import lombok.RequiredArgsConstructor;
@@ -29,7 +30,8 @@ public class IssueGetNode implements NodeDefinition, NodeExecutor {
         return List.of(new InputPortDef("issue", "string", true, "工单 ID 或 REQ-编号"));
     }
     @Override public List<OutputPortDef> getOutputPorts() {
-        return List.of(new OutputPortDef("issue", "object", "标准化工单对象"));
+        return List.of(new OutputPortDef("issue", "工单（完整）", "object", "标准化工单对象",
+                PortCardinality.single, "issue"));
     }
 
     @Override

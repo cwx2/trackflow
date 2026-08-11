@@ -110,7 +110,9 @@ public class WorkflowDefinitionValidator {
             InputParameter actual = actualInputs.get(expectedInput.name());
             if (!expectedInput.valueType().equals(actual.valueType())
                     || expectedInput.required() != actual.required()
-                    || expectedInput.optional() != actual.optional()) {
+                    || expectedInput.optional() != actual.optional()
+                    || expectedInput.cardinality() != actual.cardinality()
+                    || !java.util.Objects.equals(expectedInput.semanticType(), actual.semanticType())) {
                 throw invalid("节点输入端口契约不一致: " + node.id() + "." + expectedInput.name());
             }
             if (!VALUE_TYPES.contains(actual.valueType())) {
@@ -131,7 +133,9 @@ public class WorkflowDefinitionValidator {
         }
         for (OutputPortDef expectedOutput : expected.getOutputPorts()) {
             OutputPortDef actual = actualOutputs.get(expectedOutput.name());
-            if (!expectedOutput.valueType().equals(actual.valueType())) {
+            if (!expectedOutput.valueType().equals(actual.valueType())
+                    || expectedOutput.cardinality() != actual.cardinality()
+                    || !java.util.Objects.equals(expectedOutput.semanticType(), actual.semanticType())) {
                 throw invalid("节点输出端口契约不一致: " + node.id() + "." + expectedOutput.name());
             }
             if (!VALUE_TYPES.contains(actual.valueType())) {
@@ -153,6 +157,16 @@ public class WorkflowDefinitionValidator {
             }
             if (targetPort == null) {
                 throw invalid("连线目标端口不存在: " + edge.id() + " -> " + edge.targetPortName());
+            }
+            if (sourcePort.cardinality() != targetPort.cardinality()) {
+                throw invalid("集合与单条数据不能直接连线，需配置批处理: "
+                        + edge.sourceNodeId() + "." + edge.sourcePortName() + " → "
+                        + edge.targetNodeId() + "." + edge.targetPortName());
+            }
+            if (sourcePort.semanticType() != null && targetPort.semanticType() != null
+                    && !sourcePort.semanticType().equals(targetPort.semanticType())) {
+                throw invalid("端口业务语义不兼容: " + edge.sourceNodeId() + "." + edge.sourcePortName()
+                        + " → " + edge.targetNodeId() + "." + edge.targetPortName());
             }
         }
 
@@ -184,6 +198,10 @@ public class WorkflowDefinitionValidator {
         if (!explicitPath && !isCompatible(sourcePort.valueType(), input.valueType())) {
             throw invalid("变量类型不兼容: " + ref.nodeId() + "." + ref.outputName()
                     + " 不能赋给 " + node.id() + "." + input.name());
+        }
+        if (!explicitPath && sourcePort.cardinality() != input.cardinality()) {
+            throw invalid("集合与单条数据不能直接引用，需配置批处理: "
+                    + ref.nodeId() + "." + ref.outputName() + " → " + node.id() + "." + input.name());
         }
         if (explicitPath && !("object".equals(sourcePort.valueType())
                 || "array".equals(sourcePort.valueType()) || "any".equals(sourcePort.valueType()))) {

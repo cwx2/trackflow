@@ -35,6 +35,8 @@ export function migrateWorkflowDefinition(raw: any): WorkflowDefinition {
           required: port.required,
           optional: port.optional,
           description: port.description,
+          cardinality: port.cardinality || (port.valueType === 'array' ? 'collection' : 'single'),
+          semanticType: port.semanticType,
           value: node.data?.[port.name] != null
             ? { type: 'literal' as const, value: node.data[port.name] }
             : null,
@@ -116,10 +118,15 @@ export function upgradeNodeContract(node: any) {
         required: port.required === true,
         optional: port.optional === true,
         description: port.description,
+        cardinality: port.cardinality || (port.valueType === 'array' ? 'collection' : 'single'),
+        semanticType: port.semanticType,
         value: existing?.value ?? port.defaultValue ?? null,
       }
     }),
-    outputs: definition.outputPorts,
+    outputs: definition.outputPorts.map(port => ({
+      ...port,
+      cardinality: port.cardinality || (port.valueType === 'array' ? 'collection' : 'single'),
+    })),
   }
 }
 
