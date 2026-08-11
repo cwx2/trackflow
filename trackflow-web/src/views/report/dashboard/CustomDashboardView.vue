@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="custom-dashboard-page">
     <!-- 页面头部 -->
     <div class="page-header">
@@ -77,11 +77,13 @@
       </div>
 
       <!-- 空状态：无仪表盘 -->
-      <div v-else-if="dashboards.length === 0 && !loadingList" class="empty-state">
-        <div class="empty-icon">📋</div>
-        <h3 class="empty-title">还没有可见的仪表盘</h3>
-        <p class="empty-desc">创建您的第一个仪表盘，或恢复系统默认仪表盘来快速了解项目概况。</p>
-        <div class="empty-actions">
+      <EmptyState
+        v-else-if="dashboards.length === 0 && !loadingList"
+        icon="ordered-list"
+        title="还没有可见的仪表盘"
+        description="创建您的第一个仪表盘，或恢复系统默认仪表盘来快速了解项目概况。"
+      >
+        <template #action>
           <a-button type="primary" @click="showCreateModal = true">
             <template #icon><icon-plus /></template>
             创建仪表盘
@@ -90,8 +92,8 @@
             <template #icon><icon-undo /></template>
             恢复默认仪表盘
           </a-button>
-        </div>
-      </div>
+        </template>
+      </EmptyState>
 
       <!-- 仪表盘内容 -->
       <template v-else-if="currentDashboard">
@@ -194,18 +196,18 @@
 
         <!-- 空微件状态 -->
         <div v-else class="empty-widgets">
-          <div class="empty-icon">📊</div>
           <template v-if="canEdit">
-            <h3 class="empty-title">仪表盘还没有微件</h3>
-            <p class="empty-desc">点击"添加微件"为仪表盘添加数据展示组件。</p>
-            <a-button type="primary" size="small" @click="showAddWidgetModal = true">
-              <template #icon><icon-plus /></template>
-              添加微件
-            </a-button>
+            <EmptyState icon="bar-chart" title="仪表盘还没有微件" description="点击「添加微件」为仪表盘添加数据展示组件。">
+              <template #action>
+                <a-button type="primary" size="small" @click="showAddWidgetModal = true">
+                  <template #icon><icon-plus /></template>
+                  添加微件
+                </a-button>
+              </template>
+            </EmptyState>
           </template>
           <template v-else>
-            <h3 class="empty-title">仪表盘暂无内容</h3>
-            <p class="empty-desc">仪表盘创建者尚未添加微件。</p>
+            <EmptyState icon="bar-chart" title="仪表盘暂无内容" description="仪表盘创建者尚未添加微件。" />
           </template>
         </div>
       </template>
@@ -363,6 +365,7 @@ import {
   IconPlus, IconMore, IconEdit, IconDelete, IconShareAlt, IconStar, IconUndo
 } from '@arco-design/web-vue/es/icon'
 import { customDashboardApi } from '@/api'
+import { EmptyState } from '@/components/base'
 import { reportApi } from '@/api/report'
 import { sprintApi } from '@/api/sprint'
 import { projectApi } from '@/api/project'
@@ -1245,26 +1248,6 @@ watch(showEditModal, (val) => {
   justify-content: center;
   padding: 80px 24px;
   text-align: center;
-}
-
-.empty-icon {
-  font-size: 56px;
-  margin-bottom: 16px;
-}
-
-.empty-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--tf-text-primary);
-  margin: 0 0 8px;
-}
-
-.empty-desc {
-  font-size: 13px;
-  color: var(--tf-text-secondary);
-  margin: 0 0 20px;
-  max-width: 360px;
-  line-height: 1.5;
 }
 
 .empty-actions {

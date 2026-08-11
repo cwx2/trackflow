@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="sprint-planning-page">
     <!-- 顶部工具栏 -->
     <div class="planning-toolbar">
@@ -158,11 +158,13 @@
               </div>
 
               <!-- 空状态 -->
-              <div v-if="!backlogLoading && backlogIssues.length === 0" class="panel-empty">
-                <div class="empty-icon">📋</div>
-                <div class="empty-title">Backlog 为空</div>
-                <div class="empty-desc">所有工单都已分配到 Sprint</div>
-              </div>
+              <EmptyState
+                v-if="!backlogLoading && backlogIssues.length === 0"
+                icon="ordered-list"
+                title="Backlog 为空"
+                description="所有工单都已分配到 Sprint"
+                :compact="true"
+              />
             </div>
 
             <!-- Quick Add 内联输入框 -->
@@ -335,16 +337,20 @@
               </div>
 
               <!-- Sprint 空状态 -->
-              <div v-if="getSprintIssues(sprint.id).length === 0 && sprint.totalIssues > 0" class="panel-empty panel-empty--sprint panel-empty--all-done">
-                <div class="empty-icon">✅</div>
-                <div class="empty-title">所有工单已完成</div>
-                <div class="empty-desc">此 Sprint 共 {{ sprint.totalIssues }} 个工单，全部已完成</div>
-              </div>
-              <div v-else-if="getSprintIssues(sprint.id).length === 0" class="panel-empty panel-empty--sprint">
-                <div class="empty-icon">🎯</div>
-                <div class="empty-title">暂无工单</div>
-                <div class="empty-desc">从 Backlog 拖拽工单到此处，或使用下方输入框快速创建</div>
-              </div>
+              <EmptyState
+                v-if="getSprintIssues(sprint.id).length === 0 && sprint.totalIssues > 0"
+                icon="check-circle"
+                :title="`所有工单已完成`"
+                :description="`此 Sprint 共 ${sprint.totalIssues} 个工单，全部已完成`"
+                :compact="true"
+              />
+              <EmptyState
+                v-else-if="getSprintIssues(sprint.id).length === 0"
+                icon="trophy"
+                title="暂无工单"
+                description="从 Backlog 拖拽工单到此处，或使用下方输入框快速创建"
+                :compact="true"
+              />
             </div>
 
             <!-- Quick Add 内联输入框 -->
@@ -374,11 +380,7 @@
     </div>
 
     <!-- 未选择项目 -->
-    <div v-else class="empty-state">
-      <div class="empty-icon">📁</div>
-      <h3 class="empty-title">请选择项目</h3>
-      <p class="empty-desc">从上方下拉框选择一个项目开始 Sprint 规划</p>
-    </div>
+    <EmptyState v-else icon="folder" title="请选择项目" description="从上方下拉框选择一个项目开始 Sprint 规划" />
 
     <!-- 右键上下文菜单 -->
     <Teleport to="body">
@@ -482,6 +484,7 @@ import { localizeIssueType } from '@/utils/fieldLabels'
 import { getPriorityColor } from '@/composables/usePriorityOptions'
 import IssuePriorityBadge from '@/components/base/IssuePriorityBadge.vue'
 import IssueCreatePanel from '@/components/IssueCreatePanel.vue'
+import { EmptyState } from '@/components/base'
 import { useDrafts } from '@/composables/useDrafts'
 import type { IssueVO, SprintVO, ProjectMemberVO, SprintVelocityVO, CreationPreviewVO, SprintOverlapWarning } from '@/api/types'
 
@@ -1740,38 +1743,7 @@ onMounted(async () => {
 .panel-empty--all-done {
   opacity: 0.7;
 }
-.panel-empty--all-done .empty-icon {
-  font-size: 28px;
-}
-.panel-empty--all-done .empty-title {
-  color: var(--color-text-2);
-}
-.empty-icon {
-  font-size: 32px;
-  margin-bottom: 8px;
-}
-.empty-title {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--color-text-2);
-  margin-bottom: 4px;
-}
-.empty-desc {
-  font-size: 12px;
-  color: var(--color-text-3);
-}
-
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  text-align: center;
-  padding: 64px 24px;
-}
-
-.no-sprints-state {
+.panel-empty--all-done .panel-empty--all-done .no-sprints-state {
   display: flex;
   flex-direction: column;
   align-items: center;

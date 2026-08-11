@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="settings-members">
     <!-- 归档提示 -->
     <div v-if="isArchived" class="archived-notice">
@@ -129,11 +129,7 @@
       <div v-if="activityLoading" class="loading-state">
         <a-spin :size="20" />
       </div>
-      <div v-else-if="activities.length === 0" class="activity-empty">
-        <icon-history class="empty-icon" />
-        <p class="empty-title">暂无活动记录</p>
-        <p class="empty-desc">成员变动操作将记录在此处</p>
-      </div>
+      <EmptyState v-else-if="activities.length === 0" icon="calendar" title="暂无活动记录" description="成员变动操作将记录在此处" :compact="true" />
       <div v-else class="activity-list">
         <div v-for="act in activities" :key="act.id" class="activity-item">
           <div class="activity-dot" :class="getActivityDotClass(act.action)"></div>
@@ -152,12 +148,12 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { IconLock, IconHistory } from '@arco-design/web-vue/es/icon'
+import { IconLock } from '@arco-design/web-vue/es/icon'
 import { Message } from '@arco-design/web-vue'
 import { useConfirmDelete } from '@/composables/useConfirmDelete'
 import { projectApi, userApi, workflowApi } from '@/api'
 import type { ProjectDetailVO, ProjectMemberVO, ProjectActivityVO } from '@/api/types'
-import { UserAvatar } from '@/components/base'
+import { UserAvatar, EmptyState } from '@/components/base'
 
 const props = defineProps<{
   project: ProjectDetailVO
@@ -601,23 +597,6 @@ onMounted(() => {
 .activity-empty {
   text-align: center;
   padding: 32px 16px;
-}
-
-.empty-icon {
-  font-size: 32px;
-  color: var(--tf-text-quaternary, var(--tf-text-tertiary));
-}
-
-.empty-title {
-  font-size: 13px;
-  color: var(--tf-text-secondary);
-  margin: 8px 0 4px;
-}
-
-.empty-desc {
-  font-size: 12px;
-  color: var(--tf-text-tertiary);
-  margin: 0;
 }
 
 /* Activity list */

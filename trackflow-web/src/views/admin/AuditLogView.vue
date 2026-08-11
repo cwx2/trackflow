@@ -549,26 +549,4 @@ function formatGenericDetails(d: Record<string, any>): string {
   color: var(--text-secondary);
 }
 
-.empty-state {
-  padding: 48px 24px;
-  text-align: center;
-}
-
-.empty-icon {
-  font-size: 36px;
-  margin-bottom: 12px;
-}
-
-.empty-title {
-  font-size: 15px;
-  font-weight: 500;
-  color: var(--text-primary);
-  margin: 0 0 8px 0;
-}
-
-.empty-desc {
-  font-size: 13px;
-  color: var(--text-tertiary);
-  margin: 0;
-}
 </style>

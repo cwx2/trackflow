@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="settings-custom-fields">
     <!-- 归档提示 -->
     <div v-if="isArchived" class="archived-notice">
@@ -456,19 +456,14 @@
       </div>
 
       <!-- 空状态 -->
-      <div v-else class="empty-state">
-        <icon-apps class="empty-icon" />
-        <h4 class="empty-title">暂无自定义字段</h4>
-        <p class="empty-desc">项目尚未附加任何自定义字段。点击"添加字段"从全局字段池中选择或创建新字段。</p>
-        <a-button
-          v-if="canManage && !isArchived"
-          type="primary"
-          size="small"
-          @click="showAddDialog = true"
-        >
-          添加字段
-        </a-button>
-      </div>
+      <EmptyState v-else title="暂无自定义字段" description="项目尚未附加任何自定义字段。点击「添加字段」从全局字段池中选择或创建新字段。">
+        <template #icon><icon-apps style="font-size: 36px;" /></template>
+        <template #action>
+          <a-button v-if="canManage && !isArchived" type="primary" size="small" @click="showAddDialog = true">
+            添加字段
+          </a-button>
+        </template>
+      </EmptyState>
     </template>
 
     <!-- 添加字段弹窗 -->
@@ -640,6 +635,7 @@ import {
 import { Message, Modal } from '@arco-design/web-vue'
 import { customFieldApi } from '@/api'
 import { workflowApi } from '@/api'
+import { EmptyState } from '@/components/base'
 import type { ProjectDetailVO, CustomFieldDefinitionVO, CustomFieldOptionVO, RoleVO, OptionSetStatusVO, ReplaceableFieldsVO } from '@/api/types'
 
 const props = defineProps<{
@@ -1647,36 +1643,6 @@ onMounted(() => {
   font-size: 11px;
   color: var(--tf-text-quaternary, var(--tf-text-tertiary));
   margin-top: 2px;
-}
-
-/* Empty state */
-.empty-state {
-  text-align: center;
-  padding: 48px 24px;
-  border: 1px dashed var(--tf-border);
-  border-radius: 6px;
-}
-
-.empty-icon {
-  font-size: 36px;
-  color: var(--tf-text-quaternary, var(--tf-text-tertiary));
-  margin-bottom: 12px;
-}
-
-.empty-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--tf-text-primary);
-  margin: 0 0 8px;
-}
-
-.empty-desc {
-  font-size: 13px;
-  color: var(--tf-text-tertiary);
-  margin: 0 0 16px;
-  max-width: 360px;
-  margin-left: auto;
-  margin-right: auto;
 }
 
 /* Add dialog */

@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="settings-page">
     <h2 class="page-title">账号安全</h2>
 
@@ -21,17 +21,12 @@
       <a-spin v-if="loading" :loading="true" style="width: 100%; padding: 48px 0" />
 
       <!-- Empty State -->
-      <div v-else-if="tokens.length === 0" class="empty-state">
-        <div class="empty-icon">
-          <icon-lock :size="48" />
-        </div>
-        <h4 class="empty-title">暂无访问令牌</h4>
-        <p class="empty-desc">
-          创建一个永久访问令牌，用于 API 调用、CI/CD 集成或脚本自动化。
-        </p>
-        <a-button type="primary" size="small" @click="showCreateDialog = true">
-          创建第一个令牌
-        </a-button>
+      <EmptyState v-else-if="tokens.length === 0" title="暂无访问令牌" description="创建一个永久访问令牌，用于 API 调用、CI/CD 集成或脚本自动化。">
+        <template #icon><icon-lock style="font-size: 48px;" /></template>
+        <template #action>
+          <a-button type="primary" size="small" @click="showCreateDialog = true">创建第一个令牌</a-button>
+        </template>
+      </EmptyState>
       </div>
 
       <!-- Token List Table -->
@@ -256,6 +251,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { apiKeyApi } from '@/api'
+import { EmptyState } from '@/components/base'
 import { KEYCLOAK_CONFIG } from '@/utils/keycloak'
 import type { ApiKeyVO, ApiKeyCreatedVO } from '@/api/types'
 
@@ -451,38 +447,6 @@ onMounted(() => {
 }
 
 /* Empty State */
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 48px 24px;
-  border: 1px dashed var(--tf-border-light);
-  border-radius: 6px;
-  background: var(--tf-bg-surface);
-}
-
-.empty-icon {
-  color: var(--tf-text-quaternary);
-  margin-bottom: 16px;
-  opacity: 0.6;
-}
-
-.empty-title {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--tf-text-primary);
-  margin-bottom: 8px;
-}
-
-.empty-desc {
-  font-size: 12px;
-  color: var(--tf-text-tertiary);
-  text-align: center;
-  max-width: 320px;
-  line-height: 1.5;
-  margin-bottom: 16px;
-}
-
 /* Token Table */
 .token-table-wrapper {
   border: 1px solid var(--tf-border-light);

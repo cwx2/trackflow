@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="settings-workflow">
     <!-- 归档提示 -->
     <div v-if="isArchived" class="archived-notice">
@@ -65,15 +65,15 @@
         </div>
 
         <!-- 空状态：未附加工作流 -->
-        <div v-else class="wf-empty-state">
-          <icon-branch class="empty-icon" style="font-size: 36px; color: var(--color-text-4);" />
-          <p class="empty-title">尚未附加工作流</p>
-          <p class="empty-desc">当前项目使用全局默认工作流规则。附加工作流以使用自定义状态转换。</p>
-          <a-button v-if="canManage && !isArchived" type="primary" size="small" @click="showAttachWorkflowModal">
-            <template #icon><icon-plus /></template>
-            附加工作流
-          </a-button>
-        </div>
+        <EmptyState v-else title="尚未附加工作流" description="当前项目使用全局默认工作流规则。附加工作流以使用自定义状态转换。">
+          <template #icon><icon-branch style="font-size: 36px;" /></template>
+          <template #action>
+            <a-button v-if="canManage && !isArchived" type="primary" size="small" @click="showAttachWorkflowModal">
+              <template #icon><icon-plus /></template>
+              附加工作流
+            </a-button>
+          </template>
+        </EmptyState>
       </div>
 
       <!-- 分隔线 -->
@@ -222,14 +222,15 @@
         </div>
 
         <!-- 空状态 -->
-        <div v-else class="empty-state">
-          <icon-thunderbolt class="empty-icon" />
-          <h4 class="empty-title">暂无自动化规则</h4>
-          <p class="empty-desc">创建自动化规则，在工单创建、字段变更或按计划定时执行动作。</p>
-          <a-button v-if="canManage && !isArchived" type="primary" size="small" @click="showCreateRuleModal">
-            <template #icon><icon-plus /></template>
-            创建第一条规则
-          </a-button>
+        <EmptyState v-else title="暂无自动化规则" description="创建自动化规则，在工单创建、字段变更或按计划定时执行动作。">
+          <template #icon><icon-thunderbolt style="font-size: 36px;" /></template>
+          <template #action>
+            <a-button v-if="canManage && !isArchived" type="primary" size="small" @click="showCreateRuleModal">
+              <template #icon><icon-plus /></template>
+              创建第一条规则
+            </a-button>
+          </template>
+        </EmptyState>
         </div>
       </div>
     </template>
@@ -512,6 +513,7 @@ import { useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
 import { IconLock, IconSettings, IconPlus, IconThunderbolt, IconInfoCircle, IconDelete, IconPlayArrow, IconMinus, IconBranch } from '@arco-design/web-vue/es/icon'
 import { workflowApi, workflowRuleApi, projectApi } from '@/api'
+import { EmptyState } from '@/components/base'
 import { workflowDefinitionApi } from '@/api/workflowDefinition'
 import type { WorkflowDefinitionVO } from '@/api/workflowDefinition'
 import type { WorkflowRuleVO, WorkflowRuleDTO } from '@/api/workflowRule'
@@ -1150,18 +1152,6 @@ onMounted(loadData)
   margin-left: 16px;
 }
 
-.wf-empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 40px 24px;
-  text-align: center;
-  border-radius: 6px;
-  background: var(--color-bg-2);
-  border: 1px dashed var(--color-border-2);
-}
-
 .empty-available {
   text-align: center;
   padding: 16px 0;
@@ -1255,37 +1245,6 @@ onMounted(loadData)
   gap: 8px;
   flex-shrink: 0;
   margin-left: 16px;
-}
-
-/* Empty state */
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 48px 24px;
-  text-align: center;
-  border-radius: 6px;
-  background: var(--color-bg-2);
-  border: 1px dashed var(--color-border-2);
-}
-
-.empty-icon {
-  font-size: 48px;
-  color: var(--color-text-4);
-}
-
-.empty-title {
-  margin: 16px 0 8px;
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--color-text-1);
-}
-
-.empty-desc {
-  font-size: 13px;
-  color: var(--color-text-3);
-  margin: 0 0 16px;
 }
 
 /* Form */

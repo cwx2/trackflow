@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="kanban-page">
     <!-- 顶部工具栏 -->
     <div class="board-toolbar">
@@ -929,57 +929,32 @@
       </div>
 
       <!-- 空状态：Sprint 模式无活跃迭代 -->
-      <div v-if="showSprintModeNoActiveState" class="empty-state empty-state--sprint">
-        <div class="empty-icon">🏃</div>
-        <h3 class="empty-title">看板已配置为仅显示当前 Sprint 工单</h3>
-        <p class="empty-desc">
-          <template v-if="plannedSprints.length > 0">
-            当前项目有 {{ plannedSprints.length }} 个计划中的迭代可以激活。
-          </template>
-          <template v-else>
-            当前项目暂无活跃迭代。请创建一个新迭代，或修改看板设置为「显示所有工单」。
-          </template>
-        </p>
-        <div class="empty-actions">
-          <a-button
-            v-if="plannedSprints.length > 0"
-            type="primary"
-            size="small"
-            :loading="!!activatingSprintId"
-            @click="activatePlannedSprint(plannedSprints[0])"
-          >
+      <EmptyState
+        v-if="showSprintModeNoActiveState"
+        icon-emoji="🏃"
+        title="看板已配置为仅显示当前 Sprint 工单"
+        :description="plannedSprints.length > 0 ? `当前项目有 ${plannedSprints.length} 个计划中的迭代可以激活。` : '当前项目暂无活跃迭代。请创建一个新迭代，或修改看板设置为「显示所有工单」。'"
+      >
+        <template #action>
+          <a-button v-if="plannedSprints.length > 0" type="primary" size="small" :loading="!!activatingSprintId" @click="activatePlannedSprint(plannedSprints[0])">
             激活「{{ plannedSprints[0].name }}」
           </a-button>
           <a-button size="small" type="outline" @click="openCreateSprintFromGuidance">+ 创建新迭代</a-button>
           <a-button size="small" @click="showSettings = true">修改看板设置</a-button>
-        </div>
-      </div>
+        </template>
+      </EmptyState>
 
       <!-- 空状态：搜索无结果 -->
-      <div v-else-if="showNoSearchResults" class="empty-state">
-        <div class="empty-icon">🔍</div>
-        <h3 class="empty-title">未找到匹配的工单</h3>
-        <p class="empty-desc">没有工单匹配关键词「{{ keyword }}」</p>
-        <a-button type="primary" size="small" @click="clearSearch">清除搜索</a-button>
-      </div>
+      <EmptyState v-else-if="showNoSearchResults" icon="search" :title="`未找到匹配的工单`" :description="`没有工单匹配关键词「${keyword}」`">
+        <template #action><a-button type="primary" size="small" @click="clearSearch">清除搜索</a-button></template>
+      </EmptyState>
 
       <!-- 空状态：未选择项目 -->
-      <div v-else-if="!selectedProject && projectLoadState === 'error'" class="empty-state">
-        <div class="empty-icon">⚠️</div>
-        <h3 class="empty-title">项目列表加载失败</h3>
-        <p class="empty-desc">无法获取可用项目，请检查网络后重试</p>
-        <a-button type="primary" size="small" @click="onProjectChange">重试</a-button>
-      </div>
-      <div v-else-if="!selectedProject && projectLoadState === 'success' && projects.length === 0" class="empty-state">
-        <div class="empty-icon">📁</div>
-        <h3 class="empty-title">暂无可访问的项目</h3>
-        <p class="empty-desc">您尚未加入任何项目，请联系管理员添加为项目成员</p>
-      </div>
-      <div v-else-if="!selectedProject" class="empty-state">
-        <div class="empty-icon">📊</div>
-        <h3 class="empty-title">请选择项目</h3>
-        <p class="empty-desc">从上方下拉框选择项目查看看板视图</p>
-      </div>
+      <EmptyState v-else-if="!selectedProject && projectLoadState === 'error'" type="error" icon="exclamation-circle" title="项目列表加载失败" description="无法获取可用项目，请检查网络后重试">
+        <template #action><a-button type="primary" size="small" @click="onProjectChange">重试</a-button></template>
+      </EmptyState>
+      <EmptyState v-else-if="!selectedProject && projectLoadState === 'success' && projects.length === 0" icon="folder" title="暂无可访问的项目" description="您尚未加入任何项目，请联系管理员添加为项目成员" />
+      <EmptyState v-else-if="!selectedProject" icon="bar-chart" title="请选择项目" description="从上方下拉框选择项目查看看板视图" />
       </div><!-- end board-main-area -->
     </a-spin>
 
@@ -1173,7 +1148,7 @@
 <script setup lang="ts">
 import { useKanbanBoard } from './composables'
 import { localizeStatusName, localizePriority } from '@/utils/fieldLabels'
-import { IssueStatusTag, UserAvatar } from '@/components/base'
+import { IssueStatusTag, UserAvatar, EmptyState } from '@/components/base'
 import BoardSettingsDrawer from './BoardSettingsDrawer.vue'
 import BoardSelector from './BoardSelector.vue'
 import BacklogPanel from './BacklogPanel.vue'

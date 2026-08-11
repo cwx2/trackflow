@@ -105,9 +105,7 @@
             </a-tag>
           </div>
         </div>
-        <div v-else class="empty-state">
-          <span class="empty-text">暂无项目信息</span>
-        </div>
+        <EmptyState v-else title="暂无项目信息" :compact="true" />
       </div>
 
       <!-- 管理员：所有项目角色（如果和 commonProjects 不同） -->
@@ -140,7 +138,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { userApi, type UserPublicProfileVO } from '@/api/user'
-import { UserAvatar } from '@/components/base'
+import { UserAvatar, EmptyState } from '@/components/base'
 
 const route = useRoute()
 const router = useRouter()
@@ -394,12 +392,4 @@ onMounted(loadProfile)
 }
 
 /* Empty */
-.empty-state {
-  padding: 24px;
-  text-align: center;
-}
-.empty-text {
-  font-size: 13px;
-  color: var(--tf-text-tertiary);
-}
 </style>

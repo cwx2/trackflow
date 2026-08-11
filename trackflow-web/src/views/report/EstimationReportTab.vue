@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="estimation-report">
     <!-- 筛选栏 -->
     <div class="report-filters">
@@ -26,11 +26,12 @@
     </div>
 
     <!-- 空状态 -->
-    <div v-else-if="!reportData || reportData.pagination.total === 0" class="report-empty">
-      <div class="empty-icon">📐</div>
-      <h3 class="empty-title">暂无预估数据</h3>
-      <p class="empty-desc">没有找到设置了预估工时的工单。请先为工单设置"预估工时"字段。</p>
-    </div>
+    <EmptyState
+      v-else-if="!reportData || reportData.pagination.total === 0"
+      icon-emoji="📐"
+      title="暂无预估数据"
+      description="没有找到设置了预估工时的工单。请先为工单设置「预估工时」字段。"
+    />
 
     <!-- 报表主体 -->
     <template v-else>
@@ -129,6 +130,7 @@ import { TooltipComponent, GridComponent, LegendComponent } from 'echarts/compon
 import VChart from 'vue-echarts'
 import { IconDownload } from '@arco-design/web-vue/es/icon'
 import { reportStatisticsApi } from '@/api/reportStatistics'
+import { EmptyState } from '@/components/base'
 import type { EstimationReportData } from '@/api/reportStatistics'
 import type { ProjectVO } from '@/api/types'
 import { readChartThemeColors, SERIES_ACCENT, SERIES_SUCCESS } from '@/utils/chartColors'
@@ -329,35 +331,6 @@ defineExpose({ loadData })
 }
 
 .report-loading,
-.report-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 48px 24px;
-  text-align: center;
-}
-
-.empty-icon {
-  font-size: 48px;
-  margin-bottom: 16px;
-}
-
-.empty-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--tf-text-primary);
-  margin: 0 0 8px;
-}
-
-.empty-desc {
-  font-size: 13px;
-  color: var(--tf-text-secondary);
-  margin: 0;
-  max-width: 320px;
-  line-height: 1.5;
-}
-
 /* 概览卡片 */
 .overview-cards {
   display: grid;

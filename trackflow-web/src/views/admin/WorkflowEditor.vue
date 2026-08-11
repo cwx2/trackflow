@@ -281,55 +281,72 @@
       </div>
 
       <!-- 搜索无结果 -->
-      <div v-else-if="!loading && statuses.length > 0 && filteredStatuses.length === 0" class="empty-state">
-        <icon-search :size="48" />
-        <h3>没有匹配的状态</h3>
-        <p>尝试修改搜索关键词或关闭"只显示已配置"筛选。</p>
-        <a-button type="primary" @click="resetFilters">重置筛选</a-button>
-      </div>
+      <EmptyState
+        v-else-if="!loading && statuses.length > 0 && filteredStatuses.length === 0"
+        icon="search"
+        title="没有匹配的状态"
+        description="尝试修改搜索关键词或关闭"只显示已配置"筛选。"
+      >
+        <template #action>
+          <a-button type="primary" @click="resetFilters">重置筛选</a-button>
+        </template>
+      </EmptyState>
 
       <!-- 空状态：角色加载失败 -->
-      <div v-else-if="!loading && roleLoadingError" class="empty-state empty-state-error">
-        <icon-exclamation-circle :size="48" />
-        <h3>角色加载失败</h3>
-        <p>无法加载角色列表，可能是网络问题或服务暂时不可用。</p>
-        <a-button type="primary" @click="retryLoadRoles">
-          <template #icon><icon-refresh /></template>
-          重新加载
-        </a-button>
-      </div>
+      <EmptyState
+        v-else-if="!loading && roleLoadingError"
+        type="error"
+        icon="exclamation-circle"
+        title="角色加载失败"
+        description="无法加载角色列表，可能是网络问题或服务暂时不可用。"
+      >
+        <template #action>
+          <a-button type="primary" @click="retryLoadRoles">
+            <template #icon><icon-refresh /></template>
+            重新加载
+          </a-button>
+        </template>
+      </EmptyState>
 
       <!-- 空状态：未选择角色 -->
-      <div v-else-if="!loading && !selectedRole && roles.length > 0" class="empty-state empty-state-info">
-        <icon-user :size="48" />
-        <h3>请选择角色</h3>
-        <p>在上方筛选区域选择一个角色，以加载该角色的转换矩阵。</p>
-      </div>
+      <EmptyState
+        v-else-if="!loading && !selectedRole && roles.length > 0"
+        icon="user"
+        title="请选择角色"
+        description="在上方筛选区域选择一个角色，以加载该角色的转换矩阵。"
+      />
 
       <!-- 空状态：角色列表为空 -->
-      <div v-else-if="!loading && roles.length === 0 && !roleLoadingError" class="empty-state empty-state-info">
-        <icon-user-group :size="48" />
-        <h3>暂无可用角色</h3>
-        <p>系统中未定义任何项目角色，请先在角色管理中配置角色。</p>
-      </div>
+      <EmptyState
+        v-else-if="!loading && roles.length === 0 && !roleLoadingError"
+        icon="user"
+        title="暂无可用角色"
+        description="系统中未定义任何项目角色，请先在角色管理中配置角色。"
+      />
 
       <!-- 空状态：状态加载失败 -->
-      <div v-else-if="!loading && statusLoadingError" class="empty-state empty-state-error">
-        <icon-exclamation-circle :size="48" />
-        <h3>状态加载失败</h3>
-        <p>无法加载状态列表，可能是网络问题或服务暂时不可用。</p>
-        <a-button type="primary" @click="retryLoadStatuses">
-          <template #icon><icon-refresh /></template>
-          重新加载
-        </a-button>
-      </div>
+      <EmptyState
+        v-else-if="!loading && statusLoadingError"
+        type="error"
+        icon="exclamation-circle"
+        title="状态加载失败"
+        description="无法加载状态列表，可能是网络问题或服务暂时不可用。"
+      >
+        <template #action>
+          <a-button type="primary" @click="retryLoadStatuses">
+            <template #icon><icon-refresh /></template>
+            重新加载
+          </a-button>
+        </template>
+      </EmptyState>
 
       <!-- 空状态：无状态数据 -->
-      <div v-else-if="!loading" class="empty-state">
-        <icon-settings :size="48" />
-        <h3>暂无状态数据</h3>
-        <p>系统中未定义任何工单状态，请先配置状态列表。</p>
-      </div>
+      <EmptyState
+        v-else-if="!loading"
+        icon="settings"
+        title="暂无状态数据"
+        description="系统中未定义任何工单状态，请先配置状态列表。"
+      />
     </a-spin>
 
     <div class="help-text" v-if="statuses.length > 0">
@@ -419,16 +436,18 @@
       />
 
       <!-- 空状态 -->
-      <div v-else-if="!loading && statuses.length === 0" class="empty-state">
-        <icon-settings :size="48" />
-        <h3>暂无状态数据</h3>
-        <p>系统中未定义任何工单状态，请先配置状态列表。</p>
-      </div>
-      <div v-else-if="!loading && !selectedRole" class="empty-state empty-state-info">
-        <icon-user :size="48" />
-        <h3>请选择角色</h3>
-        <p>在上方筛选区域选择一个角色，以查看该角色的状态转换图。</p>
-      </div>
+      <EmptyState
+        v-else-if="!loading && statuses.length === 0"
+        icon="settings"
+        title="暂无状态数据"
+        description="系统中未定义任何工单状态，请先配置状态列表。"
+      />
+      <EmptyState
+        v-else-if="!loading && !selectedRole"
+        icon="user"
+        title="请选择角色"
+        description="在上方筛选区域选择一个角色，以查看该角色的状态转换图。"
+      />
     </div>
 
     <!-- 自动化规则面板 -->
@@ -484,7 +503,7 @@
 import { ref, reactive, computed, onMounted, onBeforeUnmount, h } from 'vue'
 import { onBeforeRouteLeave, useRoute } from 'vue-router'
 import { Message, Modal } from '@arco-design/web-vue'
-import { IconSettings, IconInfoCircle, IconHistory, IconSearch, IconRefresh, IconExclamationCircle, IconUser, IconUserGroup, IconLeft } from '@arco-design/web-vue/es/icon'
+import { IconInfoCircle, IconHistory, IconSearch, IconRefresh, IconLeft } from '@arco-design/web-vue/es/icon'
 import { issueApi, projectApi, workflowApi, transitionActionApi } from '@/api'
 import type { IssueStatusVO, ProjectVO, RoleVO } from '@/api/types'
 import TransitionActionPanel from './components/TransitionActionPanel.vue'
@@ -494,6 +513,7 @@ import ScheduledRulePanel from './ScheduledRulePanel.vue'
 import TransitionGuardPanel from './components/TransitionGuardPanel.vue'
 import WorkflowCanvasView from './WorkflowCanvasView.vue'
 import AdminPageLayout from '@/components/admin/AdminPageLayout.vue'
+import { EmptyState } from '@/components/base'
 import { localizeStatusName, localizeCategoryName } from '@/utils/fieldLabels'
 
 const route = useRoute()
@@ -1696,45 +1716,6 @@ onBeforeRouteLeave(() => {
   display: flex;
   align-items: center;
   gap: 6px;
-}
-
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 64px 24px;
-  color: var(--tf-text-muted);
-}
-
-.empty-state h3 {
-  margin-top: 16px;
-  font-size: 16px;
-  font-weight: 500;
-  color: var(--tf-text-secondary);
-}
-
-.empty-state p {
-  margin-top: 8px;
-  font-size: 13px;
-  text-align: center;
-  max-width: 400px;
-}
-
-.empty-state-error {
-  color: var(--tf-danger);
-}
-
-.empty-state-error h3 {
-  color: var(--tf-danger);
-}
-
-.empty-state-info {
-  color: var(--tf-accent);
-}
-
-.empty-state-info h3 {
-  color: var(--tf-accent);
 }
 
 /* 模式 Tab */

@@ -86,11 +86,13 @@
             </div>
 
             <!-- 空状态 -->
-            <div v-else-if="notifications.length === 0" class="panel-empty">
-              <div class="empty-icon">{{ getEmptyIcon() }}</div>
-              <div class="empty-title">{{ getEmptyTitle() }}</div>
-              <div class="empty-desc">{{ getEmptyDesc() }}</div>
-            </div>
+            <EmptyState
+              v-else-if="notifications.length === 0"
+              :icon-emoji="getEmptyIcon()"
+              :title="getEmptyTitle()"
+              :description="getEmptyDesc()"
+              :compact="true"
+            />
 
             <!-- 通知列表（按工单分组） -->
             <div v-else class="notification-list">
@@ -213,7 +215,7 @@ import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useNotification } from '@/composables/useNotification'
 import type { NotificationVO, NotificationCategory } from '@/api/notification'
-import { UserAvatar } from '@/components/base'
+import { UserAvatar, EmptyState } from '@/components/base'
 
 const router = useRouter()
 const {
@@ -725,26 +727,6 @@ function handleDeleteAllRead() {
   justify-content: center;
   padding: 48px 24px;
   text-align: center;
-}
-
-.empty-icon {
-  font-size: 32px;
-  margin-bottom: 12px;
-  opacity: 0.5;
-}
-
-.empty-title {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--tf-text-primary);
-  margin-bottom: 6px;
-}
-
-.empty-desc {
-  font-size: 12px;
-  color: var(--tf-text-tertiary);
-  line-height: 1.5;
-  max-width: 240px;
 }
 
 /* Notification List */

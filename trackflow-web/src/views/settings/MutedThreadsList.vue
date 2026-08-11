@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="settings-section">
     <h3 class="section-title">已静音的工单</h3>
     <p class="section-desc">你不会收到这些工单的通知（@提及除外）。取消静音后恢复正常通知推送。</p>
@@ -7,10 +7,7 @@
       <a-spin />
       <span>加载中...</span>
     </div>
-    <div v-else-if="!threads || threads.length === 0" class="muted-empty">
-      <span class="muted-empty-icon">🔔</span>
-      <span class="muted-empty-text">暂无静音的工单</span>
-    </div>
+    <EmptyState v-else-if="!threads || threads.length === 0" icon="notification" title="暂无静音的工单" :compact="true" />
     <div v-else class="muted-list">
       <div v-for="thread in threads" :key="thread.id" class="muted-item">
         <div class="muted-item-info">
@@ -28,6 +25,7 @@ import { Message } from '@arco-design/web-vue'
 import { notificationApi } from '@/api'
 import type { MutedThreadVO } from '@/api/notification'
 import { useRequest } from '@/composables/useRequest'
+import { EmptyState } from '@/components/base'
 
 const { data: threads, loading, execute: reload } = useRequest(
   () => notificationApi.listMutedThreads(),
@@ -81,24 +79,6 @@ defineExpose({ reload })
   gap: 8px;
   padding: 16px;
   font-size: 12px;
-  color: var(--tf-text-tertiary);
-}
-
-.muted-empty {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 16px;
-  font-size: 12px;
-  color: var(--tf-text-tertiary);
-}
-
-.muted-empty-icon {
-  font-size: 16px;
-  opacity: 0.5;
-}
-
-.muted-empty-text {
   color: var(--tf-text-tertiary);
 }
 

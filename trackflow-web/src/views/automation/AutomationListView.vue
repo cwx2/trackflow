@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="automation-list-view">
     <div class="page-header">
       <h1 class="page-title">自动化工作流</h1>
@@ -24,15 +24,17 @@
     <div class="page-content">
       <a-spin :loading="loading" class="full-spin">
         <!-- 空状态 -->
-        <div v-if="!loading && workflows.length === 0" class="empty-state">
-          <div class="empty-icon">🤖</div>
-          <h3 class="empty-title">暂无工作流</h3>
-          <p class="empty-desc">创建您的第一个 Agent 工作流，自动化处理需求、测试和代码审核</p>
-          <div class="empty-actions">
+        <EmptyState
+          v-if="!loading && workflows.length === 0"
+          icon="robot"
+          title="暂无工作流"
+          description="创建您的第一个 Agent 工作流，自动化处理需求、测试和代码审核"
+        >
+          <template #action>
             <a-button type="primary" @click="showCreateModal = true">新建工作流</a-button>
             <a-button @click="showTemplateModal = true; loadTemplates()">从模板创建</a-button>
-          </div>
-        </div>
+          </template>
+        </EmptyState>
 
         <!-- 工作流列表表格 -->
         <a-table
@@ -184,6 +186,7 @@ import { useRouter } from 'vue-router'
 import { Message, Modal } from '@arco-design/web-vue'
 import { useConfirmDelete } from '@/composables/useConfirmDelete'
 import { automationApi, type WorkflowVO, type CreateWorkflowDTO, type WorkflowTemplateVO } from '@/api'
+import { EmptyState } from '@/components/base'
 
 const router = useRouter()
 
@@ -450,34 +453,6 @@ onMounted(() => {
 }
 
 /* 空状态 */
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 80px 20px;
-  text-align: center;
-}
-
-.empty-icon {
-  font-size: 64px;
-  margin-bottom: 16px;
-}
-
-.empty-title {
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--tf-text-primary);
-  margin: 0 0 8px 0;
-}
-
-.empty-desc {
-  font-size: 14px;
-  color: var(--tf-text-secondary);
-  margin: 0 0 24px 0;
-  max-width: 400px;
-}
-
 /* 表格样式 */
 .workflow-table {
   background: var(--tf-bg-surface);

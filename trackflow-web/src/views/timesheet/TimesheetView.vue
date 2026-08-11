@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="timesheet-page">
     <!-- Header -->
     <div class="timesheet-header">
@@ -166,11 +166,12 @@
 
       <!-- Project Overview (no project selected) -->
       <div v-if="!selectedProjectId" class="project-overview">
-        <div v-if="projectSummaries.length === 0 && !loading" class="empty-state">
-          <div class="empty-icon">📊</div>
-          <div class="empty-title">暂无项目工时数据</div>
-          <div class="empty-desc">当前日期范围内您可见的项目没有工时记录</div>
-        </div>
+        <EmptyState
+          v-if="projectSummaries.length === 0 && !loading"
+          icon="bar-chart"
+          title="暂无项目工时数据"
+          description="当前日期范围内您可见的项目没有工时记录"
+        />
         <div v-else class="project-summary-list">
           <div
             v-for="p in projectSummaries"
@@ -226,13 +227,12 @@
       </div>
 
       <!-- 无数据空状态 -->
-      <div v-if="groupSummaries.length === 0 && !loading" class="workgroup-empty">
-        <div class="empty-state">
-          <div class="empty-icon">👥</div>
-          <div class="empty-title">暂无工作组数据</div>
-          <div class="empty-desc">当前系统中没有工作组，或工作组内尚无成员。<br>管理员可在「系统管理 → 用户组」中创建工作组并分配成员。</div>
-        </div>
-      </div>
+      <EmptyState
+        v-if="groupSummaries.length === 0 && !loading"
+        icon="user-group"
+        title="暂无工作组数据"
+        description="当前系统中没有工作组，或工作组内尚无成员。管理员可在「系统管理 → 用户组」中创建工作组并分配成员。"
+      />
 
       <!-- 工作组列表（展开/折叠） -->
       <div v-else class="group-overview">
@@ -430,6 +430,7 @@ import { timeEntryApi, issueApi, projectApi } from '@/api'
 import type { TimeEntryVO, ProjectTimeSummaryVO, TimeEntryUserVO, WorkItemAttributeVO, GroupTimeSummaryVO } from '@/api/timeEntry'
 import { workItemAttributeApi } from '@/api/timeEntry'
 import { useTimeTrackingSettings } from '@/composables/useTimeTrackingSettings'
+import { EmptyState } from '@/components/base'
 import WeekGrid from './WeekGrid.vue'
 import MonthGrid from './MonthGrid.vue'
 import { UserAvatar } from '@/components/base'
@@ -1340,15 +1341,6 @@ onMounted(async () => {
 .member-total { min-width: 48px; text-align: right; }
 .member-total-dur { font-size: 13px; font-weight: 600; color: var(--tf-text-primary); }
 .member-total-zero { font-size: 13px; color: var(--tf-text-tertiary); }
-
-/* Empty state */
-.empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px 24px; text-align: center; }
-.empty-icon { font-size: 48px; margin-bottom: 16px; opacity: 0.7; }
-.empty-title { font-size: 16px; font-weight: 600; color: var(--tf-text-primary); margin-bottom: 8px; }
-.empty-desc { font-size: 13px; color: var(--tf-text-tertiary); max-width: 360px; line-height: 1.5; }
-.empty-hint { display: flex; align-items: center; gap: 6px; margin-top: 20px; padding: 10px 16px; background: var(--tf-bg-surface); border-radius: var(--tf-radius-md); border: 1px solid var(--tf-border-light); }
-.hint-icon { font-size: 14px; }
-.empty-hint span:last-child { font-size: 12px; color: var(--tf-text-secondary); }
 
 /* Loading */
 .loading-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: center; background: var(--tf-fill-light); z-index: 10; pointer-events: none; }

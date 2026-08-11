@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <AdminPageLayout title="Webhook 管理" subtitle="管理项目的 Webhook 通知，当事件发生时自动推送到外部系统。">
     <template #actions>
       <a-button v-if="selectedProjectId" type="primary" size="small" @click="openCreateDialog">
@@ -18,11 +18,12 @@
     </div>
 
     <!-- 无项目选择提示 -->
-    <div v-if="!selectedProjectId" class="empty-state">
-      <div class="empty-icon">🔗</div>
-      <p class="empty-title">选择项目查看 Webhook</p>
-      <p class="empty-desc">Webhook 绑定在项目级别，请先选择一个项目</p>
-    </div>
+    <EmptyState
+      v-if="!selectedProjectId"
+      icon="link"
+      title="选择项目查看 Webhook"
+      description="Webhook 绑定在项目级别，请先选择一个项目"
+    />
 
     <!-- Webhook 列表 -->
     <template v-else>
@@ -188,6 +189,7 @@ import { projectApi, webhookApi } from '@/api'
 import type { WebhookVO, WebhookLogVO } from '@/api/webhook'
 import AdminPageLayout from '@/components/admin/AdminPageLayout.vue'
 import DataContainer from '@/components/base/DataContainer.vue'
+import { EmptyState } from '@/components/base'
 
 // === State ===
 const projects = ref<{ id: string; name: string; key: string }[]>([])

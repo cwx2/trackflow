@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <Transition name="stp-fade">
     <div v-if="visible" class="spent-time-panel" @click.self="$emit('update:visible', false)">
       <div class="stp-content" ref="panelRef">
@@ -14,11 +14,13 @@
         </div>
 
         <!-- Empty state -->
-        <div v-else-if="entries.length === 0" class="stp-empty">
-          <span class="stp-empty-icon">⏱</span>
-          <span class="stp-empty-text">暂无工时记录</span>
-          <span class="stp-empty-hint">点击下方按钮添加第一条工时</span>
-        </div>
+        <EmptyState
+          v-else-if="entries.length === 0"
+          icon="clock-circle"
+          title="暂无工时记录"
+          description="点击下方按钮添加第一条工时"
+          :compact="true"
+        />
 
         <!-- Time entries list -->
         <div v-else class="stp-list">
@@ -63,6 +65,7 @@
 import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { timeEntryApi } from '@/api'
 import type { TimeEntryVO } from '@/api/timeEntry'
+import { EmptyState } from '@/components/base'
 
 const props = defineProps<{
   issueId: string
@@ -197,30 +200,6 @@ function formatDate(dateStr?: string): string {
   justify-content: center;
   color: var(--tf-text-tertiary);
   font-size: 12px;
-}
-
-.stp-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  padding: 32px 16px;
-}
-
-.stp-empty-icon {
-  font-size: 24px;
-  opacity: 0.4;
-}
-
-.stp-empty-text {
-  font-size: 13px;
-  color: var(--tf-text-secondary);
-  font-weight: 500;
-}
-
-.stp-empty-hint {
-  font-size: 12px;
-  color: var(--tf-text-tertiary);
 }
 
 .stp-list {

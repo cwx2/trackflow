@@ -76,11 +76,12 @@
       </div>
 
       <!-- 空状态 -->
-      <div v-else-if="notifications.length === 0" class="page-empty">
-        <div class="empty-icon">{{ getEmptyIcon() }}</div>
-        <div class="empty-title">{{ getEmptyTitle() }}</div>
-        <div class="empty-desc">{{ getEmptyDesc() }}</div>
-      </div>
+      <EmptyState
+        v-else-if="notifications.length === 0"
+        :icon-emoji="getEmptyIcon()"
+        :title="getEmptyTitle()"
+        :description="getEmptyDesc()"
+      />
 
       <!-- 通知列表 -->
       <div v-else class="notification-list">
@@ -207,7 +208,7 @@ import { useNotification } from '@/composables/useNotification'
 import { projectApi, issueApi } from '@/api'
 import type { NotificationVO, NotificationCategory } from '@/api/notification'
 import { Message } from '@arco-design/web-vue'
-import { UserAvatar } from '@/components/base'
+import { UserAvatar, EmptyState } from '@/components/base'
 
 const router = useRouter()
 const {
@@ -695,26 +696,6 @@ onMounted(() => {
   justify-content: center;
   padding: 80px 24px;
   text-align: center;
-}
-
-.empty-icon {
-  font-size: 48px;
-  margin-bottom: 16px;
-  opacity: 0.5;
-}
-
-.empty-title {
-  font-size: 16px;
-  font-weight: 500;
-  color: var(--tf-text-primary);
-  margin-bottom: 8px;
-}
-
-.empty-desc {
-  font-size: 13px;
-  color: var(--tf-text-tertiary);
-  line-height: 1.5;
-  max-width: 320px;
 }
 
 /* Notification List */

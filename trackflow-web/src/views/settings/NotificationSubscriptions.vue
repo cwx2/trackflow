@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="subscriptions-section">
     <div class="section-header">
       <div>
@@ -17,11 +17,7 @@
       <span>加载中...</span>
     </div>
 
-    <div v-else-if="subscriptions.length === 0" class="sub-empty">
-      <span class="sub-empty-icon">📋</span>
-      <span class="sub-empty-text">暂无订阅规则</span>
-      <span class="sub-empty-hint">点击「新建订阅」添加基于标签或保存搜索的通知规则</span>
-    </div>
+    <EmptyState v-else-if="subscriptions.length === 0" icon="ordered-list" title="暂无订阅规则" description="点击「新建订阅」添加基于标签或保存搜索的通知规则" :compact="true" />
 
     <div v-else class="sub-list">
       <div v-for="sub in subscriptions" :key="sub.id" class="sub-item">
@@ -122,6 +118,7 @@ import { useConfirmDelete } from '@/composables/useConfirmDelete'
 import { notificationSubscriptionApi } from '@/api'
 import type { NotificationSubscriptionVO, SubscriptionEventsVO } from '@/api/notificationSubscription'
 import { tagApi, queryApi, projectApi } from '@/api'
+import { EmptyState } from '@/components/base'
 
 const loading = ref(true)
 const creating = ref(false)
@@ -383,30 +380,6 @@ function resetForm() {
   gap: 8px;
   padding: 16px;
   font-size: 12px;
-  color: var(--tf-text-tertiary);
-}
-
-.sub-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  padding: 24px;
-  text-align: center;
-}
-
-.sub-empty-icon {
-  font-size: 24px;
-  opacity: 0.5;
-}
-
-.sub-empty-text {
-  font-size: 13px;
-  color: var(--tf-text-secondary);
-}
-
-.sub-empty-hint {
-  font-size: 11px;
   color: var(--tf-text-tertiary);
 }
 

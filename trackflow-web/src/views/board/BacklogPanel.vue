@@ -128,17 +128,13 @@
           </template>
 
           <!-- 空状态 -->
-          <div v-if="!loading && flatIssues.length === 0" class="backlog-empty">
-            <div class="backlog-empty-icon">📋</div>
-            <div class="backlog-empty-title">
-              {{ searchKeyword || filterType || filterPriority ? '没有匹配的工单' : 'Backlog 为空' }}
-            </div>
-            <div class="backlog-empty-desc">
-              {{ searchKeyword || filterType || filterPriority
-                ? '尝试调整筛选条件'
-                : '所有工单都已在看板中' }}
-            </div>
-          </div>
+          <EmptyState
+            v-if="!loading && flatIssues.length === 0"
+            :icon="searchKeyword || filterType || filterPriority ? 'search' : 'ordered-list'"
+            :title="searchKeyword || filterType || filterPriority ? '没有匹配的工单' : 'Backlog 为空'"
+            :description="searchKeyword || filterType || filterPriority ? '尝试调整筛选条件' : '所有工单都已在看板中'"
+            :compact="true"
+          />
         </div>
       </a-spin>
     </div>
@@ -150,9 +146,10 @@ import { ref, computed, watch } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { issueApi, queryApi } from '@/api'
 import type { IssueVO } from '@/api/types'
-import { IconSearch, IconClose, IconList, IconBranch } from '@arco-design/web-vue/es/icon'
+import { IconClose, IconList, IconBranch } from '@arco-design/web-vue/es/icon'
 import { localizeIssueType, localizePriority } from '@/utils/fieldLabels'
 import BacklogTreeNode from './BacklogTreeNode.vue'
+import { EmptyState } from '@/components/base'
 
 /** 树节点结构（递归） */
 export interface BacklogTreeNodeData {
@@ -608,22 +605,7 @@ defineExpose({ removeIssue, refresh })
   text-align: center;
 }
 
-.backlog-empty-icon {
-  font-size: 32px;
-  margin-bottom: 8px;
-}
-
-.backlog-empty-title {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--color-text-2);
-  margin-bottom: 4px;
-}
-
-.backlog-empty-desc {
-  font-size: 12px;
-  color: var(--color-text-3);
-}
+/* ===== Slide Animation ===== */
 
 /* ===== Slide Animation ===== */
 .backlog-slide-enter-active,

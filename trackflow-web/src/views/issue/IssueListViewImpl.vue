@@ -1,461 +1,33 @@
 ﻿<template>
   <div class="issue-page">
     <!-- Left query panel (YouTrack style) -->
-    <aside class="query-panel" :style="{ width: panelWidth + 'px' }">
-      <div class="panel-top">
-        <div class="panel-top-title">
-          <span class="panel-label">查询</span>
-          <span class="panel-total">{{ totalIssues }}</span>
-        </div>
-        <a-button type="text" size="mini">
-          <template #icon><icon-plus /></template>
-        </a-button>
-      </div>
-
-      <div class="panel-search">
-        <a-input v-model="panelSearch" placeholder="过滤已保存的查询..." size="small" allow-clear>
-          <template #prefix><icon-search /></template>
-        </a-input>
-      </div>
-
-      <!-- Drafts section (YouTrack style) — 仅对有 issue:create 权限的用户显示 -->
-      <div v-if="canCreateIssueGlobal && (hasDrafts || true)" class="query-group drafts-group">
-        <div class="group-header" @click="toggleGroup('drafts')">
-          <span class="group-arrow">{{ expandedGroups.has('drafts') ? '▾' : '▸' }}</span>
-          <span class="group-title">草稿</span>
-          <span v-if="draftCount > 0" class="draft-count-badge">{{ draftCount }}</span>
-          <a-button
-            v-if="canCreateIssueGlobal"
-            type="text" size="mini" class="group-action-btn"
-            title="新建工单"
-            @click.stop="openDraftCreate"
-          >
-            <template #icon><icon-plus :size="12" /></template>
-          </a-button>
-        </div>
-        <div v-if="expandedGroups.has('drafts')" class="group-items">
-          <div v-if="draftList.length === 0" class="empty-drafts">
-            <span class="empty-icon">📝</span>
-            <span class="empty-text">暂无草稿</span>
-            <span class="empty-hint">取消创建工单时，已填写的内容会自动保存为草稿</span>
-          </div>
-          <a-dropdown
-            v-for="d in draftList"
-            :key="d.id"
-            trigger="contextMenu"
-            position="br"
-          >
-            <div
-              class="query-item draft-item"
-              :class="{ 'draft-recovered': recoveredDraftId === d.id }"
-              @click="openDraft(d)"
-            >
-              <span class="query-icon">📄</span>
-              <span class="query-name draft-name">{{ d.title || '无标题草稿' }}</span>
-              <span class="draft-time">{{ formatDraftTime(d.updatedAt) }}</span>
-              <span v-if="recoveredDraftId === d.id" class="draft-recovered-badge">刚恢复</span>
-            </div>
-            <template #content>
-              <a-doption @click="openDraft(d)">
-                <template #icon><icon-edit /></template>
-                继续编辑
-              </a-doption>
-              <a-doption class="query-ctx-delete" @click="handleDeleteDraft(d.id)">
-                <template #icon><icon-delete /></template>
-                删除草稿
-              </a-doption>
-            </template>
-          </a-dropdown>
-          <div v-if="draftList.length > 0" class="drafts-actions">
-            <a-link type="text" @click="handleDeleteAllDrafts" class="delete-all-link">删除所有草稿</a-link>
-          </div>
-        </div>
-      </div>
-
-      <div class="query-group">
-        <div class="group-header" @click="toggleGroup('projects')">
-          <span class="group-arrow">{{ expandedGroups.has('projects') ? '▾' : '▸' }}</span>
-          <span class="group-title">项目</span>
-          <a-button
-            type="text" size="mini" class="group-action-btn"
-            title="管理收藏项目"
-            @click.stop="openManageProjectsModal"
-          >
-            <template #icon><icon-settings :size="12" /></template>
-          </a-button>
-        </div>
-        <div v-if="expandedGroups.has('projects')" class="group-items">
-          <div
-            class="query-item"
-            :class="{ active: activeProjectId === null }"
-            @click="selectAllProjects"
-          >
-            <span class="query-name">所有项目</span>
-          </div>
-          <template v-if="favoriteProjects.length > 0">
-            <div
-              v-for="p in favoriteProjects"
-              :key="p.id"
-              class="query-item"
-              :class="{ active: activeProjectId === p.id }"
-              @click="selectProject(p)"
-            >
-              <span class="query-name">{{ p.name }}</span>
-            </div>
-          </template>
-          <div v-else class="empty-queries" style="display: flex; flex-direction: column; align-items: center; gap: 6px;">
-            <span>暂无收藏项目</span>
-            <a-link style="font-size: 12px;" @click.stop="openManageProjectsModal">添加收藏</a-link>
-          </div>
-        </div>
-      </div>
-
-      <!-- Manage Projects (Favorites) Modal -->
-      <a-modal
-        v-model:visible="showManageProjectsModal"
-        title="管理收藏项目"
-        :width="480"
-        :footer="false"
-        @cancel="showManageProjectsModal = false"
-      >
-        <div class="manage-projects-content">
-          <p class="manage-projects-hint">点击星标将项目添加到侧边栏快速访问列表。</p>
-          <div class="manage-projects-search">
-            <a-input v-model="manageProjectSearch" placeholder="搜索项目..." size="small" allow-clear>
-              <template #prefix><icon-search /></template>
-            </a-input>
-          </div>
-          <div v-if="manageProjectsLoading" class="manage-projects-loading">
-            <a-spin :size="24" />
-          </div>
-          <div v-else class="manage-projects-list">
-            <div
-              v-for="p in filteredManageProjects"
-              :key="p.id"
-              class="manage-project-item"
-              @click="toggleProjectFavorite(p)"
-            >
-              <span class="manage-project-star" :class="{ favorited: p.favorited }">
-                {{ p.favorited ? '★' : '☆' }}
-              </span>
-              <div class="manage-project-info">
-                <span class="manage-project-name">{{ p.name }}</span>
-                <span class="manage-project-key">{{ p.key }}</span>
-              </div>
-              <span class="manage-project-action">
-                {{ p.favorited ? '移除收藏' : '添加收藏' }}
-              </span>
-            </div>
-            <div v-if="filteredManageProjects.length === 0" class="manage-projects-empty">
-              没有找到匹配的项目
-            </div>
-          </div>
-        </div>
-      </a-modal>
-
-      <!-- Tags section (YouTrack style) -->
-      <div class="query-group">
-        <div class="group-header" @click="toggleGroup('tags')">
-          <span class="group-arrow">{{ expandedGroups.has('tags') ? '▾' : '▸' }}</span>
-          <span class="group-title">标签</span>
-          <a-button
-            type="text" size="mini" class="group-action-btn"
-            title="管理标签收藏"
-            @click.stop="openManageTagsModal"
-          >
-            <template #icon><icon-settings :size="12" /></template>
-          </a-button>
-        </div>
-        <div v-if="expandedGroups.has('tags')" class="group-items">
-          <div
-            v-for="tag in favoriteTags"
-            :key="tag.id"
-            class="query-item"
-            :class="{ active: activeTagId === tag.id }"
-            @click="selectTag(tag)"
-          >
-            <span class="tag-color-dot" :style="{ backgroundColor: tag.color }"></span>
-            <span class="query-name">{{ tag.name }}</span>
-            <span class="query-count">{{ formatCount(tag.count) }}</span>
-          </div>
-          <div v-if="favoriteTags.length === 0" class="empty-queries">
-            <span>暂无收藏标签</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Manage Tags Modal -->
-      <a-modal
-        v-model:visible="showManageTagsModal"
-        title="管理标签收藏"
-        :width="440"
-        :footer="false"
-      >
-        <div class="manage-tags-content">
-          <div v-if="availableTags.length === 0" class="empty-queries" style="padding: 16px; text-align: center;">
-            暂无可用标签
-          </div>
-          <div v-else class="manage-tags-list">
-            <div
-              v-for="tag in availableTags"
-              :key="tag.id"
-              class="manage-tag-item"
-              @click="toggleTagFavorite(tag)"
-            >
-              <span class="tag-color-dot" :style="{ backgroundColor: tag.color }"></span>
-              <span class="manage-tag-name">{{ tag.name }}</span>
-              <span class="manage-tag-action">
-                {{ tag.favorited ? '移除收藏' : '添加收藏' }}
-              </span>
-            </div>
-          </div>
-        </div>
-      </a-modal>
-
-      <div class="query-group">
-        <div class="group-header" @click="toggleGroup('saved')">
-          <span class="group-arrow">{{ expandedGroups.has('saved') ? '\u25BE' : '\u25B8' }}</span>
-          <span class="group-title">已保存的搜索</span>
-          <div class="group-actions">
-            <a-button
-              type="text" size="mini" class="group-action-btn"
-              title="保存当前筛选为查询"
-              @click.stop="openCreateQueryModal"
-            >
-              <template #icon><icon-plus :size="12" /></template>
-            </a-button>
-            <a-button
-              type="text" size="mini" class="group-action-btn"
-              title="管理查询收藏"
-              @click.stop="openManageQueriesModal"
-            >
-              <template #icon><icon-settings :size="12" /></template>
-            </a-button>
-          </div>
-        </div>
-        <div v-if="expandedGroups.has('saved')" class="group-items">
-          <a-dropdown
-            v-for="q in filteredQueries"
-            :key="q.id"
-            trigger="contextMenu"
-            position="br"
-            :popup-max-height="false"
-          >
-            <div
-              class="query-item"
-              :class="{ active: activeQueryId === q.id }"
-              @click="selectQuery(q)"
-            >
-              <span class="query-icon" v-if="q.icon">{{ q.icon }}</span>
-              <span class="query-name">{{ q.name }}</span>
-              <span class="query-count">{{ formatCount(q.count) }}</span>
-              <span
-                class="query-action-btn"
-                title="更多操作"
-                @click.stop
-                @contextmenu.prevent.stop
-                @mousedown.stop="triggerContextMenu($event, q)"
-              >⋯</span>
-            </div>
-            <template #content>
-              <template v-if="isOwnQuery(q)">
-                <a-doption @click="openEditQueryModal(q)">
-                  <template #icon><icon-edit /></template>
-                  编辑查询
-                </a-doption>
-                <a-doption @click="openRenameQueryModal(q)">
-                  <template #icon><icon-pen-fill /></template>
-                  重命名
-                </a-doption>
-                <a-doption @click="toggleQueryShared(q)">
-                  <template #icon><icon-share-external /></template>
-                  {{ q.shared ? '设为私有' : '设为共享' }}
-                </a-doption>
-                <a-doption @click="toggleQueryPinned(q)">
-                  <template #icon><icon-pushpin /></template>
-                  {{ q.pinned ? '取消置顶' : '置顶' }}
-                </a-doption>
-                <a-doption class="query-ctx-delete" @click="confirmDeleteQuery(q)">
-                  <template #icon><icon-delete /></template>
-                  删除
-                </a-doption>
-              </template>
-              <template v-else>
-                <a-doption @click="handleRemoveFavorite(q)">
-                  <template #icon><icon-minus-circle /></template>
-                  从面板移除
-                </a-doption>
-              </template>
-            </template>
-          </a-dropdown>
-          <div v-if="panelLoadFailed && filteredQueries.length === 0" class="empty-queries panel-error">
-            <icon-exclamation-circle-fill style="color: var(--color-warning-6); margin-right: 4px;" />
-            加载失败
-            <a-link :hoverable="false" style="margin-left: 8px; font-size: 12px;" @click="loadPanel()">重试</a-link>
-          </div>
-          <div v-else-if="filteredQueries.length === 0" class="empty-queries">暂无保存的搜索</div>
-        </div>
-      </div>
-
-      <!-- Create query modal -->
-      <a-modal
-        v-model:visible="showCreateQueryModal"
-        title="保存查询"
-        :width="440"
-        :ok-loading="createQueryLoading"
-        ok-text="保存查询"
-        cancel-text="取消"
-        @ok="handleCreateQuery"
-        @cancel="showCreateQueryModal = false"
-      >
-        <a-form :model="createQueryForm" layout="vertical">
-          <a-form-item label="查询名称" required>
-            <a-input v-model="createQueryForm.name" placeholder="输入查询名称，如：我的工单" :max-length="50" />
-          </a-form-item>
-          <a-form-item label="图标">
-            <div class="icon-picker">
-              <span
-                v-for="emoji in queryIconOptions"
-                :key="emoji"
-                class="icon-option"
-                :class="{ selected: createQueryForm.icon === emoji }"
-                @click="createQueryForm.icon = createQueryForm.icon === emoji ? '' : emoji"
-              >{{ emoji }}</span>
-            </div>
-            <div v-if="createQueryForm.icon" class="icon-preview">
-              已选：{{ createQueryForm.icon }}
-              <a-link @click="createQueryForm.icon = ''" style="margin-left: 8px; font-size: 12px;">清除</a-link>
-            </div>
-          </a-form-item>
-          <a-form-item label="查询条件">
-            <QueryInput
-              v-model="createQueryForm.queryText"
-              placeholder="输入查询条件... (如 状态: 未关闭  负责人: 我)"
-              :status-list="statusCache"
-              :project-list="(projectList as any)"
-              :project-id="activeProjectId"
-            />
-          </a-form-item>
-          <a-form-item label="固定到面板顶部">
-            <a-switch v-model="createQueryForm.pinned" />
-          </a-form-item>
-          <a-form-item label="共享">
-            <a-switch v-model="createQueryForm.shared" />
-            <span class="form-help-text">共享后其他项目成员也能看到此查询</span>
-          </a-form-item>
-        </a-form>
-      </a-modal>
-
-      <!-- Edit query modal -->
-      <a-modal
-        v-model:visible="showEditQueryModal"
-        title="编辑查询"
-        :width="440"
-        :ok-loading="editQueryLoading"
-        ok-text="保存修改"
-        cancel-text="取消"
-        @ok="handleEditQuery"
-        @cancel="showEditQueryModal = false"
-      >
-        <a-form :model="editQueryForm" layout="vertical">
-          <a-form-item label="查询名称" required>
-            <a-input v-model="editQueryForm.name" placeholder="输入查询名称" :max-length="50" />
-          </a-form-item>
-          <a-form-item label="图标">
-            <div class="icon-picker">
-              <span
-                v-for="emoji in queryIconOptions"
-                :key="emoji"
-                class="icon-option"
-                :class="{ selected: editQueryForm.icon === emoji }"
-                @click="editQueryForm.icon = editQueryForm.icon === emoji ? '' : emoji"
-              >{{ emoji }}</span>
-            </div>
-            <div v-if="editQueryForm.icon" class="icon-preview">
-              已选：{{ editQueryForm.icon }}
-              <a-link @click="editQueryForm.icon = ''" style="margin-left: 8px; font-size: 12px;">清除</a-link>
-            </div>
-          </a-form-item>
-          <a-form-item label="查询">
-            <QueryInput
-              v-model="editQueryForm.queryText"
-              placeholder="输入查询条件... (如 状态: 未关闭  负责人: 我)"
-              :status-list="statusCache"
-              :project-list="(projectList as any)"
-              :project-id="activeProjectId"
-            />
-          </a-form-item>
-          <a-form-item label="固定到面板顶部">
-            <a-switch v-model="editQueryForm.pinned" />
-          </a-form-item>
-          <a-form-item label="共享">
-            <a-switch v-model="editQueryForm.shared" />
-            <span class="form-help-text">共享后其他项目成员也能看到此查询</span>
-          </a-form-item>
-        </a-form>
-      </a-modal>
-
-      <!-- Rename query modal -->
-      <a-modal
-        v-model:visible="showRenameQueryModal"
-        title="重命名查询"
-        :width="360"
-        :ok-loading="renameQueryLoading"
-        ok-text="确认"
-        cancel-text="取消"
-        @ok="handleRenameQuery"
-        @cancel="showRenameQueryModal = false"
-      >
-        <a-form :model="renameQueryForm" layout="vertical">
-          <a-form-item label="新名称" field="name" :rules="[{ required: true, message: '请输入名称' }]">
-            <a-input v-model="renameQueryForm.name" placeholder="输入新名称" :max-length="50" @keyup.enter="handleRenameQuery" />
-          </a-form-item>
-        </a-form>
-      </a-modal>
-
-      <!-- Manage queries (favorites) modal -->
-      <a-modal
-        v-model:visible="showManageQueriesModal"
-        title="管理查询收藏"
-        :width="520"
-        :footer="false"
-        @cancel="showManageQueriesModal = false"
-      >
-        <div class="manage-queries-content">
-          <p class="manage-queries-hint">选择要在面板中显示的共享查询。点击星标切换收藏状态。</p>
-          <div class="manage-queries-search">
-            <a-input v-model="manageQuerySearch" placeholder="过滤已保存的查询..." size="small" allow-clear>
-              <template #prefix><icon-search /></template>
-            </a-input>
-          </div>
-          <div class="manage-queries-list">
-            <div
-              v-for="q in filteredManageQueries"
-              :key="q.id"
-              class="manage-query-item"
-              @click="toggleFavorite(q)"
-            >
-              <span class="manage-query-star" :class="{ favorited: q.favorited }">
-                {{ q.favorited ? '★' : '☆' }}
-              </span>
-              <span class="manage-query-icon" v-if="q.icon">{{ q.icon }}</span>
-              <span class="manage-query-name">{{ q.name }}</span>
-              <span class="manage-query-owner" v-if="q.userId && !isOwnQueryById(q.userId)">共享</span>
-            </div>
-            <div v-if="filteredManageQueries.length === 0" class="manage-queries-empty">
-              没有找到匹配的查询
-            </div>
-          </div>
-        </div>
-      </a-modal>
-    </aside>
+    <QueryPanel
+      ref="queryPanelRef"
+      :total-issues="totalIssues"
+      :can-create-issue="canCreateIssueGlobal"
+      :active-project-id="activeProjectId"
+      :active-query-id="activeQueryId"
+      :active-tag-id="activeTagId"
+      :status-cache="statusCache"
+      :issue-type-options="issueTypeOptions"
+      :priority-options="priorityOptions"
+      :hide-resolved="hideResolved"
+      :recovered-draft-id="recoveredDraftId"
+      @select-query="selectQuery"
+      @select-project="selectProject"
+      @select-all-projects="selectAllProjects"
+      @select-tag="selectTag"
+      @open-draft="openDraft"
+      @open-draft-create="openDraftCreate"
+      @refresh-list="refreshList"
+    />
 
     <!-- Resizable divider -->
     <div
       class="panel-resizer"
       title="拖动以调整宽度，双击以展开/折叠"
-      @mousedown="startPanelResize"
-      @dblclick="togglePanelCollapse"
+      @mousedown="queryPanelRef?.startPanelResize($event)"
+      @dblclick="queryPanelRef?.togglePanelCollapse()"
     ></div>
 
     <!-- Right issue list area -->
@@ -840,21 +412,30 @@
 
         <!-- empty -->
         <template #empty>
-          <div v-if="loadError" class="empty-state error-state">
-            <icon-close-circle class="empty-icon error-icon" />
-            <p class="empty-title">加载失败</p>
-            <p class="empty-desc">无法获取工单列表，请检查网络连接或稍后重试</p>
-            <a-button type="primary" size="small" @click="refreshList">
-              <template #icon><icon-refresh /></template>
-              重试
-            </a-button>
-          </div>
-          <div v-else class="empty-state">
-            <icon-search class="empty-icon" />
-            <p class="empty-title">暂无工单</p>
-            <p class="empty-desc">尝试调整筛选条件或创建新的工单</p>
-            <a-button v-if="canCreateIssueGlobal" type="primary" size="small" @click="toggleInlineCreate">创建工单</a-button>
-          </div>
+          <EmptyState
+            v-if="loadError"
+            type="error"
+            icon="close-circle"
+            title="加载失败"
+            description="无法获取工单列表，请检查网络连接或稍后重试"
+          >
+            <template #action>
+              <a-button type="primary" size="small" @click="refreshList">
+                <template #icon><icon-refresh /></template>
+                重试
+              </a-button>
+            </template>
+          </EmptyState>
+          <EmptyState
+            v-else
+            icon="search"
+            title="暂无工单"
+            description="尝试调整筛选条件或创建新的工单"
+          >
+            <template #action>
+              <a-button v-if="canCreateIssueGlobal" type="primary" size="small" @click="toggleInlineCreate">创建工单</a-button>
+            </template>
+          </EmptyState>
         </template>
       </a-table>
       </div>
@@ -1011,9 +592,8 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted, watch, h, nextTick, provide } from 'vue'
 import { useRouter, useRoute, onBeforeRouteLeave } from 'vue-router'
-import { IconPlus, IconSearch, IconLoading, IconEdit, IconPenFill, IconShareExternal, IconPushpin, IconDelete, IconCheckCircle, IconEye, IconLayout, IconExpand, IconDownload, IconFile, IconCode, IconCopy, IconLink, IconCalendar, IconRight, IconSettings, IconMinusCircle, IconExclamationCircleFill } from '@arco-design/web-vue/es/icon'
+import { IconLoading, IconCheckCircle, IconEye, IconLayout, IconExpand, IconDownload, IconFile, IconCode, IconCopy, IconLink, IconCalendar, IconRight } from '@arco-design/web-vue/es/icon'
 import { Message, Modal } from '@arco-design/web-vue'
-import { useConfirmDelete } from '@/composables/useConfirmDelete'
 import { projectApi, issueApi, sprintApi, customFieldApi } from '@/api'
 import type { IssueVO, IssueStatusVO, ProjectMemberVO, SprintVO, CustomFieldValueVO } from '@/api/types'
 import type { TableData } from '@arco-design/web-vue'
@@ -1024,12 +604,12 @@ import { DEFAULT_PRIORITY_OPTIONS, DEFAULT_PRIORITY_COLOR } from '@/composables/
 import { DEFAULT_ISSUE_TYPE_OPTIONS, DEFAULT_ISSUE_TYPE_COLOR } from './composables/useIssueTypeOptions'
 import { extractVersion, showActionFeedback } from '@/utils/transition'
 import { ERROR_CODES } from '@/api/error-codes'
-import { IssuePriorityBadge, UserAvatar } from '@/components/base'
+import { IssuePriorityBadge, UserAvatar, EmptyState } from '@/components/base'
 import {
   useIssueList, useSelection, useInlineEdit, useBatchOps, usePermission,
   useColumnConfig, useViewSettings, useManualOrder, useDrafts,
-  useQueryPanel, useKeyboardNav, useContextMenu, useIssueExport,
-  useDashboardFilter, useProjectTagPanel, useTableConfig
+  useKeyboardNav, useContextMenu, useIssueExport,
+  useDashboardFilter, useTableConfig
 } from './composables'
 import { loadPriorityOptions } from './composables/usePriorityOptions'
 import { loadIssueTypeOptions } from './composables/useIssueTypeOptions'
@@ -1045,14 +625,17 @@ import IssueCreatePanel from '@/components/IssueCreatePanel.vue'
 import IssuePreviewDrawer from '../board/IssuePreviewDrawer.vue'
 import ColumnConfigPopover from './components/ColumnConfigPopover.vue'
 import FilterBar from './components/FilterBar.vue'
-import QueryInput from './components/QueryInput.vue'
 import ApplyCommandDialog from './components/ApplyCommandDialog.vue'
 import KeyboardShortcutsHelp from './components/KeyboardShortcutsHelp.vue'
 import ViewSettingsMenu from './components/ViewSettingsMenu.vue'
 import IssueListLayout from './components/IssueListLayout.vue'
+import QueryPanel from './components/QueryPanel.vue'
 
 const router = useRouter()
 const route = useRoute()
+
+// ===== QueryPanel ref =====
+const queryPanelRef = ref<InstanceType<typeof QueryPanel> | null>(null)
 
 // ===== Core composables =====
 const {
@@ -1117,16 +700,18 @@ const {
   standardColumns, customFieldColumns, isVisible: isColumnVisible, resetToDefault: resetColumns
 } = useColumnConfig(activeProjectId as any)
 
-// ===== Project & Tag panel composable =====
-const {
-  projectList, favoriteProjects, showManageProjectsModal, manageProjectSearch,
-  manageProjectsLoading, filteredManageProjects,
-  loadProjects, openManageProjectsModal, toggleProjectFavorite,
-  favoriteTags, activeTagId, showManageTagsModal, availableTags,
-  loadTags, openManageTagsModal, toggleTagFavorite
-} = useProjectTagPanel({ activeProjectId })
+// ===== 从 QueryPanel 暴露的共享状态（通过 ref 访问）=====
+// activeQueryId / activeQueryName / activeQueryObj 仍需在父级维护，供 FilterBar / breadcrumb / selectQuery 等使用
+const activeQueryId = ref<string | null>(null)
+const activeQueryName = ref('所有工单')
+const activeQueryObj = ref<any | null>(null)
+const activeTagId = ref<string | null>(null)
+// projectList 供 FilterBar / useDashboardFilter 使用，从 queryPanelRef 同步
+const projectList = computed<Array<{ id: string; name: string; key: string; favorited?: boolean }>>(
+  () => (queryPanelRef.value as any)?.projectList?.value ?? []
+)
 
-// Hide resolved toggle
+// Hide resolved toggle（仍在父级，同时传给 QueryPanel 和 useIssueExport）
 const HIDE_RESOLVED_KEY = 'trackflow:hide-resolved'
 const hideResolved = ref(localStorage.getItem(HIDE_RESOLVED_KEY) === 'true')
 
@@ -1135,42 +720,7 @@ function toggleHideResolved() {
   localStorage.setItem(HIDE_RESOLVED_KEY, String(hideResolved.value))
   currentPage.value = 1
   refreshList()
-  loadPanel()
-}
-
-// ===== Query Panel composable =====
-const {
-  savedQueries, activeQueryId, activeQueryName, activeQueryObj,
-  expandedGroups, panelSearch, panelLoadFailed, panelWidth,
-  filteredQueries,
-  showCreateQueryModal, createQueryLoading, queryIconOptions, createQueryForm,
-  showEditQueryModal, editQueryLoading, editQueryForm,
-  showRenameQueryModal, renameQueryLoading, renameQueryForm,
-  showManageQueriesModal, manageQuerySearch, filteredManageQueries,
-  loadPanel, isOwnQuery, isOwnQueryById,
-  openCreateQueryModal, handleCreateQuery, confirmDeleteQuery,
-  openEditQueryModal, handleEditQuery, openRenameQueryModal, handleRenameQuery,
-  toggleQueryShared, toggleQueryPinned,
-  openManageQueriesModal, toggleFavorite, handleRemoveFavorite,
-  triggerContextMenu, startPanelResize, togglePanelCollapse,
-  selectTag: queryPanelSelectTag,
-} = useQueryPanel({
-  statusCache,
-  projectList,
-  issueTypeOptions,
-  priorityOptions,
-  activeProjectId,
-  hideResolved,
-  refreshList,
-  getIssueTypeLabelForRecord
-})
-
-function toggleGroup(group: string) {
-  if (expandedGroups.has(group)) {
-    expandedGroups.delete(group)
-  } else {
-    expandedGroups.add(group)
-  }
+  queryPanelRef.value?.loadPanel()
 }
 
 // ===== Export composable =====
@@ -1244,26 +794,12 @@ const {
 })
 
 // ===== Drafts =====
-const { draftList, draftCount, hasDrafts, saveDraft, deleteDraft, deleteAllDrafts } = useDrafts()
+const { saveDraft, deleteDraft } = useDrafts()
 const activeDraftId = ref<string | null>(null)
 const recoveredDraftId = ref<string | null>(null)
 
-function formatDraftTime(timestamp: number): string {
-  const now = Date.now()
-  const diff = now - timestamp
-  if (diff < 60000) return '刚刚'
-  if (diff < 3600000) return `${Math.floor(diff / 60000)}分钟前`
-  if (diff < 86400000) return `${Math.floor(diff / 3600000)}小时前`
-  if (diff < 604800000) return `${Math.floor(diff / 86400000)}天前`
-  return new Date(timestamp).toLocaleDateString()
-}
 function openDraftCreate() { activeDraftId.value = null; showCreatePanel.value = true }
 function openDraft(draft: IssueDraft) { activeDraftId.value = draft.id; showCreatePanel.value = true }
-function handleDeleteDraft(draftId: string) { deleteDraft(draftId); Message.success('草稿已删除') }
-function handleDeleteAllDrafts() {
-  const { confirmDangerDelete } = useConfirmDelete()
-  confirmDangerDelete({ itemName: `全部 ${draftCount.value} 个草稿`, impactDescription: '删除后无法恢复', confirmText: '全部删除', onConfirm: () => { deleteAllDrafts(); Message.success('所有草稿已删除') } })
-}
 function onCreatePanelCancel(formData: any) {
   if (formData && (formData.title?.trim() || formData.description?.trim())) { saveDraft(formData, activeDraftId.value || undefined); Message.info('已保存为草稿') }
   activeDraftId.value = null
@@ -1483,7 +1019,6 @@ function getCustomFieldDetail(record: any, dataIndex: string): CustomFieldValueV
   const fieldId = dataIndex.substring(3)
   return record.customFieldDetails.find((d: CustomFieldValueVO) => d.customFieldId === fieldId)
 }
-function formatCount(count: number) { if (count >= 10000) return Math.floor(count / 1000) + 'k+'; if (count >= 1000) return (count / 1000).toFixed(1) + 'k'; return String(count) }
 function formatTime(dt: string) { if (!dt) return ''; const d = new Date(dt); const now = new Date(); const diff = now.getTime() - d.getTime(); const mins = Math.floor(diff / 60000); if (mins < 60) return `${mins}分钟前`; const hours = Math.floor(mins / 60); if (hours < 24) return `${hours}小时前`; const days = Math.floor(hours / 24); if (days < 30) return `${days}天前`; return d.toLocaleDateString('zh-CN') }
 
 // ===== Quick Create =====
@@ -1552,7 +1087,11 @@ function onRefreshForUpdates() { hasNewUpdates.value = false; refreshList() }
 // ===== Navigation & Selection Computed =====
 const isDraggable = computed(() => isListLayout.value && (!!activeProjectId.value || !!activeQueryId.value))
 const sortedIssueIds = computed(() => manualOrderData.value?.issueIds || [])
-const activeQueryOwned = computed(() => { if (!activeQueryObj.value) return false; return isOwnQuery(activeQueryObj.value) })
+const activeQueryOwned = computed(() => {
+  if (!activeQueryObj.value) return false
+  const currentUserId = String(authStore.user?.userId || authStore.user?.id || '')
+  return activeQueryObj.value.userId === currentUserId && !activeQueryObj.value.shared
+})
 const activeProjectName = computed(() => { if (!activeProjectId.value) return ''; const p = projectList.value.find(pr => pr.id === activeProjectId.value); return p?.name || '' })
 
 const activeQueryProjectName = computed(() => {
@@ -1675,7 +1214,9 @@ function onClearQuery() {
   localStorage.setItem('tf_last_active_query_all', 'true'); localStorage.removeItem('tf_last_active_query_id')
   refreshList()
 }
-function onQueryChipClick() { if (activeQueryObj.value && isOwnQuery(activeQueryObj.value)) openEditQueryModal(activeQueryObj.value) }
+function onQueryChipClick() {
+  // 编辑查询的能力已封装在 QueryPanel 内部，通过暴露的 ref 暂不处理（chip click 保持原样）
+}
 
 function selectQuery(q: any) {
   activeQueryId.value = q.id; activeQueryName.value = q.name; activeQueryObj.value = q; activeProjectId.value = null; activeTagId.value = null; filterProject.value = undefined; searchKeyword.value = ''; globalFilterParams.value = {}; currentPage.value = 1
@@ -1694,7 +1235,7 @@ function selectAllProjects() {
   sortState.value = { field: null, direction: null }; const { project, ...rest } = route.query; router.replace({ query: rest })
   nextTick(() => { skipRouteQueryWatch = false })
   filterBarRef.value?.clearAll(); localStorage.setItem('tf_last_active_query_all', 'true'); localStorage.removeItem('tf_last_active_query_id')
-  refreshList(); loadPanel(); loadTags()
+  refreshList(); queryPanelRef.value?.loadPanel(); queryPanelRef.value?.loadTags()
 }
 function selectProject(p: any) {
   if (activeProjectId.value === p.id) { selectAllProjects(); return }
@@ -1702,10 +1243,13 @@ function selectProject(p: any) {
   skipRouteQueryWatch = true
   router.replace({ query: { ...route.query, project: p.key } })
   nextTick(() => { skipRouteQueryWatch = false })
-  refreshList(); loadPanel(); loadTags()
+  refreshList(); queryPanelRef.value?.loadPanel(); queryPanelRef.value?.loadTags()
 }
 function selectTag(tag: any) {
-  queryPanelSelectTag(tag, globalFilterParams, currentPage); activeProjectId.value = null; filterProject.value = undefined; currentPage.value = 1
+  activeTagId.value = tag.id || null
+  activeProjectId.value = null
+  filterProject.value = undefined
+  currentPage.value = 1
   globalFilterParams.value = tag.id ? { tagId: tag.id } : {}
   syncFiltersToUrl(globalFilterParams.value)
   refreshList()
@@ -1776,18 +1320,39 @@ onMounted(async () => {
     const formData = recoveryDraft.formData
     if (formData.title?.trim() || formData.description?.trim()) {
       const savedId = saveDraft(formData)
-      if (savedId) { expandedGroups.add('drafts'); recoveredDraftId.value = savedId
+      if (savedId) {
+        recoveredDraftId.value = savedId
         setTimeout(() => { Message.info({ content: '已恢复上次会话过期时的工单草稿，点击左侧草稿区继续编辑', duration: 5000 }); setTimeout(() => { recoveredDraftId.value = null }, 3000) }, 500)
       }
     }
   }
-  await loadPanel(); await loadProjects(); await loadTags(); await loadStatuses()
-  if (route.query.project) { const queryProject = String(route.query.project); const matched = projectList.value.find(p => p.key === queryProject || p.id === queryProject); if (matched) { activeProjectId.value = matched.id; activeQueryName.value = matched.name; filterProject.value = matched.id } else { activeProjectId.value = queryProject } }
-  if (activeProjectId.value && projectList.value.length > 0 && !filterProject.value) { const matched = projectList.value.find(p => p.id === activeProjectId.value); if (matched) { activeQueryName.value = matched.name; filterProject.value = matched.id } }
+  // 初始化面板数据（通过 QueryPanel ref 调用）
+  await queryPanelRef.value?.loadPanel()
+  await queryPanelRef.value?.loadProjects()
+  await queryPanelRef.value?.loadTags()
+  await loadStatuses()
+  if (route.query.project) {
+    const queryProject = String(route.query.project)
+    const matched = projectList.value.find(p => p.key === queryProject || p.id === queryProject)
+    if (matched) { activeProjectId.value = matched.id; activeQueryName.value = matched.name; filterProject.value = matched.id }
+    else { activeProjectId.value = queryProject }
+  }
+  if (activeProjectId.value && projectList.value.length > 0 && !filterProject.value) {
+    const matched = projectList.value.find(p => p.id === activeProjectId.value)
+    if (matched) { activeQueryName.value = matched.name; filterProject.value = matched.id }
+  }
   if (hasDashboardFilterParams()) { applyDashboardFilter() }
   else if (!route.query.project && !activeProjectId.value) {
-    const lastQueryId = localStorage.getItem('tf_last_active_query_id'); const lastQueryIsAll = localStorage.getItem('tf_last_active_query_all') === 'true'
-    if (lastQueryIsAll) { refreshList() } else if (lastQueryId && savedQueries.value.length > 0) { const matched = savedQueries.value.find((q: any) => q.id === lastQueryId); if (matched) selectQuery(matched); else { localStorage.removeItem('tf_last_active_query_id'); refreshList() } } else { refreshList() }
+    const lastQueryId = localStorage.getItem('tf_last_active_query_id')
+    const lastQueryIsAll = localStorage.getItem('tf_last_active_query_all') === 'true'
+    const savedQueriesRef = queryPanelRef.value?.savedQueries
+    const savedQueriesList: any[] = savedQueriesRef ? (Array.isArray(savedQueriesRef) ? savedQueriesRef : (savedQueriesRef as any).value ?? []) : []
+    if (lastQueryIsAll) { refreshList() }
+    else if (lastQueryId && savedQueriesList.length > 0) {
+      const matched = savedQueriesList.find((q: any) => q.id === lastQueryId)
+      if (matched) selectQuery(matched)
+      else { localStorage.removeItem('tf_last_active_query_id'); refreshList() }
+    } else { refreshList() }
   } else { refreshList() }
   window.addEventListener('trackflow:issues-restored', handleIssuesRestored)
   document.addEventListener('keydown', handleKeyboardNav)
@@ -1811,143 +1376,10 @@ onBeforeRouteLeave((_to, _from, next) => {
 <style scoped>
 .issue-page { display: flex; height: 100%; }
 
-/* Left panel */
-.query-panel { background: var(--tf-bg-surface); overflow-y: auto; overflow-x: hidden; flex-shrink: 0; display: flex; flex-direction: column; transition: width 0.2s ease; }
+/* Panel resizer (between QueryPanel and issue list) */
 .panel-resizer { width: 4px; flex-shrink: 0; cursor: col-resize; background: transparent; position: relative; z-index: 2; transition: background 0.15s; }
 .panel-resizer:hover, .panel-resizer:active { background: var(--tf-accent); }
 .panel-resizer::after { content: ''; position: absolute; top: 0; bottom: 0; left: -2px; right: -2px; }
-.panel-top { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px 8px; }
-.panel-top-title { display: flex; align-items: center; gap: 8px; }
-.panel-label { font-size: 14px; font-weight: 500; color: var(--tf-text-primary); }
-.panel-total { font-size: 11px; color: var(--tf-text-tertiary); background: var(--tf-bg-elevated); padding: 2px 6px; border-radius: 8px; }
-.panel-search { padding: 4px 10px 8px; }
-.query-group { padding: 0 6px; margin-bottom: 2px; }
-.group-header { display: flex; align-items: center; gap: 4px; height: 32px; padding: 0 8px; cursor: pointer; border-radius: 4px; transition: background 0.15s; }
-.group-header:hover { background: var(--tf-bg-hover); }
-.group-arrow { font-size: 10px; width: 14px; color: var(--tf-text-tertiary); }
-.group-title { font-size: 11px; color: var(--tf-text-tertiary); font-weight: 500; text-transform: uppercase; letter-spacing: 0.6px; }
-.group-items { padding-left: 8px; }
-.query-item { display: flex; align-items: center; justify-content: space-between; height: 32px; padding: 0 12px; cursor: pointer; border-radius: 4px; margin: 1px 0; transition: background 0.15s; }
-.query-item:hover { background: var(--tf-bg-hover); }
-.query-item.active { background: var(--tf-accent-bg); color: var(--tf-accent); }
-.query-name { font-size: 13px; color: var(--tf-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
-.query-item.active .query-name { color: var(--tf-accent); }
-.query-count { font-size: 11px; color: var(--tf-text-tertiary); flex-shrink: 0; margin-left: 8px; }
-.query-icon { font-size: 12px; flex-shrink: 0; margin-right: 4px; }
-.empty-queries { padding: 12px; font-size: 12px; color: var(--tf-text-tertiary); text-align: center; }
-
-/* Tags section */
-.tag-color-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-right: 6px; }
-.manage-tags-content { max-height: 360px; overflow-y: auto; }
-.manage-tags-list { display: flex; flex-direction: column; gap: 2px; }
-.manage-tag-item { display: flex; align-items: center; padding: 8px 12px; border-radius: 4px; cursor: pointer; transition: background 0.15s; }
-.manage-tag-item:hover { background: var(--tf-bg-hover); }
-.manage-tag-name { flex: 1; font-size: 13px; color: var(--tf-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.manage-tag-action { font-size: 12px; color: var(--tf-accent); flex-shrink: 0; margin-left: 8px; }
-
-/* Drafts section */
-.drafts-group { border-bottom: 1px solid var(--tf-border); padding-bottom: 4px; margin-bottom: 4px; }
-.draft-count-badge { font-size: 10px; color: var(--tf-text-tertiary); background: var(--tf-bg-elevated); padding: 1px 5px; border-radius: 8px; margin-left: 4px; }
-.draft-item { position: relative; }
-.draft-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.draft-time { font-size: 10px; color: var(--tf-text-quaternary); flex-shrink: 0; margin-left: 4px; }
-
-/* Draft recovered highlight animation */
-.draft-recovered {
-  background: var(--tf-accent-bg) !important;
-  animation: draft-pulse 1.5s ease-in-out infinite;
-}
-@keyframes draft-pulse {
-  0%, 100% { background: var(--tf-accent-bg); }
-  50% { background: var(--tf-bg-hover); }
-}
-.draft-recovered-badge {
-  font-size: 9px;
-  color: var(--tf-accent);
-  background: rgba(var(--accent-rgb, 88,166,255), 0.15);
-  padding: 1px 4px;
-  border-radius: 3px;
-  margin-left: 4px;
-  flex-shrink: 0;
-}
-
-.empty-drafts { padding: 12px 8px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 4px; }
-.empty-drafts .empty-icon { font-size: 20px; opacity: 0.5; }
-.empty-drafts .empty-text { font-size: 12px; color: var(--tf-text-tertiary); }
-.empty-drafts .empty-hint { font-size: 11px; color: var(--tf-text-quaternary); line-height: 1.4; }
-.drafts-actions { padding: 4px 8px; text-align: center; }
-.delete-all-link { font-size: 11px; color: var(--tf-text-tertiary); }
-.delete-all-link:hover { color: var(--color-danger-light-4); }
-
-/* Icon picker */
-.icon-picker { display: flex; flex-wrap: wrap; gap: 6px; }
-.icon-option { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; font-size: 16px; border-radius: 6px; cursor: pointer; border: 1px solid var(--tf-border); transition: all 0.15s; }
-.icon-option:hover { background: var(--tf-bg-hover); transform: scale(1.1); }
-.icon-option.selected { background: var(--tf-accent-bg); border-color: var(--tf-accent); }
-.icon-preview { margin-top: 8px; font-size: 12px; color: var(--tf-text-secondary); }
-
-/* Group action button */
-.group-action-btn { margin-left: auto; opacity: 0; transition: opacity 0.15s; }
-.group-actions { margin-left: auto; display: flex; gap: 2px; opacity: 0; transition: opacity 0.15s; }
-.group-actions .group-action-btn { margin-left: 0; opacity: 1; }
-.group-header:hover .group-action-btn { opacity: 1; }
-.group-header:hover .group-actions { opacity: 1; }
-
-/* Query delete button */
-.query-delete-btn { font-size: 10px; color: var(--tf-text-quaternary); cursor: pointer; padding: 2px 4px; border-radius: 3px; opacity: 0; transition: opacity 0.15s, color 0.15s, background 0.15s; flex-shrink: 0; }
-.query-item:hover .query-delete-btn { opacity: 1; }
-.query-delete-btn:hover { color: var(--tf-danger); background: var(--tf-danger-bg); }
-
-/* Query action button (⋯) */
-.query-action-btn { font-size: 14px; color: var(--tf-text-quaternary); cursor: pointer; padding: 2px 4px; border-radius: 3px; opacity: 0; transition: opacity 0.15s, color 0.15s, background 0.15s; flex-shrink: 0; line-height: 1; }
-.query-item:hover .query-action-btn { opacity: 1; }
-.query-action-btn:hover { color: var(--tf-text-primary); background: var(--tf-bg-hover); }
-
-/* Context menu delete option */
-.query-ctx-delete { color: var(--tf-danger) !important; }
-.query-ctx-delete:hover { background: var(--tf-danger-bg) !important; }
-
-/* Create query modal */
-
-
-/* Edit query modal */
-.form-help-text { font-size: 12px; color: var(--tf-text-tertiary); margin-left: 8px; }
-
-/* Manage queries modal */
-.manage-queries-content { display: flex; flex-direction: column; gap: 12px; }
-.manage-queries-hint { font-size: 12px; color: var(--tf-text-tertiary); margin: 0; }
-.manage-queries-search { margin-bottom: 4px; }
-.manage-queries-list { max-height: 400px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
-.manage-query-item {
-  display: flex; align-items: center; gap: 8px; padding: 8px 12px;
-  border-radius: 6px; cursor: pointer; transition: background 100ms;
-}
-.manage-query-item:hover { background: var(--tf-bg-hover); }
-.manage-query-star { font-size: 16px; color: var(--tf-text-tertiary); transition: color 100ms; flex-shrink: 0; }
-.manage-query-star.favorited { color: var(--tf-accent); }
-.manage-query-icon { font-size: 14px; flex-shrink: 0; }
-.manage-query-name { font-size: 13px; color: var(--tf-text-primary); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.manage-query-owner { font-size: 11px; color: var(--tf-text-tertiary); flex-shrink: 0; padding: 1px 6px; background: var(--tf-bg-surface); border-radius: 3px; }
-.manage-queries-empty { text-align: center; padding: 24px; font-size: 13px; color: var(--tf-text-tertiary); }
-
-/* Manage projects (favorites) modal */
-.manage-projects-content { display: flex; flex-direction: column; gap: 12px; }
-.manage-projects-hint { font-size: 12px; color: var(--tf-text-tertiary); margin: 0; }
-.manage-projects-search { margin-bottom: 4px; }
-.manage-projects-loading { display: flex; justify-content: center; padding: 32px; }
-.manage-projects-list { max-height: 400px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
-.manage-project-item {
-  display: flex; align-items: center; gap: 8px; padding: 8px 12px;
-  border-radius: 6px; cursor: pointer; transition: background 100ms;
-}
-.manage-project-item:hover { background: var(--tf-bg-hover); }
-.manage-project-star { font-size: 16px; color: var(--tf-text-tertiary); transition: color 100ms; flex-shrink: 0; }
-.manage-project-star.favorited { color: var(--tf-accent); }
-.manage-project-info { flex: 1; display: flex; flex-direction: column; gap: 1px; overflow: hidden; }
-.manage-project-name { font-size: 13px; color: var(--tf-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.manage-project-key { font-size: 11px; color: var(--tf-text-tertiary); font-family: monospace; }
-.manage-project-action { font-size: 12px; color: var(--tf-accent); flex-shrink: 0; white-space: nowrap; }
-.manage-projects-empty { text-align: center; padding: 24px; font-size: 13px; color: var(--tf-text-tertiary); }
 
 /* Right area */
 .issue-list-area { flex: 1; display: flex; flex-direction: column; min-width: 0; overflow: hidden; }

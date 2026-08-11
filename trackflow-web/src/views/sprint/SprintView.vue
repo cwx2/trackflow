@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="sprint-page">
     <div class="page-header">
       <h2 class="page-title">迭代管理</h2>
@@ -164,38 +164,28 @@
         </template>
       </div>
     </div>
-    <div v-else-if="loadingState === 'loading'" class="empty-state">
+    <div v-else-if="loadingState === 'loading'" class="loading-placeholder">
       <a-spin :size="32" />
-      <p class="empty-desc" style="margin-top: 16px;">正在加载迭代列表…</p>
+      <p style="margin-top: 16px; color: var(--tf-text-tertiary); font-size: 13px;">正在加载迭代列表…</p>
     </div>
-    <div v-else-if="loadingState === 'error' && !selectedProject" class="empty-state">
-      <div class="empty-icon">🏃</div>
-      <h3 class="empty-title">请选择一个项目</h3>
-      <p class="empty-desc">选择上方的项目后，即可查看和管理该项目的迭代（Sprint）列表</p>
-    </div>
-    <div v-else-if="loadingState === 'error'" class="empty-state">
-      <div class="empty-icon">⚠️</div>
-      <h3 class="empty-title">加载失败</h3>
-      <p class="empty-desc">无法获取迭代列表，请稍后重试</p>
-      <a-button type="primary" size="small" @click="loadSprints">重试</a-button>
-    </div>
-    <div v-else-if="loadingState === 'forbidden'" class="empty-state">
-      <div class="empty-icon">🔒</div>
-      <h3 class="empty-title">暂无可查看的迭代</h3>
-      <p class="empty-desc">当前项目尚未创建迭代，或您没有查看权限。请联系项目管理员。</p>
-    </div>
-    <div v-else-if="projectLoadState === 'error'" class="empty-state">
-      <div class="empty-icon">⚠️</div>
-      <h3 class="empty-title">项目列表加载失败</h3>
-      <p class="empty-desc">无法获取可用项目，请检查网络后重试</p>
-      <a-button type="primary" size="small" @click="loadProjects">重试</a-button>
-    </div>
-    <div v-else class="empty-state">
-      <div class="empty-icon">🏃</div>
-      <h3 class="empty-title">{{ selectedProject ? '暂无迭代' : '请选择一个项目' }}</h3>
-      <p class="empty-desc">{{ !selectedProject ? '选择上方的项目后，即可查看和管理该项目的迭代（Sprint）列表' : canCreateSprint ? '创建第一个 Sprint 来规划团队工作' : '当前项目尚未创建迭代，请联系项目管理员。' }}</p>
-      <a-button v-if="selectedProject && canCreateSprint" type="primary" size="small" @click="openCreateModal">+ 新建迭代</a-button>
-    </div>
+    <EmptyState v-else-if="loadingState === 'error' && !selectedProject" icon-emoji="🏃" title="请选择一个项目" description="选择上方的项目后，即可查看和管理该项目的迭代（Sprint）列表" />
+    <EmptyState v-else-if="loadingState === 'error'" type="error" icon="exclamation-circle" title="加载失败" description="无法获取迭代列表，请稍后重试">
+      <template #action><a-button type="primary" size="small" @click="loadSprints">重试</a-button></template>
+    </EmptyState>
+    <EmptyState v-else-if="loadingState === 'forbidden'" icon="lock" title="暂无可查看的迭代" description="当前项目尚未创建迭代，或您没有查看权限。请联系项目管理员。" />
+    <EmptyState v-else-if="projectLoadState === 'error'" type="error" icon="exclamation-circle" title="项目列表加载失败" description="无法获取可用项目，请检查网络后重试">
+      <template #action><a-button type="primary" size="small" @click="loadProjects">重试</a-button></template>
+    </EmptyState>
+    <EmptyState
+      v-else
+      icon-emoji="🏃"
+      :title="selectedProject ? '暂无迭代' : '请选择一个项目'"
+      :description="!selectedProject ? '选择上方的项目后，即可查看和管理该项目的迭代（Sprint）列表' : canCreateSprint ? '创建第一个 Sprint 来规划团队工作' : '当前项目尚未创建迭代，请联系项目管理员。'"
+    >
+      <template #action>
+        <a-button v-if="selectedProject && canCreateSprint" type="primary" size="small" @click="openCreateModal">+ 新建迭代</a-button>
+      </template>
+    </EmptyState>
 
     <!-- 创建/编辑/重叠 Sprint 弹窗 -->
     <SprintFormModal
@@ -250,6 +240,7 @@ import SprintCard from './components/SprintCard.vue'
 import SprintGuidanceBanner from './components/SprintGuidanceBanner.vue'
 import SprintNoActiveState from './components/SprintNoActiveState.vue'
 import SprintCompleteModal from './components/SprintCompleteModal.vue'
+import { EmptyState } from '@/components/base'
 import SprintDeleteModal from './components/SprintDeleteModal.vue'
 import SprintFormModal from './components/SprintFormModal.vue'
 import { useSprintNavigation, formatDate, isSprintNotStartable } from '@/composables/useSprintNavigation'
@@ -596,33 +587,6 @@ function syncUrlProjectParam() {
   display: flex;
   flex-direction: column;
   gap: 12px;
-}
-
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 64px 24px;
-  text-align: center;
-}
-
-.empty-icon {
-  font-size: 48px;
-  margin-bottom: 16px;
-}
-
-.empty-title {
-  font-size: 16px;
-  font-weight: 500;
-  color: var(--color-text-1);
-  margin-bottom: 8px;
-}
-
-.empty-desc {
-  font-size: 13px;
-  color: var(--color-text-3);
-  margin-bottom: 16px;
 }
 
 /* ===== 已完成 Sprint 折叠区域 ===== */

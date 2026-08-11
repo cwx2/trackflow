@@ -116,10 +116,13 @@
           :node-status-map="nodeStatusMap"
           :node-execution-details="nodeExecutionDetails"
           :streaming-output="streamingOutput"
-          :is-running="isRunning"
+          :is-running="isRunning || nodeTestLoading"
           :runtime-enabled="workflowRuntimeEnabled"
+          :mode="executionPanelMode"
           @close="executionPanelOpen = false"
           @go-history="router.push(`/automation/${workflowId}/executions`)"
+          @rerun-debug="rerunLastNodeTest"
+          @clear-debug="clearNodeDebugSession"
         />
       </div>
     </div>
@@ -265,12 +268,6 @@
         :auto-size="{ minRows: 6, maxRows: 12 }"
         placeholder='例如：{ "issueId": 123, "content": "节点试运行" }'
       />
-      <div v-if="nodeTestResult" class="node-test-result" :class="nodeTestResult.status">
-        <div><strong>{{ nodeTestResult.status === 'success' ? '试运行成功' : nodeTestResult.status === 'simulated' ? '预演完成' : '试运行失败' }}</strong> · {{ nodeTestResult.durationMs }}ms</div>
-        <p v-if="nodeTestResult.message">{{ nodeTestResult.message }}</p>
-        <pre v-if="nodeTestResult.error" class="node-test-error">{{ nodeTestResult.error }}</pre>
-        <pre v-else>{{ formatNodeTestJson(nodeTestResult.output) }}</pre>
-      </div>
     </a-modal>
 
     <a-modal
@@ -339,7 +336,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
 import LogicFlow from '@logicflow/core'
 import { Control, MiniMap, Snapshot } from '@logicflow/extension'
-import { automationApi, type WorkflowDefinition, type WorkflowNode, type NodeType, type GlobalVariable, type ExecutionDetailVO, type NodeTestResultVO } from '@/api'
+import { automationApi, type WorkflowDefinition, type WorkflowNode, type NodeType, type GlobalVariable, type ExecutionDetailVO } from '@/api'
 import { DRAGGABLE_NODES, findNodeContractDrift, getNodeDefinition } from './node-definitions'
 import { validateExecutableWorkflow } from './workflow-validator'
 import { FlowEdge } from './graph/edges/FlowEdge'
@@ -522,7 +519,6 @@ async function openNodeTest(node: any) {
   nodeTestNode.value = JSON.parse(JSON.stringify(node))
   nodeTestInputText.value = '{}'
   nodeTestConfirmSideEffects.value = false
-  nodeTestResult.value = null
   showNodeTestModal.value = true
 }
 
@@ -544,6 +540,22 @@ async function confirmNodeTest() {
     Message.warning('请先确认允许本次试运行产生真实副作用')
     return
   }
+  const testedNode = JSON.parse(JSON.stringify(nodeTestNode.value))
+  const nodeName = testedNode.properties?.nodeMeta?.title || testedNode.properties?.nodeType || testedNode.id
+  executionPanelMode.value = 'node-debug'
+  nodeStatusMap.value = { [testedNode.id]: 'running' }
+  nodeExecutionDetails.value = {
+    [testedNode.id]: { input: inputOverrides, nodeName, startedAt: new Date().toISOString() },
+  }
+  streamingOutput.value = {}
+  executionPanelOpen.value = true
+  lastNodeTest.value = {
+    node: testedNode,
+    inputText: nodeTestInputText.value,
+    confirmSideEffects: nodeTestConfirmSideEffects.value,
+  }
+  lf?.setProperties(testedNode.id, { runStatus: 'running' })
+  showNodeTestModal.value = false
   nodeTestLoading.value = true
   try {
     const res = await automationApi.testNode(workflowId.value, nodeTestNode.value.id, {
@@ -552,24 +564,67 @@ async function confirmNodeTest() {
       node: normalizeCanvasNode(nodeTestNode.value),
     })
     if (res.code === 0) {
-      nodeTestResult.value = res.data
-      const runStatus = res.data.status === 'success' ? 'success' : res.data.status === 'failed' ? 'failed' : 'idle'
-      lf?.setProperties(nodeTestNode.value.id, { runStatus })
+      const runStatus: CanvasNodeStatus = res.data.status === 'failed' ? 'failed' : 'success'
+      const panelStatus: CanvasNodeStatus = res.data.status === 'failed' ? 'failed' : 'success'
+      nodeStatusMap.value = { [testedNode.id]: panelStatus }
+      nodeExecutionDetails.value = {
+        [testedNode.id]: {
+          input: res.data.input,
+          output: res.data.output,
+          errorInfo: res.data.error,
+          message: res.data.message,
+          mode: res.data.status === 'simulated' ? 'simulated' : 'executed',
+          durationMs: res.data.durationMs,
+          nodeName,
+          startedAt: nodeExecutionDetails.value[testedNode.id]?.startedAt,
+        },
+      }
+      lf?.setProperties(testedNode.id, { runStatus })
       if (res.data.status === 'success') Message.success('节点试运行成功')
       else if (res.data.status === 'simulated') Message.info('节点预演完成')
     } else {
-      Message.error(res.message || '节点试运行失败')
+      recordNodeDebugFailure(testedNode, nodeName, res.message || '节点试运行失败')
     }
   } catch (error: any) {
-    Message.error(error.response?.data?.message || '节点试运行失败')
+    recordNodeDebugFailure(testedNode, nodeName, error.response?.data?.message || '节点试运行失败')
   } finally {
     nodeTestLoading.value = false
   }
 }
 
-function formatNodeTestJson(value: unknown) {
-  try { return JSON.stringify(value ?? {}, null, 2) }
-  catch { return String(value) }
+function recordNodeDebugFailure(node: any, nodeName: string, error: string) {
+  nodeStatusMap.value = { [node.id]: 'failed' }
+  nodeExecutionDetails.value = {
+    [node.id]: {
+      ...nodeExecutionDetails.value[node.id],
+      nodeName,
+      errorInfo: error,
+      mode: 'executed',
+    },
+  }
+  lf?.setProperties(node.id, { runStatus: 'failed' })
+  Message.error(error)
+}
+
+function rerunLastNodeTest() {
+  const previous = lastNodeTest.value
+  if (!previous) return
+  nodeTestNode.value = JSON.parse(JSON.stringify(previous.node))
+  nodeTestInputText.value = previous.inputText
+  nodeTestConfirmSideEffects.value = previous.confirmSideEffects
+  showNodeTestModal.value = true
+}
+
+function clearNodeDebugSession() {
+  if (executionPanelMode.value !== 'node-debug') return
+  for (const nodeId of Object.keys(nodeStatusMap.value)) {
+    lf?.setProperties(nodeId, { runStatus: 'idle' })
+  }
+  nodeStatusMap.value = {}
+  nodeExecutionDetails.value = {}
+  streamingOutput.value = {}
+  lastNodeTest.value = null
+  executionPanelOpen.value = false
 }
 
 // 面板开关
@@ -577,9 +632,26 @@ const rightPanelOpen = ref(false)  // 默认收起，点击节点时自动打开
 
 // 执行状态
 type CanvasNodeStatus = 'idle' | 'running' | 'success' | 'failed' | 'skipped' | 'cancelled'
+type ExecutionPanelMode = 'workflow' | 'node-debug'
+type NodeDebugRecord = {
+  node: any
+  inputText: string
+  confirmSideEffects: boolean
+}
 const nodeStatusMap = ref<Record<string, CanvasNodeStatus>>({})
-const nodeExecutionDetails = ref<Record<string, { input?: unknown; output?: unknown; errorInfo?: string; durationMs?: number; nodeName?: string }>>({})
+const nodeExecutionDetails = ref<Record<string, {
+  input?: unknown
+  output?: unknown
+  errorInfo?: string
+  message?: string
+  mode?: 'executed' | 'simulated'
+  startedAt?: string
+  durationMs?: number
+  nodeName?: string
+}>>({})
 const streamingOutput = ref<Record<string, string>>({})
+const executionPanelMode = ref<ExecutionPanelMode>('workflow')
+const lastNodeTest = ref<NodeDebugRecord | null>(null)
 const isRunning = ref(false)
 const currentExecutionId = ref<string | null>(null)
 const showRunInputModal = ref(false)
@@ -1403,6 +1475,8 @@ async function confirmRun() {
     return
   }
   isRunning.value = true
+  executionPanelMode.value = 'workflow'
+  lastNodeTest.value = null
   nodeStatusMap.value = {}
   nodeExecutionDetails.value = {}
   streamingOutput.value = {}

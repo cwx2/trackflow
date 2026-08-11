@@ -824,28 +824,6 @@ watch(() => props.projectId, loadRules)
   margin-left: 16px;
 }
 
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 48px 24px;
-  text-align: center;
-}
-
-.empty-state h3 {
-  margin: 16px 0 8px;
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--color-text-1);
-}
-
-.empty-state p {
-  font-size: 13px;
-  color: var(--color-text-3);
-  margin-bottom: 16px;
-}
-
 .condition-list,
 .action-list {
   display: flex;

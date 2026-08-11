@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <a-drawer
     :visible="visible"
     :title="drawerTitle"
@@ -106,10 +106,7 @@
     </div>
 
     <!-- 空状态 -->
-    <div v-else class="drawer-empty">
-      <div class="empty-icon">📋</div>
-      <p class="empty-text">{{ emptyText }}</p>
-    </div>
+    <EmptyState v-else icon="ordered-list" :title="emptyText" />
 
     <!-- 底部统计 -->
     <div class="drawer-footer-stats" v-if="!loading && issues.length > 0">
@@ -125,7 +122,7 @@ import { Message } from '@arco-design/web-vue'
 import { IconSearch, IconLoading, IconCheck } from '@arco-design/web-vue/es/icon'
 import { issueApi, projectApi } from '@/api'
 import type { IssueVO, ProjectMemberVO } from '@/api/types'
-import { UserAvatar } from '@/components/base'
+import { UserAvatar, EmptyState } from '@/components/base'
 
 const props = defineProps<{
   visible: boolean
@@ -466,22 +463,6 @@ function handleClose() {
   padding: 48px 24px;
   color: var(--color-text-3);
   font-size: 13px;
-}
-
-.drawer-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 48px 24px;
-  text-align: center;
-}
-.drawer-empty .empty-icon {
-  font-size: 32px;
-  margin-bottom: 12px;
-}
-.drawer-empty .empty-text {
-  font-size: 13px;
-  color: var(--color-text-3);
 }
 
 /* Footer stats */

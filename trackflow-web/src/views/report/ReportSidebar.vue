@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <aside class="report-sidebar" :class="{ collapsed: isCollapsed }">
     <!-- Toggle button -->
     <button class="sidebar-toggle" @click="isCollapsed = !isCollapsed" :title="isCollapsed ? '展开面板' : '收起面板'">
@@ -102,15 +102,10 @@
         </div>
 
         <!-- Empty state when search yields no results -->
-        <div v-if="filteredReports.length === 0 && searchKeyword" class="sidebar-empty">
-          <span class="empty-text">未找到匹配的报表</span>
-        </div>
+        <EmptyState v-if="filteredReports.length === 0 && searchKeyword" icon="search" title="未找到匹配的报表" :compact="true" />
 
         <!-- Empty state when no reports at all -->
-        <div v-if="allReports.length === 0 && !loading" class="sidebar-empty">
-          <span class="empty-icon">📊</span>
-          <span class="empty-text">暂无可访问的报表</span>
-        </div>
+        <EmptyState v-if="allReports.length === 0 && !loading" icon="bar-chart" title="暂无可访问的报表" :compact="true" />
       </div>
     </template>
   </aside>
@@ -121,6 +116,7 @@ import { ref, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
 import { reportApi } from '@/api/report'
+import { EmptyState } from '@/components/base'
 import type { ReportDefinitionVO } from '@/api/report'
 
 const props = defineProps<{
@@ -498,21 +494,4 @@ async function handleToggleFavorite(report: ReportDefinitionVO) {
 }
 
 /* Empty */
-.sidebar-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  padding: 24px 16px;
-  text-align: center;
-}
-
-.sidebar-empty .empty-icon {
-  font-size: 24px;
-}
-
-.sidebar-empty .empty-text {
-  font-size: 12px;
-  color: var(--tf-text-tertiary);
-}
-</style>
+.sidebar-empty .sidebar-empty </style>

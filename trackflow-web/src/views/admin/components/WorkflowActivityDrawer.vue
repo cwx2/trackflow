@@ -282,24 +282,4 @@ watch(() => props.visible, (val) => {
   line-height: 1.5;
 }
 
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 48px 16px;
-  color: var(--text-muted, var(--color-text-3));
-}
-
-.empty-state h4 {
-  margin-top: 12px;
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--text-secondary, var(--color-text-2));
-}
-
-.empty-state p {
-  margin-top: 6px;
-  font-size: 12px;
-}
 </style>

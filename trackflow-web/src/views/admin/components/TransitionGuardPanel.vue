@@ -103,11 +103,13 @@
       </div>
 
       <!-- 空状态 -->
-      <div v-else class="empty-state">
-        <icon-check-circle :size="36" style="color: var(--color-success-6)" />
-        <p class="empty-title">无守卫条件</p>
-        <p class="empty-desc">此转换对满足角色权限的用户始终可见</p>
-      </div>
+      <EmptyState
+        v-else
+        icon="check-circle"
+        title="无守卫条件"
+        description="此转换对满足角色权限的用户始终可见"
+        :compact="true"
+      />
 
       <!-- 添加条件按钮 -->
       <a-button type="dashed" long style="margin-top: 16px" @click="addCondition">
@@ -148,10 +150,11 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import { Message } from '@arco-design/web-vue'
-import { IconPlus, IconDelete, IconCheckCircle } from '@arco-design/web-vue/es/icon'
+import { IconPlus, IconDelete } from '@arco-design/web-vue/es/icon'
 import { workflowApi } from '@/api'
 import type { TransitionConditionItem } from '@/api/workflow'
 import DataContainer from '@/components/base/DataContainer.vue'
+import { EmptyState } from '@/components/base'
 
 /** 内部扩展类型，包含 conditionMode 用于 UI 分支 */
 interface ConditionRow {
@@ -452,27 +455,6 @@ function needsValue(operator: string): boolean {
   padding: 1px 6px;
   border-radius: 3px;
   letter-spacing: 0.5px;
-}
-
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 32px 24px;
-  text-align: center;
-}
-
-.empty-title {
-  margin-top: 10px;
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--text-secondary, var(--color-text-2));
-}
-
-.empty-desc {
-  margin-top: 4px;
-  font-size: 12px;
-  color: var(--text-muted, var(--color-text-4));
 }
 
 .field-hint {

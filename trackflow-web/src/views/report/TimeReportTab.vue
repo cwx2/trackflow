@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="time-report">
     <!-- 顶部工具栏 -->
     <div class="report-toolbar">
@@ -71,11 +71,12 @@
       </div>
 
       <!-- 空状态 -->
-      <div v-else-if="!chartData || chartData.totalMinutes === 0" class="report-empty">
-        <div class="empty-icon">⏱️</div>
-        <h3 class="empty-title">暂无工时数据</h3>
-        <p class="empty-desc">在选定的时间范围内没有找到工时记录。请尝试调整筛选条件。</p>
-      </div>
+      <EmptyState
+        v-else-if="!chartData || chartData.totalMinutes === 0"
+        icon="clock-circle"
+        title="暂无工时数据"
+        description="在选定的时间范围内没有找到工时记录。请尝试调整筛选条件。"
+      />
 
       <!-- 报表主体 -->
       <template v-else>
@@ -189,11 +190,12 @@
       </div>
 
       <!-- 空状态 -->
-      <div v-else-if="!tableData || tableData.totalCount === 0" class="report-empty">
-        <div class="empty-icon">⏱️</div>
-        <h3 class="empty-title">暂无工时数据</h3>
-        <p class="empty-desc">在选定的时间范围内没有找到工时记录。请尝试调整筛选条件。</p>
-      </div>
+      <EmptyState
+        v-else-if="!tableData || tableData.totalCount === 0"
+        icon="clock-circle"
+        title="暂无工时数据"
+        description="在选定的时间范围内没有找到工时记录。请尝试调整筛选条件。"
+      />
 
       <template v-else>
         <!-- 概览 -->
@@ -318,6 +320,7 @@ import {
   IconClockCircle
 } from '@arco-design/web-vue/es/icon'
 import { reportStatisticsApi } from '@/api/reportStatistics'
+import { EmptyState } from '@/components/base'
 import { readChartThemeColors, CHART_PALETTE, SERIES_ACCENT } from '@/utils/chartColors'
 import type { TimeReportData, TimeReportGroupedData } from '@/api/reportStatistics'
 import type { ProjectVO } from '@/api/types'
@@ -784,35 +787,6 @@ defineExpose({ loadData: loadChartData })
 }
 
 .report-loading,
-.report-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 48px 24px;
-  text-align: center;
-}
-
-.empty-icon {
-  font-size: 48px;
-  margin-bottom: 16px;
-}
-
-.empty-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--tf-text-primary);
-  margin: 0 0 8px;
-}
-
-.empty-desc {
-  font-size: 13px;
-  color: var(--tf-text-secondary);
-  margin: 0;
-  max-width: 320px;
-  line-height: 1.5;
-}
-
 /* 概览卡片 */
 .overview-cards {
   display: grid;

@@ -37,11 +37,11 @@
         </template>
         <template #empty>
           <slot name="empty">
-            <div class="admin-data-table__empty">
-              <icon-file class="empty-icon" />
-              <p class="empty-title">{{ emptyTitle || '暂无数据' }}</p>
-              <p v-if="emptyDescription" class="empty-desc">{{ emptyDescription }}</p>
-            </div>
+            <EmptyState
+              icon="file"
+              :title="emptyTitle || '暂无数据'"
+              :description="emptyDescription"
+            />
           </slot>
         </template>
         <template v-if="$slots.expand" #expand-row="slotProps">
@@ -66,9 +66,9 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { IconFile } from '@arco-design/web-vue/es/icon'
 import AdminTableToolbar from './AdminTableToolbar.vue'
 import AdminPagination from './AdminPagination.vue'
+import { EmptyState } from '@/components/base'
 
 export interface AdminDataTableProps {
   // ===== 数据 =====
@@ -238,22 +238,4 @@ function handlePageSizeChange(size: number) {
   gap: 8px;
 }
 
-.admin-data-table__empty .empty-icon {
-  font-size: 40px;
-  color: var(--tf-text-quaternary);
-  margin-bottom: 8px;
-}
-
-.admin-data-table__empty .empty-title {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--tf-text-secondary);
-  margin: 0;
-}
-
-.admin-data-table__empty .empty-desc {
-  font-size: 12px;
-  color: var(--tf-text-tertiary);
-  margin: 0;
-}
 </style>

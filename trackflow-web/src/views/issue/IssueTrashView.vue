@@ -44,21 +44,23 @@
 
     <div class="trash-content">
       <!-- 未选项目时的空状态 -->
-      <div v-if="!selectedProjectId" class="empty-state">
-        <span class="empty-icon"><icon-folder /></span>
-        <h3 class="empty-title">请选择项目</h3>
-        <p class="empty-desc">选择一个项目以查看其回收站中的工单</p>
-      </div>
+      <EmptyState
+        v-if="!selectedProjectId"
+        icon="folder"
+        title="请选择项目"
+        description="选择一个项目以查看其回收站中的工单"
+      />
 
       <!-- 加载中 -->
       <a-spin v-else-if="loading" :loading="true" style="width: 100%; padding: 60px 0;" />
 
       <!-- 空回收站 -->
-      <div v-else-if="trashList.length === 0" class="empty-state">
-        <span class="empty-icon"><icon-check-circle /></span>
-        <h3 class="empty-title">回收站是空的</h3>
-        <p class="empty-desc">该项目中没有已删除的工单</p>
-      </div>
+      <EmptyState
+        v-else-if="trashList.length === 0"
+        icon="check-circle"
+        title="回收站是空的"
+        description="该项目中没有已删除的工单"
+      />
 
       <!-- 回收站列表 -->
       <div v-else class="trash-list">
@@ -134,8 +136,9 @@
 import { ref, computed, onMounted } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { useConfirmDelete } from '@/composables/useConfirmDelete'
-import { IconUndo, IconDelete, IconSettings, IconFolder, IconCheckCircle } from '@arco-design/web-vue/es/icon'
+import { IconUndo, IconDelete, IconSettings } from '@arco-design/web-vue/es/icon'
 import { issueApi, projectApi } from '@/api'
+import { EmptyState } from '@/components/base'
 import { useAuthStore } from '@/stores/auth'
 import { localizeIssueType, localizePriority } from '@/utils/fieldLabels'
 import type { IssueTrashVO } from '@/api/types'

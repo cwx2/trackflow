@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="report-detail">
     <!-- 面包屑导航 -->
     <div class="detail-breadcrumb">
@@ -145,11 +145,11 @@
         </template>
 
         <!-- 无数据 -->
-        <div v-else class="chart-empty">
-          <div class="empty-icon">📊</div>
-          <p class="empty-desc">点击"重新计算"获取最新数据</p>
-          <a-button type="primary" size="small" @click="handleRecalculate">重新计算</a-button>
-        </div>
+        <EmptyState v-else icon="bar-chart" title="暂无数据" description="点击「重新计算」获取最新数据">
+          <template #action>
+            <a-button type="primary" size="small" @click="handleRecalculate">重新计算</a-button>
+          </template>
+        </EmptyState>
       </div>
     </template>
 
@@ -233,6 +233,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
 import { useConfirmDelete } from '@/composables/useConfirmDelete'
 import { reportApi } from '@/api/report'
+import { EmptyState } from '@/components/base'
 import { useAuthStore } from '@/stores/auth'
 import ShareReportModal from './ShareReportModal.vue'
 import ReportChart from './ReportChart.vue'
@@ -704,25 +705,6 @@ function formatRelativeTime(time?: string) {
   gap: 12px;
   color: var(--tf-text-tertiary);
   font-size: 13px;
-}
-
-.chart-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-height: 300px;
-  gap: 12px;
-}
-
-.empty-icon {
-  font-size: 48px;
-}
-
-.empty-desc {
-  font-size: 13px;
-  color: var(--tf-text-secondary);
-  margin: 0;
 }
 
 .matrix-cell {

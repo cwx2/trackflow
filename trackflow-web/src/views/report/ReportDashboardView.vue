@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="report-dashboard">
     <!-- 概览内容 -->
     <div class="overview-content">
@@ -68,11 +68,12 @@
     </div>
 
     <!-- 空状态（数据为空） -->
-    <div v-else-if="!dashboardData" class="dashboard-empty">
-      <div class="empty-icon">📊</div>
-      <h3 class="empty-title">暂无报表数据</h3>
-      <p class="empty-desc">当前选择范围没有工单数据。请尝试切换项目或日期范围。</p>
-    </div>
+    <EmptyState
+      v-else-if="!dashboardData"
+      icon="bar-chart"
+      title="暂无报表数据"
+      description="当前选择范围没有工单数据。请尝试切换项目或日期范围。"
+    />
 
     <!-- 仪表盘主体 -->
     <template v-else-if="dashboardData">
@@ -367,6 +368,7 @@ import {
 import VChart from 'vue-echarts'
 import { IconDownload, IconFile, IconPrinter, IconInfoCircle } from '@arco-design/web-vue/es/icon'
 import { reportStatisticsApi } from '@/api/reportStatistics'
+import { EmptyState } from '@/components/base'
 import { projectApi, sprintApi } from '@/api'
 import type { DashboardData } from '@/api/reportStatistics'
 import type { ProjectVO } from '@/api/types'
@@ -1506,35 +1508,6 @@ function printReport() {
 }
 
 /* 空状态 */
-.dashboard-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 80px 24px;
-  text-align: center;
-}
-
-.empty-icon {
-  font-size: 56px;
-  margin-bottom: 16px;
-}
-
-.empty-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--tf-text-primary);
-  margin: 0 0 8px;
-}
-
-.empty-desc {
-  font-size: 13px;
-  color: var(--tf-text-secondary);
-  margin: 0;
-  max-width: 320px;
-  line-height: 1.5;
-}
-
 /* 解决时间分组明细 */
 .resolution-group-details {
   margin-top: 12px;

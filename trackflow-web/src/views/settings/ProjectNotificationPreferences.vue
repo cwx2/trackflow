@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="project-preferences-section">
     <div class="section-header">
       <div class="section-header-text">
@@ -51,10 +51,7 @@
       <span>加载项目偏好...</span>
     </div>
 
-    <div v-else-if="projectPreferences.length === 0 && !showAddPanel" class="project-empty">
-      <span class="empty-icon">🌐</span>
-      <span class="empty-text">所有项目均使用全局设置</span>
-    </div>
+    <EmptyState v-else-if="projectPreferences.length === 0 && !showAddPanel" icon="language" title="所有项目均使用全局设置" :compact="true" />
 
     <div v-else class="project-list">
       <div
@@ -178,6 +175,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { notificationPreferenceApi, projectApi } from '@/api'
+import { EmptyState } from '@/components/base'
 import type { NotificationPreferenceVO } from '@/api/notificationPreference'
 import type { ProjectVO } from '@/api/types'
 
@@ -411,20 +409,6 @@ function handleProjectPrefChange(item: ProjectPrefItem, field: string, value: bo
   padding: 16px;
   font-size: 12px;
   color: var(--tf-text-tertiary);
-}
-
-.project-empty {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 20px 16px;
-  font-size: 12px;
-  color: var(--tf-text-tertiary);
-}
-
-.empty-icon {
-  font-size: 16px;
-  opacity: 0.5;
 }
 
 /* 项目卡片列表 */

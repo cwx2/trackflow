@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="section">
     <h2 class="section-title">近期活动</h2>
     <div v-if="loading" class="activities-loading">
@@ -16,19 +16,15 @@
         </div>
       </div>
     </div>
-    <div v-else class="activities-empty">
-      <icon-history class="empty-icon" />
-      <p class="empty-title">暂无活动记录</p>
-      <p class="empty-desc">项目成员的操作记录将在此展示</p>
-    </div>
+    <EmptyState v-else icon="calendar" title="暂无活动记录" description="项目成员的操作记录将在此展示" />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { IconHistory } from '@arco-design/web-vue/es/icon'
 import { projectApi } from '@/api'
 import type { ProjectActivityVO } from '@/api/types'
+import { EmptyState } from '@/components/base'
 
 const props = defineProps<{
   projectId: string
@@ -228,23 +224,6 @@ function formatRelativeTime(dateStr: string): string {
 .activities-empty {
   text-align: center;
   padding: 32px 0;
-  color: var(--color-text-4);
-}
-
-.activities-empty .empty-icon {
-  font-size: 32px;
-  margin-bottom: 8px;
-}
-
-.activities-empty .empty-title {
-  margin: 0 0 4px;
-  font-size: 14px;
-  color: var(--color-text-3);
-}
-
-.activities-empty .empty-desc {
-  margin: 0;
-  font-size: 12px;
   color: var(--color-text-4);
 }
 </style>

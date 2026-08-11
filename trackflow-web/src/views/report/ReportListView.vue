@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="report-page">
     <div class="report-header">
       <div class="header-right" v-if="canCreateReport">
@@ -60,29 +60,26 @@
     </div>
 
     <!-- 空状态 -->
-    <div v-else-if="filteredReports.length === 0 && reports.length > 0" class="report-empty">
-      <div class="empty-icon"><icon-search /></div>
-      <h3 class="empty-title">未找到匹配的报表</h3>
-      <p class="empty-desc">
-        {{ searchKeyword ? `没有名称包含"${searchKeyword}"的报表。` : '' }}
-        {{ viewMode === 'mine' ? '你还没有创建任何报表。' : '' }}
-        {{ viewMode === 'shared' ? '还没有其他人共享报表给你。' : '' }}
-        试试调整筛选条件或创建新报表。
-      </p>
-      <a-button v-if="canCreateReport" type="primary" size="small" @click="openCreateModal">
-        创建报表
-      </a-button>
-    </div>
-    <div v-else-if="reports.length === 0" class="report-empty">
-      <div class="empty-icon"><icon-bar-chart /></div>
-      <h3 class="empty-title">暂无报表</h3>
-      <p class="empty-desc">
-        {{ canCreateReport ? '创建第一个报表来跟踪项目进度和工作统计。' : '还没有可查看的报表，请联系项目管理员创建。' }}
-      </p>
-      <a-button v-if="canCreateReport" type="primary" size="small" @click="openCreateModal">
-        创建报表
-      </a-button>
-    </div>
+    <EmptyState
+      v-else-if="filteredReports.length === 0 && reports.length > 0"
+      icon="search"
+      title="未找到匹配的报表"
+      :description="[searchKeyword ? `没有名称包含「${searchKeyword}」的报表。` : '', viewMode === 'mine' ? '你还没有创建任何报表。' : '', viewMode === 'shared' ? '还没有其他人共享报表给你。' : '', '试试调整筛选条件或创建新报表。'].filter(Boolean).join(' ')"
+    >
+      <template #action>
+        <a-button v-if="canCreateReport" type="primary" size="small" @click="openCreateModal">创建报表</a-button>
+      </template>
+    </EmptyState>
+    <EmptyState
+      v-else-if="reports.length === 0"
+      icon="bar-chart"
+      title="暂无报表"
+      :description="canCreateReport ? '创建第一个报表来跟踪项目进度和工作统计。' : '还没有可查看的报表，请联系项目管理员创建。'"
+    >
+      <template #action>
+        <a-button v-if="canCreateReport" type="primary" size="small" @click="openCreateModal">创建报表</a-button>
+      </template>
+    </EmptyState>
 
     <!-- 报表列表 -->
     <div v-else class="report-grid">
@@ -332,11 +329,12 @@ import { ref, reactive, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { useConfirmDelete } from '@/composables/useConfirmDelete'
 import { reportApi } from '@/api/report'
+import { EmptyState } from '@/components/base'
 import { projectApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import ShareReportModal from './ShareReportModal.vue'
 import ReportChart from './ReportChart.vue'
-import { IconPlus, IconSearch, IconBarChart, IconEdit, IconShareAlt, IconCopy, IconDownload, IconPrinter, IconDelete, IconUser } from '@arco-design/web-vue/es/icon'
+import { IconPlus, IconEdit, IconShareAlt, IconCopy, IconDownload, IconPrinter, IconDelete, IconUser } from '@arco-design/web-vue/es/icon'
 import type { ReportDefinitionVO, ReportDataVO, UpdateReportParams } from '@/api/report'
 import type { ProjectVO } from '@/api/types'
 
@@ -1029,35 +1027,6 @@ onBeforeUnmount(() => {
 }
 
 /* 空状态 */
-.report-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 64px 24px;
-  text-align: center;
-}
-
-.empty-icon {
-  font-size: 48px;
-  margin-bottom: 16px;
-}
-
-.empty-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--tf-text-primary);
-  margin: 0 0 8px;
-}
-
-.empty-desc {
-  font-size: 13px;
-  color: var(--tf-text-secondary);
-  margin: 0 0 24px;
-  max-width: 320px;
-  line-height: 1.5;
-}
-
 /* 报表网格 */
 .report-grid {
   display: grid;

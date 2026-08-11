@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="workspace-tab">
     <!-- 分配给我的工单 -->
     <div class="workspace-section">
@@ -37,11 +37,7 @@
           </div>
         </div>
 
-        <div v-else-if="!assignedLoading" class="empty-state">
-          <icon-check-circle-fill class="empty-icon" />
-          <p class="empty-text">没有分配给你的待办工单</p>
-          <p class="empty-hint">当有工单分配给你时，会显示在这里</p>
-        </div>
+        <EmptyState v-else-if="!assignedLoading" icon="check-circle" title="没有分配给你的待办工单" description="当有工单分配给你时，会显示在这里" :compact="true" />
       </a-spin>
 
       <div v-if="assignedTotal > assignedIssues.length" class="view-all">
@@ -88,11 +84,7 @@
           </div>
         </div>
 
-        <div v-else-if="!reportedLoading" class="empty-state">
-          <icon-file class="empty-icon" />
-          <p class="empty-text">你还没有报告过工单</p>
-          <p class="empty-hint">创建工单后，会在这里显示</p>
-        </div>
+        <EmptyState v-else-if="!reportedLoading" icon="file" title="你还没有报告过工单" description="创建工单后，会在这里显示" :compact="true" />
       </a-spin>
 
       <div v-if="reportedTotal > reportedIssues.length" class="view-all">
@@ -108,6 +100,7 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { issueApi } from '@/api/issue'
+import { EmptyState } from '@/components/base'
 import type { IssueVO } from '@/api/types'
 
 const router = useRouter()
@@ -356,33 +349,6 @@ onMounted(() => {
 }
 
 /* ===== Empty State ===== */
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 32px 16px;
-  gap: 8px;
-}
-
-.empty-icon {
-  font-size: 28px;
-  color: var(--tf-text-quaternary);
-  opacity: 0.5;
-}
-
-.empty-text {
-  font-size: 13px;
-  color: var(--tf-text-secondary);
-  margin: 0;
-}
-
-.empty-hint {
-  font-size: 11px;
-  color: var(--tf-text-tertiary);
-  margin: 0;
-}
-
 /* ===== View All Link ===== */
 .view-all {
   margin-top: 8px;

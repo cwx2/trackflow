@@ -552,10 +552,6 @@ onMounted(() => {
   padding: 48px 24px;
 }
 
-.empty-icon { font-size: 32px; margin-bottom: 12px; }
-.empty-title { font-size: 16px; font-weight: 600; color: var(--tf-text-primary); margin: 0 0 8px 0; }
-.empty-desc { font-size: 13px; color: var(--tf-text-tertiary); margin: 0 0 16px 0; }
-
 .attr-cards {
   display: flex;
   flex-direction: column;

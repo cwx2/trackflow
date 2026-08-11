@@ -37,10 +37,7 @@
 
     <!-- 按项目分组视图 -->
     <template v-if="groupBy === 'project'">
-      <div v-if="filteredByProject.length === 0" class="empty-state">
-        <icon-folder />
-        <span>没有匹配的项目</span>
-      </div>
+      <EmptyState v-if="filteredByProject.length === 0" icon="folder" title="没有匹配的项目" :compact="true" />
       <div v-else class="project-groups">
         <div
           v-for="project in filteredByProject"
@@ -187,10 +184,7 @@
 
     <!-- 按字段分组视图 -->
     <template v-else>
-      <div v-if="filteredByField.length === 0" class="empty-state">
-        <icon-file />
-        <span>没有自定义字段</span>
-      </div>
+      <EmptyState v-if="filteredByField.length === 0" icon="file" title="没有自定义字段" :compact="true" />
       <div v-else class="field-groups">
         <div
           v-for="item in filteredByField"
@@ -499,11 +493,12 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
-import { IconSearch, IconRight, IconPlus, IconFolder, IconFile, IconLeft, IconDelete, IconInfoCircle } from '@arco-design/web-vue/es/icon'
+import { IconSearch, IconRight, IconPlus, IconLeft, IconDelete, IconInfoCircle } from '@arco-design/web-vue/es/icon'
 import { Message, Modal } from '@arco-design/web-vue'
 import { customFieldApi } from '@/api'
 import type { ProjectFieldsVO, FieldSummaryVO, CustomFieldDefinitionVO } from '@/api/types'
 import DataContainer from '@/components/base/DataContainer.vue'
+import { EmptyState } from '@/components/base'
 
 // Tooltip 提示文本（避免 HTML attribute 中的引号问题）
 const tooltipRequiredText = '设置为「不允许为空」+ 无默认值时，用户创建工单必须主动选择（参考 YouTrack "Set value"）'
@@ -960,20 +955,6 @@ defineExpose({ refresh: loadData })
   display: flex;
   justify-content: center;
   padding: 48px 0;
-}
-
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  padding: 48px 0;
-  color: var(--tf-text-tertiary);
-  font-size: 13px;
-}
-.empty-state svg {
-  font-size: 32px;
-  opacity: 0.4;
 }
 
 .project-groups,

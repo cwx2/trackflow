@@ -56,17 +56,18 @@
         :class="{ 'column-empty-state--drop-hint': isDragging && dropAllowed }"
       >
         <template v-if="isDragging && dropAllowed">
-          <div class="column-empty-icon">📥</div>
-          <div class="column-empty-text">释放以移动到此状态</div>
+          <EmptyState icon-emoji="📥" title="释放以移动到此状态" :compact="true" />
         </template>
         <template v-else-if="isDragging && !dropAllowed">
-          <div class="column-empty-icon">🚫</div>
-          <div class="column-empty-text">不允许转换到此状态</div>
+          <EmptyState icon-emoji="🚫" title="不允许转换到此状态" :compact="true" />
         </template>
         <template v-else>
-          <div class="column-empty-icon">📭</div>
-          <div class="column-empty-text">该状态下暂无工单</div>
-          <div class="column-empty-hint">{{ isClosed ? '拖拽工单到此列' : '拖拽工单到此列或创建新工单' }}</div>
+          <EmptyState
+            icon-emoji="📭"
+            title="该状态下暂无工单"
+            :description="isClosed ? '拖拽工单到此列' : '拖拽工单到此列或创建新工单'"
+            :compact="true"
+          />
         </template>
       </div>
 
@@ -117,6 +118,7 @@
  * - 快速创建卡片表单（通过 add-card slot 委托）
  */
 import type { IssueVO, BoardCardVO } from '@/api/types'
+import { EmptyState } from '@/components/base'
 
 type BoardIssue = IssueVO | BoardCardVO
 

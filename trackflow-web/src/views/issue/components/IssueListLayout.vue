@@ -44,11 +44,12 @@
       </a-button>
     </div>
 
-    <div v-else-if="issues.length === 0" class="list-empty">
-      <icon-search class="empty-icon" />
-      <p class="empty-title">暂无工单</p>
-      <p class="empty-desc">尝试调整筛选条件或创建新的工单</p>
-    </div>
+    <EmptyState
+      v-else-if="issues.length === 0"
+      icon="search"
+      title="暂无工单"
+      description="尝试调整筛选条件或创建新的工单"
+    />
 
     <div v-else class="list-items" ref="listContainerRef">
       <!-- Manually sorted section -->
@@ -180,9 +181,10 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
-import { IconDown, IconSearch, IconDragDotVertical, IconCloseCircle, IconRefresh } from '@arco-design/web-vue/es/icon'
+import { IconDown, IconDragDotVertical, IconCloseCircle, IconRefresh } from '@arco-design/web-vue/es/icon'
 import Sortable from 'sortablejs'
 import type { IssueVO, SprintVO } from '@/api/types'
+import { EmptyState } from '@/components/base'
 import type { DensityLevel, StructureMode } from '../composables'
 import type { SortState } from '../composables/useIssueList'
 import IssueListItem from './IssueListItem.vue'
@@ -493,25 +495,6 @@ onUnmounted(() => {
   justify-content: center;
   padding: 60px 20px;
   text-align: center;
-}
-
-.list-empty .empty-icon {
-  font-size: 32px;
-  color: var(--tf-text-quaternary, var(--color-text-4));
-  margin-bottom: 12px;
-}
-
-.list-empty .empty-title {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--tf-text-secondary, var(--color-text-2));
-  margin: 0 0 4px;
-}
-
-.list-empty .empty-desc {
-  font-size: 12px;
-  color: var(--tf-text-tertiary, var(--color-text-3));
-  margin: 0;
 }
 
 /* Error state */
