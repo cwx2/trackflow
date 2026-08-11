@@ -285,7 +285,7 @@ import { Control, MiniMap, Snapshot } from '@logicflow/extension'
 import { automationApi, type WorkflowDefinition, type GlobalVariable, type ExecutionDetailVO } from '@/api'
 import { DRAGGABLE_NODES, findNodeContractDrift, getNodeDefinition } from './node-definitions'
 import { validateExecutableWorkflow } from './workflow-validator'
-import { buildWorkflowDefinition, getWorkflowNodeTitle, migrateWorkflowDefinition, normalizeCanvasNode } from './workflow-definition'
+import { buildWorkflowDefinition, createInitialWorkflowDefinition, getWorkflowNodeTitle, migrateWorkflowDefinition, normalizeCanvasNode } from './workflow-definition'
 import { FlowEdge } from './graph/edges/FlowEdge'
 import { ExecutionFlowAnimator, type WorkflowCanvasEdge } from './graph/edges/ExecutionFlowAnimator'
 import { registerAllNodes } from './graph/nodes/index'
@@ -1037,7 +1037,12 @@ async function loadWorkflow() {
       const raw = JSON.parse(res.data.definition || '{}')
 
       // ── 兼容旧格式（variables/nodes[].data/edges[].source）和新格式（globalVariables/nodes[].inputs/edges[].sourceNodeId）
-      const def: WorkflowDefinition = migrateWorkflowDefinition(raw)
+      let def: WorkflowDefinition = migrateWorkflowDefinition(raw)
+      // 兼容旧版本创建出的空画布。开始/结束是系统节点，不能要求用户自己添加。
+      if (def.nodes.length === 0) {
+        def = createInitialWorkflowDefinition()
+        Message.info('已为该空白工作流补齐开始和结束节点，保存后将作为流程骨架保留。')
+      }
       globalVariables.value = def.globalVariables || {}
       
       // 转换为 LogicFlow 数据格式

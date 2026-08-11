@@ -53,6 +53,48 @@ export function migrateWorkflowDefinition(raw: any): WorkflowDefinition {
   }
 }
 
+/**
+ * 空白工作流的系统骨架。
+ *
+ * 开始与结束不是可从节点库任意拖入的业务节点：一个工作流只能有一个开始节点，
+ * 但可以在分支中拥有多个结束节点。新建和历史空画布都从这条可运行基线开始。
+ */
+export function createInitialWorkflowDefinition(): WorkflowDefinition {
+  const start = upgradeNodeContract({
+    id: 'start',
+    type: 'start',
+    position: { x: 260, y: 260 },
+    nodeMeta: {},
+    inputs: [],
+    outputs: [],
+    config: {},
+  })
+  const end = upgradeNodeContract({
+    id: 'end',
+    type: 'end',
+    position: { x: 700, y: 260 },
+    nodeMeta: {},
+    inputs: [],
+    outputs: [],
+    config: {},
+  })
+  end.inputs = end.inputs.map((input: any) => input.name === 'result'
+    ? { ...input, value: { type: 'ref', nodeId: 'start', outputName: 'trigger' } }
+    : input)
+
+  return {
+    globalVariables: {},
+    nodes: [start, end],
+    edges: [{
+      id: 'start-to-end',
+      sourceNodeId: 'start',
+      sourcePortName: 'trigger',
+      targetNodeId: 'end',
+      targetPortName: 'result',
+    }],
+  } as WorkflowDefinition
+}
+
 /** 使用节点注册表重建端口快照，杜绝模板把过期端口重新写回服务端。 */
 export function upgradeNodeContract(node: any) {
   const definition = getNodeDefinition(node.type)
