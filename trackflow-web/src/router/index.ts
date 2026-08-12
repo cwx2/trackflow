@@ -161,13 +161,13 @@ const routes = [
           {
             path: 'time',
             name: 'TimeReport',
-            component: () => import('@/views/report/TimeReportPage.vue'),
+            component: () => import('@/views/report/TimeReportView.vue'),
             meta: { title: '时间报表' }
           },
           {
             path: 'estimation',
             name: 'EstimationReport',
-            component: () => import('@/views/report/EstimationReportPage.vue'),
+            component: () => import('@/views/report/EstimationReportView.vue'),
             meta: { title: '估算报表' }
           },
           {
@@ -191,7 +191,7 @@ const routes = [
       {
         path: 'admin/workflow',
         name: 'WorkflowEditor',
-        component: () => import('@/views/admin/WorkflowEditor.vue'),
+        component: () => import('@/views/admin/WorkflowEditorView.vue'),
         meta: { requiresAdmin: true, requiredPermission: 'system:manage_roles', title: '工作流编辑' }
       },
       {
@@ -201,7 +201,7 @@ const routes = [
       {
         path: 'admin/users',
         name: 'UserManagement',
-        component: () => import('@/views/admin/UserManagement.vue'),
+        component: () => import('@/views/admin/UserManagementView.vue'),
         meta: { requiresAdmin: true, requiredPermission: 'system:manage_users', title: '用户管理' }
       },
       {
@@ -213,13 +213,13 @@ const routes = [
       {
         path: 'admin/roles',
         name: 'RoleManagement',
-        component: () => import('@/views/admin/RoleManagement.vue'),
+        component: () => import('@/views/admin/RoleManagementView.vue'),
         meta: { requiresAdmin: true, requiredPermission: 'system:manage_roles', title: '角色管理' }
       },
       {
         path: 'admin/organizations',
         name: 'OrgManagement',
-        component: () => import('@/views/admin/OrgManagement.vue'),
+        component: () => import('@/views/admin/OrgManagementView.vue'),
         meta: { requiresAdmin: true, requiredPermission: 'system:manage_orgs', title: '组织管理' }
       },
       {
@@ -231,13 +231,13 @@ const routes = [
       {
         path: 'admin/groups',
         name: 'GroupManagement',
-        component: () => import('@/views/admin/GroupManagement.vue'),
+        component: () => import('@/views/admin/GroupManagementView.vue'),
         meta: { requiresAdmin: true, requiredPermission: 'system:manage_groups', title: '群组管理' }
       },
       {
         path: 'admin/custom-fields',
         name: 'CustomFieldManagement',
-        component: () => import('@/views/admin/CustomFieldManage.vue'),
+        component: () => import('@/views/admin/CustomFieldManageView.vue'),
         meta: { requiresAdmin: true, requiredPermission: 'system:manage_roles', title: '自定义字段' }
       },
       {
@@ -249,7 +249,7 @@ const routes = [
       {
         path: 'admin/time-tracking',
         name: 'TimeTrackingSettings',
-        component: () => import('@/views/admin/TimeTrackingSettings.vue'),
+        component: () => import('@/views/admin/TimeTrackingSettingsView.vue'),
         meta: { requiresAdmin: true, requiredPermission: 'system:manage_roles', title: '工时设置' }
       },
       {
@@ -261,37 +261,37 @@ const routes = [
       {
         path: 'admin/notifications',
         name: 'NotificationManagement',
-        component: () => import('@/views/admin/NotificationManagement.vue'),
+        component: () => import('@/views/admin/NotificationManagementView.vue'),
         meta: { requiresAdmin: true, requiredPermission: 'system:manage_roles', title: '通知管理' }
       },
       {
         path: 'admin/rules',
         name: 'RuleManagement',
-        component: () => import('@/views/admin/RuleManagement.vue'),
+        component: () => import('@/views/admin/RuleManagementView.vue'),
         meta: { requiresAdmin: true, requiredPermission: 'system:manage_roles', title: '规则管理' }
       },
       {
         path: 'admin/webhooks',
         name: 'WebhookManagement',
-        component: () => import('@/views/admin/WebhookManagement.vue'),
+        component: () => import('@/views/admin/WebhookManagementView.vue'),
         meta: { requiresAdmin: true, requiredPermission: 'system:manage_roles', title: 'Webhook 管理' }
       },
       {
         path: 'admin/action-rules',
         name: 'ActionRuleManagement',
-        component: () => import('@/views/admin/ActionRuleManagement.vue'),
+        component: () => import('@/views/admin/ActionRuleManagementView.vue'),
         meta: { requiresAdmin: true, requiredPermission: 'system:manage_settings', title: '动作规则' }
       },
       {
         path: 'admin/integrations',
         name: 'IntegrationManagement',
-        component: () => import('@/views/admin/IntegrationManagement.vue'),
+        component: () => import('@/views/admin/IntegrationManagementView.vue'),
         meta: { requiresAdmin: true, requiredPermission: 'system:manage_roles', title: '集成管理' }
       },
       {
         path: 'admin/link-types',
         name: 'LinkTypeManagement',
-        component: () => import('@/views/admin/LinkTypeManagement.vue'),
+        component: () => import('@/views/admin/LinkTypeManagementView.vue'),
         meta: { requiresAdmin: true, requiredPermission: 'system:manage_settings', title: '链接类型' }
       },
       {

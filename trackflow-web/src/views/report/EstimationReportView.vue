@@ -1,12 +1,12 @@
 <template>
-  <div class="time-report-page">
-    <TimeReportTab :projects="projects" />
+  <div class="estimation-report-page">
+    <EstimationReportTab :projects="projects" />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import TimeReportTab from './TimeReportTab.vue'
+import EstimationReportTab from './components/EstimationReportTab.vue'
 import { projectApi } from '@/api'
 import type { ProjectVO } from '@/api/types'
 
@@ -23,7 +23,7 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.time-report-page {
+.estimation-report-page {
   height: 100%;
   overflow-y: auto;
   padding: 24px 32px;

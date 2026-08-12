@@ -47,7 +47,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { reportApi } from '@/api/report'
 import type { ReportDefinitionVO } from '@/api/report'
-import ReportSidebar from './ReportSidebar.vue'
+import ReportSidebar from './components/ReportSidebar.vue'
 
 const route = useRoute()
 
