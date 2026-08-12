@@ -1,0 +1,4 @@
+﻿src/components/admin/index.ts(7,15): error TS2614: Module '"*.vue"' has no exported member 'StatItem'. Did you mean to use 'import StatItem from "*.vue"' instead?
+src/components/base/index.ts(13,15): error TS2614: Module '"*.vue"' has no exported member 'ShareTargetItem'. Did you mean to use 'import ShareTargetItem from "*.vue"' instead?
+src/components/base/index.ts(13,32): error TS2614: Module '"*.vue"' has no exported member 'PermissionOption'. Did you mean to use 'import PermissionOption from "*.vue"' instead?
+src/views/issue/composables/useIssueDetailActions.ts(23,15): error TS2614: Module '"*.vue"' has no exported member 'StatusInfo'. Did you mean to use 'import StatusInfo from "*.vue"' instead?
