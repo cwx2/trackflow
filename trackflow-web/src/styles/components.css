@@ -46,18 +46,7 @@
   background: var(--tf-bg-hover) !important;
 }
 
-/* 操作列（最后一列）左侧竖线分隔 — 全局自动生效，无需在每个页面单独加 class */
-.arco-table-td:last-child,
-.arco-table-th:last-child {
-  border-left: 1px solid var(--tf-border) !important;
-}
 
-/* 操作列 cell 减小水平 padding，让按钮有足够空间 */
-.arco-table-td:last-child .arco-table-cell,
-.arco-table-th:last-child .arco-table-cell {
-  padding-left: 8px !important;
-  padding-right: 8px !important;
-}
 
 /* ===== a-tabs 主题覆盖 ===== */
 /*

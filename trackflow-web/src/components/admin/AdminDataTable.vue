@@ -321,6 +321,19 @@ function handlePageSizeChange(size: number) {
   cursor: grab;
 }
 
+/* 操作列（最后一列）左侧竖线分隔，仅限管理表格 */
+.admin-data-table__body :deep(.arco-table-td:last-child),
+.admin-data-table__body :deep(.arco-table-th:last-child) {
+  border-left: 1px solid var(--tf-border) !important;
+}
+
+/* 操作列 cell 减小水平 padding */
+.admin-data-table__body :deep(.arco-table-td:last-child .arco-table-cell),
+.admin-data-table__body :deep(.arco-table-th:last-child .arco-table-cell) {
+  padding-left: 8px !important;
+  padding-right: 8px !important;
+}
+
 /* 右键菜单 */
 .admin-ctx-menu {
   position: fixed;
