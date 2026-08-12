@@ -17,6 +17,16 @@
       <slot />
     </div>
 
+    <!-- 重置按钮（有筛选器时显示） -->
+    <a-button
+      v-if="$slots.default && showReset"
+      size="small"
+      type="secondary"
+      @click="$emit('reset')"
+    >
+      重置
+    </a-button>
+
     <!-- 弹性间隔 -->
     <div class="admin-toolbar-spacer" />
 
@@ -27,10 +37,14 @@
       </div>
     </Transition>
 
-    <!-- 右侧自定义区域 -->
+    <!-- 右侧：自定义 + 图标操作按钮组 -->
     <div v-if="$slots.right || showRefresh" class="admin-toolbar-right">
       <slot name="right" />
-      <!-- 内置刷新按钮 -->
+
+      <!-- 分隔线 -->
+      <div v-if="showRefresh" class="toolbar-divider" />
+
+      <!-- 刷新按钮 -->
       <a-tooltip v-if="showRefresh" content="刷新">
         <a-button
           size="small"
@@ -60,18 +74,22 @@ withDefaults(defineProps<{
   showRefresh?: boolean
   /** 刷新按钮是否 loading */
   refreshLoading?: boolean
+  /** 是否显示重置按钮（有筛选器时默认 true） */
+  showReset?: boolean
 }>(), {
   searchPlaceholder: '搜索...',
   searchWidth: '280px',
   selectedCount: 0,
   showRefresh: false,
   refreshLoading: false,
+  showReset: true,
 })
 
 defineEmits<{
   'search': [value: string]
   'clear': []
   'refresh': []
+  'reset': []
 }>()
 </script>
 
@@ -80,10 +98,11 @@ defineEmits<{
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 0;
+  padding: 12px 16px;
   flex-shrink: 0;
   flex-wrap: wrap;
-  min-height: 44px;
+  min-height: 52px;
+  border-bottom: 1px solid var(--tf-border-light);
 }
 
 .admin-toolbar-filters {
@@ -107,11 +126,23 @@ defineEmits<{
 .admin-toolbar-right {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+}
+
+.toolbar-divider {
+  width: 1px;
+  height: 16px;
+  background: var(--tf-border-light);
+  flex-shrink: 0;
 }
 
 .toolbar-icon-btn {
-  padding: 0 7px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* 批量操作区淡入动画 */
@@ -125,3 +156,4 @@ defineEmits<{
   transform: translateX(8px);
 }
 </style>
+

@@ -5,13 +5,16 @@
       v-if="showToolbar !== false"
       :model-value="internalSearch"
       :search-placeholder="searchPlaceholder"
+      :search-width="searchWidth"
       :selected-count="internalSelectedKeys?.length || 0"
       :show-refresh="showRefresh"
       :refresh-loading="refreshLoading"
+      :show-reset="showReset"
       @update:model-value="internalSearch = $event"
       @search="handleSearch"
       @clear="handleClear"
       @refresh="$emit('refresh')"
+      @reset="$emit('reset')"
     >
       <slot name="toolbar-filters" />
       <template #batch-actions="slotProps">
@@ -97,8 +100,12 @@ export interface AdminDataTableProps {
   searchKeyword?: string
   /** 搜索框占位符 */
   searchPlaceholder?: string
+  /** 搜索框宽度 */
+  searchWidth?: string | number
   /** 是否显示工具栏（默认 true） */
   showToolbar?: boolean
+  /** 是否显示重置按钮（默认 true） */
+  showReset?: boolean
 
   // ===== 行选择 =====
   /** 已选中的行 key 列表（支持 v-model） */
@@ -130,11 +137,12 @@ const props = withDefaults(defineProps<AdminDataTableProps>(), {
   searchKeyword: '',
   searchPlaceholder: '搜索...',
   showToolbar: true,
+  showReset: true,
   selectedKeys: () => [],
   selectable: false,
   emptyTitle: '暂无数据',
   emptyDescription: '',
-  size: 'small',
+  size: 'medium',
   bordered: false,
   showRefresh: false,
   refreshLoading: false,
@@ -150,6 +158,7 @@ const emit = defineEmits<{
   'search': [keyword: string]
   'row-click': [record: any]
   'refresh': []
+  'reset': []
 }>()
 
 // ===== 内部双向绑定 =====
@@ -209,7 +218,7 @@ function handlePageSizeChange(size: number) {
   min-height: 0;
   background: var(--tf-bg-surface);
   border: 1px solid var(--tf-border);
-  border-radius: 6px;
+  border-radius: 8px;
   overflow: hidden;
 }
 
@@ -219,12 +228,17 @@ function handlePageSizeChange(size: number) {
   overflow-y: auto;
 }
 
-/* Make table header sticky within the scroll container */
+/* 表头背景稍深，增加层次感 */
 .admin-data-table__body :deep(.arco-table-th) {
   position: sticky;
   top: 0;
   z-index: 2;
-  background: var(--tf-bg-surface);
+  background: var(--tf-bg-body);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--tf-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
 }
 
 /* Override Arco's internal scrollbar containers that break sticky */
@@ -239,13 +253,4 @@ function handlePageSizeChange(size: number) {
 .admin-data-table__body :deep(.arco-table-content-scroll-x) {
   overflow: visible !important;
 }
-
-.admin-data-table__empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 48px 24px;
-  gap: 8px;
-}
-
 </style>
