@@ -291,7 +291,7 @@ function handlePageSizeChange(size: number) {
 .admin-data-table__body {
   flex: 1;
   min-height: 0;
-  overflow: hidden;
+  overflow-y: auto;
 }
 
 /* 表头样式 */
