@@ -199,7 +199,6 @@ export function useBoardColumns(deps: ColumnDeps) {
     return allColumnConfigs.value.find(c => c.statusId === statusId)
   }
 
-  function getWipMin(statusId: string): number | null { return getColumnConfig(statusId)?.wipMin ?? null }
   function getWipMax(statusId: string): number | null { return getColumnConfig(statusId)?.wipMax ?? null }
 
   function getWipWarning(statusId: string): 'wip-over' | 'wip-under' | null {

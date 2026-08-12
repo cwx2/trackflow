@@ -7,7 +7,7 @@
       connectionDragKind ? `is-connecting-${connectionDragKind}` : '',
     ]"
     :style="{ '--node-color': nodeMeta.color }"
-    @click.stop="onNodeClick"
+    @click.stop="props.onNodeClick?.()"
   >
     <!-- ── 标题区 ── -->
     <div class="node-header">
@@ -206,10 +206,6 @@ const TYPE_LABELS: Record<string, string> = {
 }
 function typeLabel(t?: string) {
   return t ? (TYPE_LABELS[t] || t) : ''
-}
-
-function onNodeClick() {
-  props.onNodeClick?.()
 }
 </script>
 

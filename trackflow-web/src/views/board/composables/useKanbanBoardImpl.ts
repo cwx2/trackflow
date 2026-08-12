@@ -1,7 +1,7 @@
 ﻿// @ts-nocheck
 // Kanban Board Implementation — full business logic orchestration.
 // Public API is in useKanbanBoard.ts; types are in types.ts.
-import { ref, shallowRef, computed, watch, onMounted, onUnmounted, h, nextTick } from 'vue'
+import { ref, shallowRef, computed, watch, onMounted, h, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { Message, Modal, Notification } from '@arco-design/web-vue'
 import { issueApi, sprintApi, boardApi } from '@/api'
@@ -300,21 +300,6 @@ function patchIssue(issueId: string, patch: Partial<BoardIssue>): BoardIssue | n
   updated[idx] = { ...updated[idx], ...patch }
   issues.value = updated
   return updated[idx]
-}
-
-/**
- * 通过回调函数对单张卡片做原地修改，修改完成后替换数组引用触发 shallowRef 视图更新。
- * 适用于复杂的乐观更新 + 回滚场景（drag 状态机、WIP 确认流程）。
- */
-function mutateIssue(issueId: string, mutateFn: (issue: BoardIssue) => void): BoardIssue | null {
-  const idx = issues.value.findIndex(i => i.id === issueId)
-  if (idx === -1) return null
-  const copy = { ...issues.value[idx] }
-  mutateFn(copy)
-  const updated = [...issues.value]
-  updated[idx] = copy
-  issues.value = updated
-  return copy
 }
 
 /**
@@ -1418,11 +1403,6 @@ const showSprintModeNoActiveState = computed(() =>
   !isSearchActive.value
 )
 
-/** 跳转到迭代管理页面 */
-function goToSprints() {
-  router.push({ name: 'Sprints' })
-}
-
 /** 跳转到迭代详情页（保持项目上下文） */
 function goToSprintDetail() {
   const query: Record<string, string> = {}
@@ -1441,11 +1421,6 @@ function formatSprintDateRange(startDate?: string, endDate?: string): string {
   }
   if (!endDate) return formatShort(startDate) + ' 开始'
   return `${formatShort(startDate)} - ${formatShort(endDate)}`
-}
-
-/** 打开看板设置到基本设置标签页 */
-function openSettingsToGeneral() {
-  showSettings.value = true
 }
 
 function onProjectChange() {
@@ -1515,16 +1490,8 @@ const showSettings = ref(false)
 // ===== 克隆看板 =====
 const showCloneModal = ref(false)
 
-/** 当前看板显示名称（用于克隆弹窗） */
-const currentBoardDisplayName = computed(() => displayBoardName.value || currentProjectName.value || '看板')
-
 function openCloneModal() {
   showCloneModal.value = true
-}
-
-function onBoardCloned(newProjectId: string) {
-  // 克隆成功后切换到新看板
-  selectedProject.value = newProjectId
 }
 
 // 看板图表面板
@@ -1708,13 +1675,6 @@ watch(() => authStore.user?.userId, (newUserId, oldUserId) => {
 // 隐藏工单总数
 const hiddenIssueTotalCount = computed(() => {
   return hiddenIssueColumns.value.reduce((sum, c) => sum + (c.issueCount || 0), 0)
-})
-
-// 隐藏列详情文字（状态名:数量）
-const hiddenIssueColumnsDetail = computed(() => {
-  return hiddenIssueColumns.value
-    .map(c => `${c.statusName} ${c.issueCount || 0}个`)
-    .join('、')
 })
 
 /**
@@ -1982,10 +1942,6 @@ function getColumnConfig(statusId: string): BoardColumnVO | undefined {
   return allColumnConfigs.value.find(c => c.statusId === statusId)
 }
 
-function getWipMin(statusId: string): number | null {
-  return getColumnConfig(statusId)?.wipMin ?? null
-}
-
 function getWipMax(statusId: string): number | null {
   return getColumnConfig(statusId)?.wipMax ?? null
 }
@@ -2031,18 +1987,6 @@ function getWipTooltip(statusId: string): string {
 }
 
 /**
- * 获取列的预估工时总和（从列配置数据中读取）
- */
-function getColumnEstimation(statusId: string): string {
-  const config = getColumnConfig(statusId)
-  if (!config || !config.totalEstimation) return ''
-  // 格式化：去除尾部多余的零
-  const val = Number(config.totalEstimation)
-  if (val <= 0) return ''
-  return val % 1 === 0 ? String(val) : val.toFixed(1)
-}
-
-/**
  * 获取看板总预估工时（所有可见列的 totalEstimation 总和）
  */
 const boardTotalEstimation = computed(() => {
@@ -2056,19 +2000,7 @@ const boardTotalEstimation = computed(() => {
   return total
 })
 
-function expandColumn(statusId: string) {
-  collapsedColumns.value.delete(statusId)
-  expandedEmptyColumns.value.add(statusId)
-  saveCollapsedColumnsState()
-}
-
-function collapseColumn(statusId: string) {
-  collapsedColumns.value.add(statusId)
-  expandedEmptyColumns.value.delete(statusId)
-  saveCollapsedColumnsState()
-}
-
-function priorityIcon(priority: string): string {
+function priorityIcon(_priority: string): string {
   // Emoji removed; swimlane labels use plain text only.
   // KanbanCard renders color dots directly from issue.priorityColor.
   return ''
@@ -3116,9 +3048,7 @@ async function onBatchDelete() {
 // ===== 数据加载（委托到 useBoardData composable） =====
 const {
   projects, projectLoadState, loadProjects,
-  loadStatuses, loadBoardColumns, loadCardConfig, loadSwimlaneConfig,
-  loadColumnMerges, loadTransitionableStatuses, loadSprints,
-  loadBoardBehavior, loadChartConfig, loadProjectMembers,
+  loadStatuses,
   loadBoard, loadIssues, onSettingsSaved
 } = useBoardData({
   selectedProject, selectedSprint, keyword, issues, statuses, sprints,
