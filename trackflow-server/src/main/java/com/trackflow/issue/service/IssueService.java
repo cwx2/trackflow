@@ -873,11 +873,16 @@ public class IssueService {
             }
         }
         if (dto.getSprintId() != null) {
-            // Sprint 修改需要 sprint:edit 权限（仅 project_admin 具有）
-            if (!permissionService.hasPermission(currentUserId, issue.getProjectId(), "sprint:edit")) {
+            // 修改工单所属 Sprint：接受 sprint:edit 或任意 issue:edit 系列权限
+            // sprint:edit 是 Sprint 管理权限（project_admin），issue:edit 是工单编辑权限（developer+）
+            boolean canEditIssueSprint = permissionService.hasPermission(currentUserId, issue.getProjectId(), "sprint:edit")
+                    || permissionService.hasPermission(currentUserId, issue.getProjectId(), "issue:edit")
+                    || permissionService.hasPermission(currentUserId, issue.getProjectId(), "issue:edit_own")
+                    || permissionService.hasPermission(currentUserId, issue.getProjectId(), "issue:edit_assigned");
+            if (!canEditIssueSprint) {
                 // 权限不足时跳过 Sprint 字段并收集警告（不阻塞其他合法字段更新）
-                warnings.add("Sprint 修改被跳过：需要 sprint:edit 权限");
-                log.info("Issue {} sprint update skipped: user {} lacks sprint:edit permission on project {}",
+                warnings.add("Sprint 修改被跳过：需要 issue:edit 或 sprint:edit 权限");
+                log.info("Issue {} sprint update skipped: user {} lacks issue:edit/sprint:edit permission on project {}",
                         id, currentUserId, issue.getProjectId());
             } else {
                 String oldSprintId = null;
