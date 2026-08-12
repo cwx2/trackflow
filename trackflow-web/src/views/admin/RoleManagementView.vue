@@ -94,8 +94,8 @@
           </template>
         </a-table-column>
 
-        <!-- 描述：不设固定宽，弹性填充剩余空间，min-width 防止过窄 -->
-        <a-table-column title="描述" data-index="description" :min-width="160" ellipsis />
+        <!-- 描述：设最大宽度，超出 ellipsis，不独占所有空间 -->
+        <a-table-column title="描述" data-index="description" :width="300" ellipsis />
 
         <!-- 系统角色、状态、操作：固定在右侧 -->
         <a-table-column title="系统角色" :width="90" align="center" fixed="right">
@@ -104,7 +104,7 @@
           </template>
         </a-table-column>
 
-        <a-table-column title="状态" :width="88" align="center" fixed="right">
+        <a-table-column title="状态" :width="100" align="center" fixed="right">
           <template #cell="{ record }">
             <span class="status-dot" :class="record.enabled !== false ? 'enabled' : 'disabled'">
               <i class="dot" />{{ record.enabled !== false ? '启用' : '禁用' }}
