@@ -46,10 +46,10 @@
   background: var(--tf-bg-hover) !important;
 }
 
-/* 操作列左侧竖线分隔，减小 cell padding 让按钮不超出 */
+/* 操作列左侧竖线分隔，用常规边框色确保在深色背景下可见 */
 .arco-table-td.col-actions,
 .arco-table-th.col-actions {
-  border-left: 1px solid var(--tf-border-light) !important;
+  border-left: 1px solid var(--tf-border) !important;
 }
 
 /* 操作列 cell 减小水平 padding，避免按钮撑出列宽 */
