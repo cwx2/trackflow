@@ -128,7 +128,16 @@
     </div>
   </div>
   <div class="sprint-no-issues" v-else-if="showEmptyHint">
-    <span class="no-issues-text">暂无工单</span>
+    <!-- ===== 空进度条：保持与有工单卡片一致的视觉结构 ===== -->
+    <div class="progress-bar-container">
+      <div class="progress-bar">
+        <!-- 空进度条，无填充 -->
+      </div>
+      <span class="progress-percent">0%</span>
+    </div>
+    <div class="progress-stats">
+      <span class="stat-item total">共 0 个工单</span>
+    </div>
   </div>
 </template>
 

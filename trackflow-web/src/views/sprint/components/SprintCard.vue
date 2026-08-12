@@ -95,7 +95,7 @@
     <!-- Progress -->
     <SprintProgress
       :sprint="sprint"
-      :show-empty-hint="isPlanned"
+      :show-empty-hint="true"
       :always-show-details="isActive || isPlanned"
       @view-category="(cat: string) => $emit('viewCategory', sprint, cat)"
       @view-status="(statusId: string, statusName: string) => $emit('viewStatus', sprint, statusId, statusName)"
