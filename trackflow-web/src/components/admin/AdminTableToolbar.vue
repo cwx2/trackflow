@@ -102,7 +102,9 @@ defineEmits<{
   flex-shrink: 0;
   flex-wrap: wrap;
   min-height: 52px;
-  border-bottom: 1px solid var(--tf-border-light);
+  background: var(--tf-bg-surface);
+  border: 1px solid var(--tf-border);
+  border-radius: 8px;
 }
 
 .admin-toolbar-filters {
