@@ -2,9 +2,13 @@
  * 字段英文标识 → 中文显示名映射
  *
  * 用于活动记录、仪表盘等场景中，将后端存储的英文字段标识转换为界面一致的中文标签。
- * 同时覆盖 camelCase 和 snake_case 形式，防御不同来源的字段命名风格。
+ * 同时覆盖 camelCase、snake_case 和 PascalCase 形式，防御不同来源的字段命名风格。
+ *
+ * 注意：自定义字段从 YouTrack 迁移过来时，activity 表中 field_name 可能存储了
+ * PascalCase 英文原名（如 "Priority"、"Type"），因此需要同时覆盖所有变体。
  */
 export const fieldLabelMap: Record<string, string> = {
+  // ===== 系统内置字段（小写 snake_case / camelCase） =====
   status: '状态',
   status_id: '状态',
   assignee: '负责人',
@@ -43,16 +47,41 @@ export const fieldLabelMap: Record<string, string> = {
   link: '关联',
   visibility: '可见性',
   comment: '评论',
+
+  // ===== 自定义字段英文名（PascalCase / 带空格形式，来自 YouTrack 迁移数据） =====
+  // 这些字段在 custom_field_definition.name 中存储为英文，
+  // activity 记录创建时直接使用了 field.getName()，导致前端显示为英文。
+  Priority: '优先级',
+  Type: '类型',
+  State: '状态',
+  'Due Date': '截止日期',
+  'Fix versions': '修复版本',
+  'Affected versions': '受影响版本',
+  'Ideal Days': '理想人天',
+  'Story Points': '故事点',
+  Subsystem: '子系统',
+  Browser: '浏览器',
 }
 
 /**
  * 将英文字段标识转换为中文显示名
- * @param name 英文字段标识（如 "status"、"assignee"）
- * @returns 中文显示名（如 "状态"、"负责人"），未匹配时 fallback 返回原始字段名
+ * @param name 英文字段标识（如 "status"、"Priority"、"Fix versions"）
+ * @returns 中文显示名（如 "状态"、"优先级"），未匹配时 fallback 返回原始字段名
+ *
+ * 查找顺序：
+ * 1. 精确匹配 fieldLabelMap
+ * 2. 小写形式匹配（兼容 PascalCase/UPPER_CASE 变体）
+ * 3. 返回原值（可能是已经为中文的自定义字段名）
  */
 export function localizeFieldName(name?: string | null): string | undefined {
   if (!name) return undefined
-  return fieldLabelMap[name] || name
+  // 1. 精确匹配
+  if (fieldLabelMap[name]) return fieldLabelMap[name]
+  // 2. 小写 fallback（兼容未显式注册的大小写变体）
+  const lower = name.toLowerCase()
+  if (fieldLabelMap[lower]) return fieldLabelMap[lower]
+  // 3. 原值返回（中文自定义字段名无需翻译）
+  return name
 }
 
 /**
