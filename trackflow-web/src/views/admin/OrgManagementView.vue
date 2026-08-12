@@ -61,7 +61,6 @@
 </template>
 
 <script setup lang="ts">
-import { formatDate } from '@/utils/date'
 import { ref, reactive, onMounted, computed, h } from 'vue'
 import { useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
@@ -128,7 +127,7 @@ const tableColumns: ColumnDef[] = [
   {
     type: 'actions',
     width: 140,
-    actions: (record: any) => [
+    actions: () => [
       { label: '编辑', onClick: (r) => editOrg(r) },
       { label: '删除', danger: true, onClick: (r) => deleteOrg(r) },
     ],

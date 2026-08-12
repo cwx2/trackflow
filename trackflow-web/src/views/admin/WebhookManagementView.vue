@@ -142,7 +142,7 @@
 </template>
 
 <script setup lang="ts">
-import { formatDate, formatDateTime } from '@/utils/date'
+import { formatDateTime } from '@/utils/date'
 import { ref, computed, onMounted, h } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { projectApi, webhookApi } from '@/api'

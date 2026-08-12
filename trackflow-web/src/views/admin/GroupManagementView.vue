@@ -216,7 +216,6 @@
 </template>
 
 <script setup lang="ts">
-import { formatDate } from '@/utils/date'
 import { ref, computed, onMounted, reactive } from 'vue'
 import { groupApi, userApi, projectApi } from '@/api'
 import type { UserGroupVO, UserGroupDetailVO } from '@/api/group'
@@ -508,7 +507,7 @@ const tableColumns: ColumnDef[] = [
   {
     type: 'actions',
     width: 180,
-    actions: (record: any) => [
+    actions: () => [
       { label: '详情', onClick: (r) => openDetail(r) },
       { label: '编辑', onClick: (r) => openEditDialog(r) },
       { label: '删除', danger: true, onClick: (r) => confirmDelete(r) },

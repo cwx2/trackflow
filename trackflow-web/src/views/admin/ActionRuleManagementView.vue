@@ -241,7 +241,7 @@ const tableColumns: ColumnDef[] = [
   },
   {
     type: 'actions', width: 140,
-    actions: (record: any) => [
+    actions: () => [
       { label: '编辑', onClick: (r) => handleEdit(r) },
       { label: '删除', danger: true, onClick: (r) => handleDelete(r) },
     ],
@@ -305,14 +305,6 @@ function formatVisibility(vis: string) {
 function parseExecutionActions(json: string): ExecutionAction[] {
   if (!json || json === '[]') return []
   try { return JSON.parse(json) } catch { return [] }
-}
-
-function actionTypeColor(type: string) {
-  const map: Record<string, string> = {
-    set_field: 'orange', add_tag: 'green', add_comment: 'blue',
-    set_status: 'purple', send_notification: 'cyan'
-  }
-  return map[type] || 'gray'
 }
 
 function actionTypeLabel(type: string) {

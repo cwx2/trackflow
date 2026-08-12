@@ -156,24 +156,6 @@ const tableColumns: ColumnDef[] = [
   },
 ]
 
-function directionLabel(direction: string): string {
-  const map: Record<string, string> = {
-    DIRECTED: '有向',
-    UNDIRECTED: '无向',
-    AGGREGATION: '聚合'
-  }
-  return map[direction] || direction
-}
-
-function directionClass(direction: string): string {
-  const map: Record<string, string> = {
-    DIRECTED: 'directed',
-    UNDIRECTED: 'undirected',
-    AGGREGATION: 'aggregation'
-  }
-  return map[direction] || ''
-}
-
 function openCreateDialog() {
   editingId.value = null
   resetForm()

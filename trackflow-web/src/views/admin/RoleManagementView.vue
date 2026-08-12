@@ -348,17 +348,6 @@ function getRoleIcon(role: RoleVO) {
   return IconUser
 }
 
-function getRoleIconColor(role: RoleVO) {
-  const code = role.code
-  if (code === 'system_admin') return 'orange'
-  if (code === 'project_admin') return 'blue'
-  if (code === 'developer') return 'purple'
-  if (code === 'tester') return 'green'
-  if (code === 'observer') return 'gray'
-  if (code === 'product_manager') return 'pink'
-  if (code === 'tech_lead') return 'cyan'
-  return role.roleType === 'global' ? 'orange' : 'blue'
-}
 const showCreateDialog = ref(false)
 const editingRole = ref<RoleVO | null>(null)
 const roleForm = reactive({ name: '', code: '', roleType: 'project', description: '' })

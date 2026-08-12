@@ -288,12 +288,12 @@ import type { GlobalMemberVO } from '@/api/globalMember'
 import { useAuthStore } from '@/stores/auth'
 import { AdminPageLayout, AdminDataTable, AdminStatsBar, FilterSelect } from '@/components/admin'
 import type { ColumnDef } from '@/components/admin'
-import { UserAvatar, EmptyState } from '@/components/base'
+import { EmptyState } from '@/components/base'
 import { usePagedList } from '@/composables/usePagedList'
 import type { StatItem } from '@/components/admin'
 import {
   IconUser, IconUserGroup, IconClose, IconCloseCircle,
-  IconSafe, IconSettings, IconCaretUp
+  IconSafe, IconSettings
 } from '@arco-design/web-vue/es/icon'
 
 const authStore = useAuthStore()
@@ -352,17 +352,6 @@ const { list: users, total, loading, pagination, filters, refresh: loadUsers } =
   },
   { pageSize: 20, initialFilters: { keyword: '', roleId: '', status: '', banStatus: '' } }
 )
-
-function toggleSort(field: string) {
-  if (sortField.value === field) {
-    sortDesc.value = !sortDesc.value
-  } else {
-    sortField.value = field
-    sortDesc.value = true
-  }
-  pagination.page = 1
-  loadUsers()
-}
 
 /** 点击行跳转用户详情（排除按钮和链接的点击） */
 function navigateToUser(record: any) {

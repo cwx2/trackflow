@@ -224,7 +224,6 @@ import { Message } from '@arco-design/web-vue'
 import { useRouter } from 'vue-router'
 import { scoreRuleApi } from '@/api'
 import AdminPageLayout from '@/components/admin/AdminPageLayout.vue'
-import DataContainer from '@/components/base/DataContainer.vue'
 import { AdminDataTable } from '@/components/admin'
 import type { ColumnDef } from '@/components/admin'
 import type { RuleDefinitionVO, RuleExecutionLogVO, RuleStatisticsVO } from '@/api/scoreRule'
@@ -281,16 +280,6 @@ const scoreConfigPlaceholder = computed(() => {
 })
 
 // ==================== Methods ====================
-function triggerTypeLabel(type: string) {
-  const map: Record<string, string> = { scheduled: '定时', event: '事件', manual: '手动' }
-  return map[type] || type
-}
-
-function triggerTypeColor(type: string) {
-  const map: Record<string, string> = { scheduled: 'blue', event: 'orange', manual: 'gray' }
-  return map[type] || 'gray'
-}
-
 function formulaLabel(formula: string) {
   const map: Record<string, string> = {
     linear_daily: '按天递增',
@@ -351,7 +340,7 @@ const logColumns: ColumnDef[] = [
   { type: 'date', title: '执行时间', key: 'executedAt', width: 150, format: 'datetime' },
   {
     type: 'actions', width: 80,
-    actions: (record: any) => [
+    actions: () => [
       { label: '删除', danger: true, onClick: (r) => handleDeleteLog(r) },
     ],
   },
