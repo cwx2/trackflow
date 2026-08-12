@@ -30,6 +30,7 @@
     <IssueCreatePanel
       v-if="canCreateIssue"
       :visible="showCreatePanel"
+      :project-id="currentProjectId"
       :draft-id="createPanelDraftId"
       @update:visible="onCreatePanelVisibleChange"
       @created="onCreatePanelCreated"
@@ -60,6 +61,7 @@
 import { ref, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useProjectStore } from '@/stores/project'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { useToast } from '@/composables/useToast'
 import AppSidebar from './AppSidebar.vue'
@@ -72,6 +74,7 @@ import { ToastNotification } from '@/components/base'
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
+const projectStore = useProjectStore()
 const { status: wsStatus } = useWebSocket()
 const toast = useToast()
 
@@ -109,6 +112,9 @@ const canCreateIssue = computed(() => {
 // ===== 全局创建工单弹窗 =====
 const showCreatePanel = ref(false)
 const createPanelDraftId = ref<string | null>(null)
+
+// 当前项目上下文：从 projectStore 获取，传递给创建弹窗自动预选项目
+const currentProjectId = computed(() => projectStore.selectedProjectId)
 
 function openCreatePanel() {
   createPanelDraftId.value = null
