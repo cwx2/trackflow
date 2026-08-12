@@ -503,7 +503,7 @@ onMounted(() => {
 .user-count-badge { font-size: var(--font-size-xs); padding: 2px 8px; border-radius: var(--radius-sm); background: var(--bg-tertiary); color: var(--text-secondary); }
 .user-count-badge.clickable { cursor: pointer; color: var(--accent-blue); }
 .user-count-badge.clickable:hover { background: var(--tf-accent-medium); }
-.action-col { display: flex; align-items: center; justify-content: flex-end; gap: 2px; }
+.action-col { display: flex; align-items: center; justify-content: flex-end; gap: 2px; flex-wrap: nowrap; white-space: nowrap; }
 
 /* Drawer title */
 .drawer-title-row { display: flex; align-items: center; gap: 12px; }
