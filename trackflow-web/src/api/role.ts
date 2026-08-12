@@ -38,7 +38,20 @@ export interface CloneRoleDTO {
 /**
  * 角色管理模块 API
  */
+/** 角色管理统计 */
+export interface RoleStatsVO {
+  total: number
+  globalRoles: number
+  projectRoles: number
+  rolesInUse: number
+}
+
 export const roleApi = {
+  /** 角色管理统计 */
+  stats() {
+    return request.get<any, R<RoleStatsVO>>('/roles/stats')
+  },
+
   /** 分页查询角色列表 */
   list(params?: { roleType?: string; pageSize?: number; page?: number }) {
     return request.get<any, R<PageResult<RoleVO>>>('/roles', { params })

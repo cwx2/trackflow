@@ -28,8 +28,20 @@
     </Transition>
 
     <!-- 右侧自定义区域 -->
-    <div v-if="$slots.right" class="admin-toolbar-right">
+    <div v-if="$slots.right || showRefresh" class="admin-toolbar-right">
       <slot name="right" />
+      <!-- 内置刷新按钮 -->
+      <a-tooltip v-if="showRefresh" content="刷新">
+        <a-button
+          size="small"
+          type="secondary"
+          class="toolbar-icon-btn"
+          :loading="refreshLoading"
+          @click="$emit('refresh')"
+        >
+          <template #icon><icon-refresh /></template>
+        </a-button>
+      </a-tooltip>
     </div>
   </div>
 </template>
@@ -44,15 +56,22 @@ withDefaults(defineProps<{
   searchWidth?: string | number
   /** 已选中的行数（>0 时显示批量操作区） */
   selectedCount?: number
+  /** 是否显示内置刷新按钮（默认 false） */
+  showRefresh?: boolean
+  /** 刷新按钮是否 loading */
+  refreshLoading?: boolean
 }>(), {
   searchPlaceholder: '搜索...',
   searchWidth: '280px',
-  selectedCount: 0
+  selectedCount: 0,
+  showRefresh: false,
+  refreshLoading: false,
 })
 
 defineEmits<{
   'search': [value: string]
   'clear': []
+  'refresh': []
 }>()
 </script>
 
@@ -89,6 +108,10 @@ defineEmits<{
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.toolbar-icon-btn {
+  padding: 0 7px;
 }
 
 /* 批量操作区淡入动画 */

@@ -1,10 +1,15 @@
 ﻿<template>
-  <AdminPageLayout title="组织管理">
+  <AdminPageLayout title="组织管理" subtitle="管理组织结构，对项目和团队进行分组">
     <template #actions>
       <a-button type="primary" size="small" @click="openCreateDialog">
         <template #icon><icon-plus /></template>
         新建组织
       </a-button>
+    </template>
+
+    <!-- 统计卡片 -->
+    <template #stats>
+      <AdminStatsBar :stats="statsItems" :loading="statsLoading" />
     </template>
 
     <!-- 组织列表 -->
@@ -96,9 +101,36 @@ import { Message } from '@arco-design/web-vue'
 import { useConfirmDelete } from '@/composables/useConfirmDelete'
 import { organizationApi } from '@/api'
 import type { OrgVO, OrgProjectVO } from '@/api/organization'
-import { AdminPageLayout, AdminDataTable } from '@/components/admin'
+import { AdminPageLayout, AdminDataTable, AdminStatsBar } from '@/components/admin'
+import type { StatItem } from '@/components/admin'
+import { IconHome, IconFile, IconUserGroup } from '@arco-design/web-vue/es/icon'
 
 const router = useRouter()
+
+// ===== 统计卡片 =====
+const statsLoading = ref(false)
+const statsItems = ref<StatItem[]>([
+  { label: '组织总数', value: '—', icon: IconHome, color: 'blue' },
+  { label: '关联项目', value: '—', icon: IconFile, color: 'green' },
+  { label: '有项目的组织', value: '—', icon: IconUserGroup, color: 'purple' },
+])
+
+async function loadStats() {
+  statsLoading.value = true
+  try {
+    const res = await organizationApi.stats()
+    if (res.code === 0 && res.data) {
+      const d = res.data
+      statsItems.value = [
+        { label: '组织总数', value: d.total, icon: IconHome, color: 'blue' },
+        { label: '关联项目', value: d.totalProjects, icon: IconFile, color: 'green' },
+        { label: '有项目的组织', value: d.orgsWithProjects, icon: IconUserGroup, color: 'purple' },
+      ]
+    }
+  } finally {
+    statsLoading.value = false
+  }
+}
 
 const organizations = ref<OrgVO[]>([])
 const showDialog = ref(false)
@@ -177,7 +209,10 @@ async function deleteOrg(org: OrgVO) {
 
 
 
-onMounted(loadOrgs)
+onMounted(() => {
+  loadStats()
+  loadOrgs()
+})
 </script>
 
 <style scoped>

@@ -1,10 +1,15 @@
 <template>
-  <AdminPageLayout title="角色管理">
+  <AdminPageLayout title="角色管理" subtitle="管理系统中所有角色及其权限配置">
     <template #actions>
       <a-button type="primary" size="small" @click="openCreateDialog">
         <template #icon><icon-plus /></template>
         新建角色
       </a-button>
+    </template>
+
+    <!-- 统计卡片 -->
+    <template #stats>
+      <AdminStatsBar :stats="statsItems" :loading="statsLoading" />
     </template>
 
     <!-- 角色列表 -->
@@ -245,8 +250,12 @@ import { useConfirmDelete } from '@/composables/useConfirmDelete'
 import { roleApi } from '@/api'
 import type { RoleVO, RoleUsersVO } from '@/api/types'
 import type { PermissionGroup } from '@/api/role'
-import { AdminPageLayout, AdminDataTable } from '@/components/admin'
+import { AdminPageLayout, AdminDataTable, AdminStatsBar } from '@/components/admin'
 import { UserAvatar } from '@/components/base'
+import type { StatItem } from '@/components/admin'
+import {
+  IconSafe, IconUserGroup, IconUser, IconSettings
+} from '@arco-design/web-vue/es/icon'
 
 const CATEGORY_LABELS: Record<string, string> = {
   system: '系统权限',
@@ -258,6 +267,33 @@ const CATEGORY_LABELS: Record<string, string> = {
   integration: '集成权限',
   time_tracking: '时间追踪权限',
   rule: '规则权限',
+}
+
+// ===== 统计卡片 =====
+const statsLoading = ref(false)
+const statsItems = ref<StatItem[]>([
+  { label: '总角色数', value: '—', icon: IconSafe, color: 'blue' },
+  { label: '系统角色', value: '—', icon: IconUserGroup, color: 'purple' },
+  { label: '项目角色', value: '—', icon: IconUser, color: 'green' },
+  { label: '使用中', value: '—', icon: IconSettings, color: 'orange' },
+])
+
+async function loadStats() {
+  statsLoading.value = true
+  try {
+    const res = await roleApi.stats()
+    if (res.code === 0 && res.data) {
+      const d = res.data
+      statsItems.value = [
+        { label: '总角色数', value: d.total, icon: IconSafe, color: 'blue' },
+        { label: '系统角色', value: d.globalRoles, icon: IconUserGroup, color: 'purple' },
+        { label: '项目角色', value: d.projectRoles, icon: IconUser, color: 'green' },
+        { label: '使用中', value: d.rolesInUse, icon: IconSettings, color: 'orange' },
+      ]
+    }
+  } finally {
+    statsLoading.value = false
+  }
 }
 
 const roles = ref<RoleVO[]>([])
@@ -449,6 +485,7 @@ async function openUsersDialog(role: RoleVO) {
 }
 
 onMounted(() => {
+  loadStats()
   loadRoles()
   loadPermissionDefinitions()
   loadGrantablePermissions()

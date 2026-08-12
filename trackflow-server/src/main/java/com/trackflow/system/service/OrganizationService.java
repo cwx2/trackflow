@@ -19,6 +19,7 @@ import com.trackflow.system.mapper.OrgAccessMapper;
 import com.trackflow.system.mapper.OrganizationMapper;
 import com.trackflow.system.mapper.SysRoleMapper;
 import com.trackflow.system.mapper.SysUserMapper;
+import com.trackflow.system.vo.OrgStatsVO;
 import com.trackflow.system.vo.OrgAccessVO;
 import com.trackflow.system.vo.OrgProjectVO;
 import lombok.RequiredArgsConstructor;
@@ -44,6 +45,24 @@ public class OrganizationService {
     private final SysRoleMapper sysRoleMapper;
     private final ProjectMapper projectMapper;
     private final OrgAccessMapper orgAccessMapper;
+
+    /**
+     * 获取组织统计数据
+     */
+    public OrgStatsVO getStats() {
+        long total = organizationMapper.selectCount(null);
+        long totalProjects = projectMapper.selectCount(
+                new LambdaQueryWrapper<Project>().isNotNull(Project::getOrgId));
+        long orgsWithProjects = total > 0
+                ? organizationMapper.selectCount(new LambdaQueryWrapper<Organization>()
+                        .inSql(Organization::getId, "SELECT DISTINCT org_id FROM project WHERE org_id IS NOT NULL"))
+                : 0;
+        return OrgStatsVO.builder()
+                .total(total)
+                .totalProjects(totalProjects)
+                .orgsWithProjects(orgsWithProjects)
+                .build();
+    }
 
     /**
      * 创建组织

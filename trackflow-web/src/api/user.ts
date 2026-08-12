@@ -10,10 +10,23 @@ export interface UserSummaryVO {
   avatarUrl?: string
 }
 
+/** 用户管理统计 */
+export interface UserStatsVO {
+  total: number
+  active: number
+  disabled: number
+  todayNew: number
+}
+
 /**
  * 用户模块 API
  */
 export const userApi = {
+  /** 用户管理统计 */
+  stats() {
+    return request.get<any, R<UserStatsVO>>('/users/stats')
+  },
+
   /** 用户列表 */
   list(params?: {
     keyword?: string; username?: string; displayName?: string; email?: string

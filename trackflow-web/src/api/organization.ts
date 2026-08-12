@@ -46,7 +46,19 @@ export interface OrgAccessVO {
 /**
  * 组织管理模块 API
  */
+/** 组织统计 */
+export interface OrgStatsVO {
+  total: number
+  totalProjects: number
+  orgsWithProjects: number
+}
+
 export const organizationApi = {
+  /** 组织统计 */
+  stats() {
+    return request.get<any, R<OrgStatsVO>>('/organizations/stats')
+  },
+
   /** 分页查询组织列表 */
   list(params?: { keyword?: string; page?: number; pageSize?: number; sort?: string }) {
     return request.get<any, R<PageResult<OrgVO>>>('/organizations', { params })

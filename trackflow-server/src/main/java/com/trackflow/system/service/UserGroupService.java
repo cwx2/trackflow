@@ -15,6 +15,7 @@ import com.trackflow.system.dto.GroupRoleDTO;
 import com.trackflow.system.dto.UpdateGroupDTO;
 import com.trackflow.system.entity.*;
 import com.trackflow.system.mapper.*;
+import com.trackflow.system.vo.GroupStatsVO;
 import com.trackflow.system.vo.GroupSimpleVO;
 import com.trackflow.system.vo.UserGroupDetailVO;
 import com.trackflow.system.vo.UserGroupVO;
@@ -46,6 +47,23 @@ public class UserGroupService {
     private final ProjectMapper projectMapper;
     private final PermissionService permissionService;
     private final StringRedisTemplate redisTemplate;
+
+    /**
+     * 获取用户组统计数据
+     */
+    public GroupStatsVO getStats() {
+        long total = groupMapper.selectCount(null);
+        long totalMembers = memberMapper.selectCount(null);
+        long groupsWithRoles = total > 0
+                ? groupMapper.selectCount(new LambdaQueryWrapper<UserGroup>()
+                        .inSql(UserGroup::getId, "SELECT DISTINCT group_id FROM user_group_role"))
+                : 0;
+        return GroupStatsVO.builder()
+                .total(total)
+                .totalMembers(totalMembers)
+                .groupsWithRoles(groupsWithRoles)
+                .build();
+    }
 
     /**
      * 根据用户组 ID 列表查询组名称

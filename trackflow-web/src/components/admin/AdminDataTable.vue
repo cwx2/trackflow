@@ -6,9 +6,12 @@
       :model-value="internalSearch"
       :search-placeholder="searchPlaceholder"
       :selected-count="internalSelectedKeys?.length || 0"
+      :show-refresh="showRefresh"
+      :refresh-loading="refreshLoading"
       @update:model-value="internalSearch = $event"
       @search="handleSearch"
       @clear="handleClear"
+      @refresh="$emit('refresh')"
     >
       <slot name="toolbar-filters" />
       <template #batch-actions="slotProps">
@@ -114,6 +117,10 @@ export interface AdminDataTableProps {
   size?: 'small' | 'medium' | 'large'
   /** 是否显示边框 */
   bordered?: boolean
+  /** 是否显示内置刷新按钮 */
+  showRefresh?: boolean
+  /** 刷新按钮是否 loading */
+  refreshLoading?: boolean
 }
 
 const props = withDefaults(defineProps<AdminDataTableProps>(), {
@@ -128,7 +135,9 @@ const props = withDefaults(defineProps<AdminDataTableProps>(), {
   emptyTitle: '暂无数据',
   emptyDescription: '',
   size: 'small',
-  bordered: false
+  bordered: false,
+  showRefresh: false,
+  refreshLoading: false,
 })
 
 const emit = defineEmits<{
@@ -140,6 +149,7 @@ const emit = defineEmits<{
   'page-size-change': [size: number]
   'search': [keyword: string]
   'row-click': [record: any]
+  'refresh': []
 }>()
 
 // ===== 内部双向绑定 =====

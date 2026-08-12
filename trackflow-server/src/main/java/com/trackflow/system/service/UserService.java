@@ -37,6 +37,7 @@ import com.trackflow.system.mapper.UserGroupMapper;
 import com.trackflow.system.mapper.UserGroupMemberMapper;
 import com.trackflow.system.mapper.UserGroupRoleMapper;
 import com.trackflow.system.mapper.UserRoleMapper;
+import com.trackflow.system.vo.UserStatsVO;
 import com.trackflow.system.vo.UserDataExportVO;
 import com.trackflow.system.vo.UserProfileVO;
 import com.trackflow.system.vo.UserPublicProfileVO;
@@ -106,6 +107,25 @@ public class UserService {
      */
     @AuditLog(action = "create_user", targetType = "user", targetId = "#result.id",
             details = "{'username': #dto.username, 'displayName': #dto.displayName, 'email': #dto.email}")
+    /**
+     * 获取用户管理统计数据
+     */
+    public UserStatsVO getStats() {
+        long total = userMapper.selectCount(null);
+        long active = userMapper.selectCount(
+                new LambdaQueryWrapper<SysUser>().eq(SysUser::getStatus, "active"));
+        long disabled = total - active;
+        LocalDateTime todayStart = LocalDateTime.now().toLocalDate().atStartOfDay();
+        long todayNew = userMapper.selectCount(
+                new LambdaQueryWrapper<SysUser>().ge(SysUser::getCreatedAt, todayStart));
+        return UserStatsVO.builder()
+                .total(total)
+                .active(active)
+                .disabled(disabled)
+                .todayNew(todayNew)
+                .build();
+    }
+
     @Transactional(rollbackFor = Exception.class)
     public SysUser createUser(CreateUserDTO dto) {
         // 1. 本地重复性校验

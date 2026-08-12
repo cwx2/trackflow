@@ -1,10 +1,15 @@
 ﻿<template>
-  <AdminPageLayout title="用户管理">
+  <AdminPageLayout title="用户管理" subtitle="管理系统所有用户的账号、角色和权限">
     <template #actions>
       <a-button type="primary" size="small" @click="showCreateDialog = true">
         <template #icon><icon-plus /></template>
         新建用户
       </a-button>
+    </template>
+
+    <!-- 统计卡片 -->
+    <template #stats>
+      <AdminStatsBar :stats="statsItems" :loading="statsLoading" />
     </template>
 
     <!-- 用户列表 -->
@@ -346,13 +351,45 @@ import { userApi, projectApi, globalMemberApi, roleApi } from '@/api'
 import type { UserProfileProjectRoleInfo } from '@/api/user'
 import type { GlobalMemberVO } from '@/api/globalMember'
 import { useAuthStore } from '@/stores/auth'
-import { AdminPageLayout, AdminDataTable } from '@/components/admin'
+import { AdminPageLayout, AdminDataTable, AdminStatsBar } from '@/components/admin'
 import { UserAvatar, IssueStatusTag, EmptyState } from '@/components/base'
 import { usePagedList } from '@/composables/usePagedList'
+import type { StatItem } from '@/components/admin'
+import {
+  IconUser, IconUserGroup, IconClose, IconCloseCircle,
+  IconSafe, IconSettings, IconCaretUp
+} from '@arco-design/web-vue/es/icon'
 
 const authStore = useAuthStore()
 const router = useRouter()
 const currentUserId = computed(() => authStore.user?.userId)
+
+// ===== 统计卡片 =====
+const statsLoading = ref(false)
+const statsItems = ref<StatItem[]>([
+  { label: '总用户数', value: '—', icon: IconUser, color: 'blue' },
+  { label: '启用中', value: '—', icon: IconUserGroup, color: 'green' },
+  { label: '禁用中', value: '—', icon: IconSettings, color: 'red' },
+  { label: '今日新增', value: '—', icon: IconSafe, color: 'orange' },
+])
+
+async function loadStats() {
+  statsLoading.value = true
+  try {
+    const res = await userApi.stats()
+    if (res.code === 0 && res.data) {
+      const d = res.data
+      statsItems.value = [
+        { label: '总用户数', value: d.total, icon: IconUser, color: 'blue' },
+        { label: '启用中', value: d.active, icon: IconUserGroup, color: 'green' },
+        { label: '禁用中', value: d.disabled, icon: IconSettings, color: 'red' },
+        { label: '今日新增', value: d.todayNew, icon: IconSafe, color: 'orange' },
+      ]
+    }
+  } finally {
+    statsLoading.value = false
+  }
+}
 
 // 排序状态
 const sortField = ref('createdAt')
@@ -832,6 +869,7 @@ function getBanStatusLabel(banStatus?: string): string {
 }
 
 onMounted(() => {
+  loadStats()
   loadGlobalRoles()
   loadProjectRoles()
   loadAllProjects()

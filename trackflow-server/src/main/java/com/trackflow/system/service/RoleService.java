@@ -30,6 +30,7 @@ import com.trackflow.system.mapper.SysUserMapper;
 import com.trackflow.system.mapper.UserRoleMapper;
 import com.trackflow.system.vo.PermissionGroupVO;
 import com.trackflow.system.vo.PermissionVO;
+import com.trackflow.system.vo.RoleStatsVO;
 import com.trackflow.system.vo.RoleUsersVO;
 import com.trackflow.system.vo.UserVO;
 import lombok.RequiredArgsConstructor;
@@ -63,6 +64,27 @@ public class RoleService {
     private final UserConverter userConverter;
     private final WorkflowTransitionMapper workflowTransitionMapper;
     private final PermissionImplicationService permissionImplicationService;
+
+    /**
+     * 获取角色管理统计数据
+     */
+    public RoleStatsVO getStats() {
+        long total = roleMapper.selectCount(null);
+        long globalRoles = roleMapper.selectCount(
+                new LambdaQueryWrapper<SysRole>().eq(SysRole::getRoleType, "global"));
+        long projectRoles = total - globalRoles;
+        // 有用户分配的角色数（user_role 表中有记录的 role_id 去重）
+        long rolesInUse = userRoleMapper.selectCount(null) > 0
+                ? roleMapper.selectCount(new LambdaQueryWrapper<SysRole>()
+                        .inSql(SysRole::getId, "SELECT DISTINCT role_id FROM user_role"))
+                : 0;
+        return RoleStatsVO.builder()
+                .total(total)
+                .globalRoles(globalRoles)
+                .projectRoles(projectRoles)
+                .rolesInUse(rolesInUse)
+                .build();
+    }
 
     @Transactional(rollbackFor = Exception.class)
     public SysRole create(CreateRoleDTO dto) {

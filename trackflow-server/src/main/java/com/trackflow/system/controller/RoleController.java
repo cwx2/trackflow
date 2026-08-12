@@ -15,6 +15,7 @@ import com.trackflow.system.entity.PermissionImplication;
 import com.trackflow.system.service.PermissionImplicationService;
 import com.trackflow.system.service.RoleService;
 import com.trackflow.system.vo.PermissionGroupVO;
+import com.trackflow.system.vo.RoleStatsVO;
 import com.trackflow.system.vo.RoleUsersVO;
 import com.trackflow.system.vo.RoleVO;
 import jakarta.validation.Valid;
@@ -66,6 +67,12 @@ public class RoleController {
     public R<RoleVO> merge(@Valid @RequestBody MergeRolesDTO dto) {
         return R.ok(roleConverter.toVO(
                 roleService.mergeRoles(dto.getSourceRoleIds(), dto.getTargetRoleId())));
+    }
+
+    @GetMapping("/stats")
+    @PreAuthorize("@perm.checkGlobal('system:manage_roles')")
+    public R<RoleStatsVO> stats() {
+        return R.ok(roleService.getStats());
     }
 
     @GetMapping

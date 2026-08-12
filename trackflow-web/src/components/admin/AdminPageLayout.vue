@@ -15,8 +15,10 @@
     <!-- 页面头部：标题 + 操作按钮 -->
     <div class="admin-page-header">
       <div class="admin-page-title-area">
-        <h2 class="admin-page-title">{{ title }}</h2>
-        <p v-if="subtitle" class="admin-page-subtitle">{{ subtitle }}</p>
+        <div class="admin-page-title-row">
+          <h2 class="admin-page-title">{{ title }}</h2>
+          <span v-if="subtitle" class="admin-page-subtitle">{{ subtitle }}</span>
+        </div>
       </div>
       <div v-if="$slots.actions" class="admin-page-actions">
         <slot name="actions" />
@@ -25,6 +27,9 @@
 
     <!-- 分隔线 -->
     <div class="admin-page-divider" />
+
+    <!-- 统计卡片（可选） -->
+    <slot name="stats" />
 
     <!-- 标签页（可选，放在内容区上方） -->
     <div v-if="$slots.tabs" class="admin-page-tabs">
@@ -85,18 +90,27 @@ const maxWidthStyle = computed(() => {
   min-width: 0;
 }
 
+.admin-page-title-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 .admin-page-title {
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 600;
   color: var(--tf-text-primary);
   margin: 0;
   line-height: 1.3;
+  flex-shrink: 0;
 }
 
 .admin-page-subtitle {
   font-size: 13px;
   color: var(--tf-text-tertiary);
-  margin: 4px 0 0;
+  margin: 0;
+  line-height: 1.3;
 }
 
 .admin-page-actions {

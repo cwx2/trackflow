@@ -11,6 +11,7 @@ import com.trackflow.system.dto.GroupRoleDTO;
 import com.trackflow.system.dto.UpdateGroupDTO;
 import com.trackflow.system.entity.UserGroup;
 import com.trackflow.system.service.UserGroupService;
+import com.trackflow.system.vo.GroupStatsVO;
 import com.trackflow.system.vo.UserGroupDetailVO;
 import com.trackflow.system.vo.UserGroupVO;
 import com.trackflow.system.vo.GroupSimpleVO;
@@ -40,6 +41,12 @@ public class GroupController {
     @GetMapping("/simple")
     public R<List<GroupSimpleVO>> listSimple() {
         return R.ok(groupService.listSimple());
+    }
+
+    @GetMapping("/stats")
+    @PreAuthorize("@perm.checkGlobal('system:manage_groups')")
+    public R<GroupStatsVO> stats() {
+        return R.ok(groupService.getStats());
     }
 
     /**

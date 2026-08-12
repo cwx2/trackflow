@@ -22,6 +22,7 @@ import com.trackflow.system.vo.UserDetailVO;
 import com.trackflow.system.vo.UserProfileVO;
 import com.trackflow.system.vo.UserPublicProfileVO;
 import com.trackflow.system.vo.UserSummaryVO;
+import com.trackflow.system.vo.UserStatsVO;
 import com.trackflow.system.vo.UserVO;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -43,6 +44,12 @@ public class UserController {
     private final UserVOAssembler userVOAssembler;
     private final RoleService roleService;
     private final UserConverter userConverter;
+
+    @GetMapping("/stats")
+    @PreAuthorize("@perm.checkGlobal('system:manage_users')")
+    public R<UserStatsVO> stats() {
+        return R.ok(userService.getStats());
+    }
 
     @PostMapping
     @PreAuthorize("@perm.checkGlobal('system:manage_users')")

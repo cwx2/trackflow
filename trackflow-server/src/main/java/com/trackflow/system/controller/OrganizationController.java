@@ -14,6 +14,7 @@ import com.trackflow.system.service.OrganizationService;
 import com.trackflow.system.vo.OrgAccessVO;
 import com.trackflow.system.vo.OrgDetailVO;
 import com.trackflow.system.vo.OrgProjectVO;
+import com.trackflow.system.vo.OrgStatsVO;
 import com.trackflow.system.vo.OrgVO;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -43,6 +44,12 @@ public class OrganizationController {
         OrgVO vo = orgConverter.toVO(org);
         vo.setProjectCount(organizationService.getProjectCount(org.getId()));
         return R.ok(vo);
+    }
+
+    @GetMapping("/stats")
+    @PreAuthorize("@perm.checkGlobal('system:manage_orgs')")
+    public R<OrgStatsVO> stats() {
+        return R.ok(organizationService.getStats());
     }
 
     @GetMapping

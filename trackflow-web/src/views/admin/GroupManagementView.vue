@@ -1,10 +1,15 @@
 ﻿<template>
-  <AdminPageLayout title="用户组管理">
+  <AdminPageLayout title="用户组管理" subtitle="通过用户组批量管理团队权限">
     <template #actions>
       <a-button type="primary" size="small" @click="openCreateDialog">
         <template #icon><icon-plus /></template>
         新建用户组
       </a-button>
+    </template>
+
+    <!-- 统计卡片 -->
+    <template #stats>
+      <AdminStatsBar :stats="statsItems" :loading="statsLoading" />
     </template>
 
     <!-- 用户组列表 -->
@@ -251,9 +256,38 @@ import type { UserVO, ProjectVO } from '@/api/types'
 import { Message } from '@arco-design/web-vue'
 import { useRequest } from '@/composables/useRequest'
 import { UserAvatar } from '@/components/base'
-import { AdminPageLayout, AdminDataTable } from '@/components/admin'
+import { AdminPageLayout, AdminDataTable, AdminStatsBar } from '@/components/admin'
+import type { StatItem } from '@/components/admin'
+import {
+  IconUserGroup, IconUser, IconSafe
+} from '@arco-design/web-vue/es/icon'
 
 // ===== 列表数据 =====
+// ===== 统计卡片 =====
+const statsLoading = ref(false)
+const statsItems = ref<StatItem[]>([
+  { label: '用户组总数', value: '—', icon: IconUserGroup, color: 'blue' },
+  { label: '总成员数', value: '—', icon: IconUser, color: 'green' },
+  { label: '已分配角色', value: '—', icon: IconSafe, color: 'purple' },
+])
+
+async function loadStats() {
+  statsLoading.value = true
+  try {
+    const res = await groupApi.stats()
+    if (res.code === 0 && res.data) {
+      const d = res.data
+      statsItems.value = [
+        { label: '用户组总数', value: d.total, icon: IconUserGroup, color: 'blue' },
+        { label: '总成员数', value: d.totalMembers, icon: IconUser, color: 'green' },
+        { label: '已分配角色', value: d.groupsWithRoles, icon: IconSafe, color: 'purple' },
+      ]
+    }
+  } finally {
+    statsLoading.value = false
+  }
+}
+
 const groups = ref<UserGroupVO[]>([])
 const keyword = ref('')
 
@@ -496,6 +530,7 @@ async function executeDelete() {
 
 
 onMounted(async () => {
+  loadStats()
   await loadGroups()
   await loadRolesAndProjects()
 })

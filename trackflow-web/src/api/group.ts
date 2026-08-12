@@ -49,7 +49,19 @@ export interface GroupRoleAssignment {
 
 // ========== API ==========
 
+/** 用户组统计 */
+export interface GroupStatsVO {
+  total: number
+  totalMembers: number
+  groupsWithRoles: number
+}
+
 export const groupApi = {
+  /** 用户组统计 */
+  stats() {
+    return request.get<any, R<GroupStatsVO>>('/groups/stats')
+  },
+
   /** 所有用户组简要信息（id + name），用于下拉选择器 */
   listSimple() {
     return request.get<any, R<GroupSimpleVO[]>>('/groups/simple')
