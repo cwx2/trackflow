@@ -428,10 +428,6 @@ function formatGenericDetails(d: Record<string, any>): string {
   border: 1px solid var(--border-color);
   border-radius: 6px;
   overflow: hidden;
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
 }
 
 .table-header {
@@ -442,13 +438,10 @@ function formatGenericDetails(d: Record<string, any>): string {
   font-size: var(--font-size-xs);
   color: var(--text-secondary);
   text-transform: uppercase;
-  flex-shrink: 0;
 }
 
 .table-body {
-  flex: 1;
   overflow-y: auto;
-  min-height: 0;
 }
 
 .table-row {
