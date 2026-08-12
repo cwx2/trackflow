@@ -1271,6 +1271,24 @@ function shakeSubmitButton() {
 }
 
 /**
+ * 对所有标记了验证错误的字段行触发闪烁动画，吸引用户注意力。
+ * 通过添加 CSS class 触发 keyframe 动画，动画结束后自动移除 class。
+ */
+function flashErrorFields() {
+  const errorFieldIds = Object.keys(cfValidationErrors.value)
+  for (const fieldId of errorFieldIds) {
+    const fieldRow = document.querySelector(`.prop-row[data-field-id="${fieldId}"]`) as HTMLElement
+    if (fieldRow) {
+      fieldRow.classList.add('field-flash-error')
+      // 动画结束后移除 class，以便后续可再次触发
+      fieldRow.addEventListener('animationend', () => {
+        fieldRow.classList.remove('field-flash-error')
+      }, { once: true })
+    }
+  }
+}
+
+/**
  * 解析后端返回的自定义字段验证错误消息，映射到具体字段的内联错误。
  * 后端格式：`自定义字段验证失败: 字段名: 错误消息` 或 `自定义字段验证失败: 字段名1: 错误1; 字段名2: 错误2`
  * @returns true 如果成功映射到至少一个字段
@@ -1923,17 +1941,22 @@ async function doSubmit(): Promise<boolean> {
   // 自定义字段必填校验（inline 显示错误）
   const cfErrors = validateCustomFields()
   if (cfErrors.length > 0) {
-    // 填充 inline 错误
+    // 填充 inline 错误并收集未填字段名称
+    const missingFieldNames: string[] = []
     for (const field of customFields.value) {
       const isRequired = field.effectiveIsRequired ?? field.isRequired
       if (isRequired && (!customFieldValues.value[field.id] || customFieldValues.value[field.id].trim() === '')) {
         cfValidationErrors.value[field.id] = '此字段为必填项'
+        missingFieldNames.push(field.name)
       }
     }
-    // 全局 toast 告知用户（使用 error 级别确保醒目）
-    Message.error({ content: '请填写所有必填字段', duration: 3000 })
+    // 全局 toast 列出具体未填字段名称（参考 YouTrack 明确告知哪些字段缺失）
+    const fieldList = missingFieldNames.join('、')
+    Message.error({ content: `请填写必填字段：${fieldList}`, duration: 4000 })
     // 自动滚动到第一个错误字段
     scrollToFirstError()
+    // 触发错误字段闪烁动画以吸引注意
+    flashErrorFields()
     // 按钮抖动反馈
     shakeSubmitButton()
     return false
@@ -2396,6 +2419,18 @@ onMounted(() => {
 .field-error :deep(.arco-select-view),
 .field-error :deep(.arco-picker) { border-color: var(--tf-danger) !important; }
 .field-error-msg { display: block; font-size: 11px; color: var(--tf-danger); margin-top: 2px; line-height: 1.3; }
+
+/* 验证失败字段的闪烁动画：红色背景闪烁 2 次，引导用户注意 */
+.prop-row.field-flash-error {
+  animation: field-flash 0.6s ease-in-out;
+}
+@keyframes field-flash {
+  0%, 100% { background-color: transparent; }
+  20% { background-color: rgba(var(--red-6, 245, 63, 63), 0.15); }
+  40% { background-color: transparent; }
+  60% { background-color: rgba(var(--red-6, 245, 63, 63), 0.10); }
+  80% { background-color: transparent; }
+}
 
 .panel-footer { display: flex; align-items: center; padding: 10px 0; border-top: 1px solid var(--color-border); flex-shrink: 0; }
 
