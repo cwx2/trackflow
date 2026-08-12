@@ -33,17 +33,15 @@
           >
             <!-- 筛选器 -->
             <template #toolbar-filters>
-              <a-select
+              <FilterSelect
+                label="类型"
                 v-model="filterFieldFormat"
-                placeholder="按类型筛选"
-                size="small"
-                allow-clear
-                style="width: 160px"
+                :width="120"
                 @change="onFilterChange"
               >
                 <a-option value="">全部类型</a-option>
                 <a-option v-for="t in fieldTypeOptions" :key="t.value" :value="t.value">{{ t.label }}</a-option>
-              </a-select>
+              </FilterSelect>
             </template>
 
             <!-- 批量操作 -->
@@ -835,7 +833,7 @@ import type { CustomFieldDefinitionVO, CustomFieldUsageVO, UserVO, AvailableConv
 import FieldsInProjects from './components/FieldsInProjects.vue'
 import DefaultValueInput from './components/DefaultValueInput.vue'
 import { FIELD_TYPE_OPTIONS, formatFieldType } from './constants/fieldType'
-import { AdminPageLayout, AdminDataTable } from '@/components/admin'
+import { AdminPageLayout, AdminDataTable, FilterSelect } from '@/components/admin'
 
 
 const activeTab = ref('list')

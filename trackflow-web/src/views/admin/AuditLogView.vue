@@ -25,12 +25,10 @@
     >
       <!-- ===== 工具栏筛选器：操作类型 / 目标类型 / 日期范围 ===== -->
       <template #toolbar-filters>
-        <a-select
+        <FilterSelect
+          label="操作"
           v-model="filters.action"
-          placeholder="全部操作"
-          size="small"
-          allow-clear
-          style="width: 160px"
+          :width="140"
           @change="resetAndLoad"
         >
           <a-option-group label="认证">
@@ -75,14 +73,12 @@
             <a-option value="update_project_member_role">修改成员角色</a-option>
             <a-option value="remove_project_member">移除项目成员</a-option>
           </a-option-group>
-        </a-select>
+        </FilterSelect>
 
-        <a-select
+        <FilterSelect
+          label="目标"
           v-model="filters.targetType"
-          placeholder="全部目标"
-          size="small"
-          allow-clear
-          style="width: 120px"
+          :width="90"
           @change="resetAndLoad"
         >
           <a-option value="auth">认证</a-option>
@@ -92,7 +88,7 @@
           <a-option value="project">项目</a-option>
           <a-option value="api_key">API Key</a-option>
           <a-option value="system_setting">系统设置</a-option>
-        </a-select>
+        </FilterSelect>
 
         <a-range-picker
           size="small"
@@ -169,7 +165,7 @@ import { ref, computed } from 'vue'
 import { auditLogApi } from '@/api'
 import type { AuditLogVO } from '@/api/auditLog'
 import { Message } from '@arco-design/web-vue'
-import { AdminPageLayout, AdminDataTable } from '@/components/admin'
+import { AdminPageLayout, AdminDataTable, FilterSelect } from '@/components/admin'
 import { usePagedList } from '@/composables/usePagedList'
 
 // ===== 类型定义 =====

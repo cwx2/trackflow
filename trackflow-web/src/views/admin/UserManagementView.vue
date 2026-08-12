@@ -31,33 +31,27 @@
     >
       <!-- 角色/状态筛选器 -->
       <template #toolbar-filters>
-        <a-select
+        <FilterSelect
+          label="角色"
           v-model="filters.roleId"
-          placeholder="全部角色"
-          size="small"
-          allow-clear
-          style="width: 130px"
+          :width="100"
           @change="() => { pagination.page = 1; loadUsers() }"
         >
           <a-option v-for="role in globalRoles" :key="role.id" :value="role.id">{{ role.name }}</a-option>
-        </a-select>
-        <a-select
+        </FilterSelect>
+        <FilterSelect
+          label="状态"
           v-model="filters.status"
-          placeholder="全部状态"
-          size="small"
-          allow-clear
-          style="width: 110px"
+          :width="80"
           @change="() => { pagination.page = 1; loadUsers() }"
         >
           <a-option value="active">启用</a-option>
           <a-option value="disabled">禁用</a-option>
-        </a-select>
-        <a-select
+        </FilterSelect>
+        <FilterSelect
+          label="禁用类型"
           v-model="filters.banStatus"
-          placeholder="全部禁用类型"
-          size="small"
-          allow-clear
-          style="width: 140px"
+          :width="100"
           @change="() => { pagination.page = 1; loadUsers() }"
         >
           <a-option value="banned">封禁</a-option>
@@ -65,7 +59,7 @@
           <a-option value="inactive">不活跃</a-option>
           <a-option value="deactivated">注销</a-option>
           <a-option value="locked">锁定</a-option>
-        </a-select>
+        </FilterSelect>
       </template>
 
       <template #columns>
@@ -351,7 +345,7 @@ import { userApi, projectApi, globalMemberApi, roleApi } from '@/api'
 import type { UserProfileProjectRoleInfo } from '@/api/user'
 import type { GlobalMemberVO } from '@/api/globalMember'
 import { useAuthStore } from '@/stores/auth'
-import { AdminPageLayout, AdminDataTable, AdminStatsBar } from '@/components/admin'
+import { AdminPageLayout, AdminDataTable, AdminStatsBar, FilterSelect } from '@/components/admin'
 import { UserAvatar, IssueStatusTag, EmptyState } from '@/components/base'
 import { usePagedList } from '@/composables/usePagedList'
 import type { StatItem } from '@/components/admin'
