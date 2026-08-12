@@ -94,18 +94,17 @@
           </template>
         </a-table-column>
 
-        <!-- 描述 -->
-        <a-table-column title="描述" data-index="description" ellipsis />
+        <!-- 描述：不设固定宽，弹性填充剩余空间，min-width 防止过窄 -->
+        <a-table-column title="描述" data-index="description" :min-width="160" ellipsis />
 
-        <!-- 系统角色 -->
-        <a-table-column title="系统角色" :width="88" align="center">
+        <!-- 系统角色、状态、操作：固定在右侧 -->
+        <a-table-column title="系统角色" :width="90" align="center" fixed="right">
           <template #cell="{ record }">
             <span :class="record.builtin ? 'flag-yes' : 'flag-no'">{{ record.builtin ? '是' : '否' }}</span>
           </template>
         </a-table-column>
 
-        <!-- 状态 -->
-        <a-table-column title="状态" :width="88" align="center">
+        <a-table-column title="状态" :width="88" align="center" fixed="right">
           <template #cell="{ record }">
             <span class="status-dot" :class="record.enabled !== false ? 'enabled' : 'disabled'">
               <i class="dot" />{{ record.enabled !== false ? '启用' : '禁用' }}
@@ -114,7 +113,7 @@
         </a-table-column>
 
         <!-- 操作 -->
-        <a-table-column title="操作" :width="260" align="right" cell-class="col-actions" header-cell-class="col-actions">
+        <a-table-column title="操作" :width="220" align="right" fixed="right" cell-class="col-actions" header-cell-class="col-actions">
           <template #cell="{ record }">
             <div class="action-col">
               <a-button type="text" size="mini" @click="openUsersDialog(record)">用户</a-button>
