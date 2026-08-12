@@ -17,6 +17,7 @@
       :total="total"
       v-model:current="pagination.page"
       v-model:page-size="pagination.pageSize"
+      :columns="tableColumns"
       empty-title="暂无审计日志"
       empty-description="调整筛选条件或时间范围后重试"
       @search="resetAndLoad"
@@ -97,53 +98,6 @@
           @change="onDateRangeChange"
         />
       </template>
-
-      <!-- ===== 表格列定义 ===== -->
-      <template #columns>
-        <!-- 时间 -->
-        <a-table-column title="时间" data-index="createdAt" :width="160">
-          <template #cell="{ record }">
-            <span class="time-text">{{ formatDateTime(record.createdAt) }}</span>
-          </template>
-        </a-table-column>
-
-        <!-- 操作者 -->
-        <a-table-column title="操作者" data-index="operatorName" :width="120">
-          <template #cell="{ record }">
-            <span class="operator-name">{{ record.operatorName }}</span>
-          </template>
-        </a-table-column>
-
-        <!-- 操作 -->
-        <a-table-column title="操作" data-index="action" :width="160">
-          <template #cell="{ record }">
-            <span class="action-tag" :class="getActionClass(record.action)">
-              {{ getActionLabel(record.action) }}
-            </span>
-          </template>
-        </a-table-column>
-
-        <!-- 目标类型 -->
-        <a-table-column title="目标类型" data-index="targetType" :width="90">
-          <template #cell="{ record }">
-            <span class="target-type">{{ getTargetTypeLabel(record.targetType) }}</span>
-          </template>
-        </a-table-column>
-
-        <!-- 目标 -->
-        <a-table-column title="目标" data-index="targetName" :width="130">
-          <template #cell="{ record }">
-            <span class="target-name">{{ record.targetName || '—' }}</span>
-          </template>
-        </a-table-column>
-
-        <!-- 变更详情 -->
-        <a-table-column title="变更详情" data-index="details" ellipsis>
-          <template #cell="{ record }">
-            <span class="detail-text">{{ formatDetails(record) }}</span>
-          </template>
-        </a-table-column>
-      </template>
     </AdminDataTable>
   </AdminPageLayout>
 </template>
@@ -161,11 +115,12 @@
  */
 
 import { formatDateTime } from '@/utils/date'
-import { ref, computed } from 'vue'
+import { ref, computed, h } from 'vue'
 import { auditLogApi } from '@/api'
 import type { AuditLogVO } from '@/api/auditLog'
 import { Message } from '@arco-design/web-vue'
 import { AdminPageLayout, AdminDataTable, FilterSelect } from '@/components/admin'
+import type { ColumnDef } from '@/components/admin'
 import { usePagedList } from '@/composables/usePagedList'
 
 // ===== 类型定义 =====
@@ -250,6 +205,30 @@ async function exportJson() {
     exporting.value = false
   }
 }
+
+// ===== 表格列配置 =====
+const tableColumns: ColumnDef[] = [
+  { type: 'date', title: '时间', key: 'createdAt', width: 160, format: 'datetime' },
+  { type: 'text', title: '操作者', key: 'operatorName', width: 120 },
+  {
+    type: 'render', title: '操作', key: 'action', width: 160,
+    render: (record: any) => h('span', {
+      style: 'font-size:12px;padding:2px 8px;border-radius:4px;white-space:nowrap',
+      class: getActionClass(record.action)
+    }, getActionLabel(record.action)),
+  },
+  {
+    type: 'text', title: '目标类型', key: 'targetType', width: 90,
+    format: (v: string) => getTargetTypeLabel(v),
+  },
+  { type: 'text', title: '目标', key: 'targetName', width: 130 },
+  {
+    type: 'render', title: '变更详情', ellipsis: true,
+    render: (record: any) => h('span', {
+      style: 'font-size:12px;color:var(--tf-text-secondary);line-height:1.4'
+    }, formatDetails(record)),
+  },
+]
 
 // ===== 操作类型映射 =====
 

@@ -8,69 +8,17 @@
     </template>
 
     <!-- 动作列表 -->
-    <a-table
+    <AdminDataTable
+      :show-toolbar="false"
       :data="definitions"
       :loading="loading"
-      :pagination="false"
-      row-key="id"
-      :bordered="false"
-      size="medium"
-    >
-      <template #columns>
-        <a-table-column title="动作名称" :width="180">
-          <template #cell="{ record }">
-            <div class="action-name-cell">
-              <span class="action-name">{{ record.label }}</span>
-              <span class="action-key">{{ record.actionKey }}</span>
-            </div>
-          </template>
-        </a-table-column>
-        <a-table-column title="类型" :width="100">
-          <template #cell="{ record }">
-            <a-tag :color="record.actionType === 'rule' ? 'arcoblue' : 'gray'">
-              {{ record.actionType === 'rule' ? '自动执行' : '填表执行' }}
-            </a-tag>
-          </template>
-        </a-table-column>
-        <a-table-column title="可见条件" :width="200">
-          <template #cell="{ record }">
-            <span class="visibility-text">{{ formatVisibility(record.visibility) }}</span>
-          </template>
-        </a-table-column>
-        <a-table-column title="执行动作" :width="250">
-          <template #cell="{ record }">
-            <div class="actions-preview" v-if="record.actionType === 'rule'">
-              <a-tag
-                v-for="(act, idx) in parseExecutionActions(record.executionActions)"
-                :key="idx"
-                size="small"
-                :color="actionTypeColor(act.type)"
-              >{{ actionTypeLabel(act.type) }}{{ act.field ? ': ' + act.field : '' }}{{ act.tagName ? ': ' + act.tagName : '' }}{{ act.statusName ? ': ' + act.statusName : '' }}</a-tag>
-            </div>
-            <span v-else class="actions-text">表单 → 评论{{ record.statusTransitionTo ? ' + 状态变更' : '' }}</span>
-          </template>
-        </a-table-column>
-        <a-table-column title="状态" :width="80">
-          <template #cell="{ record }">
-            <a-switch
-              :model-value="record.enabled"
-              size="small"
-              @change="handleToggle(record)"
-            />
-          </template>
-        </a-table-column>
-        <a-table-column title="操作" :width="150" align="center">
-          <template #cell="{ record }">
-            <a-space>
-              <a-button size="mini" @click="handleEdit(record)">编辑</a-button>
-              <a-popconfirm content="确定删除此动作？" @ok="handleDelete(record)">
-                <a-button size="mini" type="text" status="danger">删除</a-button>
-              </a-popconfirm>
-            </a-space>
-          </template>
-        </a-table-column>
-      </template>
-    </a-table>
+      :total="definitions.length"
+      :current="1"
+      :page-size="definitions.length || 20"
+      :columns="tableColumns"
+      empty-title="暂无自定义动作"
+      empty-description="创建动作来配置工单快捷操作按钮"
+    />
 
     <!-- 创建/编辑弹窗 -->
     <a-modal
@@ -244,12 +192,61 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, h } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { IconPlus, IconDelete } from '@arco-design/web-vue/es/icon'
 import { quickActionApi } from '@/api'
 import type { QuickActionDefinitionVO } from '@/api/quickAction'
 import AdminPageLayout from '@/components/admin/AdminPageLayout.vue'
+import { AdminDataTable } from '@/components/admin'
+import type { ColumnDef } from '@/components/admin'
+
+// ==================== Table Columns ====================
+const tableColumns: ColumnDef[] = [
+  {
+    type: 'render', title: '动作名称', width: 180,
+    render: (record: any) => h('div', { style: 'display:flex;flex-direction:column;gap:2px' }, [
+      h('span', { style: 'font-weight:500;color:var(--tf-text-primary);font-size:13px' }, record.label),
+      h('span', { style: 'font-size:11px;color:var(--tf-text-tertiary);font-family:monospace' }, record.actionKey),
+    ]),
+  },
+  {
+    type: 'badge', title: '类型', key: 'actionType', width: 100,
+    labelMap: { rule: '自动执行', form: '填表执行' },
+    colorMap: { rule: 'blue', form: 'gray' },
+  },
+  {
+    type: 'text', title: '可见条件', key: 'visibility', width: 200,
+    format: (v: string) => formatVisibility(v),
+  },
+  {
+    type: 'render', title: '执行动作', width: 250,
+    render: (record: any) => {
+      if (record.actionType === 'rule') {
+        const acts = parseExecutionActions(record.executionActions)
+        return h('div', { style: 'display:flex;flex-wrap:wrap;gap:4px' },
+          acts.map((act: ExecutionAction, idx: number) => h('span', {
+            key: idx,
+            style: `font-size:11px;padding:1px 6px;border-radius:3px;background:var(--tf-bg-elevated);color:var(--tf-text-secondary)`
+          }, `${actionTypeLabel(act.type)}${act.field ? ': ' + act.field : ''}${act.tagName ? ': ' + act.tagName : ''}${act.statusName ? ': ' + act.statusName : ''}`))
+        )
+      }
+      return h('span', { style: 'font-size:12px;color:var(--tf-text-tertiary)' },
+        `表单 → 评论${record.statusTransitionTo ? ' + 状态变更' : ''}`)
+    },
+  },
+  {
+    type: 'switch', title: '状态', key: 'enabled', width: 80,
+    onChange: (record: any) => handleToggle(record),
+  },
+  {
+    type: 'actions', width: 140,
+    actions: (record: any) => [
+      { label: '编辑', onClick: (r) => handleEdit(r) },
+      { label: '删除', danger: true, onClick: (r) => handleDelete(r) },
+    ],
+  },
+]
 
 // ==================== State ====================
 const loading = ref(false)
@@ -465,39 +462,6 @@ onMounted(loadDefinitions)
 </script>
 
 <style scoped>
-.action-name-cell {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.action-name {
-  font-weight: 500;
-  color: var(--color-text-1);
-}
-
-.action-key {
-  font-size: 11px;
-  color: var(--color-text-4);
-  font-family: monospace;
-}
-
-.visibility-text {
-  font-size: 12px;
-  color: var(--color-text-3);
-}
-
-.actions-preview {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.actions-text {
-  font-size: 12px;
-  color: var(--color-text-3);
-}
-
 /* Form */
 .condition-section {
   background: var(--color-fill-1);

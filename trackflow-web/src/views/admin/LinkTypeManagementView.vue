@@ -6,62 +6,17 @@
       </a-button>
     </template>
 
-    <!-- List with DataContainer for loading / empty states -->
-    <DataContainer
+    <AdminDataTable
+      :show-toolbar="false"
+      :data="linkTypes"
       :loading="loading"
-      :error="error"
-      :is-empty="linkTypes.length === 0"
-      :retry="loadLinkTypes"
+      :total="linkTypes.length"
+      :current="1"
+      :page-size="linkTypes.length || 20"
+      :columns="tableColumns"
       empty-title="暂无自定义关联类型"
       empty-description="系统内置了 7 种标准关联类型。你可以创建自定义类型以满足特殊业务需求。"
-      create-action="创建第一个关联类型"
-      @create="openCreateDialog"
-    >
-      <a-table
-        :data="linkTypes"
-        :pagination="false"
-        :bordered="false"
-        row-key="id"
-        class="lt-table"
-      >
-        <template #columns>
-          <a-table-column title="名称（内部标识）" data-index="name" :width="160">
-            <template #cell="{ record }">
-              <span class="type-name">{{ record.name }}</span>
-              <span v-if="record.isSystem" class="system-badge">系统</span>
-            </template>
-          </a-table-column>
-          <a-table-column title="正向显示名（outward）" data-index="outwardName" :width="180" />
-          <a-table-column title="反向显示名（inward）" data-index="inwardName" :width="180" />
-          <a-table-column title="方向" data-index="direction" :width="120">
-            <template #cell="{ record }">
-              <span class="direction-badge" :class="directionClass(record.direction)">
-                {{ directionLabel(record.direction) }}
-              </span>
-            </template>
-          </a-table-column>
-          <a-table-column title="操作" :width="120" align="right">
-            <template #cell="{ record }">
-              <a-space>
-                <a-button
-                  size="small"
-                  type="text"
-                  :disabled="record.isSystem"
-                  @click="openEditDialog(record)"
-                >编辑</a-button>
-                <a-button
-                  size="small"
-                  type="text"
-                  status="danger"
-                  :disabled="record.isSystem"
-                  @click="confirmDelete(record)"
-                >删除</a-button>
-              </a-space>
-            </template>
-          </a-table-column>
-        </template>
-      </a-table>
-    </DataContainer>
+    />
 
     <!-- Create / Edit Dialog -->
     <a-modal
@@ -138,13 +93,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, h } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { linkTypeApi } from '@/api'
 import type { IssueLinkTypeVO } from '@/api/types'
 import { useRequest } from '@/composables/useRequest'
 import AdminPageLayout from '@/components/admin/AdminPageLayout.vue'
-import DataContainer from '@/components/base/DataContainer.vue'
+import { AdminDataTable } from '@/components/admin'
+import type { ColumnDef } from '@/components/admin'
 
 const saving = ref(false)
 const deleting = ref(false)
@@ -156,7 +112,7 @@ const editingId = ref<string | null>(null)
 const deletingItem = ref<IssueLinkTypeVO | null>(null)
 const deleteUsageCount = ref<number | null>(null)
 
-const { loading, error, execute: loadLinkTypes } = useRequest(
+const { loading, execute: loadLinkTypes } = useRequest(
   () => linkTypeApi.list(),
   {
     immediate: false,
@@ -172,6 +128,33 @@ const form = reactive({
   inwardName: '',
   direction: 'DIRECTED'
 })
+
+// ===== 表格列配置 =====
+const tableColumns: ColumnDef[] = [
+  {
+    type: 'render', title: '名称（内部标识）', key: 'name', width: 160,
+    render: (record: any) => h('span', { style: 'display:flex;align-items:center;gap:6px' }, [
+      h('code', { style: 'font-size:12px;font-family:monospace;font-weight:500;color:var(--tf-text-primary)' }, record.name),
+      record.isSystem ? h('span', {
+        style: 'font-size:10px;padding:2px 6px;border-radius:3px;background:var(--tf-accent-light);color:var(--tf-accent);font-weight:500'
+      }, '系统') : null,
+    ]),
+  },
+  { type: 'text', title: '正向显示名（outward）', key: 'outwardName', width: 180 },
+  { type: 'text', title: '反向显示名（inward）', key: 'inwardName', width: 180 },
+  {
+    type: 'badge', title: '方向', key: 'direction', width: 120,
+    labelMap: { DIRECTED: '有向', UNDIRECTED: '无向', AGGREGATION: '聚合' },
+    colorMap: { DIRECTED: 'blue', UNDIRECTED: 'green', AGGREGATION: 'orange' },
+  },
+  {
+    type: 'actions', width: 140,
+    actions: (record: any) => [
+      { label: '编辑', disabled: record.isSystem, onClick: (r) => openEditDialog(r) },
+      { label: '删除', danger: true, disabled: record.isSystem, onClick: (r) => confirmDelete(r) },
+    ],
+  },
+]
 
 function directionLabel(direction: string): string {
   const map: Record<string, string> = {
@@ -311,52 +294,6 @@ onMounted(() => loadLinkTypes())
 </script>
 
 <style scoped>
-.lt-table {
-  border: 1px solid var(--tf-border-light);
-  border-radius: 8px;
-  overflow: hidden;
-}
-
-.type-name {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--tf-text-primary);
-  font-family: monospace;
-}
-
-.system-badge {
-  margin-left: 6px;
-  font-size: 10px;
-  padding: 2px 6px;
-  border-radius: 3px;
-  background: var(--tf-accent-bg);
-  color: var(--tf-accent);
-  font-weight: 500;
-  font-family: sans-serif;
-}
-
-.direction-badge {
-  font-size: 11px;
-  padding: 2px 8px;
-  border-radius: 3px;
-  font-weight: 500;
-}
-
-.direction-badge.directed {
-  background: var(--tf-accent-bg-light);
-  color: var(--tf-accent);
-}
-
-.direction-badge.undirected {
-  background: var(--tf-success-bg);
-  color: var(--tf-success);
-}
-
-.direction-badge.aggregation {
-  background: var(--tf-warning-bg);
-  color: var(--tf-warning);
-}
-
 /* Form hints */
 .field-hint {
   font-size: 11px;
@@ -366,58 +303,13 @@ onMounted(() => loadLinkTypes())
 }
 
 /* Delete dialog */
-.delete-content {
-  padding: 4px 0;
-}
-
-.delete-warning {
-  display: flex;
-  gap: 12px;
-  align-items: flex-start;
-  padding: 12px;
-  border-radius: 6px;
-  background: var(--tf-bg-elevated);
-  margin-bottom: 12px;
-}
-
-.warning-icon {
-  font-size: 18px;
-  flex-shrink: 0;
-  margin-top: 1px;
-}
-
-.warning-title {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--tf-text-primary);
-  margin: 0 0 6px 0;
-}
-
-.warning-loading {
-  font-size: 12px;
-  color: var(--tf-text-tertiary);
-  margin: 0;
-}
-
-.warning-impact {
-  font-size: 12px;
-  color: var(--tf-warning);
-  margin: 0;
-}
-
-.warning-impact strong {
-  font-weight: 600;
-}
-
-.warning-safe {
-  font-size: 12px;
-  color: var(--tf-success);
-  margin: 0;
-}
-
-.delete-irreversible {
-  font-size: 12px;
-  color: var(--tf-text-muted);
-  margin: 0;
-}
+.delete-content { padding: 4px 0; }
+.delete-warning { display: flex; gap: 12px; align-items: flex-start; padding: 12px; border-radius: 6px; background: var(--tf-bg-elevated); margin-bottom: 12px; }
+.warning-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+.warning-title { font-size: 13px; font-weight: 500; color: var(--tf-text-primary); margin: 0 0 6px 0; }
+.warning-loading { font-size: 12px; color: var(--tf-text-tertiary); margin: 0; }
+.warning-impact { font-size: 12px; color: var(--tf-warning); margin: 0; }
+.warning-impact strong { font-weight: 600; }
+.warning-safe { font-size: 12px; color: var(--tf-success); margin: 0; }
+.delete-irreversible { font-size: 12px; color: var(--tf-text-muted); margin: 0; }
 </style>

@@ -11,85 +11,17 @@
     <a-tabs v-model:active-key="activeTab" class="rule-tabs">
       <!-- Tab 1: 规则列表 -->
       <a-tab-pane key="rules" title="规则列表">
-        <DataContainer
+        <AdminDataTable
+          :show-toolbar="false"
+          :data="rules"
           :loading="loadingRules"
-          :is-empty="rules.length === 0"
+          :total="rules.length"
+          :current="1"
+          :page-size="rules.length || 20"
+          :columns="ruleColumns"
           empty-title="暂无计分规则"
           empty-description="创建规则来实现工单计分与统计"
-          create-action="创建规则"
-          @create="showCreateForm"
-        >
-        <div class="rule-list">
-          <a-table
-            :data="rules"
-            :pagination="false"
-            row-key="id"
-            :bordered="false"
-            size="medium"
-          >
-            <template #columns>
-              <a-table-column title="规则名称" data-index="name" :width="200">
-                <template #cell="{ record }">
-                  <div class="rule-name-cell">
-                    <span class="rule-name">{{ record.name }}</span>
-                    <span v-if="record.description" class="rule-desc">{{ record.description }}</span>
-                  </div>
-                </template>
-              </a-table-column>
-              <a-table-column title="触发类型" :width="100">
-                <template #cell="{ record }">
-                  <a-tag :color="triggerTypeColor(record.triggerType)">
-                    {{ triggerTypeLabel(record.triggerType) }}
-                  </a-tag>
-                </template>
-              </a-table-column>
-              <a-table-column title="计算公式" :width="120">
-                <template #cell="{ record }">
-                  <span class="formula-label">{{ formulaLabel(record.scoreFormula) }}</span>
-                </template>
-              </a-table-column>
-              <a-table-column title="状态" :width="80">
-                <template #cell="{ record }">
-                  <a-switch
-                    :model-value="record.enabled"
-                    size="small"
-                    @change="handleToggle(record)"
-                  />
-                </template>
-              </a-table-column>
-              <a-table-column title="执行次数" data-index="executionCount" :width="90" align="center" />
-              <a-table-column title="最近执行" :width="150">
-                <template #cell="{ record }">
-                  <span v-if="record.lastExecutedAt" class="time-text">
-                    {{ formatDateTime(record.lastExecutedAt) }}
-                  </span>
-                  <span v-else class="time-text empty">从未执行</span>
-                </template>
-              </a-table-column>
-              <a-table-column title="操作" :width="180" align="center">
-                <template #cell="{ record }">
-                  <a-space>
-                    <a-button size="mini" @click="handleEdit(record)">编辑</a-button>
-                    <a-button
-                      v-if="record.triggerType === 'scheduled'"
-                      size="mini"
-                      type="outline"
-                      status="success"
-                      @click="handleExecuteNow(record)"
-                    >执行</a-button>
-                    <a-popconfirm
-                      content="确定删除此规则？所有执行记录将同时删除。"
-                      @ok="handleDelete(record)"
-                    >
-                      <a-button size="mini" type="text" status="danger">删除</a-button>
-                    </a-popconfirm>
-                  </a-space>
-                </template>
-              </a-table-column>
-            </template>
-          </a-table>
-        </div>
-        </DataContainer>
+        />
       </a-tab-pane>
 
       <!-- Tab 2: 执行记录 -->
@@ -112,44 +44,18 @@
             />
           </a-space>
         </div>
-        <a-table
+        <AdminDataTable
+          :show-toolbar="false"
           :data="logs"
           :loading="loadingLogs"
-          :pagination="logPagination"
-          row-key="id"
-          :bordered="false"
-          size="medium"
+          :total="logPagination.total"
+          :current="logPagination.current"
+          :page-size="logPagination.pageSize"
+          :columns="logColumns"
+          empty-title="暂无执行记录"
           @page-change="onLogPageChange"
           @page-size-change="onLogPageSizeChange"
-        >
-          <template #columns>
-            <a-table-column title="工单" :width="140">
-              <template #cell="{ record }">
-                <a class="issue-link" @click="goToIssue(record.issueId)">{{ record.issueKey }}</a>
-              </template>
-            </a-table-column>
-            <a-table-column title="工单标题" data-index="issueTitle" :width="200" ellipsis />
-            <a-table-column title="规则" data-index="ruleName" :width="150" />
-            <a-table-column title="对象" data-index="targetUserName" :width="100" />
-            <a-table-column title="金额/分数" :width="100" align="right">
-              <template #cell="{ record }">
-                <span class="score-value">¥{{ record.score }}</span>
-              </template>
-            </a-table-column>
-            <a-table-column title="执行时间" :width="150">
-              <template #cell="{ record }">
-                <span class="time-text">{{ formatDateTime(record.executedAt) }}</span>
-              </template>
-            </a-table-column>
-            <a-table-column title="操作" :width="80" align="center">
-              <template #cell="{ record }">
-                <a-popconfirm content="确定删除此记录？" @ok="handleDeleteLog(record)">
-                  <a-button size="mini" type="text" status="danger">删除</a-button>
-                </a-popconfirm>
-              </template>
-            </a-table-column>
-          </template>
-        </a-table>
+        />
       </a-tab-pane>
 
       <!-- Tab 3: 统计仪表板 -->
@@ -313,12 +219,14 @@
 
 <script setup lang="ts">
 import { formatDateTime } from '@/utils/date'
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, h } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { useRouter } from 'vue-router'
 import { scoreRuleApi } from '@/api'
 import AdminPageLayout from '@/components/admin/AdminPageLayout.vue'
 import DataContainer from '@/components/base/DataContainer.vue'
+import { AdminDataTable } from '@/components/admin'
+import type { ColumnDef } from '@/components/admin'
 import type { RuleDefinitionVO, RuleExecutionLogVO, RuleStatisticsVO } from '@/api/scoreRule'
 
 const router = useRouter()
@@ -392,6 +300,62 @@ function formulaLabel(formula: string) {
   }
   return map[formula] || formula
 }
+
+// ==================== Table Columns ====================
+const ruleColumns: ColumnDef[] = [
+  {
+    type: 'render', title: '规则名称', key: 'name', width: 200,
+    render: (record: any) => h('div', { style: 'display:flex;flex-direction:column;gap:2px' }, [
+      h('span', { style: 'font-weight:500;font-size:13px;color:var(--tf-text-primary)' }, record.name),
+      record.description ? h('span', { style: 'font-size:11px;color:var(--tf-text-tertiary)' }, record.description) : null,
+    ]),
+  },
+  {
+    type: 'badge', title: '触发类型', key: 'triggerType', width: 100,
+    labelMap: { scheduled: '定时', event: '事件', manual: '手动' },
+    colorMap: { scheduled: 'blue', event: 'orange', manual: 'gray' },
+  },
+  { type: 'text', title: '计算公式', key: 'scoreFormula', width: 120, format: (v: string) => formulaLabel(v) },
+  { type: 'switch', title: '状态', key: 'enabled', width: 80, onChange: (record: any) => handleToggle(record) },
+  { type: 'count', title: '执行次数', key: 'executionCount', width: 90, align: 'center' },
+  {
+    type: 'render', title: '最近执行', width: 150,
+    render: (record: any) => h('span', { style: 'font-size:12px;color:var(--tf-text-secondary)' },
+      record.lastExecutedAt ? formatDateTime(record.lastExecutedAt) : '从未执行'),
+  },
+  {
+    type: 'actions', width: 180,
+    actions: (record: any) => [
+      { label: '编辑', onClick: (r) => handleEdit(r) },
+      { label: '执行', hidden: record.triggerType !== 'scheduled', onClick: (r) => handleExecuteNow(r) },
+      { label: '删除', danger: true, onClick: (r) => handleDelete(r) },
+    ],
+  },
+]
+
+const logColumns: ColumnDef[] = [
+  {
+    type: 'render', title: '工单', width: 140,
+    render: (record: any) => h('a', {
+      style: 'color:var(--tf-accent);font-weight:500;cursor:pointer',
+      onClick: () => goToIssue(record.issueId)
+    }, record.issueKey),
+  },
+  { type: 'text', title: '工单标题', key: 'issueTitle', width: 200, ellipsis: true },
+  { type: 'text', title: '规则', key: 'ruleName', width: 150 },
+  { type: 'text', title: '对象', key: 'targetUserName', width: 100 },
+  {
+    type: 'render', title: '金额/分数', width: 100, align: 'right',
+    render: (record: any) => h('span', { style: 'font-weight:500;color:var(--tf-accent)' }, `¥${record.score}`),
+  },
+  { type: 'date', title: '执行时间', key: 'executedAt', width: 150, format: 'datetime' },
+  {
+    type: 'actions', width: 80,
+    actions: (record: any) => [
+      { label: '删除', danger: true, onClick: (r) => handleDeleteLog(r) },
+    ],
+  },
+]
 
 
 

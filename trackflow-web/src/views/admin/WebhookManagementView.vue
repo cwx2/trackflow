@@ -27,58 +27,17 @@
 
     <!-- Webhook 列表 -->
     <template v-else>
-      <DataContainer
+      <AdminDataTable
+        :show-toolbar="false"
+        :data="webhooks"
         :loading="loading"
-        :is-empty="webhooks.length === 0"
+        :total="webhooks.length"
+        :current="1"
+        :page-size="webhooks.length || 20"
+        :columns="tableColumns"
         empty-title="暂无 Webhook"
         empty-description="创建 Webhook 来接收项目事件通知"
-        create-action="创建 Webhook"
-        @create="openCreateDialog"
-      >
-        <div class="webhook-list">
-        <div v-for="wh in webhooks" :key="wh.id" class="webhook-card">
-          <div class="webhook-main">
-            <div class="webhook-header">
-              <span class="webhook-name">{{ wh.name }}</span>
-              <span class="status-badge" :class="wh.active ? 'active' : 'inactive'">
-                {{ wh.active ? '启用' : '禁用' }}
-              </span>
-            </div>
-            <div class="webhook-url">{{ wh.url }}</div>
-            <div class="webhook-meta">
-              <span class="meta-item">
-                <span class="meta-label">事件：</span>
-                <span class="event-tags">
-                  <span v-for="ev in parseEvents(wh.events)" :key="ev" class="event-tag">{{ ev }}</span>
-                </span>
-              </span>
-              <span class="meta-item">
-                <span class="meta-label">创建时间：</span>
-                {{ formatDate(wh.createdAt) }}
-              </span>
-            </div>
-          </div>
-          <div class="webhook-actions">
-            <a-button type="text" size="mini" @click="viewLogs(wh)" title="查看投递日志">
-              <template #icon><icon-file /></template>
-              日志
-            </a-button>
-            <a-button type="text" size="mini" @click="testWebhook(wh)" :disabled="testingId === wh.id" title="发送测试请求">
-              <template #icon><icon-thunderbolt /></template>
-              {{ testingId === wh.id ? '测试中...' : '测试' }}
-            </a-button>
-            <a-button type="text" size="mini" @click="openEditDialog(wh)" title="编辑">
-              <template #icon><icon-edit /></template>
-              编辑
-            </a-button>
-            <a-button type="text" size="mini" status="danger" @click="confirmDelete(wh)" title="删除">
-              <template #icon><icon-delete /></template>
-              删除
-            </a-button>
-          </div>
-        </div>
-      </div>
-      </DataContainer>
+      />
     </template>
 
     <!-- 创建/编辑弹窗 -->
@@ -184,13 +143,52 @@
 
 <script setup lang="ts">
 import { formatDate, formatDateTime } from '@/utils/date'
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, h } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { projectApi, webhookApi } from '@/api'
 import type { WebhookVO, WebhookLogVO } from '@/api/webhook'
 import AdminPageLayout from '@/components/admin/AdminPageLayout.vue'
 import DataContainer from '@/components/base/DataContainer.vue'
+import { AdminDataTable } from '@/components/admin'
+import type { ColumnDef } from '@/components/admin'
 import { EmptyState } from '@/components/base'
+
+// === Table Columns ===
+const tableColumns: ColumnDef[] = [
+  {
+    type: 'render', title: '名称 / URL', width: 280,
+    render: (record: any) => h('div', { style: 'display:flex;flex-direction:column;gap:3px' }, [
+      h('span', { style: 'font-size:13px;font-weight:500;color:var(--tf-text-primary)' }, record.name),
+      h('span', { style: 'font-size:11px;color:var(--tf-text-tertiary);font-family:monospace;word-break:break-all' }, record.url),
+    ]),
+  },
+  {
+    type: 'status', title: '状态', key: 'active', width: 90,
+    activeValue: (r: any) => r.active,
+    activeLabel: '启用', inactiveLabel: '禁用',
+  },
+  {
+    type: 'render', title: '订阅事件', ellipsis: true,
+    render: (record: any) => {
+      const events = parseEvents(record.events)
+      return h('div', { style: 'display:flex;flex-wrap:wrap;gap:3px' },
+        events.map((ev: string) => h('span', {
+          style: 'font-size:10px;padding:1px 6px;background:var(--tf-bg-body);border:1px solid var(--tf-border-light);border-radius:3px;color:var(--tf-text-secondary)'
+        }, ev))
+      )
+    },
+  },
+  { type: 'date', title: '创建时间', key: 'createdAt', width: 150, format: 'datetime' },
+  {
+    type: 'actions', width: 200,
+    actions: (record: any) => [
+      { label: '日志', onClick: (r) => viewLogs(r) },
+      { label: testingId.value === record.id ? '测试中...' : '测试', disabled: testingId.value === record.id, onClick: (r) => testWebhook(r) },
+      { label: '编辑', onClick: (r) => openEditDialog(r) },
+      { label: '删除', danger: true, onClick: (r) => confirmDelete(r) },
+    ],
+  },
+]
 
 // === State ===
 const projects = ref<{ id: string; name: string; key: string }[]>([])
@@ -431,244 +429,30 @@ onMounted(async () => {
 
 <style scoped>
 /* Filter bar */
-.filter-bar {
-  display: flex;
-  align-items: flex-end;
-  gap: 16px;
-  margin-bottom: 24px;
-  flex-shrink: 0;
-}
-
-.filter-item {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.filter-label {
-  font-size: 12px;
-  color: var(--tf-text-tertiary);
-  font-weight: 500;
-}
-
-/* Webhook list */
-.webhook-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.webhook-card {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  padding: 16px 20px;
-  background: var(--tf-bg-surface);
-  border: 1px solid var(--tf-border-light);
-  border-radius: 8px;
-  transition: border-color 0.15s;
-}
-.webhook-card:hover {
-  border-color: var(--tf-border);
-}
-
-.webhook-main {
-  flex: 1;
-  min-width: 0;
-}
-
-.webhook-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 6px;
-}
-
-.webhook-name {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--tf-text-primary);
-}
-
-.status-badge {
-  font-size: 11px;
-  padding: 2px 8px;
-  border-radius: 3px;
-  font-weight: 500;
-}
-.status-badge.active {
-  background: var(--tf-success-bg);
-  color: var(--tf-success);
-}
-.status-badge.inactive {
-  background: var(--tf-muted-bg);
-  color: var(--tf-text-tertiary);
-}
-
-.webhook-url {
-  font-size: 12px;
-  color: var(--tf-text-secondary);
-  font-family: monospace;
-  margin-bottom: 8px;
-  word-break: break-all;
-}
-
-.webhook-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 16px;
-}
-
-.meta-item {
-  font-size: 11px;
-  color: var(--tf-text-tertiary);
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.meta-label {
-  color: var(--tf-text-muted, var(--tf-text-tertiary));
-}
-
-.event-tags {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.event-tag {
-  font-size: 10px;
-  padding: 1px 6px;
-  background: var(--tf-bg-body);
-  border: 1px solid var(--tf-border-light);
-  border-radius: 3px;
-  color: var(--tf-text-secondary);
-}
-
-.webhook-actions {
-  display: flex;
-  gap: 4px;
-  flex-shrink: 0;
-  margin-left: 16px;
-}
+.filter-bar { display: flex; align-items: flex-end; gap: 16px; margin-bottom: 24px; flex-shrink: 0; }
+.filter-item { display: flex; flex-direction: column; gap: 4px; }
+.filter-label { font-size: 12px; color: var(--tf-text-tertiary); font-weight: 500; }
 
 /* Form events grid */
-.event-checkboxes {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-}
+.event-checkboxes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 
-/* Warning text in delete dialog */
-.warning-text {
-  font-size: 12px;
-  color: var(--tf-text-tertiary);
-  margin-top: 8px;
-}
+/* Delete dialog */
+.warning-text { font-size: 12px; color: var(--tf-text-tertiary); margin-top: 8px; }
 
 /* Log list */
-.log-list {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.log-item {
-  padding: 10px 12px;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-.log-item:hover {
-  background: var(--tf-bg-hover);
-}
-
-.log-summary {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.log-status {
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 11px;
-  font-weight: 600;
-  flex-shrink: 0;
-}
-.log-status.success {
-  background: var(--tf-success-bg);
-  color: var(--tf-success);
-}
-.log-status.failed {
-  background: var(--tf-danger-medium);
-  color: var(--tf-danger);
-}
-
-.log-event {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--tf-text-primary);
-  flex: 1;
-}
-
-.log-code {
-  font-size: 11px;
-  font-family: monospace;
-  color: var(--tf-text-secondary);
-  padding: 2px 6px;
-  background: var(--tf-bg-body);
-  border-radius: 3px;
-}
-
-.log-time {
-  font-size: 11px;
-  color: var(--tf-text-tertiary);
-  white-space: nowrap;
-}
-
-.log-detail {
-  margin-top: 8px;
-  padding: 10px 12px;
-  background: var(--tf-bg-body);
-  border-radius: 4px;
-  border: 1px solid var(--tf-border-light);
-}
-
-.log-detail-row {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.detail-label {
-  font-size: 11px;
-  color: var(--tf-text-tertiary);
-  font-weight: 500;
-}
-
-.detail-code {
-  font-size: 11px;
-  font-family: monospace;
-  color: var(--tf-text-secondary);
-  white-space: pre-wrap;
-  word-break: break-all;
-  margin: 0;
-  max-height: 120px;
-  overflow-y: auto;
-}
-
-.log-pagination {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding-top: 12px;
-  border-top: 1px solid var(--tf-border-light);
-  margin-top: 12px;
-}
+.log-list { display: flex; flex-direction: column; gap: 2px; }
+.log-item { padding: 10px 12px; border-radius: 4px; cursor: pointer; transition: background 0.15s; }
+.log-item:hover { background: var(--tf-bg-hover); }
+.log-summary { display: flex; align-items: center; gap: 10px; }
+.log-status { width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; flex-shrink: 0; }
+.log-status.success { background: var(--tf-success-bg); color: var(--tf-success); }
+.log-status.failed { background: var(--tf-danger-medium); color: var(--tf-danger); }
+.log-event { font-size: 12px; font-weight: 500; color: var(--tf-text-primary); flex: 1; }
+.log-code { font-size: 11px; font-family: monospace; color: var(--tf-text-secondary); padding: 2px 6px; background: var(--tf-bg-body); border-radius: 3px; }
+.log-time { font-size: 11px; color: var(--tf-text-tertiary); white-space: nowrap; }
+.log-detail { margin-top: 8px; padding: 10px 12px; background: var(--tf-bg-body); border-radius: 4px; border: 1px solid var(--tf-border-light); }
+.log-detail-row { display: flex; flex-direction: column; gap: 4px; }
+.detail-label { font-size: 11px; color: var(--tf-text-tertiary); font-weight: 500; }
+.detail-code { font-size: 11px; font-family: monospace; color: var(--tf-text-secondary); white-space: pre-wrap; word-break: break-all; margin: 0; max-height: 120px; overflow-y: auto; }
+.log-pagination { display: flex; align-items: center; justify-content: center; padding-top: 12px; border-top: 1px solid var(--tf-border-light); margin-top: 12px; }
 </style>
