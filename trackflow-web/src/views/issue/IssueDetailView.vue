@@ -728,7 +728,7 @@ const sidebarFields = computed<SidebarField[]>(() => {
   const canEditCF = canEdit || hasProjectPermission('issue:edit_custom_fields')
   const canTransition = canChangeStatusEffective.value
   const canAssign = canAssignIssue.value
-  const canSprint = canEditSprint.value
+  const canSprint = canEditIssueEffective.value || canEditSprint.value
   const statusOptions = [
     { value: currentStatus.value.id, label: `${currentStatus.value.name}（当前）`, dot: currentStatus.value.color },
     ...availableTransitions.value.map(s => ({ value: s.id, label: s.blocked ? `⚠ ${s.transitionName || s.name}` : (s.transitionName || s.name), dot: s.color, badge: s.blocked ? '被阻塞' : undefined, badgeColor: s.blocked ? '#d29922' : undefined }))

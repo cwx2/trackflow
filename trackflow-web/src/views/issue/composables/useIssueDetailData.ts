@@ -338,7 +338,7 @@ export function useIssueDetailData() {
     const perms = await loadProjectPermissions(pid)
     const isAdmin = authStore.hasGlobalPermission('system:admin')
     const needTransitions = isAdmin || perms.has('issue:change_status')
-    const needSprintOptions = isAdmin || perms.has('sprint:edit')
+    const needSprintOptions = isAdmin || perms.has('sprint:edit') || perms.has('issue:edit') || perms.has('issue:edit_own') || perms.has('issue:edit_assigned')
     const needMemberOptions = isAdmin || perms.has('issue:assign')
 
     try {
