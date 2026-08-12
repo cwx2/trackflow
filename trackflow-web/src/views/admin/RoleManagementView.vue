@@ -115,7 +115,7 @@
         </a-table-column>
 
         <!-- 操作 -->
-        <a-table-column title="操作" :width="220" align="right" fixed="right" cell-class="col-actions" header-cell-class="col-actions">
+        <a-table-column title="操作" :width="220" align="right" fixed="right">
           <template #cell="{ record }">
             <div class="action-col">
               <a-button type="text" size="mini" @click="openUsersDialog(record)">用户</a-button>

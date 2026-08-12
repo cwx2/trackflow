@@ -115,7 +115,7 @@
             </a-tag>
           </template>
         </a-table-column>
-        <a-table-column title="操作" :width="160" align="right" cell-class="col-actions" header-cell-class="col-actions">
+        <a-table-column title="操作" :width="160" align="right" fixed="right">
           <template #cell="{ record }">
             <div class="action-col">
               <a-button
