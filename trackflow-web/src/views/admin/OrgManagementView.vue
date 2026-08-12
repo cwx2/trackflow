@@ -49,7 +49,7 @@
             <span class="time-text">{{ formatDate(record.createdAt) }}</span>
           </template>
         </a-table-column>
-        <a-table-column title="操作" :width="140" align="right" cell-class="col-actions" header-cell-class="col-actions">
+        <a-table-column title="操作" :width="140" align="right">
           <template #cell="{ record }">
             <a-button type="text" size="mini" @click.stop="editOrg(record)">编辑</a-button>
             <a-button type="text" size="mini" status="danger" @click.stop="deleteOrg(record)">删除</a-button>

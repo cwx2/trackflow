@@ -153,7 +153,7 @@
                   <span v-else>{{ record.issueTypes.join(', ') }}</span>
                 </template>
               </a-table-column>
-              <a-table-column title="操作" :width="120" align="right" cell-class="col-actions" header-cell-class="col-actions">
+              <a-table-column title="操作" :width="120" align="center">
                 <template #cell="{ record }">
                   <a-button type="text" size="mini" @click.stop="openEdit(record)">编辑</a-button>
                   <a-tooltip v-if="record.isBuiltIn" content="内置字段不可删除">

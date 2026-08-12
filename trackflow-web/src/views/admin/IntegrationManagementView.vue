@@ -146,7 +146,7 @@
                   {{ formatDateTime(record.createdAt) }}
                 </template>
               </a-table-column>
-              <a-table-column title="操作" :width="80" fixed="right" cell-class="col-actions" header-cell-class="col-actions">
+              <a-table-column title="操作" :width="80" fixed="right">
                 <template #cell="{ record }">
                   <a-button
                     v-if="record.status === 'failed'"
