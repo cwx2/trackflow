@@ -145,10 +145,10 @@
                 <div class="card-left-border" :style="{ backgroundColor: issue.priorityColor || getPriorityColor(issue.priority) }"></div>
                 <div class="card-content">
                   <div class="card-top">
-                    <span class="card-key">{{ issue.issueKey }}</span>
+                    <router-link :to="`/issues/${issue.issueKey}`" class="card-key card-key--link" target="_blank" @click.stop>{{ issue.issueKey }}</router-link>
                     <IssuePriorityBadge :priority="issue.priority" :color="issue.priorityColor" mode="dot" size="small" />
                   </div>
-                  <div class="card-title">{{ issue.title }}</div>
+                  <router-link :to="`/issues/${issue.issueKey}`" class="card-title card-title--link" target="_blank" @click.stop>{{ issue.title }}</router-link>
                   <div v-if="issue.dueDate" class="card-due" :class="'card-due--' + getDueDateStatus(issue.dueDate)">
                     <icon-clock-circle class="card-due-icon" />
                     <span class="card-due-text">{{ formatDueDate(issue.dueDate) }}</span>
@@ -328,10 +328,10 @@
                 <div class="card-left-border" :style="{ backgroundColor: issue.priorityColor || getPriorityColor(issue.priority) }"></div>
                 <div class="card-content">
                   <div class="card-top">
-                    <span class="card-key">{{ issue.issueKey }}</span>
+                    <router-link :to="`/issues/${issue.issueKey}`" class="card-key card-key--link" target="_blank" @click.stop>{{ issue.issueKey }}</router-link>
                     <IssuePriorityBadge :priority="issue.priority" :color="issue.priorityColor" mode="dot" size="small" />
                   </div>
-                  <div class="card-title">{{ issue.title }}</div>
+                  <router-link :to="`/issues/${issue.issueKey}`" class="card-title card-title--link" target="_blank" @click.stop>{{ issue.title }}</router-link>
                   <div v-if="issue.dueDate" class="card-due" :class="'card-due--' + getDueDateStatus(issue.dueDate)">
                     <icon-clock-circle class="card-due-icon" />
                     <span class="card-due-text">{{ formatDueDate(issue.dueDate) }}</span>
@@ -1443,6 +1443,15 @@ onMounted(async () => {
   color: var(--color-text-3);
   font-family: monospace;
 }
+.card-key--link {
+  color: var(--tf-accent, var(--color-text-3));
+  text-decoration: none;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+.card-key--link:hover {
+  text-decoration: underline;
+}
 .card-title {
   font-size: 12px;
   font-weight: 500;
@@ -1452,6 +1461,14 @@ onMounted(async () => {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+.card-title--link {
+  text-decoration: none;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+.card-title--link:hover {
+  color: var(--tf-accent);
 }
 .card-meta {
   display: flex;
