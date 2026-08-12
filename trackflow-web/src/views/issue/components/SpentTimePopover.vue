@@ -1,6 +1,6 @@
 ﻿<template>
   <Transition name="stp-fade">
-    <div v-if="visible" class="spent-time-panel" @click.self="$emit('update:visible', false)">
+    <div v-if="visible" class="spent-time-panel">
       <div class="stp-content" ref="panelRef">
         <div class="stp-header">
           <span class="stp-title">⏱ 工时明细</span>
@@ -98,12 +98,22 @@ function onKeydown(e: KeyboardEvent) {
   }
 }
 
+function onClickOutside(e: MouseEvent) {
+  if (!props.visible) return
+  const panel = panelRef.value
+  if (panel && !panel.contains(e.target as Node)) {
+    emit('update:visible', false)
+  }
+}
+
 onMounted(() => {
   document.addEventListener('keydown', onKeydown)
+  document.addEventListener('mousedown', onClickOutside)
 })
 
 onUnmounted(() => {
   document.removeEventListener('keydown', onKeydown)
+  document.removeEventListener('mousedown', onClickOutside)
 })
 
 async function loadEntries() {
@@ -134,18 +144,14 @@ async function loadEntries() {
 <style scoped>
 .spent-time-panel {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  top: 80px;
+  right: 280px;
   z-index: 50;
-  display: flex;
-  justify-content: flex-end;
-  align-items: flex-start;
-  padding: 80px 280px 0 0;
+  pointer-events: none;
 }
 
 .stp-content {
+  pointer-events: auto;
   background: var(--tf-bg-elevated, var(--color-bg-2));
   border: 1px solid var(--tf-border-light);
   border-radius: 8px;
