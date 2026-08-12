@@ -187,5 +187,4 @@ onMounted(loadOrgs)
 .project-count { font-size: 13px; font-weight: 500; color: var(--text-primary); }
 .description-text { color: var(--text-secondary); }
 .time-text { font-size: var(--font-size-xs); color: var(--text-secondary); }
-.empty-state-hint { color: var(--text-tertiary); margin-bottom: 12px; font-size: 13px; }
 </style>

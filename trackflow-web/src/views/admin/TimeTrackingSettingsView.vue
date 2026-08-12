@@ -374,15 +374,6 @@ onMounted(loadSettings)
   color: var(--tf-accent);
 }
 
-.settings-loading {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 24px 0;
-  color: var(--tf-text-tertiary);
-  font-size: 13px;
-}
-
 .settings-section {
   margin-bottom: 32px;
   padding-bottom: 24px;

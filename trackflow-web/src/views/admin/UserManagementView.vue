@@ -853,8 +853,6 @@ onMounted(() => {
 .user-login { font-size: 11px; color: var(--text-muted); line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .time-text { font-size: var(--font-size-xs); color: var(--text-secondary); }
 
-.empty-state-hint { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
-
 /* Modal */
 .modal-footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border-light); }
 
