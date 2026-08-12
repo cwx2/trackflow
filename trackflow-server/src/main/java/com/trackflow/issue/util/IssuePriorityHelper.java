@@ -25,13 +25,12 @@ public final class IssuePriorityHelper {
     /**
      * 优先级语义排序 CASE 表达式（SQL 片段）。
      *
-     * <p>使用 LOWER() 确保不受数据库存储大小写差异影响。
-     * 数值越小代表优先级越高：Critical=1, High=2, Normal=3, Low=4, 其他=5。</p>
-     *
-     * <p>表达式由 {@link IssuePriority#sortCaseExpression()} 统一生成，
-     * 避免排序逻辑重复定义。</p>
+     * <p>使用 priority_option_id 列关联 custom_field_option.position 排序。
+     * 当 priority_option_id 为 null 时（历史数据未迁移），回退到旧 CASE 表达式排序。</p>
      */
-    public static final String PRIORITY_ORDER_EXPR = IssuePriority.sortCaseExpression();
+    public static final String PRIORITY_ORDER_EXPR =
+            "COALESCE((SELECT position FROM custom_field_option WHERE id = priority_option_id), "
+            + IssuePriority.sortCaseExpression() + ")";
 
     /**
      * 对 QueryWrapper 应用优先级排序（作为唯一排序条件，附带 updated_at 作为次级排序）。

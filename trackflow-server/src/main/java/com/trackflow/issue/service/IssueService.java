@@ -171,8 +171,12 @@ public class IssueService {
         issue.setTitle(dto.getTitle());
         issue.setDescription(dto.getDescription());
         issue.setIssueType(issueTypeFieldService.normalizeIssueType(dto.getIssueType(), dto.getProjectId()));
+        // 写入 issue_type_option_id（从字符串值反查 option）
+        issue.setIssueTypeOptionId(resolveOptionId(issue.getIssueType(), dto.getProjectId(), IssueTypeFieldService.ISSUE_TYPE_FIELD_ID));
         issue.setStatusId(resolvedStatusId);
         issue.setPriority(dto.getPriority() != null ? dto.getPriority() : priorityFieldService.getDefaultPriority(dto.getProjectId()));
+        // 写入 priority_option_id（从字符串值反查 option）
+        issue.setPriorityOptionId(resolveOptionId(issue.getPriority(), dto.getProjectId(), PriorityFieldService.PRIORITY_FIELD_ID));
         // 校验 assignee 是否为有效的项目成员
         validateAssignee(dto.getAssigneeId(), dto.getProjectId());
         issue.setAssigneeId(normalizeAssigneeId(dto.getAssigneeId()));
@@ -838,6 +842,7 @@ public class IssueService {
 
                 recordActivity(id, currentUserId, "updated", "issue_type", oldType, newType);
                 issue.setIssueType(newType);
+                issue.setIssueTypeOptionId(resolveOptionId(newType, issue.getProjectId(), IssueTypeFieldService.ISSUE_TYPE_FIELD_ID));
             }
         }
         if (dto.getPriority() != null) {
@@ -851,6 +856,7 @@ public class IssueService {
             }
             recordActivity(id, currentUserId, "updated", "priority", oldPriority, dto.getPriority());
             issue.setPriority(dto.getPriority());
+            issue.setPriorityOptionId(resolveOptionId(dto.getPriority(), issue.getProjectId(), PriorityFieldService.PRIORITY_FIELD_ID));
             // 收集优先级变更（仅当实际变更时）
             if (!dto.getPriority().equals(oldPriority)) {
                 fieldChanges.put("priority", new String[]{oldPriority, dto.getPriority()});
@@ -1787,6 +1793,36 @@ public class IssueService {
             return Long.parseLong(key);
         } catch (NumberFormatException e) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "自定义字段 ID 格式错误: " + key);
+        }
+    }
+
+    /**
+     * 根据字段值查找 custom_field_option.id（用于写入 priority_option_id / issue_type_option_id）。
+     *
+     * @param value     字段值（如 "高"、"缺陷"）
+     * @param projectId 项目 ID（支持项目独立选项集）
+     * @param fieldId   自定义字段定义 ID
+     * @return option ID，如果找不到返回 null
+     */
+    private Long resolveOptionId(String value, Long projectId, long fieldId) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        String optionIdStr;
+        if (fieldId == PriorityFieldService.PRIORITY_FIELD_ID) {
+            optionIdStr = priorityFieldService.getOptionIdByValue(value, projectId);
+        } else if (fieldId == IssueTypeFieldService.ISSUE_TYPE_FIELD_ID) {
+            optionIdStr = issueTypeFieldService.getOptionIdByValue(value, projectId);
+        } else {
+            return null;
+        }
+        if (optionIdStr == null) {
+            return null;
+        }
+        try {
+            return Long.parseLong(optionIdStr);
+        } catch (NumberFormatException e) {
+            return null;
         }
     }
 }

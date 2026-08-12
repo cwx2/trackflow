@@ -1,6 +1,8 @@
 package com.trackflow.issue.service;
 
 import com.trackflow.common.constant.IssueStatusCategory;
+import com.trackflow.customfield.entity.CustomFieldOption;
+import com.trackflow.customfield.mapper.CustomFieldOptionMapper;
 import com.trackflow.customfield.service.CustomFieldService;
 import com.trackflow.issue.converter.IssueConverter;
 import com.trackflow.issue.entity.IssueTag;
@@ -44,6 +46,7 @@ public class IssueDetailVOAssembler {
     private final IssueVisibilityUserMapper visibilityUserMapper;
     private final SysUserMapper sysUserMapper;
     private final CustomFieldService customFieldService;
+    private final CustomFieldOptionMapper customFieldOptionMapper;
     private final IssueTagService tagService;
 
     /**
@@ -69,6 +72,10 @@ public class IssueDetailVOAssembler {
         vo.setIssueType(row.getIssueType());
         vo.setStatusId(String.valueOf(row.getStatusId()));
         vo.setPriority(row.getPriority());
+
+        // ===== 填充 priority/issueType 颜色（从 option 表） =====
+        fillPriorityAndTypeColor(vo, row);
+
         vo.setAssigneeId(row.getAssigneeId() != null ? String.valueOf(row.getAssigneeId()) : null);
         vo.setAssigneeName(row.getAssigneeName());
         vo.setAssigneeAvatarUrl(row.getAssigneeAvatarUrl());
@@ -212,6 +219,35 @@ public class IssueDetailVOAssembler {
             } else {
                 vo.setVisibilityUserIds(List.of());
                 vo.setVisibilityUserNames(List.of());
+            }
+        }
+    }
+
+    /**
+     * 从 custom_field_option 表填充 priority/issueType 的颜色字段
+     */
+    private void fillPriorityAndTypeColor(IssueDetailVO vo, IssueDetailRow row) {
+        List<Long> optionIds = new ArrayList<>();
+        if (row.getPriorityOptionId() != null) optionIds.add(row.getPriorityOptionId());
+        if (row.getIssueTypeOptionId() != null) optionIds.add(row.getIssueTypeOptionId());
+        if (optionIds.isEmpty()) return;
+
+        List<CustomFieldOption> options = customFieldOptionMapper.selectBatchIds(optionIds);
+        Map<Long, CustomFieldOption> optionMap = options.stream()
+                .collect(Collectors.toMap(CustomFieldOption::getId, o -> o, (a, b) -> a));
+
+        if (row.getPriorityOptionId() != null) {
+            CustomFieldOption opt = optionMap.get(row.getPriorityOptionId());
+            if (opt != null) {
+                vo.setPriority(opt.getValue());
+                vo.setPriorityColor(opt.getColor());
+            }
+        }
+        if (row.getIssueTypeOptionId() != null) {
+            CustomFieldOption opt = optionMap.get(row.getIssueTypeOptionId());
+            if (opt != null) {
+                vo.setIssueType(opt.getValue());
+                vo.setIssueTypeColor(opt.getColor());
             }
         }
     }

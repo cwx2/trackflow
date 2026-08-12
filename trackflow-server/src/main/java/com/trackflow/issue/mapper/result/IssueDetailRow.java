@@ -21,8 +21,10 @@ public class IssueDetailRow {
     private String title;
     private String description;
     private String issueType;
+    private Long issueTypeOptionId;
     private Long statusId;
     private String priority;
+    private Long priorityOptionId;
     private Long assigneeId;
     private Long reporterId;
     private Long sprintId;

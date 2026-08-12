@@ -1,5 +1,7 @@
 package com.trackflow.issue.service;
 
+import com.trackflow.customfield.entity.CustomFieldOption;
+import com.trackflow.customfield.mapper.CustomFieldOptionMapper;
 import com.trackflow.customfield.service.CustomFieldService;
 import com.trackflow.customfield.vo.CustomFieldValueVO;
 import com.trackflow.issue.entity.Issue;
@@ -53,6 +55,7 @@ public class IssueVOAssembler {
     private final IssueMapper issueMapper;
     private final ProjectMapper projectMapper;
     private final CustomFieldService customFieldService;
+    private final CustomFieldOptionMapper customFieldOptionMapper;
     private final IssueTagService tagService;
     private final WorkflowService workflowService;
     private final com.trackflow.board.mapper.BoardGeneralConfigMapper boardGeneralConfigMapper;
@@ -73,6 +76,7 @@ public class IssueVOAssembler {
         fillStatusInfo(issues, voList);
         fillSprintInfo(issues, voList);
         fillMultiSprintInfo(issues, voList);
+        fillPriorityAndTypeInfo(issues, voList);
         fillCustomFieldValues(issues, voList);
         fillTagInfo(issues, voList);
     }
@@ -228,6 +232,41 @@ public class IssueVOAssembler {
                 }
                 voList.get(i).setSprintIds(ids);
                 voList.get(i).setSprintNames(names);
+            }
+        }
+    }
+
+    /**
+     * 批量填充 priority/issueType 的颜色字段（从 custom_field_option 关联查询）
+     */
+    private void fillPriorityAndTypeInfo(List<Issue> issues, List<IssueVO> voList) {
+        Set<Long> optionIds = new HashSet<>();
+        for (Issue issue : issues) {
+            if (issue.getPriorityOptionId() != null) optionIds.add(issue.getPriorityOptionId());
+            if (issue.getIssueTypeOptionId() != null) optionIds.add(issue.getIssueTypeOptionId());
+        }
+        if (optionIds.isEmpty()) return;
+
+        Map<Long, CustomFieldOption> optionMap = customFieldOptionMapper.selectBatchIds(optionIds)
+                .stream().collect(Collectors.toMap(CustomFieldOption::getId, o -> o, (a, b) -> a));
+
+        for (int i = 0; i < issues.size(); i++) {
+            Issue issue = issues.get(i);
+            IssueVO vo = voList.get(i);
+
+            if (issue.getPriorityOptionId() != null) {
+                CustomFieldOption opt = optionMap.get(issue.getPriorityOptionId());
+                if (opt != null) {
+                    vo.setPriority(opt.getValue());
+                    vo.setPriorityColor(opt.getColor());
+                }
+            }
+            if (issue.getIssueTypeOptionId() != null) {
+                CustomFieldOption opt = optionMap.get(issue.getIssueTypeOptionId());
+                if (opt != null) {
+                    vo.setIssueType(opt.getValue());
+                    vo.setIssueTypeColor(opt.getColor());
+                }
             }
         }
     }

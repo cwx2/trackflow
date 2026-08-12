@@ -20,6 +20,10 @@ public class IssueVO {
     private String statusName;
     private String statusColor;
     private String priority;
+    /** 优先级颜色（HEX 格式，来自 custom_field_option.color） */
+    private String priorityColor;
+    /** 工单类型颜色（HEX 格式，来自 custom_field_option.color） */
+    private String issueTypeColor;
     private String assigneeId;
     private String assigneeName;
     private String assigneeAvatarUrl;

@@ -16,7 +16,8 @@
     <select id="selectDetailById" resultType="com.trackflow.issue.mapper.result.IssueDetailRow">
         SELECT
             i.id, i.project_id, i.issue_key, i.title, i.description,
-            i.issue_type, i.status_id, i.priority, i.assignee_id, i.reporter_id,
+            i.issue_type, i.issue_type_option_id, i.status_id, i.priority, i.priority_option_id,
+            i.assignee_id, i.reporter_id,
             i.sprint_id, i.parent_id, i.due_date, i.estimated_hours, i.spent_hours,
             i.derived_spent_hours, i.derived_estimated_hours,
             i.resolved_at, i.created_at, i.updated_at, i.version,
@@ -367,7 +368,8 @@
     <select id="selectBoardCards" resultType="com.trackflow.issue.mapper.result.BoardCardRow">
         SELECT
             i.id, i.project_id, p.key AS project_key, i.issue_key, i.title, i.issue_type,
-            i.status_id, i.priority, i.assignee_id, i.sprint_id,
+            i.status_id, i.priority, i.priority_option_id, i.issue_type_option_id,
+            i.assignee_id, i.sprint_id,
             i.due_date, i.estimated_hours, i.child_count, i.child_closed_count,
             i.created_at, i.resolved_at,
             i.parent_id,
@@ -460,7 +462,8 @@
     <select id="selectBoardCardsMultiProject" resultType="com.trackflow.issue.mapper.result.BoardCardRow">
         SELECT
             i.id, i.project_id, p.key AS project_key, i.issue_key, i.title, i.issue_type,
-            i.status_id, i.priority, i.assignee_id, i.sprint_id,
+            i.status_id, i.priority, i.priority_option_id, i.issue_type_option_id,
+            i.assignee_id, i.sprint_id,
             i.due_date, i.estimated_hours, i.child_count, i.child_closed_count,
             i.created_at, i.resolved_at,
             i.parent_id,

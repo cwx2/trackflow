@@ -22,6 +22,8 @@ public class BoardCardRow {
     private String statusName;
     private String statusColor;
     private String priority;
+    private Long priorityOptionId;
+    private Long issueTypeOptionId;
     private Long assigneeId;
     private String assigneeName;
     private String assigneeAvatarUrl;

@@ -49,6 +49,7 @@ public class ReportStatisticsService {
     private final StringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
     private final QueryExecutor queryExecutor;
+    private final com.trackflow.issue.service.PriorityFieldService priorityFieldService;
 
     private static final String CACHE_PREFIX = "report:dashboard:";
     private static final long CACHE_TTL_SECONDS = 90;
@@ -616,17 +617,29 @@ public class ReportStatisticsService {
             total += cnt;
         }
 
-        List<String> priorityOrder = IssuePriority.ALL_VALUES;
-        Map<String, String> priorityColors = IssuePriority.COLOR_MAP;
+        // 使用 custom_field_option 的 position 排序和 color 值（而非硬编码枚举颜色）
+        List<com.trackflow.customfield.entity.CustomFieldOption> priorityOptions =
+                priorityFieldService.getGlobalPriorityOptions();
 
         List<String> labels = new ArrayList<>();
         List<Long> data = new ArrayList<>();
         List<String> colors = new ArrayList<>();
 
-        for (String priority : priorityOrder) {
-            labels.add(priority);
-            data.add(grouped.getOrDefault(priority, 0L));
-            colors.add(priorityColors.getOrDefault(priority, "#6b7280"));
+        if (priorityOptions != null && !priorityOptions.isEmpty()) {
+            for (com.trackflow.customfield.entity.CustomFieldOption opt : priorityOptions) {
+                labels.add(opt.getValue());
+                data.add(grouped.getOrDefault(opt.getValue(), 0L));
+                colors.add(opt.getColor() != null ? opt.getColor() : "#6b7280");
+            }
+        } else {
+            // fallback to enum (safety net)
+            List<String> priorityOrder = IssuePriority.ALL_VALUES;
+            Map<String, String> priorityColors = IssuePriority.COLOR_MAP;
+            for (String priority : priorityOrder) {
+                labels.add(priority);
+                data.add(grouped.getOrDefault(priority, 0L));
+                colors.add(priorityColors.getOrDefault(priority, "#6b7280"));
+            }
         }
 
         PriorityDistributionVO vo = new PriorityDistributionVO();

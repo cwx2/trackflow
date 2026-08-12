@@ -19,8 +19,10 @@ public class Issue implements Serializable {
     private String title;
     private String description;
     private String issueType;
+    private Long issueTypeOptionId;
     private Long statusId;
     private String priority;
+    private Long priorityOptionId;
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private Long assigneeId;
     private Long reporterId;

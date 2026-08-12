@@ -66,6 +66,7 @@ public class BoardDataService {
     private final BoardGeneralConfigService boardGeneralConfigService;
     private final BoardCardConfigService boardCardConfigService;
     private final CustomFieldService customFieldService;
+    private final com.trackflow.customfield.mapper.CustomFieldOptionMapper customFieldOptionMapper;
     private final IssueTagRelationMapper issueTagRelationMapper;
     private final IssueTagMapper issueTagMapper;
     private final SprintMapper sprintMapper;
@@ -300,6 +301,19 @@ public class BoardDataService {
      */
     private List<BoardCardVO> convertToCardVOs(List<BoardCardRow> rows) {
         List<BoardCardVO> cards = new ArrayList<>(rows.size());
+
+        // Collect option IDs for batch query
+        Set<Long> optionIds = new HashSet<>();
+        for (BoardCardRow row : rows) {
+            if (row.getPriorityOptionId() != null) optionIds.add(row.getPriorityOptionId());
+            if (row.getIssueTypeOptionId() != null) optionIds.add(row.getIssueTypeOptionId());
+        }
+        Map<Long, com.trackflow.customfield.entity.CustomFieldOption> optionMap = Collections.emptyMap();
+        if (!optionIds.isEmpty()) {
+            optionMap = customFieldOptionMapper.selectBatchIds(optionIds).stream()
+                    .collect(Collectors.toMap(com.trackflow.customfield.entity.CustomFieldOption::getId, o -> o, (a, b) -> a));
+        }
+
         for (BoardCardRow row : rows) {
             BoardCardVO card = new BoardCardVO();
             card.setId(String.valueOf(row.getId()));
@@ -312,6 +326,21 @@ public class BoardDataService {
             card.setStatusName(row.getStatusName());
             card.setStatusColor(row.getStatusColor());
             card.setPriority(row.getPriority());
+            // Fill priority/type colors from option table
+            if (row.getPriorityOptionId() != null) {
+                com.trackflow.customfield.entity.CustomFieldOption pOpt = optionMap.get(row.getPriorityOptionId());
+                if (pOpt != null) {
+                    card.setPriority(pOpt.getValue());
+                    card.setPriorityColor(pOpt.getColor());
+                }
+            }
+            if (row.getIssueTypeOptionId() != null) {
+                com.trackflow.customfield.entity.CustomFieldOption tOpt = optionMap.get(row.getIssueTypeOptionId());
+                if (tOpt != null) {
+                    card.setIssueType(tOpt.getValue());
+                    card.setIssueTypeColor(tOpt.getColor());
+                }
+            }
             card.setAssigneeId(row.getAssigneeId() != null ? String.valueOf(row.getAssigneeId()) : null);
             card.setAssigneeName(row.getAssigneeName());
             card.setAssigneeAvatarUrl(row.getAssigneeAvatarUrl());
