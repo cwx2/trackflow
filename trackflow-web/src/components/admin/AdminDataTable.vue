@@ -42,7 +42,7 @@
         :row-selection="selectable ? rowSelectionConfig : undefined"
         :row-class="rowClass"
         :draggable="draggable ? { type: 'handle' } : undefined"
-        :scrollbar="true"
+        :scrollbar="false"
         v-model:selected-keys="internalSelectedKeys"
         @row-click="(record: any) => $emit('row-click', record)"
         @row-contextmenu="(record: any, ev: Event) => { $emit('row-contextmenu', record, ev); showContextMenu(record, ev as MouseEvent) }"
