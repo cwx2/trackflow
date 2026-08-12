@@ -1,6 +1,6 @@
 <template>
   <div class="admin-data-table">
-    <!-- 工具栏（可选） -->
+    <!-- 工具栏（卡片外，无背景） -->
     <AdminTableToolbar
       v-if="showToolbar !== false"
       :model-value="internalSearch"
@@ -25,8 +25,9 @@
       </template>
     </AdminTableToolbar>
 
-    <!-- 数据区 -->
-    <div ref="bodyRef" class="admin-data-table__body">
+    <!-- 表格卡片（带边框圆角的容器，只包表头+数据行） -->
+    <div class="admin-data-table__card">
+      <div ref="bodyRef" class="admin-data-table__body">
       <a-table
         :data="data"
         :loading="loading"
@@ -65,17 +66,7 @@
       </a-table>
     </div>
 
-    <!-- 右键菜单（contextmenu） -->
-    <div
-      v-if="contextMenuVisible"
-      class="admin-ctx-menu"
-      :style="{ top: contextMenuY + 'px', left: contextMenuX + 'px' }"
-      @mouseleave="contextMenuVisible = false"
-    >
-      <slot name="context-menu" :record="contextMenuRecord" :close="() => contextMenuVisible = false" />
-    </div>
-
-    <!-- 分页（固定底部） -->
+    <!-- 分页（卡片底部） -->
     <AdminPagination
       :current="internalCurrent"
       :page-size="internalPageSize"
@@ -86,6 +77,19 @@
       @change="(page: number) => $emit('page-change', page)"
       @page-size-change="(size: number) => $emit('page-size-change', size)"
     />
+
+    </div><!-- end admin-data-table__card -->
+
+    <!-- 右键菜单（contextmenu，fixed 定位不受卡片影响） -->
+    <div
+      v-if="contextMenuVisible"
+      class="admin-ctx-menu"
+      :style="{ top: contextMenuY + 'px', left: contextMenuX + 'px' }"
+      @mouseleave="contextMenuVisible = false"
+    >
+      <slot name="context-menu" :record="contextMenuRecord" :close="() => contextMenuVisible = false" />
+    </div>
+
   </div>
 </template>
 
@@ -301,11 +305,22 @@ function handlePageSizeChange(size: number) {
   flex-direction: column;
   flex: 1;
   min-height: 0;
+  gap: 8px;
+  position: relative;
+}
+
+/* 工具栏无卡片背景，直接在页面背景上 */
+
+/* 表格卡片：带圆角和边框，层次感与参考截图一致 */
+.admin-data-table__card {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   background: var(--tf-bg-surface);
   border: 1px solid var(--tf-border);
   border-radius: 8px;
   overflow: hidden;
-  position: relative;
 }
 
 .admin-data-table__body {
