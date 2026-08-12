@@ -4,8 +4,10 @@
     将 label + select 封装成统一样式的控件：[ 标签  选中值 ▼ ]
     用于 AdminDataTable #toolbar-filters slot 内。
     
-    有分组选项时用 :options prop（避免 Arco slot 透传无法识别 option-group 的问题）
+    有分组选项时用 :options prop（避免 Arco slot 透传无法识别 optgroup 的问题）
     简单选项时可直接用 <slot> 内嵌 <a-option>
+    
+    注意：Arco Design 分组组件是 a-optgroup，不是 a-option-group
   -->
   <div class="filter-select" :class="{ 'filter-select--active': hasValue }">
     <span class="filter-select__label">{{ label }}</span>
@@ -23,14 +25,14 @@
     >
       <template v-if="options && options.length">
         <template v-for="opt in options" :key="opt.value ?? opt.label">
-          <!-- 分组 -->
-          <a-option-group v-if="opt.options" :label="opt.label">
+          <!-- 分组：使用 a-optgroup（Arco Design 的正确分组组件名） -->
+          <a-optgroup v-if="opt.options" :label="opt.label">
             <a-option
               v-for="child in opt.options"
               :key="child.value"
               :value="child.value"
             >{{ child.label }}</a-option>
-          </a-option-group>
+          </a-optgroup>
           <!-- 普通选项 -->
           <a-option v-else :value="opt.value">{{ opt.label }}</a-option>
         </template>
@@ -55,6 +57,8 @@
  *   { label: '认证', options: [{ label: '登录', value: 'login' }, ...] },
  *   { label: '普通项', value: 'xxx' },
  * ]
+ *
+ * 注意：Arco Design 分组组件是 a-optgroup（不是 a-option-group）
  */
 import { computed } from 'vue'
 
