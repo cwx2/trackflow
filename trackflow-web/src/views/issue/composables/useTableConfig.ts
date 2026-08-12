@@ -130,7 +130,7 @@ export function useTableConfig(options: TableConfigOptions) {
   function getStatusName(id: string, inlineName?: string) {
     if (inlineName) return inlineName
     const s = statusCache.value.find(st => st.id === id)
-    return s?.name
+    return s?.displayName || s?.name
   }
 
   function getStatusColor(id: string, inlineColor?: string) {

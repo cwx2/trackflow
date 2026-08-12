@@ -691,7 +691,7 @@ async function loadValueOptions(fieldKey: string) {
       case 'status':
         valueOptions.value = props.statusList.map(s => ({
           id: s.id,
-          label: s.name,
+          label: s.displayName || s.name,
           color: s.color
         }))
         break

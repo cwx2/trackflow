@@ -499,7 +499,7 @@ const issueLinks = computed(() => {
   return links.value.map(l => ({
     ...l,
     typeLabel: localizeLinkType(l.linkType),
-    statusName: l.issueStatus?.name ?? '',
+    statusName: l.issueStatus?.displayName || l.issueStatus?.name || '',
     statusColor: l.issueStatus?.color || '',
     isUnresolvedBlocker: l.linkType === 'blocked_by' && l.issueStatus && !l.issueStatus.isClosed,
     priority: l.priority,
@@ -518,14 +518,14 @@ const issueAttachments = computed(() => {
 
 const currentStatus = computed<StatusInfo>(() => {
   if (issue.value?.status) {
-    return { id: issue.value.status.id, name: issue.value.status.name, color: issue.value.status.color }
+    return { id: issue.value.status.id, name: issue.value.status.displayName || issue.value.status.name, color: issue.value.status.color }
   }
   return { id: '', name: '未知', color: '#666' }
 })
 
 const availableTransitions = computed<StatusInfo[]>(() => {
   return transitions.value.map(s => ({
-    id: s.id, name: s.name, color: s.color,
+    id: s.id, name: s.displayName || s.name, color: s.color,
     blocked: s.blocked || false, blockedBy: s.blockedBy || [],
     requireComment: s.requireComment || false, transitionName: s.transitionName || undefined
   }))
