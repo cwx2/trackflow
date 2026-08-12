@@ -343,7 +343,7 @@
           <div @click.stop>
             <a-trigger v-if="canEditIssue(record)" v-model:popup-visible="priorityDropdowns[record.id]" trigger="click" position="bl" :popup-offset="4">
               <span class="editable-cell" @click="priorityDropdowns[record.id] = true">
-                <IssuePriorityBadge :priority="record.priority" mode="dot" :show-label="true" />
+                <IssuePriorityBadge :priority="record.priority" :color="record.priorityColor" mode="dot" :show-label="true" />
                 <icon-loading v-if="isCellEditing(record.id, 'priority')" class="cell-spinner" />
               </span>
               <template #content>
@@ -355,7 +355,7 @@
               </template>
             </a-trigger>
             <span v-else class="readonly-cell">
-              <IssuePriorityBadge :priority="record.priority" mode="dot" :show-label="true" />
+              <IssuePriorityBadge :priority="record.priority" :color="record.priorityColor" mode="dot" :show-label="true" />
             </span>
           </div>
         </template>

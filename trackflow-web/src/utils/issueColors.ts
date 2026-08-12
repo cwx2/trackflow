@@ -39,16 +39,6 @@ export const WORK_TYPE_OPTIONS = [
   { id: 'Other', name: '其他', color: WORK_TYPE_COLORS['Other'] },
 ]
 
-// ─── 优先级颜色回退（后端动态系统不可用时使用） ────────────────────
-
-export const PRIORITY_COLORS: Record<string, string> = {
-  '阻塞': '#f85149',
-  '紧急': '#f85149',
-  '高': '#f0883e',
-  '普通': '#58a6ff',
-  '低': '#8b949e',
-}
-
 // ─── 默认回退色 ─────────────────────────────────────────────────
 
 /** 默认 badge 颜色（当后端数据没有指定颜色时的回退色） */

@@ -23,6 +23,7 @@ import type { BoardIssue, SwimlaneGroupBy, CardSize, EffectiveColumn, SwimlaneRo
 import { useManualOrder } from '@/composables/useManualOrder'
 import { extractVersion, showActionFeedback } from '@/utils/transition'
 import { getDueDateInfo } from '@/utils/dueDate'
+import { localizeStatusName } from '@/utils/fieldLabels'
 import { useIssueProjectSubscription } from '@/composables/useWebSocket'
 import type { IssueRealtimeEvent } from '@/composables/useWebSocket'
 
