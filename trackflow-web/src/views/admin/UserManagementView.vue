@@ -63,7 +63,7 @@
       </template>
 
       <template #columns>
-        <a-table-column title="用户" :width="240" data-index="displayName">
+        <a-table-column title="用户" :width="260" data-index="displayName">
           <template #title>
             <span class="col-sortable" :class="{ active: sortField === 'displayName' }" @click="toggleSort('displayName')">
               用户
@@ -72,18 +72,20 @@
           </template>
           <template #cell="{ record }">
             <div class="user-col">
-              <UserAvatar :name="record.displayName || record.username" :size="28" />
+              <UserAvatar :name="record.displayName || record.username" :size="32" />
               <div class="user-info">
                 <router-link :to="`/admin/users/${record.id}`" class="username-link" @click.stop>{{ record.displayName || record.username }}</router-link>
-                <span class="user-login">{{ record.username }}</span>
+                <span class="user-login">@{{ record.username }}</span>
               </div>
             </div>
           </template>
         </a-table-column>
-        <a-table-column title="邮箱" data-index="email">
-          <template #cell="{ record }">{{ record.email || '—' }}</template>
+        <a-table-column title="邮箱" data-index="email" ellipsis>
+          <template #cell="{ record }">
+            <span class="email-text">{{ record.email || '—' }}</span>
+          </template>
         </a-table-column>
-        <a-table-column title="系统角色" :width="140">
+        <a-table-column title="系统角色" :width="160">
           <template #cell="{ record }">
             <template v-if="record.globalRoles && record.globalRoles.length > 0">
               <span v-for="role in record.globalRoles" :key="role.id" class="role-badge">{{ role.name }}</span>
@@ -91,32 +93,44 @@
             <span v-else class="text-muted">—</span>
           </template>
         </a-table-column>
-        <a-table-column title="状态" :width="80">
+        <a-table-column title="状态" :width="90" align="center">
           <template #cell="{ record }">
-            <IssueStatusTag
-              :name="record.status === 'active' ? '启用' : getBanStatusLabel(record.banStatus)"
-              :color="record.status === 'active' ? '#4caf50' : '#f44336'"
-              size="medium"
-              :show-dot="false"
-            />
+            <a-tag
+              v-if="record.status === 'active'"
+              color="green"
+              size="small"
+              class="status-tag"
+            >
+              <template #icon><span class="status-dot status-dot--active" /></template>
+              启用
+            </a-tag>
+            <a-tag
+              v-else
+              color="red"
+              size="small"
+              class="status-tag"
+            >
+              <template #icon><span class="status-dot status-dot--disabled" /></template>
+              {{ getBanStatusLabel(record.banStatus) }}
+            </a-tag>
           </template>
         </a-table-column>
-        <a-table-column title="最近登录" :width="150">
-          <template #title>
-            <span class="col-sortable" :class="{ active: sortField === 'lastLoginAt' }" @click="toggleSort('lastLoginAt')">
-              最近登录
-              <icon-caret-up v-if="sortField === 'lastLoginAt'" class="sort-icon" :class="{ desc: sortDesc }" :size="10" />
-            </span>
-          </template>
+        <a-table-column title="操作" :width="160" align="right">
           <template #cell="{ record }">
-            <span class="time-text">{{ formatDate(record.lastLoginAt) }}</span>
-          </template>
-        </a-table-column>
-        <a-table-column title="操作" :width="120" align="center">
-          <template #cell="{ record }">
-            <a-button v-if="record.status === 'active' && record.id !== currentUserId" type="text" size="mini" status="danger" @click.stop="disableUser(record)">禁用</a-button>
-            <a-button v-else-if="record.status !== 'active'" type="text" size="mini" @click.stop="enableUser(record)">启用</a-button>
-            <a-button type="text" size="mini" @click.stop="openRoleDialog(record)">角色</a-button>
+            <div class="action-col">
+              <a-button
+                v-if="record.status === 'active' && record.id !== currentUserId"
+                type="text" size="mini" status="danger"
+                @click.stop="disableUser(record)"
+              >禁用</a-button>
+              <a-button
+                v-else-if="record.status !== 'active'"
+                type="text" size="mini"
+                @click.stop="enableUser(record)"
+              >启用</a-button>
+              <a-button type="text" size="mini" @click.stop="openRoleDialog(record)">角色</a-button>
+              <a-button type="text" size="mini" @click.stop="navigateToUser(record)">详情</a-button>
+            </div>
           </template>
         </a-table-column>
       </template>
@@ -336,7 +350,6 @@
 </template>
 
 <script setup lang="ts">
-import { formatDate } from '@/utils/date'
 import { ref, reactive, computed, onMounted, h } from 'vue'
 import { useRouter } from 'vue-router'
 import { Modal, Message } from '@arco-design/web-vue'
@@ -346,7 +359,7 @@ import type { UserProfileProjectRoleInfo } from '@/api/user'
 import type { GlobalMemberVO } from '@/api/globalMember'
 import { useAuthStore } from '@/stores/auth'
 import { AdminPageLayout, AdminDataTable, AdminStatsBar, FilterSelect } from '@/components/admin'
-import { UserAvatar, IssueStatusTag, EmptyState } from '@/components/base'
+import { UserAvatar, EmptyState } from '@/components/base'
 import { usePagedList } from '@/composables/usePagedList'
 import type { StatItem } from '@/components/admin'
 import {
@@ -871,19 +884,22 @@ onMounted(() => {
 </script>
 
 <style scoped>
-/* User Table */
-.user-table :deep(.arco-table-tr.clickable-row) { cursor: pointer; }
-.user-table :deep(.arco-table-tr.clickable-row:hover .arco-table-td) { background: var(--bg-hover); }
-
-.username-link { color: var(--accent-blue); font-weight: 500; text-decoration: none; }
-.username-link:hover { text-decoration: underline; }
-
 /* User column with avatar */
 .user-col { display: flex; align-items: center; gap: 10px; }
-.user-info { display: flex; flex-direction: column; min-width: 0; }
-.user-info .username-link { font-size: var(--font-size-sm); line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.user-info { display: flex; flex-direction: column; min-width: 0; gap: 2px; }
+.username-link { font-size: 13px; font-weight: 500; color: var(--accent-blue); text-decoration: none; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.username-link:hover { text-decoration: underline; }
 .user-login { font-size: 11px; color: var(--text-muted); line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.time-text { font-size: var(--font-size-xs); color: var(--text-secondary); }
+.email-text { font-size: 13px; color: var(--tf-text-secondary); }
+
+/* 状态标签 */
+.status-tag { font-size: 12px; }
+.status-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 4px; }
+.status-dot--active { background: var(--accent-green); }
+.status-dot--disabled { background: var(--accent-red); }
+
+/* 操作列 */
+.action-col { display: flex; align-items: center; justify-content: flex-end; gap: 2px; }
 
 /* Modal */
 .modal-footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border-light); }

@@ -19,27 +19,30 @@
       :total="roles.length"
       :current="1"
       :page-size="roles.length || 20"
+      :selectable="true"
       empty-title="暂无角色"
       empty-description="创建角色来管理团队权限"
     >
       <template #columns>
-        <a-table-column title="ID" data-index="id" :width="60" />
-        <a-table-column title="名称" :width="150">
+        <a-table-column title="角色名称" :width="180">
           <template #cell="{ record }">
-            <span class="role-name">{{ record.name }}</span>
+            <div class="role-name-cell">
+              <span class="role-name">{{ record.name }}</span>
+              <a-tag v-if="record.builtin" size="small" color="arcoblue" class="builtin-tag-inline">内置</a-tag>
+            </div>
           </template>
         </a-table-column>
-        <a-table-column title="编码" :width="120">
+        <a-table-column title="编码" :width="140">
           <template #cell="{ record }">
             <code class="code-tag">{{ record.code }}</code>
           </template>
         </a-table-column>
-        <a-table-column title="类型" :width="100">
+        <a-table-column title="类型" :width="90">
           <template #cell="{ record }">
             <span class="type-badge" :class="record.roleType">{{ record.roleType === 'global' ? '全局' : '项目级' }}</span>
           </template>
         </a-table-column>
-        <a-table-column title="用户数" :width="80">
+        <a-table-column title="用户数" :width="80" align="center">
           <template #cell="{ record }">
             <span
               class="user-count-badge"
@@ -51,19 +54,15 @@
           </template>
         </a-table-column>
         <a-table-column title="描述" data-index="description" ellipsis />
-        <a-table-column title="内置" :width="80">
+        <a-table-column title="操作" :width="220" align="right">
           <template #cell="{ record }">
-            <span v-if="record.builtin" class="builtin-tag">是</span>
-            <span v-else>—</span>
-          </template>
-        </a-table-column>
-        <a-table-column title="操作" :width="260">
-          <template #cell="{ record }">
-            <a-button type="text" size="mini" @click="openUsersDialog(record)">用户</a-button>
-            <a-button type="text" size="mini" @click="openPermDialog(record)">权限</a-button>
-            <a-button type="text" size="mini" @click="openCloneDialog(record)">克隆</a-button>
-            <a-button type="text" size="mini" @click="editRole(record)" :disabled="record.builtin">编辑</a-button>
-            <a-button type="text" size="mini" status="danger" @click="deleteRole(record)" :disabled="record.builtin">删除</a-button>
+            <div class="action-col">
+              <a-button type="text" size="mini" @click="openUsersDialog(record)">用户</a-button>
+              <a-button type="text" size="mini" @click="openPermDialog(record)">权限</a-button>
+              <a-button type="text" size="mini" @click="openCloneDialog(record)">克隆</a-button>
+              <a-button type="text" size="mini" @click="editRole(record)" :disabled="record.builtin">编辑</a-button>
+              <a-button type="text" size="mini" status="danger" @click="deleteRole(record)" :disabled="record.builtin">删除</a-button>
+            </div>
           </template>
         </a-table-column>
       </template>
@@ -494,16 +493,17 @@ onMounted(() => {
 
 <style scoped>
 /* Table */
-.role-name { color: var(--text-bright); font-weight: 500; }
-.code-tag { font-size: var(--font-size-xs); background: var(--bg-tertiary); padding: 2px 6px; border-radius: var(--radius-sm); color: var(--accent-blue); }
+.role-name { color: var(--text-bright); font-weight: 500; font-size: 13px; }
+.role-name-cell { display: flex; align-items: center; gap: 6px; }
+.builtin-tag-inline { flex-shrink: 0; }
+.code-tag { font-size: var(--font-size-xs); background: var(--bg-tertiary); padding: 2px 6px; border-radius: var(--radius-sm); color: var(--accent-blue); font-family: monospace; }
 .type-badge { font-size: var(--font-size-xs); padding: 2px 6px; border-radius: var(--radius-sm); }
 .type-badge.global { background: var(--tf-purple-medium); color: var(--accent-purple); }
 .type-badge.project { background: var(--tf-accent-medium); color: var(--accent-blue); }
-.builtin-tag { font-size: var(--font-size-xs); color: var(--accent-orange); }
-
 .user-count-badge { font-size: var(--font-size-xs); padding: 2px 8px; border-radius: var(--radius-sm); background: var(--bg-tertiary); color: var(--text-secondary); }
 .user-count-badge.clickable { cursor: pointer; color: var(--accent-blue); }
 .user-count-badge.clickable:hover { background: var(--tf-accent-medium); }
+.action-col { display: flex; align-items: center; justify-content: flex-end; gap: 2px; }
 
 /* Drawer title */
 .drawer-title-row { display: flex; align-items: center; gap: 12px; }
