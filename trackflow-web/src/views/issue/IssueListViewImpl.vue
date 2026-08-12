@@ -76,7 +76,7 @@
           <nav class="breadcrumb-nav" aria-label="筛选导航">
             <span
               class="breadcrumb-item"
-              :class="{ clickable: activeProjectId !== null || activeQueryId !== null }"
+              :class="{ clickable: activeProjectId !== null || activeQueryId !== null || activeTagId !== null || searchKeyword !== '' || Object.keys(globalFilterParams).length > 0 }"
               @click="selectAllProjects"
             >所有工单</span>
             <template v-if="activeProjectId && !activeQueryId">
@@ -1315,10 +1315,10 @@ function selectQuery(q: any) {
   filterBarRef.value?.clearAll(); refreshList()
 }
 function selectAllProjects() {
-  if (activeProjectId.value === null && activeTagId.value === null && activeQueryId.value === null && searchKeyword.value === '') return
+  if (activeProjectId.value === null && activeTagId.value === null && activeQueryId.value === null && searchKeyword.value === '' && Object.keys(globalFilterParams.value).length === 0 && Object.keys(route.query).length === 0) return
   activeProjectId.value = null; activeQueryId.value = null; activeTagId.value = null; activeQueryName.value = '所有工单'; activeQueryObj.value = null; filterProject.value = undefined; searchKeyword.value = ''; globalFilterParams.value = {}; currentPage.value = 1
   skipRouteQueryWatch = true
-  sortState.value = { field: null, direction: null }; const { project, ...rest } = route.query; router.replace({ query: rest })
+  sortState.value = { field: null, direction: null }; router.replace({ query: {} })
   nextTick(() => { skipRouteQueryWatch = false })
   filterBarRef.value?.clearAll(); localStorage.setItem('tf_last_active_query_all', 'true'); localStorage.removeItem('tf_last_active_query_id')
   refreshList(); queryPanelRef.value?.loadPanel(); queryPanelRef.value?.loadTags()
