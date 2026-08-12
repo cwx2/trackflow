@@ -17,27 +17,35 @@
       @reset="$emit('reset')"
     >
       <slot name="toolbar-filters" />
-      <template #batch-actions="slotProps">
-        <slot name="toolbar-batch" v-bind="slotProps" />
+      <template #batch-actions="{ count }">
+        <slot name="toolbar-batch" :count="count" />
       </template>
       <template #right>
         <slot name="toolbar-right" />
       </template>
     </AdminTableToolbar>
 
-    <!-- 数据区（独立滚动容器） -->
-    <div ref="bodyRef" class="admin-data-table__body">
+    <!-- 数据区 -->
+    <div class="admin-data-table__body">
       <a-table
         :data="data"
         :loading="loading"
-        :row-key="rowKey || 'id'"
+        :row-key="rowKey"
         :pagination="false"
-        :size="size || 'small'"
-        :bordered="bordered || false"
+        :size="size"
+        :bordered="bordered"
+        :stripe="stripe"
+        :hoverable="true"
+        :sticky-header="true"
+        :column-resizable="columnResizable"
         :row-selection="selectable ? rowSelectionConfig : undefined"
-        :scroll="{ y: bodyHeight }"
+        :row-class="rowClass"
+        :draggable="draggable ? { type: 'handle' } : undefined"
+        :scrollbar="true"
         v-model:selected-keys="internalSelectedKeys"
         @row-click="(record: any) => $emit('row-click', record)"
+        @row-contextmenu="(record: any, ev: Event) => { $emit('row-contextmenu', record, ev); showContextMenu(record, ev as MouseEvent) }"
+        @change="(_data: any, _extra: any) => draggable && $emit('order-change', _data)"
       >
         <template #columns>
           <slot name="columns" />
@@ -55,6 +63,16 @@
           <slot name="expand" v-bind="slotProps" />
         </template>
       </a-table>
+    </div>
+
+    <!-- 右键菜单（contextmenu） -->
+    <div
+      v-if="contextMenuVisible"
+      class="admin-ctx-menu"
+      :style="{ top: contextMenuY + 'px', left: contextMenuX + 'px' }"
+      @mouseleave="contextMenuVisible = false"
+    >
+      <slot name="context-menu" :record="contextMenuRecord" :close="() => contextMenuVisible = false" />
     </div>
 
     <!-- 分页（固定底部） -->
@@ -77,58 +95,64 @@ import AdminTableToolbar from './AdminTableToolbar.vue'
 import AdminPagination from './AdminPagination.vue'
 import { EmptyState } from '@/components/base'
 
+/**
+ * AdminDataTable — 管理后台通用数据表格
+ *
+ * 职责：
+ * - 封装工具栏（搜索/筛选/刷新/重置）
+ * - 封装 a-table 并透传 UX 增强特性
+ * - 封装分页
+ *
+ * UX 特性：
+ * - stickyHeader: 表头自动固定（无需测量高度）
+ * - columnResizable: 列宽拖拽调整
+ * - rowClass: 支持行条件样式（如禁用行变灰）
+ * - draggable: 拖拽排序，触发 order-change emit
+ * - row-contextmenu: 右键菜单 slot
+ */
+
 export interface AdminDataTableProps {
   // ===== 数据 =====
-  /** 表格数据 */
   data: any[]
-  /** 是否加载中 */
   loading?: boolean
-  /** 行 key 字段名，默认 'id' */
   rowKey?: string
 
   // ===== 分页 =====
-  /** 总条数 */
   total: number
-  /** 当前页（支持 v-model） */
   current: number
-  /** 每页条数（支持 v-model） */
   pageSize: number
-  /** 每页条数候选值 */
   pageSizeOptions?: number[]
 
   // ===== 搜索 =====
-  /** 搜索关键词（支持 v-model） */
   searchKeyword?: string
-  /** 搜索框占位符 */
   searchPlaceholder?: string
-  /** 搜索框宽度 */
   searchWidth?: string | number
-  /** 是否显示工具栏（默认 true） */
   showToolbar?: boolean
-  /** 是否显示重置按钮（默认 true） */
   showReset?: boolean
 
   // ===== 行选择 =====
-  /** 已选中的行 key 列表（支持 v-model） */
   selectedKeys?: string[]
-  /** 是否启用行选择（checkbox） */
   selectable?: boolean
 
   // ===== 空状态 =====
-  /** 空状态标题 */
   emptyTitle?: string
-  /** 空状态描述 */
   emptyDescription?: string
 
   // ===== 表格外观 =====
-  /** Arco Table size */
   size?: 'small' | 'medium' | 'large'
-  /** 是否显示边框 */
   bordered?: boolean
-  /** 是否显示内置刷新按钮 */
+  /** 斑马纹 */
+  stripe?: boolean
   showRefresh?: boolean
-  /** 刷新按钮是否 loading */
   refreshLoading?: boolean
+
+  // ===== UX 增强 =====
+  /** 列宽拖拽调整，默认 true */
+  columnResizable?: boolean
+  /** 拖拽排序，开启后显示拖拽手柄列 */
+  draggable?: boolean
+  /** 行条件 class，用于禁用/高亮等场景 */
+  rowClass?: string | ((record: any, rowIndex: number) => any)
 }
 
 const props = withDefaults(defineProps<AdminDataTableProps>(), {
@@ -145,8 +169,11 @@ const props = withDefaults(defineProps<AdminDataTableProps>(), {
   emptyDescription: '',
   size: 'medium',
   bordered: false,
+  stripe: false,
   showRefresh: false,
   refreshLoading: false,
+  columnResizable: true,
+  draggable: false,
 })
 
 const emit = defineEmits<{
@@ -158,8 +185,11 @@ const emit = defineEmits<{
   'page-size-change': [size: number]
   'search': [keyword: string]
   'row-click': [record: any]
+  'row-contextmenu': [record: any, ev: Event]
   'refresh': []
   'reset': []
+  /** 拖拽排序后触发，传入重新排列后的完整数据数组 */
+  'order-change': [data: any[]]
 }>()
 
 // ===== 内部双向绑定 =====
@@ -184,35 +214,48 @@ const internalSelectedKeys = computed({
   set: (val: string[]) => emit('update:selected-keys', val)
 })
 
-// ===== 表格滚动区域高度（用于表头 sticky）=====
-// 通过 ResizeObserver 动态测量 __body 容器高度，传给 a-table scroll.y
-// 保证表头始终固定，内容区在容器内滚动
-const bodyRef = ref<HTMLElement | null>(null)
-const bodyHeight = ref(400)
-let resizeObserver: ResizeObserver | null = null
-
-onMounted(() => {
-  if (bodyRef.value) {
-    bodyHeight.value = bodyRef.value.clientHeight
-    resizeObserver = new ResizeObserver(() => {
-      bodyHeight.value = bodyRef.value?.clientHeight || 400
-    })
-    resizeObserver.observe(bodyRef.value)
-  }
-})
-
-onBeforeUnmount(() => {
-  resizeObserver?.disconnect()
-})
-
 // ===== 行选择配置 =====
 
 const rowSelectionConfig = computed(() => ({
   type: 'checkbox' as const,
-  showCheckedAll: true
+  showCheckedAll: true,
 }))
 
+// ===== 右键菜单 =====
+// 监听 row-contextmenu，在鼠标位置显示 context-menu slot
+const contextMenuVisible = ref(false)
+const contextMenuX = ref(0)
+const contextMenuY = ref(0)
+const contextMenuRecord = ref<any>(null)
+
+function showContextMenu(record: any, ev: MouseEvent) {
+  if (!slots['context-menu']) return
+  ev.preventDefault()
+  contextMenuRecord.value = record
+  contextMenuX.value = ev.clientX
+  contextMenuY.value = ev.clientY
+  contextMenuVisible.value = true
+}
+
+// 点击页面其他地方关闭右键菜单
+function handleDocumentClick() {
+  contextMenuVisible.value = false
+}
+
+onMounted(() => document.addEventListener('click', handleDocumentClick))
+onBeforeUnmount(() => document.removeEventListener('click', handleDocumentClick))
+
 // ===== 事件处理 =====
+
+const slots = defineSlots<{
+  columns(): any
+  empty(): any
+  expand(props: { record: any }): any
+  'toolbar-filters'(): any
+  'toolbar-batch'(props: { count: number }): any
+  'toolbar-right'(): any
+  'context-menu'(props: { record: any; close: () => void }): any
+}>()
 
 function handleSearch(value: string) {
   emit('search', value)
@@ -242,6 +285,7 @@ function handlePageSizeChange(size: number) {
   border: 1px solid var(--tf-border);
   border-radius: 8px;
   overflow: hidden;
+  position: relative;
 }
 
 .admin-data-table__body {
@@ -260,12 +304,32 @@ function handlePageSizeChange(size: number) {
   letter-spacing: 0.3px;
 }
 
-/* 表头 sticky 需要 arco-table-container 是实际滚动容器 */
-.admin-data-table__body :deep(.arco-table) {
-  width: 100%;
+/* fixed 列背景与表头保持一致 */
+.admin-data-table__body :deep(.arco-table-th.arco-table-col-fixed-right),
+.admin-data-table__body :deep(.arco-table-td.arco-table-col-fixed-right) {
+  background: var(--tf-bg-surface);
 }
 
-.admin-data-table__body :deep(.arco-table-container) {
-  width: 100%;
+/* 列宽拖拽手柄 */
+.admin-data-table__body :deep(.arco-table-col-resizable)::after {
+  background-color: var(--tf-border);
+}
+
+/* 拖拽排序手柄列 */
+.admin-data-table__body :deep(.arco-table-drag-handle-wrapper) {
+  color: var(--tf-text-tertiary);
+  cursor: grab;
+}
+
+/* 右键菜单 */
+.admin-ctx-menu {
+  position: fixed;
+  z-index: 9999;
+  background: var(--tf-bg-elevated);
+  border: 1px solid var(--tf-border);
+  border-radius: 6px;
+  padding: 4px 0;
+  min-width: 160px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
 }
 </style>

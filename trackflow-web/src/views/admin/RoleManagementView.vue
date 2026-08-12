@@ -20,6 +20,8 @@
       :current="1"
       :page-size="filteredRoles.length || 20"
       :selectable="false"
+      :column-resizable="true"
+      :row-class="(record: any) => record.enabled === false ? 'row-disabled' : ''"
       search-placeholder="搜索角色名称、编码或描述..."
       :show-reset="true"
       v-model:search-keyword="searchKeyword"
@@ -142,6 +144,18 @@
             </div>
           </template>
         </a-table-column>
+      </template>
+
+      <!-- 右键菜单：与操作列功能对应的快捷入口 -->
+      <template #context-menu="{ record, close }">
+        <div class="ctx-menu-item" @click="openUsersDialog(record); close()">👥 查看用户</div>
+        <div class="ctx-menu-item" @click="openPermDialog(record); close()">🔑 配置权限</div>
+        <div class="ctx-menu-item" @click="openCloneDialog(record); close()">📋 克隆角色</div>
+        <div v-if="!record.builtin" class="ctx-menu-item" @click="editRole(record); close()">✏️ 编辑</div>
+        <div class="ctx-menu-item" @click="toggleEnabled(record); close()">
+          {{ record.enabled !== false ? '🚫 禁用' : '✅ 启用' }}
+        </div>
+        <div v-if="!record.builtin" class="ctx-menu-item ctx-menu-item--danger" @click="deleteRole(record); close()">🗑️ 删除</div>
       </template>
     </AdminDataTable>
 
@@ -689,6 +703,26 @@ onMounted(() => {
 
 .action-col { display: flex; align-items: center; justify-content: flex-end; gap: 2px; flex-wrap: nowrap; white-space: nowrap; }
 .more-btn { font-size: 16px; letter-spacing: 1px; }
+
+/* 禁用行样式：整行变半透明灰色 */
+:deep(.row-disabled) { opacity: 0.45; }
+:deep(.row-disabled):hover { opacity: 0.6; }
+
+/* 右键菜单条目 */
+.ctx-menu-item {
+  padding: 7px 14px;
+  font-size: 13px;
+  color: var(--tf-text-primary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: background 0.1s;
+  white-space: nowrap;
+}
+.ctx-menu-item:hover { background: var(--tf-bg-hover); }
+.ctx-menu-item--danger { color: var(--tf-error); }
+.ctx-menu-item--danger:hover { background: rgba(248, 81, 73, 0.1); }
 
 /* Drawer title */
 .drawer-title-row { display: flex; align-items: center; gap: 12px; }
