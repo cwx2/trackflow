@@ -228,11 +228,8 @@ function handlePageSizeChange(size: number) {
   overflow-y: auto;
 }
 
-/* 表头背景稍深，增加层次感 */
+/* 表头样式 */
 .admin-data-table__body :deep(.arco-table-th) {
-  position: sticky;
-  top: 0;
-  z-index: 2;
   background: var(--tf-bg-body);
   font-size: 12px;
   font-weight: 600;
@@ -241,16 +238,12 @@ function handlePageSizeChange(size: number) {
   letter-spacing: 0.3px;
 }
 
-/* Override Arco's internal scrollbar containers that break sticky */
-.admin-data-table__body :deep(.arco-scrollbar) {
-  overflow: visible;
+/* 表头 sticky 需要 arco-table-container 是实际滚动容器 */
+.admin-data-table__body :deep(.arco-table) {
+  width: 100%;
 }
 
-.admin-data-table__body :deep(.arco-scrollbar-container) {
-  overflow: visible !important;
-}
-
-.admin-data-table__body :deep(.arco-table-content-scroll-x) {
-  overflow: visible !important;
+.admin-data-table__body :deep(.arco-table-container) {
+  width: 100%;
 }
 </style>
