@@ -329,6 +329,12 @@ function handlePageSizeChange(size: number) {
   overflow: hidden;
 }
 
+/* tbody 用 overlay scrollbar，不占布局宽度，避免表头/tbody 宽度差导致 fixed 列错位 */
+.admin-data-table__body :deep(.arco-table-body) {
+  overflow-y: auto;
+  overflow-y: overlay; /* Chrome/Edge: 滚动条浮层不占宽，Safari 降级为 auto */
+}
+
 /* 表头样式 */
 .admin-data-table__body :deep(.arco-table-th) {
   background: var(--tf-bg-body);
