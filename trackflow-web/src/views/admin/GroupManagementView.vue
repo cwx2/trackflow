@@ -27,7 +27,7 @@
       :columns="tableColumns"
       @search="loadGroups"
       @row-click="openDetail"
-    >
+    />
 
     <!-- 创建/编辑弹窗 -->
     <a-modal

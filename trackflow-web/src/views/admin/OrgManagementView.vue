@@ -23,7 +23,7 @@
       empty-description="组织用于对项目和团队进行分组管理"
       :columns="tableColumns"
       @row-click="navigateToOrg"
-    >
+    />
 
   <!-- 创建/编辑弹窗 -->
     <a-modal
