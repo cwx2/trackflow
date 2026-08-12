@@ -1,6 +1,7 @@
 package com.trackflow.system.controller;
 
 import com.trackflow.common.model.R;
+import com.trackflow.system.dto.UpdateColorPaletteDTO;
 import com.trackflow.system.dto.UpdateTimeTrackingSettingsDTO;
 import com.trackflow.system.service.SystemSettingService;
 import com.trackflow.system.vo.TimeTrackingRecalculationResultVO;
@@ -9,6 +10,8 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 /**
  * 系统设置控制器
@@ -43,5 +46,25 @@ public class SystemSettingController {
     public R<TimeTrackingRecalculationResultVO> updateTimeTrackingSettings(
             @Valid @RequestBody UpdateTimeTrackingSettingsDTO dto) {
         return R.ok(settingService.updateTimeTrackingSettings(dto));
+    }
+
+    // ===== 调色板管理 =====
+
+    /**
+     * 获取系统调色板颜色列表（所有认证用户可读取，用于自定义字段选项颜色选择器）
+     */
+    @GetMapping("/color-palette")
+    @PreAuthorize("isAuthenticated()")
+    public R<List<String>> getColorPalette() {
+        return R.ok(settingService.getColorPalette());
+    }
+
+    /**
+     * 更新系统调色板颜色列表（需要系统管理权限）
+     */
+    @PutMapping("/color-palette")
+    @PreAuthorize("@perm.checkGlobal('system:manage_roles')")
+    public R<List<String>> updateColorPalette(@Valid @RequestBody UpdateColorPaletteDTO dto) {
+        return R.ok(settingService.updateColorPalette(dto.getColors()));
     }
 }

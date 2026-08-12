@@ -230,4 +230,63 @@ public class SystemSettingService {
             settingMapper.insert(setting);
         }
     }
+
+    // ===== 调色板管理 =====
+
+    private static final String KEY_COLOR_PALETTE = "ui.color_palette";
+
+    /** 默认调色板颜色（与前端原硬编码一致） */
+    private static final List<String> DEFAULT_COLOR_PALETTE = List.of(
+            "#4CAF50", "#2196F3", "#9C27B0", "#FF9800",
+            "#F44336", "#00BCD4", "#607D8B", "#E91E63",
+            "#8BC34A", "#3F51B5", "#FF5722", "#009688",
+            "#795548", "#FFC107"
+    );
+
+    /**
+     * 获取系统调色板颜色列表
+     */
+    public List<String> getColorPalette() {
+        SystemSetting setting = settingMapper.selectByKey(KEY_COLOR_PALETTE);
+        if (setting == null) {
+            return DEFAULT_COLOR_PALETTE;
+        }
+        try {
+            return objectMapper.readValue(setting.getValue(),
+                    objectMapper.getTypeFactory().constructCollectionType(List.class, String.class));
+        } catch (Exception e) {
+            log.warn("解析调色板配置失败，使用默认值", e);
+            return DEFAULT_COLOR_PALETTE;
+        }
+    }
+
+    /**
+     * 更新系统调色板颜色列表
+     *
+     * @param colors 新的颜色列表（HEX 格式）
+     * @return 更新后的颜色列表
+     */
+    @AuditLog(action = "color_palette_update", targetType = "system_setting")
+    @Transactional(rollbackFor = Exception.class)
+    public List<String> updateColorPalette(List<String> colors) {
+        // 校验每个颜色格式
+        for (String color : colors) {
+            if (color == null || !color.matches("^#[0-9A-Fa-f]{6}$")) {
+                throw new BusinessException(ErrorCode.VALIDATION_ERROR,
+                        "颜色格式不正确，必须为 HEX 格式（如 #4CAF50）: " + color);
+            }
+        }
+
+        try {
+            String json = objectMapper.writeValueAsString(colors);
+            upsertSetting(KEY_COLOR_PALETTE, json,
+                    "自定义字段选项颜色调色板，JSON 数组格式，管理员可增删颜色", "ui");
+        } catch (Exception e) {
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "保存调色板配置失败");
+        }
+
+        AuditContext.put("colorCount", colors.size());
+        log.info("系统调色板已更新，共 {} 个颜色", colors.size());
+        return colors;
+    }
 }

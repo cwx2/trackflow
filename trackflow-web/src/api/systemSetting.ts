@@ -34,5 +34,15 @@ export const systemSettingApi = {
   /** 更新时间追踪设置（需要管理员权限） */
   updateTimeTrackingSettings(data: UpdateTimeTrackingSettingsDTO) {
     return request.put<any, R<TimeTrackingRecalculationResultVO>>('/system/settings/time-tracking', data)
+  },
+
+  /** 获取系统调色板颜色列表 */
+  getColorPalette() {
+    return request.get<any, R<string[]>>('/system/settings/color-palette')
+  },
+
+  /** 更新系统调色板颜色列表（需要管理员权限） */
+  updateColorPalette(colors: string[]) {
+    return request.put<any, R<string[]>>('/system/settings/color-palette', { colors })
   }
 }

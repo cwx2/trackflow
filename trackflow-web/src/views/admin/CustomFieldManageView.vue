@@ -830,7 +830,7 @@ import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { IconPlus, IconDelete, IconCheck, IconEye, IconEyeInvisible, IconClose, IconSortAscending, IconSortDescending, IconApps, IconFolder, IconLock, IconUnlock, IconInfoCircle, IconExclamationCircleFill } from '@arco-design/web-vue/es/icon'
 import { Message, Modal } from '@arco-design/web-vue'
 import { useConfirmDelete } from '@/composables/useConfirmDelete'
-import { customFieldApi, projectApi, workflowApi, userApi } from '@/api'
+import { customFieldApi, projectApi, workflowApi, userApi, systemSettingApi } from '@/api'
 import type { CustomFieldDefinitionVO, CustomFieldUsageVO, UserVO, AvailableConversionsVO, ConversionOptionVO } from '@/api/types'
 import FieldsInProjects from './components/FieldsInProjects.vue'
 import DefaultValueInput from './components/DefaultValueInput.vue'
@@ -947,13 +947,25 @@ const form = reactive({
   copyOptionsFromFieldId: undefined as string | undefined
 })
 
-/** 预定义颜色方案（14 种） */
-const presetColors = [
+/** 预定义颜色方案（从系统设置加载，fallback 为默认 14 色） */
+const presetColors = ref([
   '#4CAF50', '#2196F3', '#9C27B0', '#FF9800',
   '#F44336', '#00BCD4', '#607D8B', '#E91E63',
   '#8BC34A', '#3F51B5', '#FF5722', '#009688',
   '#795548', '#FFC107'
-]
+])
+
+/** 从后端加载调色板颜色 */
+async function loadColorPalette() {
+  try {
+    const res = await systemSettingApi.getColorPalette()
+    if (res.code === 0 && res.data && res.data.length > 0) {
+      presetColors.value = res.data
+    }
+  } catch (_e) {
+    // 加载失败时保留默认颜色
+  }
+}
 
 const fieldTypeOptions = FIELD_TYPE_OPTIONS
 
@@ -1697,6 +1709,7 @@ onMounted(() => {
   loadProjects()
   loadIssueTypes()
   loadOwnerUsers()
+  loadColorPalette()
 })
 </script>
 
