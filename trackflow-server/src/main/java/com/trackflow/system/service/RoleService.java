@@ -198,6 +198,20 @@ public class RoleService {
     }
 
     /**
+     * 启用或禁用角色
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public SysRole setEnabled(Long id, boolean enabled) {
+        SysRole role = getById(id);
+        if (Boolean.TRUE.equals(role.getBuiltin()) && !enabled) {
+            throw new BusinessException(ErrorCode.BUILTIN_ROLE_PROTECTED, "内置角色不能被禁用");
+        }
+        role.setEnabled(enabled);
+        roleMapper.updateById(role);
+        return role;
+    }
+
+    /**
      * 克隆角色（复制角色定义 + 权限）
      */
     @AuditLog(action = "clone_role", targetType = "role", targetId = "#result.id")

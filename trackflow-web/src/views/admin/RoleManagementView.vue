@@ -14,54 +14,132 @@
 
     <!-- 角色列表 -->
     <AdminDataTable
-      :show-toolbar="false"
-      :data="roles"
-      :total="roles.length"
+      :show-toolbar="true"
+      :data="filteredRoles"
+      :total="filteredRoles.length"
       :current="1"
-      :page-size="roles.length || 20"
-      :selectable="true"
+      :page-size="filteredRoles.length || 20"
+      :selectable="false"
+      search-placeholder="搜索角色名称、编码或描述..."
+      :show-reset="true"
+      v-model:search-keyword="searchKeyword"
+      @search="applyFilter"
+      @reset="resetFilter"
       empty-title="暂无角色"
       empty-description="创建角色来管理团队权限"
     >
+      <!-- 筛选器 -->
+      <template #toolbar-filters>
+        <FilterSelect label="角色类型" v-model="filters.roleType" :width="90" @change="applyFilter">
+          <a-option value="global">全局</a-option>
+          <a-option value="project">项目级</a-option>
+        </FilterSelect>
+        <FilterSelect label="用户数" v-model="filters.hasUsers" :width="90" @change="applyFilter">
+          <a-option value="yes">有用户</a-option>
+          <a-option value="no">无用户</a-option>
+        </FilterSelect>
+        <FilterSelect label="系统角色" v-model="filters.builtin" :width="90" @change="applyFilter">
+          <a-option value="true">是</a-option>
+          <a-option value="false">否</a-option>
+        </FilterSelect>
+        <FilterSelect label="状态" v-model="filters.enabled" :width="80" @change="applyFilter">
+          <a-option value="true">启用</a-option>
+          <a-option value="false">禁用</a-option>
+        </FilterSelect>
+      </template>
+
       <template #columns>
+        <!-- ID 列 -->
+        <a-table-column title="ID" :width="56" align="center">
+          <template #cell="{ rowIndex }">
+            <span class="id-cell">{{ rowIndex + 1 }}</span>
+          </template>
+        </a-table-column>
+
+        <!-- 角色名称：图标 + 名称 + 内置tag -->
         <a-table-column title="角色名称" :width="160">
           <template #cell="{ record }">
             <div class="role-name-cell">
+              <span class="role-icon" :class="`role-icon--${getRoleIconColor(record)}`">
+                <component :is="getRoleIcon(record)" />
+              </span>
               <span class="role-name">{{ record.name }}</span>
               <a-tag v-if="record.builtin" size="small" color="arcoblue" class="builtin-tag-inline">内置</a-tag>
             </div>
           </template>
         </a-table-column>
+
+        <!-- 编码 -->
         <a-table-column title="编码" :width="130">
           <template #cell="{ record }">
             <code class="code-tag">{{ record.code }}</code>
           </template>
         </a-table-column>
+
+        <!-- 类型 -->
         <a-table-column title="类型" :width="80">
           <template #cell="{ record }">
             <span class="type-badge" :class="record.roleType">{{ record.roleType === 'global' ? '全局' : '项目级' }}</span>
           </template>
         </a-table-column>
+
+        <!-- 用户数 -->
         <a-table-column title="用户数" :width="72" align="center">
           <template #cell="{ record }">
             <span
               class="user-count-badge"
               :class="{ clickable: record.userCount > 0 }"
               @click="record.userCount > 0 && openUsersDialog(record)"
-            >
-              {{ record.userCount ?? 0 }} 人
+            >{{ record.userCount ?? 0 }} 人</span>
+          </template>
+        </a-table-column>
+
+        <!-- 描述 -->
+        <a-table-column title="描述" data-index="description" ellipsis />
+
+        <!-- 系统角色 -->
+        <a-table-column title="系统角色" :width="88" align="center">
+          <template #cell="{ record }">
+            <span :class="record.builtin ? 'flag-yes' : 'flag-no'">{{ record.builtin ? '是' : '否' }}</span>
+          </template>
+        </a-table-column>
+
+        <!-- 状态 -->
+        <a-table-column title="状态" :width="88" align="center">
+          <template #cell="{ record }">
+            <span class="status-dot" :class="record.enabled !== false ? 'enabled' : 'disabled'">
+              <i class="dot" />{{ record.enabled !== false ? '启用' : '禁用' }}
             </span>
           </template>
         </a-table-column>
-        <a-table-column title="描述" data-index="description" ellipsis />
-        <a-table-column title="操作" :width="280" align="right" cell-class="col-actions" header-cell-class="col-actions">
+
+        <!-- 操作 -->
+        <a-table-column title="操作" :width="260" align="right" cell-class="col-actions" header-cell-class="col-actions">
           <template #cell="{ record }">
             <div class="action-col">
               <a-button type="text" size="mini" @click="openUsersDialog(record)">用户</a-button>
               <a-button type="text" size="mini" @click="openPermDialog(record)">权限</a-button>
               <a-button type="text" size="mini" @click="openCloneDialog(record)">克隆</a-button>
-              <a-button type="text" size="mini" @click="editRole(record)" :disabled="record.builtin">编辑</a-button>
-              <a-button type="text" size="mini" status="danger" @click="deleteRole(record)" :disabled="record.builtin">删除</a-button>
+              <a-button v-if="!record.builtin" type="text" size="mini" @click="editRole(record)">编辑</a-button>
+              <a-button v-if="!record.builtin" type="text" size="mini" status="danger" @click="deleteRole(record)">删除</a-button>
+              <!-- 内置角色只显示 ⋮ 更多菜单 -->
+              <a-dropdown v-if="record.builtin" trigger="click">
+                <a-button type="text" size="mini" class="more-btn">⋮</a-button>
+                <template #content>
+                  <a-doption @click="editRole(record)">编辑名称/描述</a-doption>
+                  <a-doption @click="toggleEnabled(record)">
+                    {{ record.enabled !== false ? '禁用角色' : '启用角色' }}
+                  </a-doption>
+                </template>
+              </a-dropdown>
+              <a-dropdown v-else trigger="click">
+                <a-button type="text" size="mini" class="more-btn">⋮</a-button>
+                <template #content>
+                  <a-doption @click="toggleEnabled(record)">
+                    {{ record.enabled !== false ? '禁用角色' : '启用角色' }}
+                  </a-doption>
+                </template>
+              </a-dropdown>
             </div>
           </template>
         </a-table-column>
@@ -249,11 +327,12 @@ import { useConfirmDelete } from '@/composables/useConfirmDelete'
 import { roleApi } from '@/api'
 import type { RoleVO, RoleUsersVO } from '@/api/types'
 import type { PermissionGroup } from '@/api/role'
-import { AdminPageLayout, AdminDataTable, AdminStatsBar } from '@/components/admin'
+import { AdminPageLayout, AdminDataTable, AdminStatsBar, FilterSelect } from '@/components/admin'
 import { UserAvatar } from '@/components/base'
 import type { StatItem } from '@/components/admin'
 import {
-  IconSafe, IconUserGroup, IconUser, IconSettings
+  IconSafe, IconUserGroup, IconUser, IconSettings,
+  IconIdcard, IconCode, IconEye, IconLock, IconTag, IconTrophy
 } from '@arco-design/web-vue/es/icon'
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -296,6 +375,71 @@ async function loadStats() {
 }
 
 const roles = ref<RoleVO[]>([])
+
+// ===== 筛选逻辑 =====
+const searchKeyword = ref('')
+const filters = reactive({
+  roleType: '',
+  hasUsers: '',
+  builtin: '',
+  enabled: '',
+})
+
+const filteredRoles = computed(() => {
+  return roles.value.filter(r => {
+    if (searchKeyword.value) {
+      const kw = searchKeyword.value.toLowerCase()
+      if (!r.name.toLowerCase().includes(kw) && !r.code.toLowerCase().includes(kw) && !(r.description || '').toLowerCase().includes(kw)) return false
+    }
+    if (filters.roleType && r.roleType !== filters.roleType) return false
+    if (filters.hasUsers === 'yes' && (r.userCount ?? 0) === 0) return false
+    if (filters.hasUsers === 'no' && (r.userCount ?? 0) > 0) return false
+    if (filters.builtin === 'true' && !r.builtin) return false
+    if (filters.builtin === 'false' && r.builtin) return false
+    if (filters.enabled === 'true' && r.enabled === false) return false
+    if (filters.enabled === 'false' && r.enabled !== false) return false
+    return true
+  })
+})
+
+function applyFilter() { /* 响应式自动更新 */ }
+
+function resetFilter() {
+  searchKeyword.value = ''
+  filters.roleType = ''
+  filters.hasUsers = ''
+  filters.builtin = ''
+  filters.enabled = ''
+}
+
+// ===== 角色图标和颜色映射 =====
+// 根据角色 code 返回合适的图标和颜色
+function getRoleIcon(role: RoleVO) {
+  const code = role.code
+  if (code === 'system_admin') return IconTrophy
+  if (code === 'project_admin') return IconIdcard
+  if (code === 'developer') return IconCode
+  if (code === 'tester') return IconSafe
+  if (code === 'observer') return IconEye
+  if (code === 'product_manager') return IconTag
+  if (code === 'tech_lead') return IconUserGroup
+  if (code === 'user_manager') return IconUser
+  if (code === 'project_creator') return IconSettings
+  if (role.roleType === 'global') return IconLock
+  return IconUser
+}
+
+function getRoleIconColor(role: RoleVO) {
+  const code = role.code
+  if (code === 'system_admin') return 'orange'
+  if (code === 'project_admin') return 'blue'
+  if (code === 'developer') return 'purple'
+  if (code === 'tester') return 'green'
+  if (code === 'observer') return 'gray'
+  if (code === 'product_manager') return 'pink'
+  if (code === 'tech_lead') return 'cyan'
+  return role.roleType === 'global' ? 'orange' : 'blue'
+}
 const showCreateDialog = ref(false)
 const editingRole = ref<RoleVO | null>(null)
 const roleForm = reactive({ name: '', code: '', roleType: 'project', description: '' })
@@ -469,6 +613,19 @@ async function savePermissions() {
   Message.success('权限保存成功')
 }
 
+async function toggleEnabled(role: RoleVO) {
+  const newEnabled = role.enabled === false ? true : false
+  try {
+    const res = await roleApi.setEnabled(role.id, newEnabled)
+    if (res.code === 0) {
+      role.enabled = newEnabled
+      Message.success(newEnabled ? '角色已启用' : '角色已禁用')
+    }
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '操作失败')
+  }
+}
+
 async function openUsersDialog(role: RoleVO) {
   showUsersDialog.value = true
   usersLoading.value = true
@@ -493,9 +650,24 @@ onMounted(() => {
 
 <style scoped>
 /* Table */
+.id-cell { font-size: 12px; color: var(--tf-text-tertiary); }
+
 .role-name { color: var(--text-bright); font-weight: 500; font-size: 13px; }
 .role-name-cell { display: flex; align-items: center; gap: 6px; }
 .builtin-tag-inline { flex-shrink: 0; }
+
+/* 角色图标 */
+.role-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; border-radius: 4px; flex-shrink: 0; font-size: 13px;
+}
+.role-icon--blue     { background: rgba(79,140,255,0.15); color: #4f8cff; }
+.role-icon--purple   { background: rgba(148,100,255,0.15); color: #9464ff; }
+.role-icon--green    { background: rgba(56,197,120,0.15); color: #38c578; }
+.role-icon--orange   { background: rgba(255,163,60,0.15); color: #ffa33c; }
+.role-icon--gray     { background: rgba(150,160,180,0.15); color: #96a0b4; }
+.role-icon--cyan     { background: rgba(34,211,238,0.15); color: #22d3ee; }
+.role-icon--pink     { background: rgba(236,72,153,0.15); color: #ec4899; }
 .code-tag { font-size: var(--font-size-xs); background: var(--bg-tertiary); padding: 2px 6px; border-radius: var(--radius-sm); color: var(--accent-blue); font-family: monospace; }
 .type-badge { font-size: var(--font-size-xs); padding: 2px 6px; border-radius: var(--radius-sm); }
 .type-badge.global { background: var(--tf-purple-medium); color: var(--accent-purple); }
@@ -503,7 +675,21 @@ onMounted(() => {
 .user-count-badge { font-size: var(--font-size-xs); padding: 2px 8px; border-radius: var(--radius-sm); background: var(--bg-tertiary); color: var(--text-secondary); }
 .user-count-badge.clickable { cursor: pointer; color: var(--accent-blue); }
 .user-count-badge.clickable:hover { background: var(--tf-accent-medium); }
-.action-col { display: flex; align-items: center; justify-content: flex-start; gap: 2px; flex-wrap: nowrap; white-space: nowrap; }
+
+/* 系统角色列 */
+.flag-yes { font-size: 12px; color: #38c578; font-weight: 500; }
+.flag-no  { font-size: 12px; color: var(--tf-text-tertiary); }
+
+/* 状态列 */
+.status-dot { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 500; }
+.status-dot .dot { width: 7px; height: 7px; border-radius: 50%; }
+.status-dot.enabled  { color: #38c578; }
+.status-dot.enabled .dot { background: #38c578; }
+.status-dot.disabled { color: #f87171; }
+.status-dot.disabled .dot { background: #f87171; }
+
+.action-col { display: flex; align-items: center; justify-content: flex-end; gap: 2px; flex-wrap: nowrap; white-space: nowrap; }
+.more-btn { font-size: 16px; letter-spacing: 1px; }
 
 /* Drawer title */
 .drawer-title-row { display: flex; align-items: center; gap: 12px; }

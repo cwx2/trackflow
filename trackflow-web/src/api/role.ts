@@ -100,5 +100,10 @@ export const roleApi = {
   /** 获取角色下的用户（全局+项目分组） */
   getUsers(id: string) {
     return request.get<any, R<RoleUsersVO>>(`/roles/${id}/users`)
+  },
+
+  /** 启用/禁用角色 */
+  setEnabled(id: string, enabled: boolean) {
+    return request.patch<any, R<RoleVO>>(`/roles/${id}/enabled`, null, { params: { enabled } })
   }
 }

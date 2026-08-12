@@ -31,6 +31,7 @@ export interface RoleVO {
   description?: string
   roleType: string
   builtin: boolean
+  enabled?: boolean
   sortOrder: number
   userCount?: number
 }

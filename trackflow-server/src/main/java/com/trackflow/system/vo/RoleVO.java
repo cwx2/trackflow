@@ -10,6 +10,7 @@ public class RoleVO {
     private String description;
     private String roleType;
     private Boolean builtin;
+    private Boolean enabled;
     private Integer sortOrder;
 
     /**

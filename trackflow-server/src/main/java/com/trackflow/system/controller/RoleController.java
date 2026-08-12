@@ -122,6 +122,12 @@ public class RoleController {
         return R.ok();
     }
 
+    @PatchMapping("/{id}/enabled")
+    @PreAuthorize("@perm.checkGlobal('system:manage_roles')")
+    public R<RoleVO> setEnabled(@PathVariable("id") Long id, @RequestParam boolean enabled) {
+        return R.ok(roleConverter.toVO(roleService.setEnabled(id, enabled)));
+    }
+
     @PutMapping("/{id}/permissions")
     @PreAuthorize("@perm.checkGlobal('system:manage_roles')")
     public R<Void> replacePermissions(@PathVariable("id") Long id, @Valid @RequestBody ReplacePermissionsDTO dto) {

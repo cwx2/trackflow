@@ -18,5 +18,6 @@ public class SysRole extends BaseEntity {
     private String description;
     private String roleType;  // global / project
     private Boolean builtin;
+    private Boolean enabled;
     private Integer sortOrder;
 }
