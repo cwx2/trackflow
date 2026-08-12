@@ -40,10 +40,17 @@
   background: var(--tf-bg-hover) !important;
 }
 
-/* 操作列左侧竖线分隔 */
+/* 操作列左侧竖线分隔，减小 cell padding 让按钮不超出 */
 .arco-table-td.col-actions,
 .arco-table-th.col-actions {
   border-left: 1px solid var(--tf-border-light) !important;
+}
+
+/* 操作列 cell 减小水平 padding，避免按钮撑出列宽 */
+.arco-table-td.col-actions .arco-table-cell,
+.arco-table-th.col-actions .arco-table-cell {
+  padding-left: 8px !important;
+  padding-right: 8px !important;
 }
 
 /* ===== a-tabs 主题覆盖 ===== */
