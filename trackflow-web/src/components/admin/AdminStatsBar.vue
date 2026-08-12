@@ -22,7 +22,7 @@
           </span>
         </div>
         <div class="stat-card__icon" :class="`stat-card__icon--${stat.color || 'blue'}`">
-          <component :is="stat.icon" :size="24" />
+          <component :is="stat.icon" :size="20" />
         </div>
       </div>
     </div>
@@ -59,7 +59,7 @@ defineProps<{
 /* ===== 容器 ===== */
 .stats-bar {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
   gap: 12px;
   flex-shrink: 0;
   margin-bottom: 16px;
@@ -70,7 +70,7 @@ defineProps<{
   background: var(--tf-bg-surface);
   border: 1px solid var(--tf-border-light);
   border-radius: 10px;
-  padding: 20px;
+  padding: 14px 18px;
   transition: border-color 150ms, background 150ms, transform 100ms;
 }
 
@@ -121,9 +121,9 @@ defineProps<{
 
 /* ===== 图标区（右侧） ===== */
 .stat-card__icon {
-  width: 52px;
-  height: 52px;
-  border-radius: 12px;
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
