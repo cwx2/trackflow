@@ -7,6 +7,8 @@ import com.baomidou.mybatisplus.extension.toolkit.Db;
 import com.trackflow.auth.service.PermissionService;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
+import com.trackflow.project.entity.Project;
+import com.trackflow.project.mapper.ProjectMapper;
 import com.trackflow.report.converter.DashboardConverter;
 import com.trackflow.report.dto.CreateDashboardDTO;
 import com.trackflow.report.dto.CreateWidgetDTO;
@@ -54,6 +56,7 @@ public class CustomDashboardService {
     private final SysUserMapper sysUserMapper;
     private final UserGroupMapper userGroupMapper;
     private final PermissionService permissionService;
+    private final ProjectMapper projectMapper;
 
     /**
      * 获取仪表盘列表（当前用户拥有的 + 全局共享的 + 精确共享给我的 + 系统默认仪表盘）
@@ -170,9 +173,67 @@ public class CustomDashboardService {
                 .orderByAsc(DashboardWidget::getPositionY)
                 .orderByAsc(DashboardWidget::getPositionX);
         List<DashboardWidget> widgets = widgetMapper.selectList(widgetWrapper);
-        vo.setWidgets(dashboardConverter.toWidgetVOList(widgets));
+        List<DashboardWidgetVO> widgetVOs = dashboardConverter.toWidgetVOList(widgets);
+
+        // 解析 widget config 中的 projectId，批量查询项目名称并填充 projectName
+        enrichWidgetProjectNames(widgetVOs);
+
+        vo.setWidgets(widgetVOs);
 
         return vo;
+    }
+
+    /**
+     * 批量解析 widget config 中的 projectId 并填充 projectName 字段
+     */
+    private void enrichWidgetProjectNames(List<DashboardWidgetVO> widgetVOs) {
+        if (widgetVOs == null || widgetVOs.isEmpty()) return;
+
+        // 收集所有 widget config 中的 projectId
+        Set<Long> projectIds = new HashSet<>();
+        for (DashboardWidgetVO wvo : widgetVOs) {
+            Long pid = extractProjectIdFromConfig(wvo.getConfig());
+            if (pid != null) {
+                projectIds.add(pid);
+            }
+        }
+
+        if (projectIds.isEmpty()) return;
+
+        // 批量查询项目名称
+        List<Project> projects = projectMapper.selectBatchIds(projectIds);
+        Map<Long, String> projectNameMap = projects.stream()
+                .collect(Collectors.toMap(Project::getId, p -> p.getName() != null ? p.getName() : ""));
+
+        // 填充 projectName
+        for (DashboardWidgetVO wvo : widgetVOs) {
+            Long pid = extractProjectIdFromConfig(wvo.getConfig());
+            if (pid != null && projectNameMap.containsKey(pid)) {
+                wvo.setProjectName(projectNameMap.get(pid));
+            }
+        }
+    }
+
+    /**
+     * 从 widget config JSON 中提取 projectId
+     */
+    private Long extractProjectIdFromConfig(String configJson) {
+        if (configJson == null || configJson.isBlank()) return null;
+        try {
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            com.fasterxml.jackson.databind.JsonNode node = mapper.readTree(configJson);
+            com.fasterxml.jackson.databind.JsonNode pidNode = node.get("projectId");
+            if (pidNode != null && !pidNode.isNull()) {
+                String pidStr = pidNode.asText();
+                if (pidStr != null && !pidStr.isBlank()) {
+                    return Long.parseLong(pidStr);
+                }
+            }
+        } catch (Exception e) {
+            // config JSON 解析失败时忽略，不影响主流程
+            log.debug("解析 widget config projectId 失败: {}", e.getMessage());
+        }
+        return null;
     }
 
     /**
@@ -583,7 +644,9 @@ public class CustomDashboardService {
                 .orderByAsc(DashboardWidget::getPositionY)
                 .orderByAsc(DashboardWidget::getPositionX);
         List<DashboardWidget> widgets = widgetMapper.selectList(widgetWrapper);
-        vo.setWidgets(dashboardConverter.toWidgetVOList(widgets));
+        List<DashboardWidgetVO> widgetVOs = dashboardConverter.toWidgetVOList(widgets);
+        enrichWidgetProjectNames(widgetVOs);
+        vo.setWidgets(widgetVOs);
 
         return vo;
     }

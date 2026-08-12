@@ -36,6 +36,7 @@ public interface DashboardConverter extends BaseConverter {
     @Mapping(target = "id", expression = "java(longToString(entity.getId()))")
     @Mapping(target = "dashboardId", expression = "java(longToString(entity.getDashboardId()))")
     @Mapping(target = "reportId", expression = "java(longToString(entity.getReportId()))")
+    @Mapping(target = "projectName", ignore = true)
     DashboardWidgetVO toWidgetVO(DashboardWidget entity);
 
     List<DashboardWidgetVO> toWidgetVOList(List<DashboardWidget> entities);

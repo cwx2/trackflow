@@ -22,4 +22,7 @@ public class DashboardWidgetVO {
     private Integer height;
     private Integer sortOrder;
     private LocalDateTime createdAt;
+
+    /** 从 config.projectId 解析出的项目名称（用于标题区分） */
+    private String projectName;
 }

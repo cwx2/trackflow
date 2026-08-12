@@ -9,7 +9,7 @@
           :class="{ 'widget-title-clickable': isIssueListWidget }"
           :title="isIssueListWidget ? '点击查看完整工单列表' : undefined"
           @click="handleTitleClick"
-        >{{ widget.title || widgetTypeLabel }}</span>
+        >{{ displayTitle }}</span>
       </div>
       <div class="widget-header-right">
         <button
@@ -156,6 +156,19 @@ const widgetTypeLabel = computed(() => {
   if (!props.widget) return ''
   const def = getWidget(props.widget.widgetType)
   return def?.label || props.widget.widgetType
+})
+
+/**
+ * 展示标题：如果 widget 关联了项目且后端返回了 projectName，则在标题后追加项目名
+ * 用于区分同一仪表盘中多个同类 Widget
+ */
+const displayTitle = computed(() => {
+  if (!props.widget) return ''
+  const baseTitle = props.widget.title || widgetTypeLabel.value
+  if (props.widget.projectName) {
+    return `${baseTitle} - ${props.widget.projectName}`
+  }
+  return baseTitle
 })
 
 const isIssueListWidget = computed(() => {

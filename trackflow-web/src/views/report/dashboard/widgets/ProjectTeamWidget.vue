@@ -1,5 +1,5 @@
 <template>
-  <div v-if="teamMembers.length > 0" class="widget-project-team">
+  <div v-if="teamMembers.length > 0 && totalIssueCount > 0" class="widget-project-team">
     <!-- 汇总行 -->
     <div class="team-summary-row">
       <span class="summary-label">Total</span>
@@ -40,6 +40,13 @@
       </div>
     </div>
   </div>
+
+  <!-- 有成员但全部工单数为 0：简洁空状态 -->
+  <div v-else-if="teamMembers.length > 0 && totalIssueCount === 0" class="widget-no-issues">
+    <icon-user-group :size="28" class="no-issues-icon" />
+    <span class="no-issues-text">{{ teamMembers.length }} 位成员，暂无分配工单</span>
+  </div>
+
   <div v-else class="widget-configure-hint">
     <icon-user-group :size="32" class="hint-icon" />
     <span class="hint-text">{{ !config.projectId ? '点击「编辑配置」选择项目' : '该项目暂无成员' }}</span>
@@ -294,6 +301,29 @@ defineExpose({ loadData })
 .hint-text {
   font-size: 11px;
   color: var(--tf-text-tertiary);
+  text-align: center;
+  line-height: 1.4;
+}
+
+/* 有成员但无工单的简洁空状态 */
+.widget-no-issues {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  gap: 8px;
+  padding: 12px;
+}
+
+.no-issues-icon {
+  color: var(--tf-text-tertiary);
+  opacity: 0.5;
+}
+
+.no-issues-text {
+  font-size: 12px;
+  color: var(--tf-text-secondary);
   text-align: center;
   line-height: 1.4;
 }

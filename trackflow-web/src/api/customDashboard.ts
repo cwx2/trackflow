@@ -16,6 +16,8 @@ export interface DashboardWidgetVO {
   height: number
   sortOrder: number
   createdAt: string
+  /** 从 config.projectId 解析出的项目名称（用于标题区分） */
+  projectName?: string
 }
 
 export interface DashboardDetailVO {
