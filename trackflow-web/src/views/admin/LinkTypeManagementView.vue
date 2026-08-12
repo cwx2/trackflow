@@ -40,7 +40,7 @@
               </span>
             </template>
           </a-table-column>
-          <a-table-column title="操作" :width="120" align="right">
+          <a-table-column title="操作" :width="120" align="right" cell-class="col-actions" header-cell-class="col-actions">
             <template #cell="{ record }">
               <a-space>
                 <a-button

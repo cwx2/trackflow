@@ -66,7 +66,7 @@
                   <span v-else class="time-text empty">从未执行</span>
                 </template>
               </a-table-column>
-              <a-table-column title="操作" :width="180" align="center">
+              <a-table-column title="操作" :width="180" align="right" cell-class="col-actions" header-cell-class="col-actions">
                 <template #cell="{ record }">
                   <a-space>
                     <a-button size="mini" @click="handleEdit(record)">编辑</a-button>
@@ -141,7 +141,7 @@
                 <span class="time-text">{{ formatDateTime(record.executedAt) }}</span>
               </template>
             </a-table-column>
-            <a-table-column title="操作" :width="80" align="center">
+            <a-table-column title="操作" :width="80" align="right" cell-class="col-actions" header-cell-class="col-actions">
               <template #cell="{ record }">
                 <a-popconfirm content="确定删除此记录？" @ok="handleDeleteLog(record)">
                   <a-button size="mini" type="text" status="danger">删除</a-button>

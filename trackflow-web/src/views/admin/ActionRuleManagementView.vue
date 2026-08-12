@@ -59,7 +59,7 @@
             />
           </template>
         </a-table-column>
-        <a-table-column title="操作" :width="150" align="center">
+        <a-table-column title="操作" :width="150" align="right" cell-class="col-actions" header-cell-class="col-actions">
           <template #cell="{ record }">
             <a-space>
               <a-button size="mini" @click="handleEdit(record)">编辑</a-button>

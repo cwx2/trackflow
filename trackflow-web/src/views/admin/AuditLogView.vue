@@ -115,7 +115,7 @@
         </a-table-column>
 
         <!-- 操作 -->
-        <a-table-column title="操作" data-index="action" :width="160">
+        <a-table-column title="操作" data-index="action" :width="160" cell-class="col-actions" header-cell-class="col-actions">
           <template #cell="{ record }">
             <span class="action-tag" :class="getActionClass(record.action)">
               {{ getActionLabel(record.action) }}

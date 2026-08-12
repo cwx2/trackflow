@@ -49,7 +49,7 @@
         <a-table-column title="创建时间" :width="160" data-index="createdAt">
           <template #cell="{ record }">{{ formatDate(record.createdAt) }}</template>
         </a-table-column>
-        <a-table-column title="操作" :width="200">
+        <a-table-column title="操作" :width="200" align="right" cell-class="col-actions" header-cell-class="col-actions">
           <template #cell="{ record }">
             <a-space :size="4">
               <a-button type="text" size="mini" @click.stop="openDetail(record)">详情</a-button>
