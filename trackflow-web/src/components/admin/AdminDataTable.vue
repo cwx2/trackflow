@@ -42,7 +42,7 @@
         :row-selection="selectable ? rowSelectionConfig : undefined"
         :row-class="rowClass"
         :draggable="draggable ? { type: 'handle' } : undefined"
-        :scrollbar="false"
+        :scrollbar="true"
         v-model:selected-keys="internalSelectedKeys"
         @row-click="(record: any) => $emit('row-click', record)"
         @row-contextmenu="(record: any, ev: Event) => { $emit('row-contextmenu', record, ev); showContextMenu(record, ev as MouseEvent) }"
@@ -327,12 +327,6 @@ function handlePageSizeChange(size: number) {
   flex: 1;
   min-height: 0;
   overflow: hidden;
-}
-
-/* tbody 用 overlay scrollbar，不占布局宽度，避免表头/tbody 宽度差导致 fixed 列错位 */
-.admin-data-table__body :deep(.arco-table-body) {
-  overflow-y: auto;
-  overflow-y: overlay; /* Chrome/Edge: 滚动条浮层不占宽，Safari 降级为 auto */
 }
 
 /* 表头样式 */
