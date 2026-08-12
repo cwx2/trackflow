@@ -57,7 +57,7 @@
                 COUNT(*) FILTER (WHERE ist.is_closed = true) AS done_issues,
                 COUNT(*) FILTER (WHERE ist.is_closed = false AND ist.category = 'in_progress') AS in_progress_issues,
                 COUNT(*) FILTER (WHERE ist.is_closed = false AND ist.category != 'in_progress') AS todo_issues,
-                COUNT(*) FILTER (WHERE ist.is_closed = false AND i.due_date IS NOT NULL AND i.due_date &lt; CURRENT_DATE) AS overdue_issues,
+                COUNT(*) FILTER (WHERE ist.is_closed = false AND i.due_date IS NOT NULL AND i.due_date &lt; CURRENT_DATE AND sp.status = 'active') AS overdue_issues,
                 COUNT(*) FILTER (WHERE i.assignee_id IS NULL) AS unassigned_issues,
                 COALESCE(SUM(i.estimated_hours), 0) AS total_estimated_hours,
                 COALESCE(SUM(i.estimated_hours) FILTER (WHERE ist.is_closed = true), 0) AS completed_estimated_hours
@@ -124,7 +124,7 @@
                 COUNT(*) FILTER (WHERE ist.is_closed = true) AS done_issues,
                 COUNT(*) FILTER (WHERE ist.is_closed = false AND ist.category = 'in_progress') AS in_progress_issues,
                 COUNT(*) FILTER (WHERE ist.is_closed = false AND ist.category != 'in_progress') AS todo_issues,
-                COUNT(*) FILTER (WHERE ist.is_closed = false AND i.due_date IS NOT NULL AND i.due_date &lt; CURRENT_DATE) AS overdue_issues,
+                COUNT(*) FILTER (WHERE ist.is_closed = false AND i.due_date IS NOT NULL AND i.due_date &lt; CURRENT_DATE AND sp.status = 'active') AS overdue_issues,
                 COUNT(*) FILTER (WHERE i.assignee_id IS NULL) AS unassigned_issues,
                 COALESCE(SUM(i.estimated_hours), 0) AS total_estimated_hours,
                 COALESCE(SUM(i.estimated_hours) FILTER (WHERE ist.is_closed = true), 0) AS completed_estimated_hours
@@ -185,11 +185,12 @@
                 COUNT(*) FILTER (WHERE ist.is_closed = true) AS done_issues,
                 COUNT(*) FILTER (WHERE ist.is_closed = false AND ist.category = 'in_progress') AS in_progress_issues,
                 COUNT(*) FILTER (WHERE ist.is_closed = false AND ist.category != 'in_progress') AS todo_issues,
-                COUNT(*) FILTER (WHERE ist.is_closed = false AND i.due_date IS NOT NULL AND i.due_date &lt; CURRENT_DATE) AS overdue_issues,
+                COUNT(*) FILTER (WHERE ist.is_closed = false AND i.due_date IS NOT NULL AND i.due_date &lt; CURRENT_DATE AND sp.status = 'active') AS overdue_issues,
                 COUNT(*) FILTER (WHERE i.assignee_id IS NULL) AS unassigned_issues,
                 COALESCE(SUM(i.estimated_hours), 0) AS total_estimated_hours,
                 COALESCE(SUM(i.estimated_hours) FILTER (WHERE ist.is_closed = true), 0) AS completed_estimated_hours
             FROM issue i
+            JOIN sprint sp ON sp.id = i.sprint_id
             LEFT JOIN issue_status ist ON ist.id = i.status_id
             WHERE i.deleted_at IS NULL
               AND i.sprint_id = #{sprintId}
@@ -362,11 +363,12 @@
                 COUNT(*) FILTER (WHERE ist.is_closed = true) AS done_issues,
                 COUNT(*) FILTER (WHERE ist.is_closed = false AND ist.category = 'in_progress') AS in_progress_issues,
                 COUNT(*) FILTER (WHERE ist.is_closed = false AND ist.category != 'in_progress') AS todo_issues,
-                COUNT(*) FILTER (WHERE ist.is_closed = false AND i.due_date IS NOT NULL AND i.due_date &lt; CURRENT_DATE) AS overdue_issues,
+                COUNT(*) FILTER (WHERE ist.is_closed = false AND i.due_date IS NOT NULL AND i.due_date &lt; CURRENT_DATE AND sp.status = 'active') AS overdue_issues,
                 COUNT(*) FILTER (WHERE i.assignee_id IS NULL) AS unassigned_issues,
                 COALESCE(SUM(i.estimated_hours), 0) AS total_estimated_hours,
                 COALESCE(SUM(i.estimated_hours) FILTER (WHERE ist.is_closed = true), 0) AS completed_estimated_hours
             FROM issue i
+            JOIN sprint sp ON sp.id = i.sprint_id
             LEFT JOIN issue_status ist ON ist.id = i.status_id
             WHERE i.deleted_at IS NULL
             GROUP BY i.sprint_id

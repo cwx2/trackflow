@@ -49,7 +49,7 @@
         共 {{ sprint.totalIssues }} 个工单
       </span>
       <span
-        v-if="sprint.overdueIssues && sprint.overdueIssues > 0"
+        v-if="sprint.overdueIssues && sprint.overdueIssues > 0 && sprint.status === 'active'"
         class="stat-item overdue stat-clickable"
         @click.stop="$emit('viewOverdue')"
       >
@@ -101,7 +101,7 @@
         共 {{ sprint.totalIssues }} 个工单
       </span>
       <span
-        v-if="sprint.overdueIssues && sprint.overdueIssues > 0"
+        v-if="sprint.overdueIssues && sprint.overdueIssues > 0 && sprint.status === 'active'"
         class="stat-item overdue stat-clickable"
         @click.stop="$emit('viewOverdue')"
       >
