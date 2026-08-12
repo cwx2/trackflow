@@ -115,7 +115,7 @@
             </a-tag>
           </template>
         </a-table-column>
-        <a-table-column title="操作" :width="160" align="right">
+        <a-table-column title="操作" :width="160" align="left" class-name="col-actions">
           <template #cell="{ record }">
             <div class="action-col">
               <a-button
@@ -899,7 +899,7 @@ onMounted(() => {
 .status-dot--disabled { background: var(--accent-red); }
 
 /* 操作列 */
-.action-col { display: flex; align-items: center; justify-content: flex-end; gap: 2px; flex-wrap: nowrap; white-space: nowrap; }
+.action-col { display: flex; align-items: center; justify-content: flex-start; gap: 2px; flex-wrap: nowrap; white-space: nowrap; }
 
 /* Modal */
 .modal-footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border-light); }

@@ -40,6 +40,12 @@
   background: var(--tf-bg-hover) !important;
 }
 
+/* 操作列左侧竖线分隔 */
+.arco-table-td.col-actions,
+.arco-table-th.col-actions {
+  border-left: 1px solid var(--tf-border-light) !important;
+}
+
 /* ===== a-tabs 主题覆盖 ===== */
 /*
  * 统一去除 a-tabs 内容区的默认 padding（页面自己控制内边距）。
