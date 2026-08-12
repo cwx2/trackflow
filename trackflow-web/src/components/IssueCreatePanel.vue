@@ -672,7 +672,7 @@
       <!-- 底部操作栏 -->
       <div class="panel-footer">
         <a-space>
-          <div class="split-button">
+          <div class="split-button" :class="{ 'submit-shake': submitButtonShaking }">
 
             <a-button type="primary" :loading="submitting" :disabled="!canSubmit" class="split-main" @click="executeDefaultAction">
               {{ defaultActionLabel }}
@@ -751,6 +751,7 @@ const emit = defineEmits<{
 const submitting = ref(false)
 const splitMenuVisible = ref(false)
 const submitError = ref('')
+const submitButtonShaking = ref(false)
 
 // ========== 标题栏草稿数量下拉 ==========
 const draftDropdownVisible = ref(false)
@@ -1233,7 +1234,7 @@ function scrollToFirstError() {
     }
   }
 
-  // 检查自定义字段错误（必填字段现在直接在主区域显示）
+  // 检查自定义字段错误（必填字段在 props-panel 区域）
   const errorFieldIds = Object.keys(cfValidationErrors.value)
   if (errorFieldIds.length === 0) return
 
@@ -1241,14 +1242,32 @@ function scrollToFirstError() {
   // 通过 data-field-id 属性查找元素
   const fieldRow = document.querySelector(`.prop-row[data-field-id="${firstFieldId}"]`) as HTMLElement
   if (fieldRow) {
-    // 滚动到视野中
-    fieldRow.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    // 先确保 props-panel 容器滚动到该字段位置
+    const propsPanel = fieldRow.closest('.props-panel') as HTMLElement
+    if (propsPanel) {
+      const panelRect = propsPanel.getBoundingClientRect()
+      const fieldRect = fieldRow.getBoundingClientRect()
+      // 如果字段不在 props-panel 可视区域内，滚动到视野中
+      if (fieldRect.top < panelRect.top || fieldRect.bottom > panelRect.bottom) {
+        const scrollOffset = fieldRow.offsetTop - propsPanel.offsetTop - (propsPanel.clientHeight / 2) + (fieldRow.clientHeight / 2)
+        propsPanel.scrollTo({ top: scrollOffset, behavior: 'smooth' })
+      }
+    } else {
+      // fallback: 直接使用 scrollIntoView
+      fieldRow.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
     // 尝试聚焦输入元素
     setTimeout(() => {
       const input = fieldRow.querySelector('input, textarea, .arco-select-view') as HTMLElement
       input?.focus?.()
     }, 300)
   }
+}
+
+/** 触发提交按钮抖动动画，给用户明确的"操作被阻止"反馈 */
+function shakeSubmitButton() {
+  submitButtonShaking.value = true
+  setTimeout(() => { submitButtonShaking.value = false }, 500)
 }
 
 /**
@@ -1890,12 +1909,14 @@ async function doSubmit(): Promise<boolean> {
     titleError.value = '请输入工单标题'
     Message.warning('请输入工单标题')
     scrollToFirstError()
+    shakeSubmitButton()
     return false
   }
 
   // 项目校验
   if (!form.projectId) {
     Message.warning('请选择项目')
+    shakeSubmitButton()
     return false
   }
 
@@ -1909,9 +1930,12 @@ async function doSubmit(): Promise<boolean> {
         cfValidationErrors.value[field.id] = '此字段为必填项'
       }
     }
-    Message.warning(cfErrors[0])
+    // 全局 toast 告知用户（使用 error 级别确保醒目）
+    Message.error({ content: '请填写所有必填字段', duration: 3000 })
     // 自动滚动到第一个错误字段
     scrollToFirstError()
+    // 按钮抖动反馈
+    shakeSubmitButton()
     return false
   }
 
@@ -2383,6 +2407,16 @@ onMounted(() => {
 }
 
 .split-button { display: inline-flex; }
+.split-button.submit-shake { animation: shake-horizontal 0.4s ease-in-out; }
+@keyframes shake-horizontal {
+  0%, 100% { transform: translateX(0); }
+  15% { transform: translateX(-4px); }
+  30% { transform: translateX(4px); }
+  45% { transform: translateX(-3px); }
+  60% { transform: translateX(3px); }
+  75% { transform: translateX(-2px); }
+  90% { transform: translateX(2px); }
+}
 .split-button .split-main { border-top-right-radius: 0; border-bottom-right-radius: 0; }
 .split-arrow-trigger {
   display: inline-flex;
