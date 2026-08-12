@@ -85,7 +85,7 @@
             <span class="email-text">{{ record.email || '—' }}</span>
           </template>
         </a-table-column>
-        <a-table-column title="系统角色" :width="160">
+        <a-table-column title="系统角色" :width="160" fixed="right">
           <template #cell="{ record }">
             <template v-if="record.globalRoles && record.globalRoles.length > 0">
               <span v-for="role in record.globalRoles" :key="role.id" class="role-badge">{{ role.name }}</span>
@@ -93,7 +93,7 @@
             <span v-else class="text-muted">—</span>
           </template>
         </a-table-column>
-        <a-table-column title="状态" :width="90" align="center">
+        <a-table-column title="状态" :width="90" align="center" fixed="right">
           <template #cell="{ record }">
             <a-tag
               v-if="record.status === 'active'"
@@ -118,6 +118,7 @@
         <a-table-column title="操作" :width="160" align="right" fixed="right">
           <template #cell="{ record }">
             <div class="action-col">
+              <!-- 禁用/启用：条件显示，用占位保持列宽稳定 -->
               <a-button
                 v-if="record.status === 'active' && record.id !== currentUserId"
                 type="text" size="mini" status="danger"
@@ -128,6 +129,7 @@
                 type="text" size="mini"
                 @click.stop="enableUser(record)"
               >启用</a-button>
+              <span v-else class="action-placeholder" />
               <a-button type="text" size="mini" @click.stop="openRoleDialog(record)">角色</a-button>
               <a-button type="text" size="mini" @click.stop="navigateToUser(record)">详情</a-button>
             </div>
@@ -899,7 +901,8 @@ onMounted(() => {
 .status-dot--disabled { background: var(--accent-red); }
 
 /* 操作列 */
-.action-col { display: flex; align-items: center; justify-content: flex-start; gap: 2px; flex-wrap: nowrap; white-space: nowrap; }
+.action-col { display: flex; align-items: center; justify-content: flex-end; gap: 4px; flex-wrap: nowrap; white-space: nowrap; }
+.action-placeholder { display: inline-block; width: 44px; }
 
 /* Modal */
 .modal-footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border-light); }
