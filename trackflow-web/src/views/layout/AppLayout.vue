@@ -83,7 +83,7 @@ let wsDisconnectToastId: number | null = null
 watch(wsStatus, (status, prevStatus) => {
   if (status === 'error') {
     if (wsDisconnectToastId === null) {
-      wsDisconnectToastId = toast.warning('实时更新连接已断开，数据可能不是最新', { duration: 0 })
+      wsDisconnectToastId = toast.warning('实时更新连接已断开，数据可能不是最新', { duration: 10000 })
     }
   } else if (status === 'connected' && prevStatus !== 'connected') {
     if (wsDisconnectToastId !== null) {
@@ -93,6 +93,12 @@ watch(wsStatus, (status, prevStatus) => {
     }
   }
 })
+// 当断线 toast 被自动关闭（duration 到期）时重置 ID，允许下次断线再次提示
+watch(toast.toasts, (list) => {
+  if (wsDisconnectToastId !== null && !list.some(t => t.id === wsDisconnectToastId)) {
+    wsDisconnectToastId = null
+  }
+}, { deep: true })
 
 // ===== TabBar 仅在 Issue 相关路由显示 =====
 const showTabBar = computed(() => {

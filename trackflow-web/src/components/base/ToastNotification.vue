@@ -6,7 +6,7 @@
           v-for="toast in toasts"
           :key="toast.id"
           class="toast-item"
-          :class="`toast-${toast.type}`"
+          :class="[`toast-${toast.type}`, { 'toast-clickable': !!toast.onClick }]"
           :role="toast.type === 'error' ? 'alert' : 'status'"
           @click="handleClick(toast)"
         >
@@ -118,7 +118,7 @@ function handleClick(toast: ToastItem) {
   align-items: flex-end;
 }
 
-/* 单条 toast */
+/* 单条 toast — 允许点击穿透到下方元素，仅关闭按钮可交互 */
 .toast-item {
   position: relative;
   display: flex;
@@ -131,7 +131,7 @@ function handleClick(toast: ToastItem) {
   border-radius: 8px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.18);
   overflow: hidden;
-  pointer-events: all;
+  pointer-events: none;
   cursor: default;
 }
 
@@ -139,6 +139,12 @@ function handleClick(toast: ToastItem) {
 .toast-item.toast-success { border-left: none; }
 .toast-item.toast-warning { border-left: none; }
 .toast-item.toast-error   { border-left: none; }
+
+/* 有 onClick 回调的 toast 整体可点击 */
+.toast-item.toast-clickable {
+  pointer-events: auto;
+  cursor: pointer;
+}
 
 /* 左侧色条 */
 .toast-accent {
@@ -172,11 +178,6 @@ function handleClick(toast: ToastItem) {
   line-height: 1.4;
 }
 
-/* 有 onClick 时显示手形 */
-.toast-item:has(.toast-message[data-clickable]) {
-  cursor: pointer;
-}
-
 /* 关闭按钮 */
 .toast-close {
   flex-shrink: 0;
@@ -190,6 +191,7 @@ function handleClick(toast: ToastItem) {
   border-radius: 4px;
   color: var(--tf-text-tertiary);
   cursor: pointer;
+  pointer-events: auto;
   transition: color 150ms, background 150ms;
 }
 
