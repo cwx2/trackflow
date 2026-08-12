@@ -141,12 +141,12 @@ import { loadProjectPermissions } from '@/composables/usePermission'
 import type { ProjectDetailVO, ProjectStatisticsVO } from '@/api/types'
 import { Message, Modal } from '@arco-design/web-vue'
 import { DataContainer } from '@/components/base'
-import ProjectWidgetPanel from './ProjectWidgetPanel.vue'
-import ProjectActivityFeed from './ProjectActivityFeed.vue'
-import ProjectStatistics from './ProjectStatistics.vue'
-import ProjectMemberList from './ProjectMemberList.vue'
-import ProjectNavGrid from './ProjectNavGrid.vue'
-import ProjectDescription from './ProjectDescription.vue'
+import ProjectWidgetPanel from './components/ProjectWidgetPanel.vue'
+import ProjectActivityFeed from './components/ProjectActivityFeed.vue'
+import ProjectStatistics from './components/ProjectStatistics.vue'
+import ProjectMemberList from './components/ProjectMemberList.vue'
+import ProjectNavGrid from './components/ProjectNavGrid.vue'
+import ProjectDescription from './components/ProjectDescription.vue'
 
 const route = useRoute()
 const router = useRouter()

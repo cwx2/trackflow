@@ -326,7 +326,7 @@ import cronstrue from 'cronstrue/i18n'
 import { CronExpressionParser } from 'cron-parser'
 import { workflowRuleApi, projectApi } from '@/api'
 import type { WorkflowRuleVO, WorkflowRuleDTO, WorkflowRuleExecutionLogVO } from '@/api/workflowRule'
-import VariableInput from './components/VariableInput.vue'
+import VariableInput from './VariableInput.vue'
 import DataContainer from '@/components/base/DataContainer.vue'
 
 const props = defineProps<{

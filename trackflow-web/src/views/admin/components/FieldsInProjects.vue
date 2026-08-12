@@ -537,7 +537,7 @@ const createForm = reactive({
   options: [] as Array<{ value: string; isDefault: boolean }>
 })
 
-import { FIELD_TYPE_OPTIONS, formatFieldType } from './constants/fieldType'
+import { FIELD_TYPE_OPTIONS, formatFieldType } from '../constants/fieldType'
 
 // === 汇总统计 ===
 const totalFieldCount = computed(() => {

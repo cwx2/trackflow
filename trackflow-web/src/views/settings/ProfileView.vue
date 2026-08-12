@@ -179,7 +179,7 @@ import { useTheme } from '@/composables/useTheme'
 import { authApi } from '@/api'
 import type { UserProfileVO } from '@/api/user'
 import { UserAvatar } from '@/components/base'
-import ProfileWorkspaceTab from './ProfileWorkspaceTab.vue'
+import ProfileWorkspaceTab from './components/ProfileWorkspaceTab.vue'
 import NotificationSettingsView from './NotificationSettingsView.vue'
 import AccountSecurityView from './AccountSecurityView.vue'
 

@@ -712,7 +712,7 @@ import { Message } from '@arco-design/web-vue'
 import { workflowRuleApi, issueApi, sprintApi, projectApi } from '@/api'
 import type { WorkflowRuleVO, WorkflowRuleDTO, WorkflowRuleExecutionLogVO, WorkflowRuleExportDTO, WorkflowRuleExportItem } from '@/api/workflowRule'
 import type { IssueStatusVO, SprintVO } from '@/api/types'
-import VariableInput from './components/VariableInput.vue'
+import VariableInput from './VariableInput.vue'
 import DataContainer from '@/components/base/DataContainer.vue'
 
 const props = defineProps<{

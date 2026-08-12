@@ -46,11 +46,11 @@ import { Message } from '@arco-design/web-vue'
 import { notificationPreferenceApi } from '@/api'
 import type { NotificationPreferenceVO, EmailAvailabilityVO } from '@/api/notificationPreference'
 import { useRequest } from '@/composables/useRequest'
-import ProjectNotificationPreferences from './ProjectNotificationPreferences.vue'
-import NotificationSubscriptions from './NotificationSubscriptions.vue'
+import ProjectNotificationPreferences from './components/ProjectNotificationPreferences.vue'
+import NotificationSubscriptions from './components/NotificationSubscriptions.vue'
 import EventSubscriptionSettings from './components/EventSubscriptionSettings.vue'
 import NotificationChannelSettings from './components/NotificationChannelSettings.vue'
-import MutedThreadsList from './MutedThreadsList.vue'
+import MutedThreadsList from './components/MutedThreadsList.vue'
 
 // --- Email status (useRequest) ---
 const { data: emailStatus } = useRequest<EmailAvailabilityVO>(

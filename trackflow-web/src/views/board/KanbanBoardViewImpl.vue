@@ -991,14 +991,14 @@ import { IssueStatusTag, EmptyState } from '@/components/base'
 import { defineAsyncComponent } from 'vue'
 // BoardSettingsDrawer 包含 settings tabs + 大量表单，只在用户点击设置按钮时才需要，懒加载
 const BoardSettingsDrawer = defineAsyncComponent(
-  () => import('./BoardSettingsDrawer.vue')
+  () => import('./components/BoardSettingsDrawer.vue')
 )
-import BoardSelector from './BoardSelector.vue'
-import BacklogPanel from './BacklogPanel.vue'
-import BoardChartPanel from './BoardChartPanel.vue'
+import BoardSelector from './components/BoardSelector.vue'
+import BacklogPanel from './components/BacklogPanel.vue'
+import BoardChartPanel from './components/BoardChartPanel.vue'
 import KanbanCard from './components/KanbanCard.vue'
-import IssuePreviewDrawer from './IssuePreviewDrawer.vue'
-import CloneBoardModal from './CloneBoardModal.vue'
+import IssuePreviewDrawer from './components/IssuePreviewDrawer.vue'
+import CloneBoardModal from './components/CloneBoardModal.vue'
 import IssueCreatePanel from '@/components/IssueCreatePanel.vue'
 import BatchActionToolbar from '@/components/BatchActionToolbar.vue'
 import { IconSettings, IconSearch, IconList, IconBarChart, IconPlus, IconFile, IconCalendar, IconCopy } from '@arco-design/web-vue/es/icon'
