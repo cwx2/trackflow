@@ -30,66 +30,17 @@
           label="操作"
           v-model="filters.action"
           :width="140"
+          :options="actionOptions"
           @change="resetAndLoad"
-        >
-          <a-option-group label="认证">
-            <a-option value="login">用户登录</a-option>
-            <a-option value="first_login">首次登录</a-option>
-            <a-option value="login_failed">登录失败</a-option>
-            <a-option value="api_key_used">使用 API Key</a-option>
-            <a-option value="api_key_failed">API Key 失败</a-option>
-          </a-option-group>
-          <a-option-group label="用户管理">
-            <a-option value="create_user">创建用户</a-option>
-            <a-option value="disable_user">禁用用户</a-option>
-            <a-option value="enable_user">启用用户</a-option>
-            <a-option value="assign_global_role">分配系统角色</a-option>
-            <a-option value="remove_global_role">移除系统角色</a-option>
-          </a-option-group>
-          <a-option-group label="用户组">
-            <a-option value="create_group">创建用户组</a-option>
-            <a-option value="update_group">编辑用户组</a-option>
-            <a-option value="delete_group">删除用户组</a-option>
-            <a-option value="add_group_members">添加组成员</a-option>
-            <a-option value="remove_group_members">移除组成员</a-option>
-            <a-option value="assign_group_role">分配组角色</a-option>
-          </a-option-group>
-          <a-option-group label="角色与权限">
-            <a-option value="clone_role">克隆角色</a-option>
-            <a-option value="update_role_permissions">修改角色权限</a-option>
-          </a-option-group>
-          <a-option-group label="API Key">
-            <a-option value="create_api_key">创建 API Key</a-option>
-            <a-option value="revoke_api_key">吊销 API Key</a-option>
-            <a-option value="revoke_all_api_keys">吊销所有 API Key</a-option>
-          </a-option-group>
-          <a-option-group label="系统设置">
-            <a-option value="time_tracking_settings_update">修改工时设置</a-option>
-          </a-option-group>
-          <a-option-group label="项目管理">
-            <a-option value="create_project">创建项目</a-option>
-            <a-option value="update_project">修改项目</a-option>
-            <a-option value="archive_project">归档项目</a-option>
-            <a-option value="delete_project">删除项目</a-option>
-            <a-option value="update_project_member_role">修改成员角色</a-option>
-            <a-option value="remove_project_member">移除项目成员</a-option>
-          </a-option-group>
-        </FilterSelect>
+        />
 
         <FilterSelect
           label="目标"
           v-model="filters.targetType"
           :width="90"
+          :options="targetTypeOptions"
           @change="resetAndLoad"
-        >
-          <a-option value="auth">认证</a-option>
-          <a-option value="user">用户</a-option>
-          <a-option value="user_group">用户组</a-option>
-          <a-option value="role">角色</a-option>
-          <a-option value="project">项目</a-option>
-          <a-option value="api_key">API Key</a-option>
-          <a-option value="system_setting">系统设置</a-option>
-        </FilterSelect>
+        />
 
         <a-range-picker
           size="small"
@@ -119,7 +70,7 @@ import { auditLogApi } from '@/api'
 import type { AuditLogVO } from '@/api/auditLog'
 import { Message } from '@arco-design/web-vue'
 import { AdminPageLayout, AdminDataTable, FilterSelect } from '@/components/admin'
-import type { ColumnDef } from '@/components/admin'
+import type { ColumnDef, FilterOption } from '@/components/admin'
 import { usePagedList } from '@/composables/usePagedList'
 
 // ===== 类型定义 =====
@@ -131,6 +82,63 @@ interface AuditLogFilters {
   endDate: string
   search: string
 }
+
+// ===== 筛选器选项 =====
+
+const actionOptions: FilterOption[] = [
+  { label: '认证', options: [
+    { label: '用户登录', value: 'login' },
+    { label: '首次登录', value: 'first_login' },
+    { label: '登录失败', value: 'login_failed' },
+    { label: '使用 API Key', value: 'api_key_used' },
+    { label: 'API Key 失败', value: 'api_key_failed' },
+  ]},
+  { label: '用户管理', options: [
+    { label: '创建用户', value: 'create_user' },
+    { label: '禁用用户', value: 'disable_user' },
+    { label: '启用用户', value: 'enable_user' },
+    { label: '分配系统角色', value: 'assign_global_role' },
+    { label: '移除系统角色', value: 'remove_global_role' },
+  ]},
+  { label: '用户组', options: [
+    { label: '创建用户组', value: 'create_group' },
+    { label: '编辑用户组', value: 'update_group' },
+    { label: '删除用户组', value: 'delete_group' },
+    { label: '添加组成员', value: 'add_group_members' },
+    { label: '移除组成员', value: 'remove_group_members' },
+    { label: '分配组角色', value: 'assign_group_role' },
+  ]},
+  { label: '角色与权限', options: [
+    { label: '克隆角色', value: 'clone_role' },
+    { label: '修改角色权限', value: 'update_role_permissions' },
+  ]},
+  { label: 'API Key', options: [
+    { label: '创建 API Key', value: 'create_api_key' },
+    { label: '吊销 API Key', value: 'revoke_api_key' },
+    { label: '吊销所有 API Key', value: 'revoke_all_api_keys' },
+  ]},
+  { label: '系统设置', options: [
+    { label: '修改工时设置', value: 'time_tracking_settings_update' },
+  ]},
+  { label: '项目管理', options: [
+    { label: '创建项目', value: 'create_project' },
+    { label: '修改项目', value: 'update_project' },
+    { label: '归档项目', value: 'archive_project' },
+    { label: '删除项目', value: 'delete_project' },
+    { label: '修改成员角色', value: 'update_project_member_role' },
+    { label: '移除项目成员', value: 'remove_project_member' },
+  ]},
+]
+
+const targetTypeOptions: FilterOption[] = [
+  { label: '认证', value: 'auth' },
+  { label: '用户', value: 'user' },
+  { label: '用户组', value: 'user_group' },
+  { label: '角色', value: 'role' },
+  { label: '项目', value: 'project' },
+  { label: 'API Key', value: 'api_key' },
+  { label: '系统设置', value: 'system_setting' },
+]
 
 // ===== 数据加载（usePagedList 统一管理列表+分页+筛选） =====
 

@@ -3,6 +3,9 @@
     FilterSelect — 工具栏筛选器 pill 组件
     将 label + select 封装成统一样式的控件：[ 标签  选中值 ▼ ]
     用于 AdminDataTable #toolbar-filters slot 内。
+    
+    有分组选项时用 :options prop（避免 Arco slot 透传无法识别 option-group 的问题）
+    简单选项时可直接用 <slot> 内嵌 <a-option>
   -->
   <div class="filter-select" :class="{ 'filter-select--active': hasValue }">
     <span class="filter-select__label">{{ label }}</span>
@@ -18,7 +21,21 @@
       @change="$emit('change', $event as any)"
       @clear="$emit('clear')"
     >
-      <slot />
+      <template v-if="options && options.length">
+        <template v-for="opt in options" :key="opt.value ?? opt.label">
+          <!-- 分组 -->
+          <a-option-group v-if="opt.options" :label="opt.label">
+            <a-option
+              v-for="child in opt.options"
+              :key="child.value"
+              :value="child.value"
+            >{{ child.label }}</a-option>
+          </a-option-group>
+          <!-- 普通选项 -->
+          <a-option v-else :value="opt.value">{{ opt.label }}</a-option>
+        </template>
+      </template>
+      <slot v-else />
     </a-select>
   </div>
 </template>
@@ -27,13 +44,27 @@
 /**
  * FilterSelect — 工具栏筛选 pill 组件
  *
- * 用法：
+ * 用法（简单选项，走 slot）：
  * <FilterSelect label="角色类型" v-model="filters.roleType" @change="reload">
  *   <a-option value="global">全局</a-option>
- *   <a-option value="project">项目级</a-option>
  * </FilterSelect>
+ *
+ * 用法（分组选项，走 :options prop，推荐）：
+ * <FilterSelect label="操作" v-model="filters.action" :options="actionOptions" @change="reload" />
+ * actionOptions = [
+ *   { label: '认证', options: [{ label: '登录', value: 'login' }, ...] },
+ *   { label: '普通项', value: 'xxx' },
+ * ]
  */
 import { computed } from 'vue'
+
+/** 普通选项 */
+export interface FilterOption {
+  label: string
+  value?: string | number
+  /** 有 options 时视为分组 */
+  options?: FilterOption[]
+}
 
 defineOptions({ inheritAttrs: false })
 
@@ -48,6 +79,8 @@ const props = withDefaults(defineProps<{
   allowClear?: boolean
   /** select 最小宽度 */
   width?: string | number
+  /** 结构化选项（有分组时用此 prop，避免 Arco slot 透传问题） */
+  options?: FilterOption[]
 }>(), {
   allowClear: true,
 })
