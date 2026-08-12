@@ -373,7 +373,6 @@ import { EmptyState } from '@/components/base'
 import { projectApi, sprintApi } from '@/api'
 import type { DashboardData } from '@/api/reportStatistics'
 import type { ProjectVO } from '@/api/types'
-import { localizeStatusName } from '@/utils/fieldLabels'
 import { useChartColors, SERIES_ACCENT, SERIES_ACCENT_LIGHT, SERIES_SUCCESS, SERIES_DANGER, SERIES_TERTIARY, areaGradient, getChartDownloadBgColor } from '@/utils/chartColors'
 
 // 注册 ECharts 组件
@@ -473,7 +472,7 @@ const statusChartOption = computed(() => {
         itemStyle: { shadowBlur: 10, shadowOffsetX: 0, shadowColor: 'rgba(0, 0, 0, 0.3)' }
       },
       data: items.map(item => ({
-        name: localizeStatusName(item.name),
+        name: item.name,
         value: item.value,
         itemStyle: { color: item.color }
       }))
@@ -854,13 +853,13 @@ function drillDownOverview(type: 'total' | 'open' | 'closed' | 'overdue') {
 function handleStatusChartClick(params: any) {
   if (!params || !params.data) return
   const item = dashboardData.value?.statusDistribution.items.find(
-    i => localizeStatusName(i.name) === params.name || i.name === params.name
+    i => i.name === params.name
   )
   if (item) {
     // Pass statusName which will be resolved to status ID in IssueListView
     navigateToDrillDown({
       statusName: item.name,
-      label: localizeStatusName(item.name)
+      label: item.name
     })
   }
 }
@@ -938,7 +937,7 @@ const cumulativeFlowChartOption = computed(() => {
       }
     },
     legend: {
-      data: series.map(s => localizeStatusName(s.name)),
+      data: series.map(s => s.name),
       bottom: 0,
       textStyle: { color: c.textColor, fontSize: 11 },
       itemWidth: 12,
@@ -962,7 +961,7 @@ const cumulativeFlowChartOption = computed(() => {
       splitLine: { lineStyle: { color: c.axisColor, type: 'dashed' } }
     },
     series: series.map(s => ({
-      name: localizeStatusName(s.name),
+      name: s.name,
       type: 'line',
       stack: 'total',
       areaStyle: { opacity: 0.7 },
@@ -1223,7 +1222,7 @@ function exportCSV() {
   lines.push('=== 状态分布 ===')
   lines.push('状态,数量')
   data.statusDistribution.items.forEach(item => {
-    lines.push(`${localizeStatusName(item.name)},${item.value}`)
+    lines.push(`${item.name},${item.value}`)
   })
   lines.push('')
 

@@ -34,7 +34,6 @@
 import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { projectApi, customFieldApi } from '@/api'
 import type { IssueStatusVO, ProjectVO } from '@/api/types'
-import { localizeStatusName } from '@/utils/fieldLabels'
 import { loadIssueTypeOptions } from '../composables/useIssueTypeOptions'
 
 // ==================== Types ====================
@@ -92,7 +91,7 @@ function getBuiltinFields(): FieldDef[] {
       key: 'status', label: '状态', queryKey: '状态', valueType: 'enum',
       getValues: () => {
         const special = [{ id: '__open__', label: '未关闭' }, { id: '__closed__', label: '已关闭' }]
-        const statuses = props.statusList.map(s => ({ id: s.name, label: localizeStatusName(s.name) }))
+        const statuses = props.statusList.map(s => ({ id: s.name, label: s.name }))
         return [...special, ...statuses]
       }
     },

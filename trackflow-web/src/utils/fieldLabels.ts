@@ -71,10 +71,11 @@ export function localizeFieldName(name?: string | null): string | undefined {
  */
 
 /**
- * 状态英文名 → 中文映射
- * 
- * @deprecated 自 V274 后，后端 API 返回 displayName（中文）或已本地化的 statusName。
- * 保留此映射仅用于兼容可能残留的历史英文值（如活动记录中旧的 status 变更值）。
+ * 状态英文 name → 中文 display_name 兼容映射
+ *
+ * 用途：activity 记录历史值兼容 + useApplyCommand 命令解析。
+ * 禁止用于展示 issue.status.name——后端已通过 COALESCE(display_name, name)
+ * 返回中文，直接用原值即可。
  */
 export const statusLabelMap: Record<string, string> = {
   'Open': '待处理',
@@ -99,11 +100,14 @@ export const statusLabelMap: Record<string, string> = {
 }
 
 /**
- * 本地化状态名称
- * V274 后后端已返回中文 statusName（通过 COALESCE(display_name, name)），
- * 此函数用于兼容可能残留的英文值。
- * @param name 状态名（中文或历史英文名）
- * @returns 中文状态名
+ * 将状态英文 name 转换为中文 display_name。
+ *
+ * 仅在以下场景使用：
+ * 1. issue_activity 历史记录中的 old_value/new_value（可能存英文 name）
+ * 2. useApplyCommand 命令解析（用户输入英文或中文状态名）
+ *
+ * 禁止在展示 issue.status.name / statusName 字段时调用——
+ * 这些字段后端已返回 display_name（中文），直接渲染即可。
  */
 export function localizeStatusName(name?: string | null): string {
   if (!name) return '未知'

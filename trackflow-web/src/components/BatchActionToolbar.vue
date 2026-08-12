@@ -29,7 +29,7 @@
                 @click="handleBatchState(status)"
               >
                 <span class="status-dot" :style="{ background: status.color }"></span>
-                <span class="status-name">{{ status.transitionName || localizeStatusName(status.name) }}</span>
+                <span class="status-name">{{ status.transitionName || status.name }}</span>
                 <span
                   v-if="status.totalCount > 1 && status.reachableCount < status.totalCount"
                   class="reachable-hint"
@@ -355,7 +355,7 @@ import { issueApi, projectApi, sprintApi, tagApi } from '@/api'
 import { UserAvatar } from '@/components/base'
 import { IssuePriorityBadge } from '@/components/base'
 import type { IssueVO, IssueTagVO, ProjectMemberVO, SprintVO, BatchAvailableStatusVO } from '@/api/types'
-import { localizeStatusName, linkTypeLabelMap } from '@/utils/fieldLabels'
+import { linkTypeLabelMap } from '@/utils/fieldLabels'
 import { loadPriorityOptions } from '@/composables/usePriorityOptions'
 import { PRIORITY_COLORS, DEFAULT_BADGE_COLOR } from '@/utils/issueColors'
 

@@ -39,7 +39,7 @@
           <span class="issue-key">{{ issue.issueKey }}</span>
           <span class="issue-title">{{ issue.title }}</span>
           <IssueStatusTag
-            :name="localizeStatusName(issue.statusName)"
+            :name="issue.statusName"
             :color="issue.statusColor || DEFAULT_STATUS_COLOR"
           />
           <span class="issue-assignee" v-if="issue.assigneeName">{{ issue.assigneeName }}</span>
@@ -95,7 +95,6 @@ import { ref, computed, watch } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { IconExclamationCircle, IconCheckCircle } from '@arco-design/web-vue/es/icon'
 import { sprintApi } from '@/api'
-import { localizeStatusName } from '@/utils/fieldLabels'
 import { IssueStatusTag } from '@/components/base'
 import { DEFAULT_STATUS_COLOR, getSprintStatusColor } from '@/utils/uiColors'
 import type { SprintVO, CompletionPreviewVO } from '@/api/types'

@@ -39,13 +39,13 @@
           :key="item.statusId"
           class="status-bar-segment"
           :style="{ width: getStatusPercent(item.count) + '%', background: item.statusColor || '#6b7280' }"
-          :title="`${localizeStatusName(item.statusName)}: ${item.count} (${getStatusPercent(item.count).toFixed(1)}%)`"
+          :title="`${item.statusName}: ${item.count} (${getStatusPercent(item.count).toFixed(1)}%)`"
         ></div>
       </div>
       <div class="status-legend">
         <div v-for="item in statistics.statusDistribution" :key="item.statusId" class="legend-item">
           <span class="legend-dot" :style="{ background: item.statusColor || '#6b7280' }"></span>
-          <span class="legend-name">{{ localizeStatusName(item.statusName) }}</span>
+          <span class="legend-name">{{ item.statusName }}</span>
           <span class="legend-count">{{ item.count }}</span>
         </div>
       </div>
@@ -82,7 +82,6 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { localizeStatusName } from '@/utils/fieldLabels'
 import type { ProjectStatisticsVO } from '@/api/types'
 
 const props = defineProps<{

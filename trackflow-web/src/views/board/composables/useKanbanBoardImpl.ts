@@ -21,7 +21,6 @@ import type { UndoEntry } from './useBoardDrag'
 import { useBoardData } from './useBoardData'
 import type { BoardIssue, SwimlaneGroupBy, CardSize, EffectiveColumn, SwimlaneRow } from './types'
 import { useManualOrder } from '@/composables/useManualOrder'
-import { localizeStatusName } from '@/utils/fieldLabels'
 import { extractVersion, showActionFeedback } from '@/utils/transition'
 import { getDueDateInfo } from '@/utils/dueDate'
 import { useIssueProjectSubscription } from '@/composables/useWebSocket'
@@ -1590,7 +1589,7 @@ const closedIssueCount = computed(() => {
 const closedIssueDetail = computed(() => {
   return closedStatuses.value
     .filter(s => getColumnIssues(s.id).length > 0)
-    .map(s => `${localizeStatusName(s.name)} ${getColumnIssues(s.id).length}`)
+    .map(s => `${s.name} ${getColumnIssues(s.id).length}`)
     .join('、')
 })
 
@@ -1610,7 +1609,7 @@ const effectiveColumns = computed<EffectiveColumn[]>(() => {
     // 无合并：每个状态独占一列
     return cols.map(s => ({
       id: s.id,
-      name: localizeStatusName(s.name),
+      name: s.name,
       color: s.color || '',
       category: s.category || '',
       statusIds: [s.id],
@@ -1653,7 +1652,7 @@ const effectiveColumns = computed<EffectiveColumn[]>(() => {
       // 普通列
       result.push({
         id: s.id,
-        name: localizeStatusName(s.name),
+        name: s.name,
         color: s.color || '',
         category: s.category || '',
         statusIds: [s.id],
@@ -1713,7 +1712,7 @@ const hiddenIssueTotalCount = computed(() => {
 // 隐藏列详情文字（状态名:数量）
 const hiddenIssueColumnsDetail = computed(() => {
   return hiddenIssueColumns.value
-    .map(c => `${localizeStatusName(c.statusName)} ${c.issueCount || 0}个`)
+    .map(c => `${c.statusName} ${c.issueCount || 0}个`)
     .join('、')
 })
 
@@ -2327,7 +2326,7 @@ async function onDrop(event: DragEvent, targetStatusId: string) {
       content: () => h('div', { style: 'display:flex;flex-direction:column;gap:8px' }, [
         h('div', { style: 'display:flex;align-items:center;gap:6px' }, [
           h('span', { style: 'color:var(--color-text-3);font-size:13px' }, '目标状态：'),
-          h('span', { style: `background:${targetStatus?.color || '#6b7280'};color:#fff;padding:2px 8px;border-radius:3px;font-size:12px` }, localizeStatusName(targetStatus?.name || ''))
+          h('span', { style: `background:${targetStatus?.color || '#6b7280'};color:#fff;padding:2px 8px;border-radius:3px;font-size:12px` }, targetStatus?.name || '')
         ]),
         h('textarea', {
           placeholder: '请说明退回/变更的原因（必填）',
@@ -2827,7 +2826,7 @@ async function handleBacklogDrop(issue: BoardIssue, targetStatusId: string) {
     }
     issues.value.push(updatedIssue)
 
-    Message.success(`${issue.issueKey} 已添加到看板「${localizeStatusName(targetStatus?.name)}」`)
+    Message.success(`${issue.issueKey} 已添加到看板「${targetStatus?.name}」`)
   }
 
   try {
@@ -2946,7 +2945,7 @@ async function handleBacklogDrop(issue: BoardIssue, targetStatusId: string) {
       }
       issues.value.push(updatedIssue)
 
-      Message.success(`${issue.issueKey} 已添加到看板「${localizeStatusName(targetStatus?.name)}」`)
+      Message.success(`${issue.issueKey} 已添加到看板「${targetStatus?.name}」`)
     }
   } catch (e: any) {
     const errMsg = e.response?.data?.message || '操作失败'
@@ -2978,7 +2977,7 @@ function pushUndoNotification(issue: BoardIssue, oldStatusId: string, newStatusI
   Notification.success({
     id: notifId,
     title: '状态变更成功',
-    content: `${issue.issueKey} 已移至「${localizeStatusName(targetStatus?.name)}」`,
+    content: `${issue.issueKey} 已移至「${targetStatus?.name}」`,
     duration: UNDO_TIMEOUT,
     closable: true,
     footer: () => h('button', {
@@ -3011,7 +3010,7 @@ async function undoTransition(entry: UndoEntry) {
     } else {
       issue.version = (issue.version || 0) + 1
     }
-    Message.success(`${entry.issueKey} 已撤销回「${localizeStatusName(entry.oldStatusName)}」`)
+    Message.success(`${entry.issueKey} 已撤销回「${entry.oldStatusName}」`)
     undoStack.value = undoStack.value.filter(e => e !== entry)
   } catch (e: any) {
     issue.statusId = currentStatusId

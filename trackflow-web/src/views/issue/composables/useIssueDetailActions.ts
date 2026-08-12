@@ -492,7 +492,11 @@ export function useIssueDetailActions(deps: ActionDeps) {
     const prop = fieldMap[key]
     if (!prop) return
 
-    const val = prop === 'estimatedHours' ? (newValue ? Number(newValue) : null) : (newValue || null)
+    const val = prop === 'estimatedHours'
+      ? (newValue ? Number(newValue) : null)
+      : prop === 'sprintId'
+        ? (newValue || '0')  // Backend expects "0" to clear sprint (null means "don't change")
+        : (newValue || null)
 
     try {
       if (key === 'assignee' && newValue) { await issueApi.assign(deps.issue.value!.id, newValue as string) }

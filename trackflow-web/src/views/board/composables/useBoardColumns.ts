@@ -3,7 +3,6 @@ import { ref, computed, watch, nextTick } from 'vue'
 import type { Ref, ComputedRef } from 'vue'
 import type { IssueStatusVO, BoardColumnVO, BoardColumnMergeGroupVO, BoardCardConfigVO } from '@/api/types'
 import type { BoardIssue, EffectiveColumn, CardSize } from './useKanbanBoard'
-import { localizeStatusName } from '@/utils/fieldLabels'
 import { getDueDateInfo } from '@/utils/dueDate'
 import { useManualOrder } from '@/composables/useManualOrder'
 
@@ -73,7 +72,7 @@ export function useBoardColumns(deps: ColumnDeps) {
     const merges = columnMerges.value
     if (merges.length === 0) {
       return cols.map(s => ({
-        id: s.id, name: localizeStatusName(s.name), color: s.color || '',
+        id: s.id, name: s.name, color: s.color || '',
         category: s.category || '', statusIds: [s.id], isMerged: false, sortOrder: s.sortOrder
       }))
     }
@@ -98,7 +97,7 @@ export function useBoardColumns(deps: ColumnDeps) {
         }
       } else {
         result.push({
-          id: s.id, name: localizeStatusName(s.name), color: s.color || '',
+          id: s.id, name: s.name, color: s.color || '',
           category: s.category || '', statusIds: [s.id], isMerged: false, sortOrder: s.sortOrder
         })
       }
@@ -293,7 +292,7 @@ export function useBoardColumns(deps: ColumnDeps) {
   const closedIssueCount = computed(() => closedStatuses.value.reduce((sum, s) => sum + getColumnIssues(s.id).length, 0))
   const closedIssueDetail = computed(() =>
     closedStatuses.value.filter(s => getColumnIssues(s.id).length > 0)
-      .map(s => `${localizeStatusName(s.name)} ${getColumnIssues(s.id).length}`).join('、')
+      .map(s => `${s.name} ${getColumnIssues(s.id).length}`).join('、')
   )
   const progressIndicatorAriaLabel = computed(() => {
     const activeCount = activeStatuses.value.reduce((sum, s) => sum + getColumnIssues(s.id).length, 0)

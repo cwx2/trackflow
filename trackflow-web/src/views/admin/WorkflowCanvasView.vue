@@ -44,7 +44,6 @@ import { IconPlus, IconMinus, IconExpand, IconApps } from '@arco-design/web-vue/
 import LogicFlow, { HtmlNode, HtmlNodeModel } from '@logicflow/core'
 import { issueApi } from '@/api'
 import type { IssueStatusVO } from '@/api/types'
-import { localizeStatusName } from '@/utils/fieldLabels'
 import { STATUS_CATEGORY_COLORS, SERIES_TERTIARY } from '@/utils/chartColors'
 
 import '@logicflow/core/dist/index.css'
@@ -86,7 +85,7 @@ class StatusNodeView extends HtmlNode {
     const status = properties.statusData as IssueStatusVO
     const isInitial = properties.isInitial as boolean
     const color = status?.color || categoryColors[status?.category] || SERIES_TERTIARY
-    const name = localizeStatusName(status?.name || '')
+    const name = status?.name || ''
     const categoryClass = `category-${status?.category || 'open'}`
 
     // 清除之前的内容

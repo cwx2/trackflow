@@ -248,7 +248,7 @@
             <span class="prop-label">状态</span>
             <a-select v-model="form.statusId" size="small" allow-clear placeholder="默认初始状态">
               <a-option v-for="s in statuses" :key="s.id" :value="s.id">
-                <span class="status-dot" :style="{ backgroundColor: s.color || '#6b7280' }"></span>{{ s.displayName || localizeStatusName(s.name) }}
+                <span class="status-dot" :style="{ backgroundColor: s.color || '#6b7280' }"></span>{{ s.displayName || s.name }}
               </a-option>
             </a-select>
           </div>
@@ -444,7 +444,7 @@
               >
                 <a-option v-for="opt in getFilteredOptionsForField(cf)" :key="opt.id" :value="opt.id">
                   <a-tooltip :content="opt.description ?? ''" :disabled="!opt.description" position="left" mini>
-                    <span class="cf-option-label" :style="opt.color ? { color: opt.color } : {}">{{ localizeStatusName(opt.value) }}</span>
+                    <span class="cf-option-label" :style="opt.color ? { color: opt.color } : {}">{{ opt.value }}</span>
                   </a-tooltip>
                 </a-option>
               </a-select>
@@ -627,7 +627,7 @@
                 >
                   <a-option v-for="opt in getFilteredOptionsForField(cf)" :key="opt.id" :value="opt.id">
                     <a-tooltip :content="opt.description ?? ''" :disabled="!opt.description" position="left" mini>
-                      <span class="cf-option-label" :style="opt.color ? { color: opt.color } : {}">{{ localizeStatusName(opt.value) }}</span>
+                      <span class="cf-option-label" :style="opt.color ? { color: opt.color } : {}">{{ opt.value }}</span>
                     </a-tooltip>
                   </a-option>
                 </a-select>
@@ -723,7 +723,7 @@ import { loadPriorityOptions } from '@/views/issue/composables/usePriorityOption
 import { loadIssueTypeOptions } from '@/views/issue/composables/useIssueTypeOptions'
 import { onSessionEvent, saveSessionRecoveryDraft } from '@/utils/sessionEvents'
 import RichEditor from '@/components/RichEditor.vue'
-import { localizeLinkType, localizeStatusName } from '@/utils/fieldLabels'
+import { localizeLinkType } from '@/utils/fieldLabels'
 import { DEFAULT_PRIORITY_OPTIONS, DEFAULT_PRIORITY_COLOR } from '@/composables/usePriorityOptions'
 import { DEFAULT_ISSUE_TYPE_OPTIONS, DEFAULT_ISSUE_TYPE_COLOR } from '@/views/issue/composables/useIssueTypeOptions'
 import type { CustomFieldDefinitionVO, IssueTemplateVO, FilterRule, IssueStatusVO, IssueVO as SimilarIssue } from '@/api/types'

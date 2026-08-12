@@ -1,7 +1,6 @@
 import { nextTick, type Ref } from 'vue'
 import { useRoute } from 'vue-router'
 import type { IssueStatusVO, SprintVO } from '@/api/types'
-import { localizeStatusName } from '@/utils/fieldLabels'
 
 export interface DashboardFilterOptions {
   activeQueryId: Ref<string | null>
@@ -95,7 +94,6 @@ export function useDashboardFilter(options: DashboardFilterOptions) {
       const statusParam = String(route.query.status)
       const matchedStatus = statusCache.value.find(st =>
         st.name === statusParam ||
-        localizeStatusName(st.name) === statusParam ||
         st.code === statusParam
       )
       if (matchedStatus) {
@@ -104,7 +102,7 @@ export function useDashboardFilter(options: DashboardFilterOptions) {
           fieldKey: 'status',
           operator: 'any_of',
           values: [matchedStatus.id],
-          valueLabels: [localizeStatusName(matchedStatus.name)]
+          valueLabels: [matchedStatus.name]
         })
       }
     }

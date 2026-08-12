@@ -103,7 +103,7 @@
                     <a-checkbox v-model="col.visible" class="col-visible-check" />
                     <div class="col-name-cell">
                       <span class="column-color" :style="{ backgroundColor: col.statusColor }"></span>
-                      <span class="column-name">{{ localizeStatusName(col.statusName) }}</span>
+                      <span class="column-name">{{ col.statusName }}</span>
                       <span v-if="col.inWorkflow" class="column-workflow-badge" title="工作流中活跃的状态">⚡</span>
                     </div>
                     <div class="col-count-cell">
@@ -331,7 +331,6 @@ import { ref, watch, computed } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { boardApi, queryApi, projectApi } from '@/api'
 import type { BoardColumnVO, BoardColumnItem, ProjectVO } from '@/api/types'
-import { localizeStatusName } from '@/utils/fieldLabels'
 import { getPriorityColor } from '@/composables/usePriorityOptions'
 import CardSettingsPanel from './CardSettingsPanel.vue'
 import ChartSettingsPanel from './ChartSettingsPanel.vue'
@@ -959,7 +958,7 @@ async function handleSave() {
 
     for (const col of editableColumns.value) {
       if (col.wipMin != null && col.wipMax != null && col.wipMin > col.wipMax) {
-        Message.warning(`「${localizeStatusName(col.statusName)}」的 Min WIP 不能大于 Max WIP`)
+        Message.warning(`「${col.statusName}」的 Min WIP 不能大于 Max WIP`)
         saving.value = false
         return
       }

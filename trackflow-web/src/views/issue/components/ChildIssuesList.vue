@@ -33,7 +33,7 @@
         <router-link :to="`/issues/${child.issueKey}`" class="child-key">{{ child.issueKey }}</router-link>
         <span class="child-title">{{ child.title }}</span>
         <span class="child-assignee" v-if="child.assigneeName">{{ child.assigneeName }}</span>
-        <span class="child-status" :style="{ color: child.statusColor || '#666' }">{{ localizeStatusName(child.statusName) }}</span>
+        <span class="child-status" :style="{ color: child.statusColor || '#666' }">{{ child.statusName }}</span>
       </div>
     </div>
 
@@ -51,7 +51,6 @@
 
 <script setup lang="ts">
 import type { ChildIssueVO, ChildProgressVO } from '@/api/types'
-import { localizeStatusName } from '@/utils/fieldLabels'
 import { IssuePriorityBadge } from '@/components/base'
 
 defineProps<{

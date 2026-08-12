@@ -3,7 +3,6 @@ import { ref, reactive, computed } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { issueApi, sprintApi } from '@/api'
 import type { IssueVO, IssueStatusVO, SprintVO } from '@/api/types'
-import { localizeStatusName } from '@/utils/fieldLabels'
 
 export interface ContextMenuState {
   visible: boolean
@@ -109,7 +108,7 @@ export function useContextMenu(options: ContextMenuOptions) {
     closeContextMenu()
     try {
       await issueApi.transitStatus(issue.id, st.id, undefined, issue.version)
-      Message.success(`状态已更新为 ${localizeStatusName(st.name)}`)
+      Message.success(`状态已更新为 ${st.name}`)
       await refreshList()
     } catch (e: any) {
       Message.error(e?.response?.data?.message || '状态变更失败')

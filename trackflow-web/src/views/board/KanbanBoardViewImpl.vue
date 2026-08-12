@@ -112,7 +112,7 @@
             class="progress-bar"
             :class="{ 'progress-bar--collapsed': isColumnCollapsed(effectiveColumns.find(c => c.statusIds.includes(status.id))?.id || status.id) }"
             :style="{ height: getProgressBarHeight(status.id), backgroundColor: status.color || 'var(--color-fill-4)' }"
-            :title="`${localizeStatusName(status.name)}：${getColumnIssues(status.id).length} 个工单`"
+            :title="`${status.name}：${getColumnIssues(status.id).length} 个工单`"
             @click="scrollToColumn(status.id)"
           ></div>
           <!-- 终态汇总柱形（灰色弱化） -->
@@ -315,11 +315,11 @@
             :key="col.fieldValue || col.statusId || ''"
             class="hidden-status-tag"
             :style="col.statusColor ? { '--tag-color': col.statusColor } : {}"
-            :title="`查看「${localizeStatusName(col.statusName)}」状态下的 ${col.issueCount || 0} 个工单`"
+            :title="`查看「${col.statusName}」状态下的 ${col.issueCount || 0} 个工单`"
             @click="onHiddenStatusTagClick(col)"
           >
             <IssueStatusTag
-              :name="localizeStatusName(col.statusName)"
+              :name="col.statusName"
               :color="col.statusColor"
               size="small"
               variant="plain"
@@ -987,7 +987,6 @@
 
 <script setup lang="ts">
 import { useKanbanBoard } from './composables'
-import { localizeStatusName } from '@/utils/fieldLabels'
 import { IssueStatusTag, EmptyState } from '@/components/base'
 import { defineAsyncComponent } from 'vue'
 // BoardSettingsDrawer 包含 settings tabs + 大量表单，只在用户点击设置按钮时才需要，懒加载

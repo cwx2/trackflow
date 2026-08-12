@@ -6,7 +6,6 @@ import type { IssueStatusVO, QueryPanelItemVO, SavedQueryFilter, UpdateSavedQuer
 import type { TagPanelItemVO, AvailableTagVO } from '@/api/tag'
 import { useAuthStore } from '@/stores/auth'
 import {
-  localizeStatusName,
   queryFieldKeyToLabel, queryFieldLabelToKey
 } from '@/utils/fieldLabels'
 import axios from 'axios'
@@ -548,7 +547,7 @@ export function useQueryPanel(options: QueryPanelOptions) {
           if (f.field === 'priority') return v
           if (f.field === 'status') {
             const st = statusCache.value.find(s => s.code === v || s.id === v)
-            return st ? localizeStatusName(st.name) : v
+            return st ? st.name : v
           }
           if (f.field === 'project') {
             const p = projectList.value.find(pr => pr.id === v)
@@ -651,7 +650,7 @@ export function useQueryPanel(options: QueryPanelOptions) {
       return entry ? entry.value : v
     }
     if (fieldKey === 'status') {
-      const st = statusCache.value.find(s => localizeStatusName(s.name) === v || s.name === v)
+      const st = statusCache.value.find(s => s.name === v)
       return st ? st.id : v
     }
     return v

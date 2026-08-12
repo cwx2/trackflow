@@ -97,7 +97,7 @@
 
     <!-- Status badge -->
     <span class="item-status" :style="{ background: issue.statusColor || '#666' }">
-      {{ localizeStatusName(issue.statusName) }}
+      {{ issue.statusName }}
     </span>
 
     <!-- Row 2: M/L density - custom fields + reporter -->
@@ -202,7 +202,6 @@ import type { Ref } from 'vue'
 import { IconRight, IconDown, IconLayers, IconDragDotVertical, IconThumbUp, IconLoading } from '@arco-design/web-vue/es/icon'
 import type { IssueVO, CustomFieldValueVO, SprintVO } from '@/api/types'
 import type { DensityLevel } from '../composables'
-import { localizeStatusName } from '@/utils/fieldLabels'
 import { highlightKeyword } from '@/utils/highlight'
 import { IssuePriorityBadge } from '@/components/base'
 import { DEFAULT_BADGE_COLOR } from '@/utils/uiColors'

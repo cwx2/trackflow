@@ -218,7 +218,6 @@ import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { IconFilter, IconSearch, IconPlus } from '@arco-design/web-vue/es/icon'
 import { projectApi, sprintApi, tagApi } from '@/api'
 import type { IssueStatusVO, IssueTagVO, ProjectVO, SprintVO } from '@/api/types'
-import { localizeStatusName } from '@/utils/fieldLabels'
 import { PRIORITY_COLORS } from '@/utils/issueColors'
 import { loadIssueTypeOptions } from '../composables/useIssueTypeOptions'
 import QueryInput from './QueryInput.vue'
@@ -692,7 +691,7 @@ async function loadValueOptions(fieldKey: string) {
       case 'status':
         valueOptions.value = props.statusList.map(s => ({
           id: s.id,
-          label: localizeStatusName(s.name),
+          label: s.name,
           color: s.color
         }))
         break

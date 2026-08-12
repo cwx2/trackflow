@@ -199,8 +199,8 @@
                 :class="{ highlighted: highlightCol === colIdx }"
               >
                 <span class="status-dot" :style="{ background: status.color }"></span>
-                <span class="col-header-name" :title="localizeStatusName(status.name)">
-                  {{ localizeStatusName(status.name) }}
+                <span class="col-header-name" :title="status.name">
+                  {{ status.name }}
                 </span>
               </th>
             </tr>
@@ -231,7 +231,7 @@
                     :class="{ highlighted: highlightRow === getRowIndex(fromStatus) }"
                   >
                     <span class="status-dot" :style="{ background: fromStatus.color }"></span>
-                    <span class="row-header-name">{{ localizeStatusName(fromStatus.name) }}</span>
+                    <span class="row-header-name">{{ fromStatus.name }}</span>
                     <span
                       class="initial-status-star"
                       :class="{ active: isInitialStatus(fromStatus.id) }"
@@ -518,7 +518,7 @@ const WorkflowCanvasView = defineAsyncComponent(
 )
 import AdminPageLayout from '@/components/admin/AdminPageLayout.vue'
 import { EmptyState } from '@/components/base'
-import { localizeStatusName, localizeCategoryName } from '@/utils/fieldLabels'
+import { localizeCategoryName } from '@/utils/fieldLabels'
 
 const route = useRoute()
 
@@ -643,11 +643,7 @@ const filteredStatuses = computed(() => {
   // 按搜索关键词筛选
   if (searchKeyword.value.trim()) {
     const kw = searchKeyword.value.trim().toLowerCase()
-    result = result.filter(s => {
-      const localized = localizeStatusName(s.name).toLowerCase()
-      const original = s.name.toLowerCase()
-      return localized.includes(kw) || original.includes(kw)
-    })
+    result = result.filter(s => s.name.toLowerCase().includes(kw))
   }
 
   // 只显示已配置转换
@@ -759,8 +755,8 @@ function openActionPanel(fromStatus: IssueStatusVO, toStatus: IssueStatusVO) {
   if (!isAllowed(fromStatus.id, toStatus.id)) return
   actionPanelFrom.value = fromStatus.id
   actionPanelTo.value = toStatus.id
-  actionPanelFromName.value = localizeStatusName(fromStatus.name)
-  actionPanelToName.value = localizeStatusName(toStatus.name)
+  actionPanelFromName.value = fromStatus.name
+  actionPanelToName.value = toStatus.name
   const key = `${fromStatus.id}-${toStatus.id}`
   actionPanelTransitionId.value = transitionIdMap.get(key) || ''
   actionPanelTransitionName.value = transitionNameMap.get(key) || ''
@@ -783,7 +779,7 @@ function openGuardPanel(fromStatus: IssueStatusVO, toStatus: IssueStatusVO) {
     // 转换尚未保存，弹出 Modal 提示并提供"立即保存"选项
     Modal.confirm({
       title: '需要先保存工作流',
-      content: `您需要先保存当前的工作流变更，才能配置「${localizeStatusName(fromStatus.name)} → ${localizeStatusName(toStatus.name)}」的守卫条件。现在保存吗？`,
+      content: `您需要先保存当前的工作流变更，才能配置「${fromStatus.name} → ${toStatus.name}」的守卫条件。现在保存吗？`,
       okText: '立即保存',
       cancelText: '取消',
       async onOk() {
@@ -799,8 +795,8 @@ function openGuardPanel(fromStatus: IssueStatusVO, toStatus: IssueStatusVO) {
   // 获取当前守卫条件（从 transitions 数据获取）
   const conditions = getTransitionConditions(key)
   guardPanelTransitionId.value = tid
-  guardPanelFromName.value = localizeStatusName(fromStatus.name)
-  guardPanelToName.value = localizeStatusName(toStatus.name)
+  guardPanelFromName.value = fromStatus.name
+  guardPanelToName.value = toStatus.name
   guardPanelConditions.value = conditions
   guardPanelVisible.value = true
 }
@@ -842,8 +838,8 @@ async function doSaveMatrixAndOpenGuard() {
         // 现在可以打开守卫面板了
         const conditions = getTransitionConditions(key)
         guardPanelTransitionId.value = tid
-        guardPanelFromName.value = localizeStatusName(fromStatus.name)
-        guardPanelToName.value = localizeStatusName(toStatus.name)
+        guardPanelFromName.value = fromStatus.name
+        guardPanelToName.value = toStatus.name
         guardPanelConditions.value = conditions
         guardPanelVisible.value = true
       }
@@ -1171,8 +1167,8 @@ async function saveMatrix() {
       const toStatus = statusMap.get(toId)
       added.push({
         fromId, toId,
-        fromName: fromStatus ? localizeStatusName(fromStatus.name) : fromId,
-        toName: toStatus ? localizeStatusName(toStatus.name) : toId
+        fromName: fromStatus ? fromStatus.name : fromId,
+        toName: toStatus ? toStatus.name : toId
       })
     }
   }
@@ -1183,8 +1179,8 @@ async function saveMatrix() {
       const toStatus = statusMap.get(toId)
       removed.push({
         fromId, toId,
-        fromName: fromStatus ? localizeStatusName(fromStatus.name) : fromId,
-        toName: toStatus ? localizeStatusName(toStatus.name) : toId
+        fromName: fromStatus ? fromStatus.name : fromId,
+        toName: toStatus ? toStatus.name : toId
       })
     }
   }
@@ -1267,7 +1263,7 @@ async function saveMatrix() {
           .filter(([_, count]) => count > 0)
           .map(([statusId, count]) => {
             const status = statusMap.get(statusId)
-            const statusName = status ? localizeStatusName(status.name) : statusId
+            const statusName = status ? status.name : statusId
             return h('div', { style: 'padding: 2px 0; color: var(--color-text-2); font-size: 13px;' },
               `当前有 ${count} 个工单处于"${statusName}"状态`)
           }),

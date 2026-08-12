@@ -89,7 +89,6 @@ import { CanvasRenderer } from 'echarts/renderers'
 import { PieChart, BarChart, LineChart } from 'echarts/charts'
 import { TooltipComponent, LegendComponent, GridComponent } from 'echarts/components'
 import VChart from 'vue-echarts'
-import { localizeStatusName } from '@/utils/fieldLabels'
 import { getPriorityColor } from '@/composables/usePriorityOptions'
 import { useChartColors, STATUS_COLORS, CHART_PALETTE } from '@/utils/chartColors'
 import type { ReportDataVO } from '@/api/report'
@@ -136,7 +135,7 @@ function getItemColor(label: string, groupBy: string, idx: number): string {
 }
 
 function localizeLabel(label: string, groupBy: string): string {
-  if (groupBy === 'status') return localizeStatusName(label)
+  if (groupBy === 'status') return label
   if (groupBy === 'priority') return label
   return label
 }

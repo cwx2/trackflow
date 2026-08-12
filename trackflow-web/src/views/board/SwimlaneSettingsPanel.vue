@@ -305,7 +305,6 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import type { BoardColumnVO } from '@/api/types'
-import { localizeStatusName } from '@/utils/fieldLabels'
 import { projectApi, sprintApi, tagApi } from '@/api'
 
 interface MergeGroupLocal {
@@ -487,7 +486,7 @@ function emitMergeChange() {
 
 function getStatusName(statusId: string): string {
   const col = props.columns.find(c => c.statusId === statusId)
-  return col ? localizeStatusName(col.statusName) : statusId
+  return col ? col.statusName : statusId
 }
 
 function getStatusColor(statusId: string): string {

@@ -306,7 +306,7 @@
                   <div v-if="transitionsLoading[record.id]" class="dropdown-loading"><a-spin :size="16" /></div>
                   <template v-else>
                     <div v-for="st in availableTransitions[record.id]" :key="st.id" class="dropdown-item" @click="selectStatus(record, st)">
-                      <span class="status-dot" :style="{ background: st.color }"></span><span>{{ st.transitionName || localizeStatusName(st.name) }}</span>
+                      <span class="status-dot" :style="{ background: st.color }"></span><span>{{ st.transitionName || st.name }}</span>
                     </div>
                     <div v-if="(availableTransitions[record.id] || []).length === 0" class="dropdown-empty">无可用转换</div>
                   </template>
@@ -547,7 +547,7 @@
             @click="ctxSetStatus(st)"
           >
             <span class="ctx-status-dot" :style="{ background: st.color }"></span>
-            <span>{{ localizeStatusName(st.name) }}</span>
+            <span>{{ st.name }}</span>
           </div>
           <div class="ctx-menu-separator"></div>
         </template>
@@ -903,7 +903,7 @@ function selectStatus(issue: IssueVO, status: IssueStatusVO) {
       content: () => h('div', { style: 'display:flex;flex-direction:column;gap:8px' }, [
         h('div', { style: 'display:flex;align-items:center;gap:6px' }, [
           h('span', { style: 'color:var(--color-text-3);font-size:13px' }, '目标状态：'),
-          h('span', { style: `background:${status.color};color: var(--tf-text-on-accent);padding:2px 8px;border-radius:3px;font-size:12px` }, localizeStatusName(status.name))
+          h('span', { style: `background:${status.color};color: var(--tf-text-on-accent);padding:2px 8px;border-radius:3px;font-size:12px` }, status.name)
         ]),
         h('textarea', { placeholder: '请说明退回/变更的原因（必填）', style: 'width:100%;min-height:80px;margin-top:8px;padding:8px;border:1px solid var(--color-border-2);border-radius:4px;resize:vertical;font-size:13px;background:var(--color-bg-2);color:var(--color-text-1)', onInput: (e: Event) => { commentText = (e.target as HTMLTextAreaElement).value } })
       ]),
@@ -976,7 +976,7 @@ function getSprintGroups(projectId: string) {
   if (completed.length) groups.push({ label: '已完成', items: completed })
   return groups
 }
-function selectSprint(issue: IssueVO, sprint: SprintVO | null) { sprintDropdowns[issue.id] = false; executeEdit(issue.id, 'sprintId', sprint?.id || null, (_signal) => issueApi.update(issue.id, { sprintId: sprint?.id || null, version: issue.version }), undefined, onInlineEditSuccess) }
+function selectSprint(issue: IssueVO, sprint: SprintVO | null) { sprintDropdowns[issue.id] = false; const sprintVal = sprint?.id || '0'; executeEdit(issue.id, 'sprintId', sprint?.id || null, (_signal) => issueApi.update(issue.id, { sprintId: sprintVal, version: issue.version }), undefined, onInlineEditSuccess) }
 function selectPriority(issue: IssueVO, priority: string) { priorityDropdowns[issue.id] = false; executeEdit(issue.id, 'priority', priority, (_signal) => issueApi.update(issue.id, { priority, version: issue.version }), undefined, onInlineEditSuccess) }
 
 // List layout Sprint inline edit
@@ -991,7 +991,8 @@ async function onListSprintEdit(issue: IssueVO) {
 }
 function onListSprintSelect(issue: IssueVO, sprint: SprintVO | null) {
   const newSprintId = sprint?.id ?? null; const newSprintName = sprint?.name ?? null
-  executeEdit(issue.id, 'sprintId', newSprintId, (_signal) => issueApi.update(issue.id, { sprintId: newSprintId, version: issue.version }), (_iss) => ({ sprintId: newSprintId ?? undefined, sprintName: newSprintName ?? undefined }), onInlineEditSuccess)
+  const apiSprintId = sprint?.id || '0'
+  executeEdit(issue.id, 'sprintId', newSprintId, (_signal) => issueApi.update(issue.id, { sprintId: apiSprintId, version: issue.version }), (_iss) => ({ sprintId: newSprintId ?? undefined, sprintName: newSprintName ?? undefined }), onInlineEditSuccess)
 }
 
 // ===== Batch Operations =====
@@ -1196,7 +1197,7 @@ const activeQueryParsedFilters = computed(() => {
               fieldKey: 'status',
               operator: 'any_of',
               values: openStatuses.map(s => s.id),
-              valueLabels: openStatuses.map(s => localizeStatusName(s.name))
+              valueLabels: openStatuses.map(s => s.name)
             })
           }
         }
@@ -1215,7 +1216,7 @@ const activeQueryParsedFilters = computed(() => {
       if (v === '${currentUser}') return '我'
       if (fieldKey === 'status') {
         const s = statusCache.value.find(st => st.id === v || st.code === v)
-        return s ? localizeStatusName(s.name) : v
+        return s ? s.name : v
       }
       if (fieldKey === 'priority') return v
       if (fieldKey === 'issueType') return getIssueTypeLabelForRecord(v)

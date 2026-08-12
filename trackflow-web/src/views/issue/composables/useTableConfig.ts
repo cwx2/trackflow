@@ -1,7 +1,6 @@
 import { reactive, computed, type Ref } from 'vue'
 import type { IssueStatusVO } from '@/api/types'
 import type { TableData } from '@arco-design/web-vue'
-import { localizeStatusName } from '@/utils/fieldLabels'
 
 export interface TableConfigOptions {
   visibleColumns: Ref<Array<{ key: string; label: string; fixed?: boolean; sortable?: boolean }>>
@@ -129,9 +128,9 @@ export function useTableConfig(options: TableConfigOptions) {
   }
 
   function getStatusName(id: string, inlineName?: string) {
-    if (inlineName) return localizeStatusName(inlineName)
+    if (inlineName) return inlineName
     const s = statusCache.value.find(st => st.id === id)
-    return localizeStatusName(s?.name)
+    return s?.name
   }
 
   function getStatusColor(id: string, inlineColor?: string) {

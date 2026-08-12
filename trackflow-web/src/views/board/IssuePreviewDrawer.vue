@@ -49,7 +49,7 @@
             class="preview-status-badge preview-status-badge--editable"
             :style="{ backgroundColor: statusColor, color: 'var(--tf-text-on-accent)' }"
             title="点击切换状态"
-          >{{ localizeStatusName(detail.status?.name) }} <span class="edit-chevron">▾</span></span>
+          >{{ detail.status?.name }} <span class="edit-chevron">▾</span></span>
           <template #content>
             <div class="inline-edit-panel">
               <div class="inline-edit-title">变更状态</div>
@@ -63,7 +63,7 @@
                   @click="selectStatus(t)"
                 >
                   <span class="status-dot" :style="{ background: t.color || 'var(--color-fill-4)' }"></span>
-                  <span class="item-label">{{ t.transitionName || localizeStatusName(t.name) }}</span>
+                  <span class="item-label">{{ t.transitionName || t.name }}</span>
                 </div>
               </div>
             </div>
@@ -268,7 +268,6 @@ import { issueApi, projectApi } from '@/api'
 import type { IssueDetailVO, IssueCommentVO, IssueStatusVO } from '@/api/types'
 import { Message, Modal } from '@arco-design/web-vue'
 import TimeProgressIndicator from '@/components/base/TimeProgressIndicator.vue'
-import { localizeStatusName } from '@/utils/fieldLabels'
 import { renderMarkdown, renderHtmlWithMarkdown } from '@/utils/markdown'
 import { getDueDateInfo } from '@/utils/dueDate'
 import type { DueDateInfo } from '@/utils/dueDate'
@@ -351,7 +350,7 @@ async function selectStatus(target: IssueStatusVO) {
       content: () => h('div', { style: 'display:flex;flex-direction:column;gap:8px' }, [
         h('div', { style: 'display:flex;align-items:center;gap:6px' }, [
           h('span', { style: 'color:var(--color-text-3);font-size:13px' }, '目标状态：'),
-          h('span', { style: `background:${target.color};color: var(--tf-text-on-accent);padding:2px 8px;border-radius:3px;font-size:12px` }, localizeStatusName(target.name))
+          h('span', { style: `background:${target.color};color: var(--tf-text-on-accent);padding:2px 8px;border-radius:3px;font-size:12px` }, target.name)
         ]),
         h('textarea', {
           placeholder: '请说明退回/变更的原因（必填）',
@@ -409,7 +408,7 @@ async function doTransitStatus(target: IssueStatusVO, comment: string | undefine
 
       // 成功：同步版本号
       detail.value.version = (detail.value.version || 0) + 1
-      Message.success(`状态已变更为「${localizeStatusName(target.name)}」`)
+      Message.success(`状态已变更为「${target.name}」`)
       emit('issue-updated', props.issueId, { statusId: target.id })
       useNavBadge().refresh() // 状态变更后刷新导航栏 badge
       return
