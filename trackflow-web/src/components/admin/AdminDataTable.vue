@@ -35,6 +35,7 @@
         :size="size || 'small'"
         :bordered="bordered || false"
         :row-selection="selectable ? rowSelectionConfig : undefined"
+        :scroll="{ x: '100%' }"
         v-model:selected-keys="internalSelectedKeys"
         @row-click="(record: any) => $emit('row-click', record)"
       >

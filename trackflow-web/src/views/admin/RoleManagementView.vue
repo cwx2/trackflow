@@ -24,7 +24,7 @@
       empty-description="创建角色来管理团队权限"
     >
       <template #columns>
-        <a-table-column title="角色名称" :width="180">
+        <a-table-column title="角色名称" :width="160">
           <template #cell="{ record }">
             <div class="role-name-cell">
               <span class="role-name">{{ record.name }}</span>
@@ -32,17 +32,17 @@
             </div>
           </template>
         </a-table-column>
-        <a-table-column title="编码" :width="140">
+        <a-table-column title="编码" :width="130">
           <template #cell="{ record }">
             <code class="code-tag">{{ record.code }}</code>
           </template>
         </a-table-column>
-        <a-table-column title="类型" :width="90">
+        <a-table-column title="类型" :width="80">
           <template #cell="{ record }">
             <span class="type-badge" :class="record.roleType">{{ record.roleType === 'global' ? '全局' : '项目级' }}</span>
           </template>
         </a-table-column>
-        <a-table-column title="用户数" :width="80" align="center">
+        <a-table-column title="用户数" :width="72" align="center">
           <template #cell="{ record }">
             <span
               class="user-count-badge"
@@ -54,7 +54,7 @@
           </template>
         </a-table-column>
         <a-table-column title="描述" data-index="description" ellipsis />
-        <a-table-column title="操作" :width="220" align="right" cell-class="col-actions" header-cell-class="col-actions">
+        <a-table-column title="操作" :width="190" align="right" cell-class="col-actions" header-cell-class="col-actions">
           <template #cell="{ record }">
             <div class="action-col">
               <a-button type="text" size="mini" @click="openUsersDialog(record)">用户</a-button>
