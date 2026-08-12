@@ -21,42 +21,9 @@
       :page-size="organizations.length || 20"
       empty-title="暂无组织"
       empty-description="组织用于对项目和团队进行分组管理"
+      :columns="tableColumns"
       @row-click="navigateToOrg"
     >
-      <template #columns>
-        <a-table-column title="编码" :width="120" data-index="code">
-          <template #cell="{ record }">
-            <code class="code-tag">{{ record.code }}</code>
-          </template>
-        </a-table-column>
-        <a-table-column title="名称" :width="200" data-index="name">
-          <template #cell="{ record }">
-            <span class="org-name-link">{{ record.name }}</span>
-          </template>
-        </a-table-column>
-        <a-table-column title="项目数" :width="80" data-index="projectCount" align="center">
-          <template #cell="{ record }">
-            <span class="project-count">{{ record.projectCount ?? 0 }}</span>
-          </template>
-        </a-table-column>
-        <a-table-column title="描述" data-index="description" ellipsis>
-          <template #cell="{ record }">
-            <span class="description-text">{{ record.description || '—' }}</span>
-          </template>
-        </a-table-column>
-        <a-table-column title="创建时间" :width="150" data-index="createdAt">
-          <template #cell="{ record }">
-            <span class="time-text">{{ formatDate(record.createdAt) }}</span>
-          </template>
-        </a-table-column>
-        <a-table-column title="操作" :width="140" align="right">
-          <template #cell="{ record }">
-            <a-button type="text" size="mini" @click.stop="editOrg(record)">编辑</a-button>
-            <a-button type="text" size="mini" status="danger" @click.stop="deleteOrg(record)">删除</a-button>
-          </template>
-        </a-table-column>
-      </template>
-    </AdminDataTable>
 
   <!-- 创建/编辑弹窗 -->
     <a-modal
@@ -95,13 +62,14 @@
 
 <script setup lang="ts">
 import { formatDate } from '@/utils/date'
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted, computed, h } from 'vue'
 import { useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
 import { useConfirmDelete } from '@/composables/useConfirmDelete'
 import { organizationApi } from '@/api'
 import type { OrgVO, OrgProjectVO } from '@/api/organization'
 import { AdminPageLayout, AdminDataTable, AdminStatsBar } from '@/components/admin'
+import type { ColumnDef } from '@/components/admin'
 import type { StatItem } from '@/components/admin'
 import { IconHome, IconFile, IconUserGroup } from '@arco-design/web-vue/es/icon'
 
@@ -141,6 +109,31 @@ const unassignedProjects = ref<OrgProjectVO[]>([])
 const unassignedProjectOptions = computed(() =>
   unassignedProjects.value.map(p => ({ value: p.id, label: `${p.key} - ${p.name}` }))
 )
+
+// ===== 表格列配置 =====
+const tableColumns: ColumnDef[] = [
+  { type: 'code', title: '编码', key: 'code', width: 120 },
+  {
+    type: 'render',
+    title: '名称',
+    key: 'name',
+    width: 200,
+    render: (record: any) => h('span', {
+      style: 'color:var(--tf-accent);font-weight:500;cursor:pointer'
+    }, record.name),
+  },
+  { type: 'count', title: '项目数', key: 'projectCount', width: 80, align: 'center' },
+  { type: 'text', title: '描述', key: 'description', ellipsis: true },
+  { type: 'date', title: '创建时间', key: 'createdAt', width: 150, format: 'datetime' },
+  {
+    type: 'actions',
+    width: 140,
+    actions: (record: any) => [
+      { label: '编辑', onClick: (r) => editOrg(r) },
+      { label: '删除', danger: true, onClick: (r) => deleteOrg(r) },
+    ],
+  },
+]
 
 async function loadOrgs() {
   try {
@@ -216,10 +209,5 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.org-name-link { color: var(--accent-blue); font-weight: 500; cursor: pointer; transition: color 150ms; }
-.org-name-link:hover { text-decoration: underline; }
-.code-tag { font-size: var(--font-size-xs); background: var(--bg-tertiary); padding: 2px 6px; border-radius: var(--radius-sm); color: var(--accent-blue); }
-.project-count { font-size: 13px; font-weight: 500; color: var(--text-primary); }
-.description-text { color: var(--text-secondary); }
-.time-text { font-size: var(--font-size-xs); color: var(--text-secondary); }
+/* 无页面专属样式 —— 列样式统一由 AdminDataTable 的 adt-* 类处理 */
 </style>

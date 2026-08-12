@@ -24,6 +24,7 @@
       :row-class="(record: any) => record.enabled === false ? 'row-disabled' : ''"
       search-placeholder="搜索角色名称、编码或描述..."
       :show-reset="true"
+      :columns="tableColumns"
       v-model:search-keyword="searchKeyword"
       @search="applyFilter"
       @reset="resetFilter"
@@ -50,103 +51,7 @@
         </FilterSelect>
       </template>
 
-      <template #columns>
-        <!-- ID 列 -->
-        <a-table-column title="ID" :width="56" align="center">
-          <template #cell="{ rowIndex }">
-            <span class="id-cell">{{ rowIndex + 1 }}</span>
-          </template>
-        </a-table-column>
-
-        <!-- 角色名称：图标 + 名称 + 内置tag -->
-        <a-table-column title="角色名称" :width="160">
-          <template #cell="{ record }">
-            <div class="role-name-cell">
-              <span class="role-icon" :class="`role-icon--${getRoleIconColor(record)}`">
-                <component :is="getRoleIcon(record)" />
-              </span>
-              <span class="role-name">{{ record.name }}</span>
-              <a-tag v-if="record.builtin" size="small" color="arcoblue" class="builtin-tag-inline">内置</a-tag>
-            </div>
-          </template>
-        </a-table-column>
-
-        <!-- 编码 -->
-        <a-table-column title="编码" :width="130">
-          <template #cell="{ record }">
-            <code class="code-tag">{{ record.code }}</code>
-          </template>
-        </a-table-column>
-
-        <!-- 类型 -->
-        <a-table-column title="类型" :width="80">
-          <template #cell="{ record }">
-            <span class="type-badge" :class="record.roleType">{{ record.roleType === 'global' ? '全局' : '项目级' }}</span>
-          </template>
-        </a-table-column>
-
-        <!-- 用户数 -->
-        <a-table-column title="用户数" :width="72" align="center">
-          <template #cell="{ record }">
-            <span
-              class="user-count-badge"
-              :class="{ clickable: record.userCount > 0 }"
-              @click="record.userCount > 0 && openUsersDialog(record)"
-            >{{ record.userCount ?? 0 }} 人</span>
-          </template>
-        </a-table-column>
-
-        <!-- 描述：设最大宽度，超出 ellipsis，不独占所有空间 -->
-        <a-table-column title="描述" data-index="description" :width="300" ellipsis />
-
-        <!-- 系统角色、状态、操作 -->
-        <a-table-column title="系统角色" :width="90" align="center">
-          <template #cell="{ record }">
-            <span :class="record.builtin ? 'flag-yes' : 'flag-no'">{{ record.builtin ? '是' : '否' }}</span>
-          </template>
-        </a-table-column>
-
-        <a-table-column title="状态" :width="100" align="center">
-          <template #cell="{ record }">
-            <span class="status-dot" :class="record.enabled !== false ? 'enabled' : 'disabled'">
-              <i class="dot" />{{ record.enabled !== false ? '启用' : '禁用' }}
-            </span>
-          </template>
-        </a-table-column>
-
-        <!-- 操作 -->
-        <a-table-column title="操作" :width="220" align="right">
-          <template #cell="{ record }">
-            <div class="action-col">
-              <a-button type="text" size="mini" @click="openUsersDialog(record)">用户</a-button>
-              <a-button type="text" size="mini" @click="openPermDialog(record)">权限</a-button>
-              <a-button type="text" size="mini" @click="openCloneDialog(record)">克隆</a-button>
-              <a-button v-if="!record.builtin" type="text" size="mini" @click="editRole(record)">编辑</a-button>
-              <a-button v-if="!record.builtin" type="text" size="mini" status="danger" @click="deleteRole(record)">删除</a-button>
-              <!-- 内置角色只显示 ⋮ 更多菜单 -->
-              <a-dropdown v-if="record.builtin" trigger="click">
-                <a-button type="text" size="mini" class="more-btn">⋮</a-button>
-                <template #content>
-                  <a-doption @click="editRole(record)">编辑名称/描述</a-doption>
-                  <a-doption @click="toggleEnabled(record)">
-                    {{ record.enabled !== false ? '禁用角色' : '启用角色' }}
-                  </a-doption>
-                </template>
-              </a-dropdown>
-              <a-dropdown v-else trigger="click">
-                <a-button type="text" size="mini" class="more-btn">⋮</a-button>
-                <template #content>
-                  <a-doption @click="toggleEnabled(record)">
-                    {{ record.enabled !== false ? '禁用角色' : '启用角色' }}
-                  </a-doption>
-                </template>
-              </a-dropdown>
-            </div>
-          </template>
-        </a-table-column>
-      </template>
-
-      <!-- 右键菜单：与操作列功能对应的快捷入口 -->
+      <!-- 右键菜单 -->
       <template #context-menu="{ record, close }">
         <div class="ctx-menu-item" @click="openUsersDialog(record); close()">👥 查看用户</div>
         <div class="ctx-menu-item" @click="openPermDialog(record); close()">🔑 配置权限</div>
@@ -334,13 +239,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted, computed, h } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { useConfirmDelete } from '@/composables/useConfirmDelete'
 import { roleApi } from '@/api'
 import type { RoleVO, RoleUsersVO } from '@/api/types'
 import type { PermissionGroup } from '@/api/role'
 import { AdminPageLayout, AdminDataTable, AdminStatsBar, FilterSelect } from '@/components/admin'
+import type { ColumnDef } from '@/components/admin'
 import { UserAvatar } from '@/components/base'
 import type { StatItem } from '@/components/admin'
 import {
@@ -652,6 +558,74 @@ async function openUsersDialog(role: RoleVO) {
     usersLoading.value = false
   }
 }
+
+// ===== 表格列配置 =====
+const tableColumns = computed<ColumnDef[]>(() => [
+  { type: 'index', width: 56 },
+  {
+    type: 'render',
+    title: '角色名称',
+    key: 'name',
+    width: 160,
+    render: (record: any) => h('div', { style: 'display:flex;align-items:center;gap:6px' }, [
+      h('span', {
+        style: `display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:4px;font-size:12px;background:var(--tf-accent-light);color:var(--tf-accent)`
+      }, h(getRoleIcon(record) as any)),
+      h('span', { style: 'font-size:13px;font-weight:500;color:var(--tf-text-primary)' }, record.name),
+      record.builtin ? h('span', {
+        style: 'font-size:10px;font-weight:600;padding:1px 5px;border-radius:3px;background:var(--tf-accent-light);color:var(--tf-accent);flex-shrink:0'
+      }, '内置') : null,
+    ]),
+  },
+  { type: 'code', title: '编码', key: 'code', width: 130 },
+  {
+    type: 'badge',
+    title: '类型',
+    key: 'roleType',
+    width: 80,
+    labelMap: { global: '全局', project: '项目级' },
+    colorMap: { global: 'blue', project: 'green' },
+  },
+  {
+    type: 'count',
+    title: '用户数',
+    key: 'userCount',
+    width: 72,
+    unit: '人',
+    onClick: (r: any) => openUsersDialog(r),
+  },
+  { type: 'text', title: '描述', key: 'description', width: 260, ellipsis: true },
+  {
+    type: 'boolean',
+    title: '系统角色',
+    key: 'builtin',
+    width: 88,
+    trueLabel: '是',
+    falseLabel: '否',
+    trueColor: 'arcoblue',
+    falseColor: 'gray',
+  },
+  {
+    type: 'status',
+    title: '状态',
+    key: 'enabled',
+    width: 90,
+    activeValue: (r: any) => r.enabled !== false,
+  },
+  {
+    type: 'render',
+    title: '操作',
+    width: 220,
+    align: 'right',
+    render: (record: any) => h('div', { style: 'display:flex;align-items:center;justify-content:flex-end;gap:4px' }, [
+      h('button', { class: 'arco-btn arco-btn-text arco-btn-size-mini arco-btn-shape-square', onClick: () => openUsersDialog(record) }, '用户'),
+      h('button', { class: 'arco-btn arco-btn-text arco-btn-size-mini arco-btn-shape-square', onClick: () => openPermDialog(record) }, '权限'),
+      h('button', { class: 'arco-btn arco-btn-text arco-btn-size-mini arco-btn-shape-square', onClick: () => openCloneDialog(record) }, '克隆'),
+      !record.builtin ? h('button', { class: 'arco-btn arco-btn-text arco-btn-size-mini arco-btn-shape-square', onClick: () => editRole(record) }, '编辑') : null,
+      !record.builtin ? h('button', { class: 'arco-btn arco-btn-text arco-btn-size-mini arco-btn-shape-square arco-btn-status-danger', onClick: () => deleteRole(record) }, '删除') : null,
+    ]),
+  },
+])
 
 onMounted(() => {
   loadStats()

@@ -24,42 +24,10 @@
       :page-size="groups.length || 20"
       empty-title="暂无用户组"
       empty-description="创建用户组来批量管理团队权限"
+      :columns="tableColumns"
       @search="loadGroups"
       @row-click="openDetail"
     >
-      <template #columns>
-        <a-table-column title="名称" :width="200" data-index="name">
-          <template #cell="{ record }">
-            <span class="group-name">{{ record.name }}</span>
-          </template>
-        </a-table-column>
-        <a-table-column title="描述" data-index="description" ellipsis>
-          <template #cell="{ record }">{{ record.description || '—' }}</template>
-        </a-table-column>
-        <a-table-column title="成员数" :width="90" data-index="memberCount">
-          <template #cell="{ record }">
-            <span class="count-badge">{{ record.memberCount }} 人</span>
-          </template>
-        </a-table-column>
-        <a-table-column title="角色数" :width="90" data-index="roleCount">
-          <template #cell="{ record }">
-            <span class="count-badge">{{ record.roleCount }} 个</span>
-          </template>
-        </a-table-column>
-        <a-table-column title="创建时间" :width="160" data-index="createdAt">
-          <template #cell="{ record }">{{ formatDate(record.createdAt) }}</template>
-        </a-table-column>
-        <a-table-column title="操作" :width="200">
-          <template #cell="{ record }">
-            <a-space :size="4">
-              <a-button type="text" size="mini" @click.stop="openDetail(record)">详情</a-button>
-              <a-button type="text" size="mini" @click.stop="openEditDialog(record)">编辑</a-button>
-              <a-button type="text" size="mini" status="danger" @click.stop="confirmDelete(record)">删除</a-button>
-            </a-space>
-          </template>
-        </a-table-column>
-      </template>
-    </AdminDataTable>
 
     <!-- 创建/编辑弹窗 -->
     <a-modal
@@ -257,6 +225,7 @@ import { Message } from '@arco-design/web-vue'
 import { useRequest } from '@/composables/useRequest'
 import { UserAvatar } from '@/components/base'
 import { AdminPageLayout, AdminDataTable, AdminStatsBar } from '@/components/admin'
+import type { ColumnDef } from '@/components/admin'
 import type { StatItem } from '@/components/admin'
 import {
   IconUserGroup, IconUser, IconSafe
@@ -529,6 +498,24 @@ async function executeDelete() {
 
 
 
+// ===== 表格列配置 =====
+const tableColumns: ColumnDef[] = [
+  { type: 'text', title: '名称', key: 'name', width: 200 },
+  { type: 'text', title: '描述', key: 'description', ellipsis: true },
+  { type: 'count', title: '成员数', key: 'memberCount', width: 90, unit: '人' },
+  { type: 'count', title: '角色数', key: 'roleCount', width: 90, unit: '个' },
+  { type: 'date', title: '创建时间', key: 'createdAt', width: 160, format: 'datetime' },
+  {
+    type: 'actions',
+    width: 180,
+    actions: (record: any) => [
+      { label: '详情', onClick: (r) => openDetail(r) },
+      { label: '编辑', onClick: (r) => openEditDialog(r) },
+      { label: '删除', danger: true, onClick: (r) => confirmDelete(r) },
+    ],
+  },
+]
+
 onMounted(async () => {
   loadStats()
   await loadGroups()
@@ -539,10 +526,6 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-/* Table */
-.group-name { font-weight: 500; color: var(--tf-text-primary); }
-.count-badge { font-size: 12px; color: var(--tf-text-tertiary); }
-
 /* Detail panel */
 .detail-body { padding: 0; }
 .detail-section { padding: 16px 0; border-bottom: 1px solid var(--tf-border-light); }

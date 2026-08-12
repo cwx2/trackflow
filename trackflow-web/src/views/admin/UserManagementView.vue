@@ -24,6 +24,7 @@
       v-model:page-size="pagination.pageSize"
       empty-title="暂无用户"
       empty-description="点击「新建用户」按钮添加第一个用户"
+      :columns="tableColumns"
       @search="() => { pagination.page = 1; loadUsers() }"
       @page-change="loadUsers"
       @page-size-change="loadUsers"
@@ -60,81 +61,6 @@
           <a-option value="deactivated">注销</a-option>
           <a-option value="locked">锁定</a-option>
         </FilterSelect>
-      </template>
-
-      <template #columns>
-        <a-table-column title="用户" :width="260" data-index="displayName">
-          <template #title>
-            <span class="col-sortable" :class="{ active: sortField === 'displayName' }" @click="toggleSort('displayName')">
-              用户
-              <icon-caret-up v-if="sortField === 'displayName'" class="sort-icon" :class="{ desc: sortDesc }" :size="10" />
-            </span>
-          </template>
-          <template #cell="{ record }">
-            <div class="user-col">
-              <UserAvatar :name="record.displayName || record.username" :size="32" />
-              <div class="user-info">
-                <router-link :to="`/admin/users/${record.id}`" class="username-link" @click.stop>{{ record.displayName || record.username }}</router-link>
-                <span class="user-login">@{{ record.username }}</span>
-              </div>
-            </div>
-          </template>
-        </a-table-column>
-        <a-table-column title="邮箱" data-index="email" ellipsis>
-          <template #cell="{ record }">
-            <span class="email-text">{{ record.email || '—' }}</span>
-          </template>
-        </a-table-column>
-        <a-table-column title="系统角色" :width="160">
-          <template #cell="{ record }">
-            <template v-if="record.globalRoles && record.globalRoles.length > 0">
-              <span v-for="role in record.globalRoles" :key="role.id" class="role-badge">{{ role.name }}</span>
-            </template>
-            <span v-else class="text-muted">—</span>
-          </template>
-        </a-table-column>
-        <a-table-column title="状态" :width="90" align="center">
-          <template #cell="{ record }">
-            <a-tag
-              v-if="record.status === 'active'"
-              color="green"
-              size="small"
-              class="status-tag"
-            >
-              <template #icon><span class="status-dot status-dot--active" /></template>
-              启用
-            </a-tag>
-            <a-tag
-              v-else
-              color="red"
-              size="small"
-              class="status-tag"
-            >
-              <template #icon><span class="status-dot status-dot--disabled" /></template>
-              {{ getBanStatusLabel(record.banStatus) }}
-            </a-tag>
-          </template>
-        </a-table-column>
-        <a-table-column title="操作" :width="160" align="right">
-          <template #cell="{ record }">
-            <div class="action-col">
-              <!-- 禁用/启用：条件显示，用占位保持列宽稳定 -->
-              <a-button
-                v-if="record.status === 'active' && record.id !== currentUserId"
-                type="text" size="mini" status="danger"
-                @click.stop="disableUser(record)"
-              >禁用</a-button>
-              <a-button
-                v-else-if="record.status !== 'active'"
-                type="text" size="mini"
-                @click.stop="enableUser(record)"
-              >启用</a-button>
-              <span v-else class="action-placeholder" />
-              <a-button type="text" size="mini" @click.stop="openRoleDialog(record)">角色</a-button>
-              <a-button type="text" size="mini" @click.stop="navigateToUser(record)">详情</a-button>
-            </div>
-          </template>
-        </a-table-column>
       </template>
     </AdminDataTable>
 
@@ -361,6 +287,7 @@ import type { UserProfileProjectRoleInfo } from '@/api/user'
 import type { GlobalMemberVO } from '@/api/globalMember'
 import { useAuthStore } from '@/stores/auth'
 import { AdminPageLayout, AdminDataTable, AdminStatsBar, FilterSelect } from '@/components/admin'
+import type { ColumnDef } from '@/components/admin'
 import { UserAvatar, EmptyState } from '@/components/base'
 import { usePagedList } from '@/composables/usePagedList'
 import type { StatItem } from '@/components/admin'
@@ -877,6 +804,86 @@ function getBanStatusLabel(banStatus?: string): string {
   return BAN_STATUS_LABELS[banStatus] || '禁用'
 }
 
+// ===== 表格列配置 =====
+const tableColumns = computed<ColumnDef[]>(() => [
+  {
+    type: 'user',
+    title: '用户',
+    key: 'displayName',
+    subKey: 'username',
+    width: 260,
+    avatarSize: 32,
+    href: (r: any) => `/admin/users/${r.id}`,
+  },
+  {
+    type: 'text',
+    title: '邮箱',
+    key: 'email',
+    ellipsis: true,
+  },
+  {
+    type: 'render',
+    title: '系统角色',
+    width: 160,
+    render: (record: any) => {
+      if (!record.globalRoles?.length) {
+        return h('span', { style: 'color: var(--tf-text-tertiary); font-size: 13px' }, '—')
+      }
+      return h('div', { style: 'display:flex; flex-wrap:wrap; gap:4px' },
+        record.globalRoles.map((role: any) =>
+          h('span', {
+            style: 'display:inline-flex;align-items:center;height:20px;padding:0 7px;background:var(--tf-accent-light);color:var(--tf-accent);font-size:11px;font-weight:500;border-radius:3px;white-space:nowrap'
+          }, role.name)
+        )
+      )
+    },
+  },
+  {
+    type: 'render',
+    title: '状态',
+    key: 'status',
+    width: 90,
+    align: 'center',
+    render: (record: any) => {
+      if (record.status === 'active') {
+        return h('span', { class: 'adt-status-active' }, [
+          h('span', { class: 'adt-dot adt-dot--on', style: 'display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--color-success-6,#00b42a);margin-right:4px' }),
+          '启用'
+        ])
+      }
+      return h('span', { class: 'adt-status-inactive', style: 'color:var(--color-danger-6,#f53f3f);font-size:12px' }, [
+        h('span', { style: 'display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--color-danger-6,#f53f3f);margin-right:4px' }),
+        getBanStatusLabel(record.banStatus),
+      ])
+    },
+  },
+  {
+    type: 'actions',
+    width: 160,
+    actions: (record: any) => [
+      {
+        label: '禁用',
+        danger: true,
+        hidden: record.status !== 'active' || record.id === currentUserId.value,
+        onClick: (r: any) => disableUser(r),
+      },
+      {
+        label: '启用',
+        hidden: record.status === 'active',
+        onClick: (r: any) => enableUser(r),
+      },
+      {
+        label: '角色',
+        onClick: (r: any) => openRoleDialog(r),
+      },
+      {
+        label: '详情',
+        onClick: (r: any) => navigateToUser(r),
+      },
+    ],
+  },
+])
+
 onMounted(() => {
   loadStats()
   loadGlobalRoles()
@@ -886,24 +893,7 @@ onMounted(() => {
 </script>
 
 <style scoped>
-/* User column with avatar */
-.user-col { display: flex; align-items: center; gap: 10px; }
-.user-info { display: flex; flex-direction: column; min-width: 0; gap: 2px; }
-.username-link { font-size: 13px; font-weight: 500; color: var(--accent-blue); text-decoration: none; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.username-link:hover { text-decoration: underline; }
-.user-login { font-size: 11px; color: var(--text-muted); line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.email-text { font-size: 13px; color: var(--tf-text-secondary); }
-
-/* 状态标签 */
-.status-tag { font-size: 12px; }
-.status-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 4px; }
-.status-dot--active { background: var(--accent-green); }
-.status-dot--disabled { background: var(--accent-red); }
-
-/* 操作列 */
-.action-col { display: flex; align-items: center; justify-content: flex-end; gap: 4px; flex-wrap: nowrap; white-space: nowrap; }
-.action-placeholder { display: inline-block; width: 44px; }
-
+/* ===== 弹窗 ===== */
 /* Modal */
 .modal-footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border-light); }
 
@@ -946,7 +936,6 @@ onMounted(() => {
 .add-project-form { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
 /* Role badges */
-.role-badge { display: inline-flex; align-items: center; height: 20px; padding: 0 7px; background: var(--tf-accent-bg-light); color: var(--accent-blue); font-size: 11px; font-weight: 500; border-radius: 3px; white-space: nowrap; margin-right: 4px; }
 .text-muted { color: var(--text-muted); font-size: var(--font-size-sm); }
 
 /* Global Project Role Section */
