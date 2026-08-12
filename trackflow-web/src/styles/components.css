@@ -31,6 +31,12 @@
   border-bottom: 1px solid var(--tf-border-light) !important;
 }
 
+/* medium size 行高增大：上下 padding 从 7px 改为 11px，行高约 42px */
+.arco-table-size-medium .arco-table-cell {
+  padding-top: 11px !important;
+  padding-bottom: 11px !important;
+}
+
 /* 最后一行不需要底部分割线 */
 .arco-table-tr:last-child .arco-table-td {
   border-bottom: none !important;
@@ -51,6 +57,9 @@
 .arco-table-th.col-actions .arco-table-cell {
   padding-left: 8px !important;
   padding-right: 8px !important;
+  /* 垂直 padding 跟随全局行高 */
+  padding-top: 11px !important;
+  padding-bottom: 11px !important;
 }
 
 /* ===== a-tabs 主题覆盖 ===== */

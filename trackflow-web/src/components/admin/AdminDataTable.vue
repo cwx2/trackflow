@@ -26,7 +26,7 @@
     </AdminTableToolbar>
 
     <!-- 数据区（独立滚动容器） -->
-    <div class="admin-data-table__body">
+    <div ref="bodyRef" class="admin-data-table__body">
       <a-table
         :data="data"
         :loading="loading"
@@ -35,7 +35,7 @@
         :size="size || 'small'"
         :bordered="bordered || false"
         :row-selection="selectable ? rowSelectionConfig : undefined"
-        :scroll="{ x: '100%' }"
+        :scroll="{ x: '100%', y: bodyHeight }"
         v-model:selected-keys="internalSelectedKeys"
         @row-click="(record: any) => $emit('row-click', record)"
       >
@@ -72,7 +72,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
 import AdminTableToolbar from './AdminTableToolbar.vue'
 import AdminPagination from './AdminPagination.vue'
 import { EmptyState } from '@/components/base'
@@ -184,6 +184,27 @@ const internalSelectedKeys = computed({
   set: (val: string[]) => emit('update:selected-keys', val)
 })
 
+// ===== 表格滚动区域高度（用于表头 sticky）=====
+// 通过 ResizeObserver 动态测量 __body 容器高度，传给 a-table scroll.y
+// 保证表头始终固定，内容区在容器内滚动
+const bodyRef = ref<HTMLElement | null>(null)
+const bodyHeight = ref(400)
+let resizeObserver: ResizeObserver | null = null
+
+onMounted(() => {
+  if (bodyRef.value) {
+    bodyHeight.value = bodyRef.value.clientHeight
+    resizeObserver = new ResizeObserver(() => {
+      bodyHeight.value = bodyRef.value?.clientHeight || 400
+    })
+    resizeObserver.observe(bodyRef.value)
+  }
+})
+
+onBeforeUnmount(() => {
+  resizeObserver?.disconnect()
+})
+
 // ===== 行选择配置 =====
 
 const rowSelectionConfig = computed(() => ({
@@ -226,7 +247,7 @@ function handlePageSizeChange(size: number) {
 .admin-data-table__body {
   flex: 1;
   min-height: 0;
-  overflow-y: auto;
+  overflow: hidden;
 }
 
 /* 表头样式 */
