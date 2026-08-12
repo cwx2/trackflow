@@ -484,13 +484,25 @@ function handleDocumentClick() {
   contextMenuVisible.value = false
 }
 
+/** 计算 scroll.y：容器高度 − 表头高度（Arco scroll.y 只作用于 tbody 区域） */
+function calcBodyHeight() {
+  const container = bodyRef.value
+  if (!container) return
+  const containerH = container.clientHeight
+  // 尝试读取真实表头高度，兜底使用 size 对应的默认值
+  const thead = container.querySelector<HTMLElement>('.arco-table-thead')
+  const sizeDefault = props.size === 'small' ? 32 : props.size === 'large' ? 48 : 40
+  const theadH = thead ? thead.clientHeight : sizeDefault
+  bodyHeight.value = Math.max(containerH - theadH, 120)
+}
+
 onMounted(() => {
   document.addEventListener('click', handleDocumentClick)
   // 测量 __body 高度，响应窗口/布局变化
   if (bodyRef.value) {
-    bodyHeight.value = bodyRef.value.clientHeight
+    calcBodyHeight()
     resizeObserver = new ResizeObserver(() => {
-      bodyHeight.value = bodyRef.value?.clientHeight || 500
+      calcBodyHeight()
     })
     resizeObserver.observe(bodyRef.value)
   }
