@@ -85,7 +85,7 @@
             <span class="email-text">{{ record.email || '—' }}</span>
           </template>
         </a-table-column>
-        <a-table-column title="系统角色" :width="160" fixed="right">
+        <a-table-column title="系统角色" :width="160">
           <template #cell="{ record }">
             <template v-if="record.globalRoles && record.globalRoles.length > 0">
               <span v-for="role in record.globalRoles" :key="role.id" class="role-badge">{{ role.name }}</span>
@@ -93,7 +93,7 @@
             <span v-else class="text-muted">—</span>
           </template>
         </a-table-column>
-        <a-table-column title="状态" :width="90" align="center" fixed="right">
+        <a-table-column title="状态" :width="90" align="center">
           <template #cell="{ record }">
             <a-tag
               v-if="record.status === 'active'"
@@ -115,7 +115,7 @@
             </a-tag>
           </template>
         </a-table-column>
-        <a-table-column title="操作" :width="160" align="right" fixed="right">
+        <a-table-column title="操作" :width="160" align="right">
           <template #cell="{ record }">
             <div class="action-col">
               <!-- 禁用/启用：条件显示，用占位保持列宽稳定 -->

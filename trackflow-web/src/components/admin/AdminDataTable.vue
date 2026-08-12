@@ -339,12 +339,6 @@ function handlePageSizeChange(size: number) {
   letter-spacing: 0.3px;
 }
 
-/* fixed 列背景与表头保持一致 */
-.admin-data-table__body :deep(.arco-table-th.arco-table-col-fixed-right),
-.admin-data-table__body :deep(.arco-table-td.arco-table-col-fixed-right) {
-  background: var(--tf-bg-surface);
-}
-
 /* 列宽拖拽手柄 */
 .admin-data-table__body :deep(.arco-table-col-resizable)::after {
   background-color: var(--tf-border);

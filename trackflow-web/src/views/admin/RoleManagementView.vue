@@ -99,14 +99,14 @@
         <!-- 描述：设最大宽度，超出 ellipsis，不独占所有空间 -->
         <a-table-column title="描述" data-index="description" :width="300" ellipsis />
 
-        <!-- 系统角色、状态、操作：固定在右侧 -->
-        <a-table-column title="系统角色" :width="90" align="center" fixed="right">
+        <!-- 系统角色、状态、操作 -->
+        <a-table-column title="系统角色" :width="90" align="center">
           <template #cell="{ record }">
             <span :class="record.builtin ? 'flag-yes' : 'flag-no'">{{ record.builtin ? '是' : '否' }}</span>
           </template>
         </a-table-column>
 
-        <a-table-column title="状态" :width="100" align="center" fixed="right">
+        <a-table-column title="状态" :width="100" align="center">
           <template #cell="{ record }">
             <span class="status-dot" :class="record.enabled !== false ? 'enabled' : 'disabled'">
               <i class="dot" />{{ record.enabled !== false ? '启用' : '禁用' }}
@@ -115,7 +115,7 @@
         </a-table-column>
 
         <!-- 操作 -->
-        <a-table-column title="操作" :width="220" align="right" fixed="right">
+        <a-table-column title="操作" :width="220" align="right">
           <template #cell="{ record }">
             <div class="action-col">
               <a-button type="text" size="mini" @click="openUsersDialog(record)">用户</a-button>
