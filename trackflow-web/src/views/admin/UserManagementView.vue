@@ -1,73 +1,68 @@
 ﻿<template>
   <AdminPageLayout title="用户管理">
     <template #actions>
-      <div class="header-filters">
-          <a-input-search
-            v-model="filters.keyword"
-            placeholder="搜索用户名/姓名/邮箱..."
-            size="small"
-            allow-clear
-            style="width: 260px"
-            @search="() => { pagination.page = 1; loadUsers() }"
-            @clear="() => { pagination.page = 1; loadUsers() }"
-            @input="debounceLoad"
-          />
-          <a-select
-            v-model="filters.roleId"
-            placeholder="全部角色"
-            size="small"
-            allow-clear
-            style="width: 130px"
-            @change="() => { pagination.page = 1; loadUsers() }"
-          >
-            <a-option v-for="role in globalRoles" :key="role.id" :value="role.id">{{ role.name }}</a-option>
-          </a-select>
-          <a-select
-            v-model="filters.status"
-            placeholder="全部状态"
-            size="small"
-            allow-clear
-            style="width: 110px"
-            @change="() => { pagination.page = 1; loadUsers() }"
-          >
-            <a-option value="active">启用</a-option>
-            <a-option value="disabled">禁用</a-option>
-          </a-select>
-          <a-select
-            v-model="filters.banStatus"
-            placeholder="全部禁用类型"
-            size="small"
-            allow-clear
-            style="width: 140px"
-            @change="() => { pagination.page = 1; loadUsers() }"
-          >
-            <a-option value="banned">封禁</a-option>
-            <a-option value="suspended">暂停</a-option>
-            <a-option value="inactive">不活跃</a-option>
-            <a-option value="deactivated">注销</a-option>
-            <a-option value="locked">锁定</a-option>
-          </a-select>
-        </div>
-        <a-button type="primary" size="small" @click="showCreateDialog = true">
-          <template #icon><icon-plus /></template>
-          新建用户
-        </a-button>
+      <a-button type="primary" size="small" @click="showCreateDialog = true">
+        <template #icon><icon-plus /></template>
+        新建用户
+      </a-button>
     </template>
 
     <!-- 用户列表 -->
-    <div class="table-wrapper">
-    <a-table
+    <AdminDataTable
+      v-model:search-keyword="filters.keyword"
+      search-placeholder="搜索用户名/姓名/邮箱..."
+      :search-width="260"
       :data="users"
-      :pagination="false"
-      :bordered="false"
       :loading="loading"
-      size="medium"
-      row-key="id"
-      class="user-table"
-      :row-class="() => 'clickable-row'"
-      :scroll="{ y: '100%' }"
+      :total="total"
+      v-model:current="pagination.page"
+      v-model:page-size="pagination.pageSize"
+      empty-title="暂无用户"
+      empty-description="点击「新建用户」按钮添加第一个用户"
+      @search="() => { pagination.page = 1; loadUsers() }"
+      @page-change="loadUsers"
+      @page-size-change="loadUsers"
       @row-click="navigateToUser"
     >
+      <!-- 角色/状态筛选器 -->
+      <template #toolbar-filters>
+        <a-select
+          v-model="filters.roleId"
+          placeholder="全部角色"
+          size="small"
+          allow-clear
+          style="width: 130px"
+          @change="() => { pagination.page = 1; loadUsers() }"
+        >
+          <a-option v-for="role in globalRoles" :key="role.id" :value="role.id">{{ role.name }}</a-option>
+        </a-select>
+        <a-select
+          v-model="filters.status"
+          placeholder="全部状态"
+          size="small"
+          allow-clear
+          style="width: 110px"
+          @change="() => { pagination.page = 1; loadUsers() }"
+        >
+          <a-option value="active">启用</a-option>
+          <a-option value="disabled">禁用</a-option>
+        </a-select>
+        <a-select
+          v-model="filters.banStatus"
+          placeholder="全部禁用类型"
+          size="small"
+          allow-clear
+          style="width: 140px"
+          @change="() => { pagination.page = 1; loadUsers() }"
+        >
+          <a-option value="banned">封禁</a-option>
+          <a-option value="suspended">暂停</a-option>
+          <a-option value="inactive">不活跃</a-option>
+          <a-option value="deactivated">注销</a-option>
+          <a-option value="locked">锁定</a-option>
+        </a-select>
+      </template>
+
       <template #columns>
         <a-table-column title="用户" :width="240" data-index="displayName">
           <template #title>
@@ -126,24 +121,7 @@
           </template>
         </a-table-column>
       </template>
-      <template #empty>
-        <a-empty description="暂无用户">
-          <template #extra>
-            <p class="empty-state-hint">点击"新建用户"按钮添加第一个用户</p>
-          </template>
-        </a-empty>
-      </template>
-    </a-table>
-    </div>
-
-    <!-- 分页 -->
-    <AdminPagination
-      v-model:current="pagination.page"
-      v-model:page-size="pagination.pageSize"
-      :total="total"
-      @change="onPageChange"
-      @page-size-change="onPageSizeChange"
-    />
+    </AdminDataTable>
 
     <!-- 新建用户弹窗 -->
     <a-modal
@@ -368,7 +346,7 @@ import { userApi, projectApi, globalMemberApi, roleApi } from '@/api'
 import type { UserProfileProjectRoleInfo } from '@/api/user'
 import type { GlobalMemberVO } from '@/api/globalMember'
 import { useAuthStore } from '@/stores/auth'
-import { AdminPageLayout, AdminPagination } from '@/components/admin'
+import { AdminPageLayout, AdminDataTable } from '@/components/admin'
 import { UserAvatar, IssueStatusTag, EmptyState } from '@/components/base'
 import { usePagedList } from '@/composables/usePagedList'
 
@@ -387,7 +365,7 @@ interface UserFilters {
   banStatus: string
 }
 
-const { list: users, total, loading, pagination, filters, refresh: loadUsers, onPageChange, onPageSizeChange } = usePagedList<any, UserFilters>(
+const { list: users, total, loading, pagination, filters, refresh: loadUsers } = usePagedList<any, UserFilters>(
   (params) => {
     const requestParams: Record<string, any> = { page: params.page, pageSize: params.pageSize }
     if (params.keyword) requestParams.keyword = params.keyword
@@ -475,12 +453,6 @@ const availableProjects = computed(() => {
   const joinedProjectIds = new Set(userProjectRoles.value.map(pr => pr.projectId))
   return allProjects.value.filter(p => !joinedProjectIds.has(String(p.id)) && p.status === 'active')
 })
-
-let debounceTimer: any = null
-function debounceLoad() {
-  clearTimeout(debounceTimer)
-  debounceTimer = setTimeout(() => { pagination.page = 1; loadUsers() }, 300)
-}
 
 async function disableUser(user: any) {
   // 使用响应式状态来收集表单数据
@@ -867,16 +839,6 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.header-filters { display: flex; gap: 8px; }
-
-/* Table wrapper: flex-grow to fill remaining space, internal scroll */
-.table-wrapper { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
-.table-wrapper .user-table { flex: 1; min-height: 0; }
-.table-wrapper :deep(.arco-table) { height: 100%; }
-.table-wrapper :deep(.arco-table-container) { height: 100%; display: flex; flex-direction: column; }
-.table-wrapper :deep(.arco-table-content) { flex: 1; min-height: 0; overflow: hidden; }
-.table-wrapper :deep(.arco-table-body) { flex: 1; max-height: none !important; overflow-y: auto !important; }
-
 /* User Table */
 .user-table :deep(.arco-table-tr.clickable-row) { cursor: pointer; }
 .user-table :deep(.arco-table-tr.clickable-row:hover .arco-table-td) { background: var(--bg-hover); }

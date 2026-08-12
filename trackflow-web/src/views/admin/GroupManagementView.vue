@@ -7,69 +7,54 @@
       </a-button>
     </template>
 
-    <!-- 搜索 -->
-    <div class="search-bar">
-      <a-input-search
-        v-model="keyword"
-        placeholder="搜索用户组..."
-        size="small"
-        allow-clear
-        style="max-width: 320px"
-        @search="loadGroups"
-        @clear="loadGroups"
-        @input="debouncedSearch"
-      />
-    </div>
-
     <!-- 用户组列表 -->
-    <a-table
-      :columns="tableColumns"
+    <AdminDataTable
+      v-model:search-keyword="keyword"
+      search-placeholder="搜索用户组..."
+      :search-width="320"
       :data="groups"
       :loading="loading"
-      :pagination="false"
-      :bordered="false"
-      row-key="id"
-      size="medium"
-      class="group-table"
-      :scroll="{ y: '100%' }"
+      :total="groups.length"
+      :current="1"
+      :page-size="groups.length || 20"
+      empty-title="暂无用户组"
+      empty-description="创建用户组来批量管理团队权限"
+      @search="loadGroups"
       @row-click="openDetail"
     >
-      <template #empty>
-        <DataContainer
-          :loading="false"
-          :error="loadError"
-          :is-empty="true"
-          :retry="loadGroups"
-          loading-text="加载中..."
-          empty-title="暂无用户组"
-          empty-description="创建用户组来批量管理团队权限"
-          create-action="创建用户组"
-          @create="openCreateDialog"
-        />
+      <template #columns>
+        <a-table-column title="名称" :width="200" data-index="name">
+          <template #cell="{ record }">
+            <span class="group-name">{{ record.name }}</span>
+          </template>
+        </a-table-column>
+        <a-table-column title="描述" data-index="description" ellipsis>
+          <template #cell="{ record }">{{ record.description || '—' }}</template>
+        </a-table-column>
+        <a-table-column title="成员数" :width="90" data-index="memberCount">
+          <template #cell="{ record }">
+            <span class="count-badge">{{ record.memberCount }} 人</span>
+          </template>
+        </a-table-column>
+        <a-table-column title="角色数" :width="90" data-index="roleCount">
+          <template #cell="{ record }">
+            <span class="count-badge">{{ record.roleCount }} 个</span>
+          </template>
+        </a-table-column>
+        <a-table-column title="创建时间" :width="160" data-index="createdAt">
+          <template #cell="{ record }">{{ formatDate(record.createdAt) }}</template>
+        </a-table-column>
+        <a-table-column title="操作" :width="200">
+          <template #cell="{ record }">
+            <a-space :size="4">
+              <a-button type="text" size="mini" @click.stop="openDetail(record)">详情</a-button>
+              <a-button type="text" size="mini" @click.stop="openEditDialog(record)">编辑</a-button>
+              <a-button type="text" size="mini" status="danger" @click.stop="confirmDelete(record)">删除</a-button>
+            </a-space>
+          </template>
+        </a-table-column>
       </template>
-      <template #name="{ record }">
-        <span class="group-name">{{ record.name }}</span>
-      </template>
-      <template #description="{ record }">
-        {{ record.description || '—' }}
-      </template>
-      <template #memberCount="{ record }">
-        <span class="count-badge">{{ record.memberCount }} 人</span>
-      </template>
-      <template #roleCount="{ record }">
-        <span class="count-badge">{{ record.roleCount }} 个</span>
-      </template>
-      <template #createdAt="{ record }">
-        {{ formatDate(record.createdAt) }}
-      </template>
-      <template #actions="{ record }">
-        <a-space :size="4">
-          <a-button type="text" size="mini" @click.stop="openDetail(record)">详情</a-button>
-          <a-button type="text" size="mini" @click.stop="openEditDialog(record)">编辑</a-button>
-          <a-button type="text" size="mini" status="danger" @click.stop="confirmDelete(record)">删除</a-button>
-        </a-space>
-      </template>
-    </a-table>
+    </AdminDataTable>
 
     <!-- 创建/编辑弹窗 -->
     <a-modal
@@ -265,26 +250,14 @@ import type { UserGroupVO, UserGroupDetailVO } from '@/api/group'
 import type { UserVO, ProjectVO } from '@/api/types'
 import { Message } from '@arco-design/web-vue'
 import { useRequest } from '@/composables/useRequest'
-import DataContainer from '@/components/base/DataContainer.vue'
 import { UserAvatar } from '@/components/base'
-import AdminPageLayout from '@/components/admin/AdminPageLayout.vue'
-import type { TableColumnData } from '@arco-design/web-vue'
-
-// ===== 表格列定义 =====
-const tableColumns: TableColumnData[] = [
-  { title: '名称', dataIndex: 'name', slotName: 'name', width: 200 },
-  { title: '描述', dataIndex: 'description', slotName: 'description', ellipsis: true },
-  { title: '成员数', dataIndex: 'memberCount', slotName: 'memberCount', width: 90 },
-  { title: '角色数', dataIndex: 'roleCount', slotName: 'roleCount', width: 90 },
-  { title: '创建时间', dataIndex: 'createdAt', slotName: 'createdAt', width: 160 },
-  { title: '操作', slotName: 'actions', width: 200 },
-]
+import { AdminPageLayout, AdminDataTable } from '@/components/admin'
 
 // ===== 列表数据 =====
 const groups = ref<UserGroupVO[]>([])
 const keyword = ref('')
 
-const { loading, error: loadError, execute: loadGroups } = useRequest(
+const { loading, execute: loadGroups } = useRequest(
   () => groupApi.list({ keyword: keyword.value || undefined, page: 1, pageSize: 100 }),
   {
     immediate: false,
@@ -330,12 +303,6 @@ const canSubmitRole = computed(() => {
   }
   return true
 })
-
-let searchTimer: ReturnType<typeof setTimeout> | null = null
-function debouncedSearch() {
-  if (searchTimer) clearTimeout(searchTimer)
-  searchTimer = setTimeout(() => loadGroups(), 300)
-}
 
 function openCreateDialog() {
   editingGroup.value = null
@@ -537,15 +504,6 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.search-bar { margin-bottom: 16px; flex-shrink: 0; }
-
-/* Table fills remaining space */
-.group-table { flex: 1; min-height: 0; }
-.group-table :deep(.arco-table) { height: 100%; }
-.group-table :deep(.arco-table-container) { height: 100%; display: flex; flex-direction: column; }
-.group-table :deep(.arco-table-content) { flex: 1; min-height: 0; overflow: hidden; }
-.group-table :deep(.arco-table-body) { flex: 1; max-height: none !important; overflow-y: auto !important; }
-
 /* Table */
 .group-name { font-weight: 500; color: var(--tf-text-primary); }
 .count-badge { font-size: 12px; color: var(--tf-text-tertiary); }

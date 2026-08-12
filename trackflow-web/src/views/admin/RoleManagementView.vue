@@ -8,46 +8,61 @@
     </template>
 
     <!-- 角色列表 -->
-    <a-table
+    <AdminDataTable
+      :show-toolbar="false"
       :data="roles"
-      :columns="tableColumns"
-      :pagination="false"
-      :bordered="false"
-      row-key="id"
-      size="medium"
-      class="role-table"
-      :scroll="{ y: '100%' }"
+      :total="roles.length"
+      :current="1"
+      :page-size="roles.length || 20"
+      empty-title="暂无角色"
+      empty-description="创建角色来管理团队权限"
     >
-      <template #name="{ record }">
-        <span class="role-name">{{ record.name }}</span>
+      <template #columns>
+        <a-table-column title="ID" data-index="id" :width="60" />
+        <a-table-column title="名称" :width="150">
+          <template #cell="{ record }">
+            <span class="role-name">{{ record.name }}</span>
+          </template>
+        </a-table-column>
+        <a-table-column title="编码" :width="120">
+          <template #cell="{ record }">
+            <code class="code-tag">{{ record.code }}</code>
+          </template>
+        </a-table-column>
+        <a-table-column title="类型" :width="100">
+          <template #cell="{ record }">
+            <span class="type-badge" :class="record.roleType">{{ record.roleType === 'global' ? '全局' : '项目级' }}</span>
+          </template>
+        </a-table-column>
+        <a-table-column title="用户数" :width="80">
+          <template #cell="{ record }">
+            <span
+              class="user-count-badge"
+              :class="{ clickable: record.userCount > 0 }"
+              @click="record.userCount > 0 && openUsersDialog(record)"
+            >
+              {{ record.userCount ?? 0 }} 人
+            </span>
+          </template>
+        </a-table-column>
+        <a-table-column title="描述" data-index="description" ellipsis />
+        <a-table-column title="内置" :width="80">
+          <template #cell="{ record }">
+            <span v-if="record.builtin" class="builtin-tag">是</span>
+            <span v-else>—</span>
+          </template>
+        </a-table-column>
+        <a-table-column title="操作" :width="260">
+          <template #cell="{ record }">
+            <a-button type="text" size="mini" @click="openUsersDialog(record)">用户</a-button>
+            <a-button type="text" size="mini" @click="openPermDialog(record)">权限</a-button>
+            <a-button type="text" size="mini" @click="openCloneDialog(record)">克隆</a-button>
+            <a-button type="text" size="mini" @click="editRole(record)" :disabled="record.builtin">编辑</a-button>
+            <a-button type="text" size="mini" status="danger" @click="deleteRole(record)" :disabled="record.builtin">删除</a-button>
+          </template>
+        </a-table-column>
       </template>
-      <template #code="{ record }">
-        <code class="code-tag">{{ record.code }}</code>
-      </template>
-      <template #roleType="{ record }">
-        <span class="type-badge" :class="record.roleType">{{ record.roleType === 'global' ? '全局' : '项目级' }}</span>
-      </template>
-      <template #userCount="{ record }">
-        <span
-          class="user-count-badge"
-          :class="{ clickable: record.userCount > 0 }"
-          @click="record.userCount > 0 && openUsersDialog(record)"
-        >
-          {{ record.userCount ?? 0 }} 人
-        </span>
-      </template>
-      <template #builtin="{ record }">
-        <span v-if="record.builtin" class="builtin-tag">是</span>
-        <span v-else>—</span>
-      </template>
-      <template #actions="{ record }">
-        <a-button type="text" size="mini" @click="openUsersDialog(record)">用户</a-button>
-        <a-button type="text" size="mini" @click="openPermDialog(record)">权限</a-button>
-        <a-button type="text" size="mini" @click="openCloneDialog(record)">克隆</a-button>
-        <a-button type="text" size="mini" @click="editRole(record)" :disabled="record.builtin">编辑</a-button>
-        <a-button type="text" size="mini" status="danger" @click="deleteRole(record)" :disabled="record.builtin">删除</a-button>
-      </template>
-    </a-table>
+    </AdminDataTable>
 
     <!-- 创建/编辑角色弹窗 -->
     <a-modal
@@ -230,7 +245,7 @@ import { useConfirmDelete } from '@/composables/useConfirmDelete'
 import { roleApi } from '@/api'
 import type { RoleVO, RoleUsersVO } from '@/api/types'
 import type { PermissionGroup } from '@/api/role'
-import AdminPageLayout from '@/components/admin/AdminPageLayout.vue'
+import { AdminPageLayout, AdminDataTable } from '@/components/admin'
 import { UserAvatar } from '@/components/base'
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -244,17 +259,6 @@ const CATEGORY_LABELS: Record<string, string> = {
   time_tracking: '时间追踪权限',
   rule: '规则权限',
 }
-
-const tableColumns = [
-  { title: 'ID', dataIndex: 'id', width: 60 },
-  { title: '名称', slotName: 'name', width: 150 },
-  { title: '编码', slotName: 'code', width: 120 },
-  { title: '类型', slotName: 'roleType', width: 100 },
-  { title: '用户数', slotName: 'userCount', width: 80 },
-  { title: '描述', dataIndex: 'description', ellipsis: true },
-  { title: '内置', slotName: 'builtin', width: 80 },
-  { title: '操作', slotName: 'actions', width: 260 },
-]
 
 const roles = ref<RoleVO[]>([])
 const showCreateDialog = ref(false)
@@ -452,13 +456,7 @@ onMounted(() => {
 </script>
 
 <style scoped>
-/* Table fills remaining space with fixed header */
-.role-table { flex: 1; min-height: 0; }
-.role-table :deep(.arco-table) { height: 100%; }
-.role-table :deep(.arco-table-container) { height: 100%; display: flex; flex-direction: column; }
-.role-table :deep(.arco-table-content) { flex: 1; min-height: 0; overflow: hidden; }
-.role-table :deep(.arco-table-body) { flex: 1; max-height: none !important; overflow-y: auto !important; }
-
+/* Table */
 .role-name { color: var(--text-bright); font-weight: 500; }
 .code-tag { font-size: var(--font-size-xs); background: var(--bg-tertiary); padding: 2px 6px; border-radius: var(--radius-sm); color: var(--accent-blue); }
 .type-badge { font-size: var(--font-size-xs); padding: 2px 6px; border-radius: var(--radius-sm); }

@@ -8,46 +8,50 @@
     </template>
 
     <!-- 组织列表 -->
-    <a-table
-      :columns="columns"
+    <AdminDataTable
+      :show-toolbar="false"
       :data="organizations"
-      :pagination="false"
-      :bordered="false"
-      row-key="id"
-      size="medium"
-      class="org-table"
-      :row-class="() => 'clickable-row'"
-      :scroll="{ y: '100%' }"
+      :total="organizations.length"
+      :current="1"
+      :page-size="organizations.length || 20"
+      empty-title="暂无组织"
+      empty-description="组织用于对项目和团队进行分组管理"
       @row-click="navigateToOrg"
     >
-      <template #code="{ record }">
-        <code class="code-tag">{{ record.code }}</code>
-      </template>
-      <template #name="{ record }">
-        <span class="org-name-link">{{ record.name }}</span>
-      </template>
-      <template #projectCount="{ record }">
-        <span class="project-count">{{ record.projectCount ?? 0 }}</span>
-      </template>
-      <template #description="{ record }">
-        <span class="description-text">{{ record.description || '—' }}</span>
-      </template>
-      <template #createdAt="{ record }">
-        <span class="time-text">{{ formatDate(record.createdAt) }}</span>
-      </template>
-      <template #actions="{ record }">
-        <a-button type="text" size="mini" @click.stop="editOrg(record)">编辑</a-button>
-        <a-button type="text" size="mini" status="danger" @click.stop="deleteOrg(record)">删除</a-button>
-      </template>
-      <template #empty>
-        <a-empty description="暂无组织">
-          <template #extra>
-            <p class="empty-state-hint">组织用于对项目和团队进行分组管理</p>
-            <a-button type="primary" size="small" @click="openCreateDialog">新建组织</a-button>
+      <template #columns>
+        <a-table-column title="编码" :width="120" data-index="code">
+          <template #cell="{ record }">
+            <code class="code-tag">{{ record.code }}</code>
           </template>
-        </a-empty>
+        </a-table-column>
+        <a-table-column title="名称" :width="200" data-index="name">
+          <template #cell="{ record }">
+            <span class="org-name-link">{{ record.name }}</span>
+          </template>
+        </a-table-column>
+        <a-table-column title="项目数" :width="80" data-index="projectCount" align="center">
+          <template #cell="{ record }">
+            <span class="project-count">{{ record.projectCount ?? 0 }}</span>
+          </template>
+        </a-table-column>
+        <a-table-column title="描述" data-index="description" ellipsis>
+          <template #cell="{ record }">
+            <span class="description-text">{{ record.description || '—' }}</span>
+          </template>
+        </a-table-column>
+        <a-table-column title="创建时间" :width="150" data-index="createdAt">
+          <template #cell="{ record }">
+            <span class="time-text">{{ formatDate(record.createdAt) }}</span>
+          </template>
+        </a-table-column>
+        <a-table-column title="操作" :width="140" align="right">
+          <template #cell="{ record }">
+            <a-button type="text" size="mini" @click.stop="editOrg(record)">编辑</a-button>
+            <a-button type="text" size="mini" status="danger" @click.stop="deleteOrg(record)">删除</a-button>
+          </template>
+        </a-table-column>
       </template>
-    </a-table>
+    </AdminDataTable>
 
   <!-- 创建/编辑弹窗 -->
     <a-modal
@@ -90,21 +94,11 @@ import { ref, reactive, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
 import { useConfirmDelete } from '@/composables/useConfirmDelete'
-import type { TableColumnData } from '@arco-design/web-vue'
 import { organizationApi } from '@/api'
 import type { OrgVO, OrgProjectVO } from '@/api/organization'
-import AdminPageLayout from '@/components/admin/AdminPageLayout.vue'
+import { AdminPageLayout, AdminDataTable } from '@/components/admin'
 
 const router = useRouter()
-
-const columns: TableColumnData[] = [
-  { title: '编码', slotName: 'code', width: 120 },
-  { title: '名称', slotName: 'name', width: 200 },
-  { title: '项目数', slotName: 'projectCount', width: 80, align: 'center' },
-  { title: '描述', slotName: 'description', ellipsis: true, tooltip: true },
-  { title: '创建时间', slotName: 'createdAt', width: 150 },
-  { title: '操作', slotName: 'actions', width: 140 },
-]
 
 const organizations = ref<OrgVO[]>([])
 const showDialog = ref(false)
@@ -187,15 +181,6 @@ onMounted(loadOrgs)
 </script>
 
 <style scoped>
-.org-table { flex: 1; min-height: 0; }
-.org-table :deep(.arco-table) { height: 100%; }
-.org-table :deep(.arco-table-container) { height: 100%; display: flex; flex-direction: column; }
-.org-table :deep(.arco-table-content) { flex: 1; min-height: 0; overflow: hidden; }
-.org-table :deep(.arco-table-body) { flex: 1; max-height: none !important; overflow-y: auto !important; }
-
-.org-table :deep(.arco-table-tr.clickable-row) { cursor: pointer; }
-.org-table :deep(.arco-table-tr.clickable-row:hover .arco-table-td) { background: var(--bg-hover); }
-
 .org-name-link { color: var(--accent-blue); font-weight: 500; cursor: pointer; transition: color 150ms; }
 .org-name-link:hover { text-decoration: underline; }
 .code-tag { font-size: var(--font-size-xs); background: var(--bg-tertiary); padding: 2px 6px; border-radius: var(--radius-sm); color: var(--accent-blue); }
