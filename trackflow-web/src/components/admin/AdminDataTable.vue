@@ -26,7 +26,7 @@
     </AdminTableToolbar>
 
     <!-- 数据区 -->
-    <div class="admin-data-table__body">
+    <div ref="bodyRef" class="admin-data-table__body">
       <a-table
         :data="data"
         :loading="loading"
@@ -36,7 +36,7 @@
         :bordered="bordered"
         :stripe="stripe"
         :hoverable="true"
-        :sticky-header="true"
+        :scroll="{ y: bodyHeight }"
         :column-resizable="columnResizable"
         :row-selection="selectable ? rowSelectionConfig : undefined"
         :row-class="rowClass"
@@ -221,6 +221,12 @@ const rowSelectionConfig = computed(() => ({
   showCheckedAll: true,
 }))
 
+// ===== 表格高度（传给 scroll.y，让 Arco 自管内部滚动和表头固定）=====
+// ResizeObserver 动态测量 __body 容器高度，容器本身 overflow:hidden 不滚动
+const bodyRef = ref<HTMLElement | null>(null)
+const bodyHeight = ref(500)
+let resizeObserver: ResizeObserver | null = null
+
 // ===== 右键菜单 =====
 // 监听 row-contextmenu，在鼠标位置显示 context-menu slot
 const contextMenuVisible = ref(false)
@@ -242,8 +248,22 @@ function handleDocumentClick() {
   contextMenuVisible.value = false
 }
 
-onMounted(() => document.addEventListener('click', handleDocumentClick))
-onBeforeUnmount(() => document.removeEventListener('click', handleDocumentClick))
+onMounted(() => {
+  document.addEventListener('click', handleDocumentClick)
+  // 测量 __body 高度，响应窗口/布局变化
+  if (bodyRef.value) {
+    bodyHeight.value = bodyRef.value.clientHeight
+    resizeObserver = new ResizeObserver(() => {
+      bodyHeight.value = bodyRef.value?.clientHeight || 500
+    })
+    resizeObserver.observe(bodyRef.value)
+  }
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('click', handleDocumentClick)
+  resizeObserver?.disconnect()
+})
 
 // ===== 事件处理 =====
 
@@ -291,7 +311,7 @@ function handlePageSizeChange(size: number) {
 .admin-data-table__body {
   flex: 1;
   min-height: 0;
-  overflow-y: auto;
+  overflow: hidden;
 }
 
 /* 表头样式 */
