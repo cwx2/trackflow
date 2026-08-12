@@ -1,62 +1,13 @@
 /**
  * Issue 语义颜色常量 — 全系统单一来源
  *
- * 集中管理优先级、类型、工作类型对应的颜色。
- * 这些颜色由业务定义（对应后端字段值），不随 UI 主题变化。
+ * 优先级颜色和工单类型颜色已迁移到后端自定义字段系统动态管理，
+ * 前端通过 API 返回的 priorityColor / issueTypeColor 字段获取。
  *
- * ⚠️ 其他文件禁止重复定义这些颜色，应通过 import 引用。
+ * 本文件仅保留：
+ * - 工作类型颜色（time tracking，暂未迁移到动态系统）
+ * - 默认回退色（当 API 未返回颜色时使用）
  */
-
-// ─── 优先级颜色 ─────────────────────────────────────────────────
-
-export const PRIORITY_COLORS: Record<string, string> = {
-  '阻塞': '#b91c1c',
-  '紧急': '#ef4444',
-  '高': '#f59e0b',
-  '普通': '#6366f1',
-  '低': '#64748b',
-  // 兼容历史英文值
-  'Show-stopper': '#b91c1c',
-  'Critical': '#ef4444',
-  'High': '#f59e0b',
-  'Medium': '#6366f1',
-  'Normal': '#6366f1',
-  'Low': '#64748b',
-}
-
-/** 获取优先级颜色，支持中英文名称 */
-export function getPriorityColor(priority: string): string {
-  return PRIORITY_COLORS[priority] || '#6366f1'
-}
-
-/** 优先级选项列表（用于过滤器和批量操作下拉） */
-export const PRIORITY_OPTIONS = [
-  { id: '阻塞', label: '阻塞', value: '阻塞', color: PRIORITY_COLORS['阻塞'] },
-  { id: '紧急', label: '紧急', value: '紧急', color: PRIORITY_COLORS['紧急'] },
-  { id: '高', label: '高', value: '高', color: PRIORITY_COLORS['高'] },
-  { id: '普通', label: '普通', value: '普通', color: PRIORITY_COLORS['普通'] },
-  { id: '低', label: '低', value: '低', color: PRIORITY_COLORS['低'] },
-]
-
-// ─── 工单类型颜色 ───────────────────────────────────────────────
-
-export const ISSUE_TYPE_COLORS: Record<string, string> = {
-  'Bug': '#ef4444',
-  '缺陷': '#ef4444',
-  'Task': '#6366f1',
-  '任务': '#6366f1',
-  'Feature': '#22c55e',
-  '需求': '#22c55e',
-  'Epic': '#a855f7',
-  '史诗': '#a855f7',
-  'Story': '#3b82f6',
-  '故事': '#3b82f6',
-}
-
-/** 获取 Issue 类型颜色 */
-export function getIssueTypeColor(type: string): string {
-  return ISSUE_TYPE_COLORS[type] || '#6366f1'
-}
 
 // ─── 工作类型颜色（Time Tracking） ──────────────────────────────
 
@@ -87,6 +38,16 @@ export const WORK_TYPE_OPTIONS = [
   { id: 'Meeting', name: '会议', color: WORK_TYPE_COLORS['Meeting'] },
   { id: 'Other', name: '其他', color: WORK_TYPE_COLORS['Other'] },
 ]
+
+// ─── 优先级颜色回退（后端动态系统不可用时使用） ────────────────────
+
+export const PRIORITY_COLORS: Record<string, string> = {
+  '阻塞': '#f85149',
+  '紧急': '#f85149',
+  '高': '#f0883e',
+  '普通': '#58a6ff',
+  '低': '#8b949e',
+}
 
 // ─── 默认回退色 ─────────────────────────────────────────────────
 

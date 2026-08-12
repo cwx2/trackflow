@@ -857,7 +857,7 @@ function groupByPriority(allIssues: BoardIssue[]): SwimlaneRow[] {
     .filter(p => (groups.get(p)?.length ?? 0) > 0)
     .map(p => ({
       key: p,
-      label: `${priorityIcon(p)} ${p}`,
+      label: p,
       issues: groups.get(p)!
     }))
 }
@@ -2068,14 +2068,9 @@ function collapseColumn(statusId: string) {
 }
 
 function priorityIcon(priority: string): string {
-  switch (priority) {
-    case '阻塞': return '⛔'
-    case '紧急': case 'Critical': return '🔴'
-    case '高': case 'High': return '🟠'
-    case '普通': case 'Normal': return '🔵'
-    case '低': case 'Low': return '🟢'
-    default: return '⚪'
-  }
+  // Emoji removed; swimlane labels use plain text only.
+  // KanbanCard renders color dots directly from issue.priorityColor.
+  return ''
 }
 
 function typeLabel(type: string): string {

@@ -32,10 +32,9 @@
       <span
         v-if="isFieldVisible('priority')"
         class="card-priority"
-        :class="issue.priority?.toLowerCase()"
         :title="issue.priority"
       >
-        {{ priorityIcon(issue.priority) }}
+        <span class="priority-dot" :style="{ background: (issue as any).priorityColor || '#6b7280' }"></span>
       </span>
     </div>
     <div class="card-title" :class="`card-title--${cardSize}`">{{ issue.title }}</div>
@@ -218,23 +217,8 @@ function typeLabel(issueType?: string): string {
   return issueType || ''
 }
 
-// ─── 优先级图标 ──────────────────────────────────────
+// ─── （priorityIcon 已移除，使用 API 返回的 priorityColor 渲染圆点） ──────
 
-function priorityIcon(priority?: string): string {
-  switch (priority) {
-    case '阻塞': return '⛔'
-    case '紧急': return '🔴'
-    case '高': return '🟠'
-    case '普通': return '🔵'
-    case '低': return '🟢'
-    // 兼容历史英文值
-    case 'Critical': return '🔴'
-    case 'High': return '🟠'
-    case 'Normal': return '🔵'
-    case 'Low': return '🟢'
-    default: return '⚪'
-  }
-}
 
 
 </script>

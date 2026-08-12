@@ -30,10 +30,9 @@
           <span class="backlog-card-key">{{ node.issue.issueKey }}</span>
           <span
             class="backlog-card-priority"
-            :class="node.issue.priority?.toLowerCase()"
             :title="node.issue.priority"
           >
-            {{ priorityIcon(node.issue.priority) }}
+            <span class="priority-dot" :style="{ background: (node.issue as any).priorityColor || '#6b7280' }"></span>
           </span>
         </div>
         <div class="backlog-card-title">{{ node.issue.title }}</div>
@@ -79,11 +78,6 @@ defineEmits<{
 
 // 初始展开：根节点（depth=0）默认展开，深层默认折叠
 const expanded = ref(props.depth < 2)
-
-function priorityIcon(priority: string): string {
-  const map: Record<string, string> = { Critical: '🔴', High: '🟠', Normal: '🔵', Low: '⚪' }
-  return map[priority] || '🔵'
-}
 
 function typeLabel(type: string): string {
   return type
@@ -178,6 +172,16 @@ function typeLabel(type: string): string {
 
 .backlog-card-priority {
   font-size: 10px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.backlog-card-priority .priority-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  flex-shrink: 0;
 }
 
 .backlog-card-title {

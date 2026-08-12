@@ -25,6 +25,10 @@ export interface IssueVO {
   statusName?: string
   statusColor?: string
   priority: string
+  /** 优先级颜色（HEX 格式，来自自定义字段配置，null 表示未配置） */
+  priorityColor?: string
+  /** 工单类型颜色（HEX 格式，来自自定义字段配置，null 表示未配置） */
+  issueTypeColor?: string
   assigneeId?: string
   assigneeName?: string
   assigneeAvatarUrl?: string

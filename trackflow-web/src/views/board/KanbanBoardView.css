@@ -623,6 +623,16 @@
 
 .card-priority {
   font-size: 10px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.card-priority .priority-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  flex-shrink: 0;
 }
 
 .card-title {

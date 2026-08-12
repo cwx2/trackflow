@@ -142,11 +142,11 @@
                 @click="onCardClick($event, issue, 'backlog')"
                 @contextmenu.prevent="onCardContextMenu($event, issue, 'backlog')"
               >
-                <div class="card-left-border" :style="{ backgroundColor: getPriorityColor(issue.priority) }"></div>
+                <div class="card-left-border" :style="{ backgroundColor: issue.priorityColor || getPriorityColor(issue.priority) }"></div>
                 <div class="card-content">
                   <div class="card-top">
                     <span class="card-key">{{ issue.issueKey }}</span>
-                    <IssuePriorityBadge :priority="issue.priority" mode="dot" size="small" />
+                    <IssuePriorityBadge :priority="issue.priority" :color="issue.priorityColor" mode="dot" size="small" />
                   </div>
                   <div class="card-title">{{ issue.title }}</div>
                   <div v-if="issue.dueDate" class="card-due" :class="'card-due--' + getDueDateStatus(issue.dueDate)">
@@ -325,11 +325,11 @@
                 @click="onCardClick($event, issue, sprint.id)"
                 @contextmenu.prevent="onCardContextMenu($event, issue, sprint.id)"
               >
-                <div class="card-left-border" :style="{ backgroundColor: getPriorityColor(issue.priority) }"></div>
+                <div class="card-left-border" :style="{ backgroundColor: issue.priorityColor || getPriorityColor(issue.priority) }"></div>
                 <div class="card-content">
                   <div class="card-top">
                     <span class="card-key">{{ issue.issueKey }}</span>
-                    <IssuePriorityBadge :priority="issue.priority" mode="dot" size="small" />
+                    <IssuePriorityBadge :priority="issue.priority" :color="issue.priorityColor" mode="dot" size="small" />
                   </div>
                   <div class="card-title">{{ issue.title }}</div>
                   <div v-if="issue.dueDate" class="card-due" :class="'card-due--' + getDueDateStatus(issue.dueDate)">

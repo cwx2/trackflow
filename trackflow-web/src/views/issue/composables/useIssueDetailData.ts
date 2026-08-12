@@ -13,7 +13,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
 import { issueApi, projectApi, sprintApi, tagApi, customFieldApi, timeEntryApi } from '@/api'
 import { workItemAttributeApi } from '@/api/timeEntry'
-import { PRIORITY_COLORS, ISSUE_TYPE_COLORS, WORK_TYPE_OPTIONS } from '@/utils/issueColors'
+import { WORK_TYPE_OPTIONS } from '@/utils/issueColors'
 import type { WorkItemAttributeVO } from '@/api/timeEntry'
 import { usePermission, loadProjectPermissions } from '@/composables/usePermission'
 import { useIssueDetailSubscription } from '@/composables/useWebSocket'
@@ -57,21 +57,21 @@ export function useIssueDetailData() {
   const sprints = ref<SprintVO[]>([])
   const customFieldDefs = ref<CustomFieldDefinitionVO[]>([])
 
-  // Options loaded dynamically
+  // Options loaded dynamically (colors will be loaded from API)
   const dynamicPriorityOptions = ref<Array<{ value: string; label: string; color: string }>>([
-    { value: '阻塞', label: '阻塞', color: PRIORITY_COLORS['阻塞'] },
-    { value: '紧急', label: '紧急', color: PRIORITY_COLORS['紧急'] },
-    { value: '高', label: '高', color: PRIORITY_COLORS['高'] },
-    { value: '普通', label: '普通', color: PRIORITY_COLORS['普通'] },
-    { value: '低', label: '低', color: PRIORITY_COLORS['低'] },
+    { value: '阻塞', label: '阻塞', color: '#b91c1c' },
+    { value: '紧急', label: '紧急', color: '#ef4444' },
+    { value: '高', label: '高', color: '#f59e0b' },
+    { value: '普通', label: '普通', color: '#6366f1' },
+    { value: '低', label: '低', color: '#64748b' },
   ])
 
   const dynamicIssueTypeOptions = ref<Array<{ value: string; label: string; color: string }>>([
-    { value: '缺陷', label: '缺陷', color: ISSUE_TYPE_COLORS['缺陷'] },
-    { value: '任务', label: '任务', color: ISSUE_TYPE_COLORS['任务'] },
-    { value: '需求', label: '需求', color: ISSUE_TYPE_COLORS['需求'] },
-    { value: '史诗', label: '史诗', color: ISSUE_TYPE_COLORS['史诗'] },
-    { value: '故事', label: '故事', color: ISSUE_TYPE_COLORS['故事'] },
+    { value: '缺陷', label: '缺陷', color: '#ef4444' },
+    { value: '任务', label: '任务', color: '#6366f1' },
+    { value: '需求', label: '需求', color: '#22c55e' },
+    { value: '史诗', label: '史诗', color: '#a855f7' },
+    { value: '故事', label: '故事', color: '#3b82f6' },
   ])
 
   // Time tracking

@@ -360,7 +360,7 @@
           </div>
         </template>
         <template #updatedAt="{ record }"><span class="time-ago">{{ formatTime(record.updatedAt) }}</span></template>
-        <template #issueType="{ record }"><span class="type-label"><span class="type-color-dot" :style="{ background: getIssueTypeColorForRecord(record.issueType) }"></span>{{ getIssueTypeLabelForRecord(record.issueType) }}</span></template>
+        <template #issueType="{ record }"><span class="type-label"><span class="type-color-dot" :style="{ background: record.issueTypeColor || getIssueTypeColorForRecord(record.issueType) }"></span>{{ getIssueTypeLabelForRecord(record.issueType) }}</span></template>
         <template #reporter="{ record }"><span class="reporter-name">{{ record.reporterName || '\u2014' }}</span></template>
         <template #createdAt="{ record }"><span class="time-ago">{{ formatTime(record.createdAt) }}</span></template>
         <template #dueDate="{ record }">

@@ -1,13 +1,12 @@
 import { ref, computed, watch } from 'vue'
 import { issueApi } from '@/api'
+import { DEFAULT_BADGE_COLOR } from '@/utils/issueColors'
 
 /**
  * 优先级选项管理 - 从后端自定义字段系统动态加载优先级选项
  *
- * 替代原有硬编码的 priorityOptions 数组，支持：
- * - 项目级别的独立选项集
- * - 动态颜色配置
- * - 值的增删改（通过项目设置→自定义字段管理）
+ * 颜色完全来自后端 API（自定义字段 option.color），不再使用硬编码回退色。
+ * 当 API 不可用或颜色未配置时，返回 null（UI 层决定是否显示灰色或不显示）。
  */
 
 export interface PriorityOption {
@@ -30,26 +29,18 @@ const FALLBACK_LABELS: Record<string, string> = {
   'Medium': '普通',
   'Normal': '普通',
   'Low': '低',
-  '阻塞': '阻塞',
-  '紧急': '紧急',
-  '高': '高',
-  '普通': '普通',
-  '低': '低',
 }
 
-/** 回退颜色映射（API 不可用时） — 引用 issueColors 单一来源 */
-import { PRIORITY_COLORS as FALLBACK_COLORS } from '@/utils/issueColors'
+/** 默认优先级颜色回退值（仅在缓存中无颜色且确实需要显示时使用） */
+export const DEFAULT_PRIORITY_COLOR = DEFAULT_BADGE_COLOR
 
-/** 默认优先级颜色回退值 */
-export const DEFAULT_PRIORITY_COLOR = FALLBACK_COLORS['普通'] || '#6366f1'
-
-/** 默认优先级选项（API 不可用时的回退，也作为初始值） */
+/** 默认优先级选项（API 不可用时的回退，颜色为 null 表示未从 API 加载） */
 export const DEFAULT_PRIORITY_OPTIONS: PriorityOption[] = [
-  { value: '阻塞', label: '阻塞', color: FALLBACK_COLORS['阻塞'], description: '阻塞性问题，必须立即解决', isDefault: false },
-  { value: '紧急', label: '紧急', color: FALLBACK_COLORS['紧急'], description: '严重问题，影响核心功能', isDefault: false },
-  { value: '高', label: '高', color: FALLBACK_COLORS['高'], description: '高优先级，需要尽快处理', isDefault: false },
-  { value: '普通', label: '普通', color: FALLBACK_COLORS['普通'], description: '普通优先级，按计划处理', isDefault: true },
-  { value: '低', label: '低', color: FALLBACK_COLORS['低'], description: '低优先级，有空再处理', isDefault: false },
+  { value: '阻塞', label: '阻塞', color: null, description: '阻塞性问题，必须立即解决', isDefault: false },
+  { value: '紧急', label: '紧急', color: null, description: '严重问题，影响核心功能', isDefault: false },
+  { value: '高', label: '高', color: null, description: '高优先级，需要尽快处理', isDefault: false },
+  { value: '普通', label: '普通', color: null, description: '普通优先级，按计划处理', isDefault: true },
+  { value: '低', label: '低', color: null, description: '低优先级，有空再处理', isDefault: false },
 ]
 
 /**
@@ -94,10 +85,13 @@ export function clearPriorityOptionsCache(projectId?: string) {
 }
 
 /**
- * 根据优先级值获取颜色（从缓存或回退值）
+ * 根据优先级值获取颜色（从缓存获取，无缓存时返回 DEFAULT_PRIORITY_COLOR）
+ *
+ * 注意：大多数场景应优先使用 API 返回的 issue.priorityColor 字段，
+ * 本函数仅用于报表图表等无法直接获取 issue 对象颜色字段的场景。
  */
 export function getPriorityColor(priority: string | null | undefined, projectId?: string): string {
-  if (!priority) return FALLBACK_COLORS['Normal']
+  if (!priority) return DEFAULT_PRIORITY_COLOR
 
   // 尝试从缓存取
   if (projectId) {
@@ -108,7 +102,13 @@ export function getPriorityColor(priority: string | null | undefined, projectId?
     }
   }
 
-  return FALLBACK_COLORS[priority] || FALLBACK_COLORS['Normal']
+  // 无缓存时遍历所有已缓存的项目查找
+  for (const [, entry] of cache) {
+    const opt = entry.options.find(o => o.value === priority)
+    if (opt?.color) return opt.color
+  }
+
+  return DEFAULT_PRIORITY_COLOR
 }
 
 /**

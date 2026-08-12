@@ -77,7 +77,7 @@
           @update:popup-visible="v => v ? editingPriority = true : editingPriority = false"
         >
           <span class="preview-priority preview-priority--editable" title="点击修改优先级">
-            {{ priorityIcon(detail.priority) }} {{ detail.priority }} <span class="edit-chevron">▾</span>
+            <span class="priority-dot" :style="{ background: detail.priorityColor || '#6b7280' }"></span> {{ detail.priority }} <span class="edit-chevron">▾</span>
           </span>
           <template #content>
             <div class="inline-edit-panel">
@@ -617,11 +617,6 @@ function goToDetail() {
   }
 }
 
-function priorityIcon(priority: string): string {
-  const map: Record<string, string> = { Critical: '🔴', High: '🟠', Normal: '🔵', Low: '⚪' }
-  return map[priority] || '🔵'
-}
-
 function typeLabel(type: string): string {
   return type
 }
@@ -728,6 +723,17 @@ function renderCommentContent(content: string): string {
 .preview-priority {
   font-size: 12px;
   color: var(--color-text-2);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.preview-priority .priority-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex-shrink: 0;
 }
 
 .preview-priority--editable {

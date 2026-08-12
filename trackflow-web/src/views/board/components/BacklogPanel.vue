@@ -98,10 +98,9 @@
                 <span class="backlog-card-key">{{ issue.issueKey }}</span>
                 <span
                   class="backlog-card-priority"
-                  :class="issue.priority?.toLowerCase()"
                   :title="issue.priority"
                 >
-                  {{ priorityIcon(issue.priority) }}
+                  <span class="priority-dot" :style="{ background: (issue as any).priorityColor || '#6b7280' }"></span>
                 </span>
               </div>
               <div class="backlog-card-title">{{ issue.title }}</div>
@@ -387,11 +386,6 @@ function onDragEnd() {
   emit('drag-end')
 }
 
-function priorityIcon(priority: string): string {
-  const map: Record<string, string> = { Critical: '🔴', High: '🟠', Normal: '🔵', Low: '⚪' }
-  return map[priority] || '🔵'
-}
-
 function typeLabel(type: string): string {
   return type
 }
@@ -561,6 +555,16 @@ defineExpose({ removeIssue, refresh })
 
 .backlog-card-priority {
   font-size: 10px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.backlog-card-priority .priority-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  flex-shrink: 0;
 }
 
 .backlog-card-title {

@@ -22,7 +22,6 @@ export interface SwimlaneDeps {
   dragOverColumnId: Ref<string | null>
   isDropAllowed: (statusId: string) => boolean
   syncUrlState: () => void
-  priorityIcon: (priority: string) => string
 }
 
 export function useBoardSwimlane(deps: SwimlaneDeps) {
@@ -30,7 +29,7 @@ export function useBoardSwimlane(deps: SwimlaneDeps) {
     issues, sprints, selectedProject,
     swimlaneGroupBy, swimlaneSelectedValues, swimlaneShowUncategorized,
     swimlaneUncategorizedPosition, swimlaneIssueType,
-    isDragging, dragOverColumnId, isDropAllowed, syncUrlState, priorityIcon
+    isDragging, dragOverColumnId, isDropAllowed, syncUrlState
   } = deps
 
   // ===== Collapsed swimlanes =====
@@ -261,7 +260,7 @@ export function useBoardSwimlane(deps: SwimlaneDeps) {
     }
     return priorities
       .filter(p => (groups.get(p)?.length ?? 0) > 0)
-      .map(p => ({ key: p, label: `${priorityIcon(p)} ${p}`, issues: groups.get(p)! }))
+      .map(p => ({ key: p, label: p, issues: groups.get(p)! }))
   }
 
   function groupByType(allIssues: BoardIssue[]): SwimlaneRow[] {

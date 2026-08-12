@@ -1,14 +1,13 @@
 import { ref, computed, watch } from 'vue'
 import { issueApi } from '@/api'
 import { type MaybeRefOrGetter, toValue } from 'vue'
+import { DEFAULT_BADGE_COLOR } from '@/utils/issueColors'
 
 /**
  * 工单类型选项管理 - 从后端自定义字段系统动态加载工单类型选项
  *
- * 替代原有硬编码的 issueTypeLabelMap，支持：
- * - 项目级别的独立选项集
- * - 动态颜色配置
- * - 值的增删改（通过项目设置→自定义字段管理）
+ * 颜色完全来自后端 API（自定义字段 option.color），不再使用硬编码回退色。
+ * 当 API 不可用或颜色未配置时，返回 null（UI 层决定是否显示灰色或不显示）。
  */
 
 export interface IssueTypeOption {
@@ -23,7 +22,7 @@ export interface IssueTypeOption {
 const cache = new Map<string, { options: IssueTypeOption[]; timestamp: number }>()
 const CACHE_TTL = 5 * 60 * 1000 // 5 分钟缓存
 
-/** 中文标签映射（回退用，同时也用于本地化展示） */
+/** 中文标签映射（回退用，兼容历史英文值） */
 const FALLBACK_LABELS: Record<string, string> = {
   'Bug': '缺陷',
   'Task': '任务',
@@ -32,19 +31,16 @@ const FALLBACK_LABELS: Record<string, string> = {
   'Story': '故事',
 }
 
-/** 回退颜色映射（API 不可用时） — 引用 issueColors 单一来源 */
-import { ISSUE_TYPE_COLORS as FALLBACK_COLORS } from '@/utils/issueColors'
-
 /** 默认工单类型颜色回退值 */
-export const DEFAULT_ISSUE_TYPE_COLOR = FALLBACK_COLORS['Task'] || '#6366f1'
+export const DEFAULT_ISSUE_TYPE_COLOR = DEFAULT_BADGE_COLOR
 
-/** 默认工单类型选项（API 不可用时的回退，也作为初始值） */
+/** 默认工单类型选项（API 不可用时的回退，value 使用中文，与数据库存储一致） */
 export const DEFAULT_ISSUE_TYPE_OPTIONS: IssueTypeOption[] = [
-  { value: 'Bug', label: '缺陷', color: FALLBACK_COLORS['Bug'], description: '软件缺陷，需要修复', isDefault: false },
-  { value: 'Task', label: '任务', color: FALLBACK_COLORS['Task'], description: '常规任务', isDefault: true },
-  { value: 'Feature', label: '需求', color: FALLBACK_COLORS['Feature'], description: '新功能需求', isDefault: false },
-  { value: 'Epic', label: '史诗', color: FALLBACK_COLORS['Epic'], description: '大型功能集合', isDefault: false },
-  { value: 'Story', label: '故事', color: FALLBACK_COLORS['Story'], description: '用户故事', isDefault: false },
+  { value: '缺陷', label: '缺陷', color: null, description: '软件缺陷，需要修复', isDefault: false },
+  { value: '任务', label: '任务', color: null, description: '常规任务', isDefault: true },
+  { value: '需求', label: '需求', color: null, description: '新功能需求', isDefault: false },
+  { value: '史诗', label: '史诗', color: null, description: '大型功能集合', isDefault: false },
+  { value: '故事', label: '故事', color: null, description: '用户故事', isDefault: false },
 ]
 
 /**
@@ -89,10 +85,13 @@ export function clearIssueTypeOptionsCache(projectId?: string) {
 }
 
 /**
- * 根据工单类型值获取颜色（从缓存或回退值）
+ * 根据工单类型值获取颜色（从缓存获取，无缓存时返回 DEFAULT_ISSUE_TYPE_COLOR）
+ *
+ * 注意：大多数场景应优先使用 API 返回的 issue.issueTypeColor 字段，
+ * 本函数仅用于报表图表等无法直接获取 issue 对象颜色字段的场景。
  */
 export function getIssueTypeColor(issueType: string | null | undefined, projectId?: string): string {
-  if (!issueType) return FALLBACK_COLORS['Task']
+  if (!issueType) return DEFAULT_ISSUE_TYPE_COLOR
 
   // 尝试从缓存取
   if (projectId) {
@@ -103,7 +102,13 @@ export function getIssueTypeColor(issueType: string | null | undefined, projectI
     }
   }
 
-  return FALLBACK_COLORS[issueType] || FALLBACK_COLORS['Task']
+  // 无缓存时遍历所有已缓存的项目查找
+  for (const [, entry] of cache) {
+    const opt = entry.options.find(o => o.value === issueType)
+    if (opt?.color) return opt.color
+  }
+
+  return DEFAULT_ISSUE_TYPE_COLOR
 }
 
 /**

@@ -218,7 +218,7 @@ import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { IconFilter, IconSearch, IconPlus } from '@arco-design/web-vue/es/icon'
 import { projectApi, sprintApi, tagApi } from '@/api'
 import type { IssueStatusVO, IssueTagVO, ProjectVO, SprintVO } from '@/api/types'
-import { PRIORITY_COLORS } from '@/utils/issueColors'
+import { loadPriorityOptions } from '@/composables/usePriorityOptions'
 import { loadIssueTypeOptions } from '../composables/useIssueTypeOptions'
 import QueryInput from './QueryInput.vue'
 
@@ -696,15 +696,22 @@ async function loadValueOptions(fieldKey: string) {
         }))
         break
 
-      case 'priority':
-        valueOptions.value = [
-          { id: '阻塞', label: '阻塞', color: PRIORITY_COLORS['阻塞'] },
-          { id: '紧急', label: '紧急', color: PRIORITY_COLORS['紧急'] },
-          { id: '高', label: '高', color: PRIORITY_COLORS['高'] },
-          { id: '普通', label: '普通', color: PRIORITY_COLORS['普通'] },
-          { id: '低', label: '低', color: PRIORITY_COLORS['低'] },
-        ]
+      case 'priority': {
+        // 从自定义字段系统动态加载优先级选项
+        const priorityProjectFilter = activeFilters.value.find(f => f.fieldKey === 'project')
+        const priorityPid = props.projectId || (priorityProjectFilter?.values[0] || '')
+        if (priorityPid) {
+          const priorityOpts = await loadPriorityOptions(priorityPid)
+          if (editingChip.value && activeFilters.value[editingChip.value.index]?.fieldKey === 'priority') {
+            valueOptions.value = priorityOpts.map(o => ({ id: o.value, label: o.label, color: o.color || undefined }))
+          }
+        } else {
+          // 全部项目模式且无项目筛选条件时，回退到静态列表（无颜色）
+          const DEFAULT_PRIORITIES = ['阻塞', '紧急', '高', '普通', '低']
+          valueOptions.value = DEFAULT_PRIORITIES.map(label => ({ id: label, label }))
+        }
         break
+      }
 
       case 'issueType': {
         // 从自定义字段系统动态加载工单类型选项

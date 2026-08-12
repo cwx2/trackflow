@@ -250,7 +250,7 @@ import { renderMarkdown, renderHtmlWithMarkdown } from '@/utils/markdown'
 import { useTimerStore } from '@/stores/timer'
 import { useIssueDetailData } from './composables/useIssueDetailData'
 import { useIssueDetailActions } from './composables/useIssueDetailActions'
-import { getPriorityColor } from './composables/usePriorityOptions'
+import { getPriorityColor } from '@/composables/usePriorityOptions'
 import type { IssueDetailVO, CustomFieldDefinitionVO, FilterRule, SprintVO } from '@/api/types'
 import DetailTopBar from './components/DetailTopBar.vue'
 import DetailMainContent from './components/DetailMainContent.vue'
@@ -554,10 +554,12 @@ function getDueDateTooltip(dueDate: string | undefined | null): string {
 }
 
 function priorityDot(p: string) {
-  return getPriorityColor(p, issue.value?.projectId)
+  return issue.value?.priorityColor || getPriorityColor(p, issue.value?.projectId)
 }
 
 function getDetailIssueTypeColor(issueType: string | null | undefined): string {
+  // Prefer API-returned issueTypeColor, fallback to dynamicIssueTypeOptions cache
+  if (issue.value?.issueTypeColor) return issue.value.issueTypeColor
   if (!issueType) return '#6366f1'
   const opt = dynamicIssueTypeOptions.value.find(o => o.value === issueType || o.value.toLowerCase() === issueType.toLowerCase())
   return opt?.color || '#6366f1'
