@@ -33,7 +33,7 @@
         v-if="isFieldVisible('priority')"
         class="card-priority"
         :class="issue.priority?.toLowerCase()"
-        :title="localizePriority(issue.priority)"
+        :title="issue.priority"
       >
         {{ priorityIcon(issue.priority) }}
       </span>
@@ -108,7 +108,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { IconUser } from '@arco-design/web-vue/es/icon'
-import { localizePriority, localizeIssueType } from '@/utils/fieldLabels'
 import { getDueDateInfo } from '@/utils/dueDate'
 import type { IssueVO, BoardCardVO } from '@/api/types'
 import { UserAvatar } from '@/components/base'
@@ -216,7 +215,7 @@ function typeInitial(issueType?: string): string {
 }
 
 function typeLabel(issueType?: string): string {
-  return localizeIssueType(issueType || '')
+  return issueType || ''
 }
 
 // ─── 优先级图标 ──────────────────────────────────────

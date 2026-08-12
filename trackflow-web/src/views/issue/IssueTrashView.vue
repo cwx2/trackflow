@@ -97,11 +97,11 @@
             <span class="issue-title">{{ record.title }}</span>
           </template>
           <template #issueType="{ record }">
-            <span class="type-label">{{ localizeIssueType(record.issueType) }}</span>
+            <span class="type-label">{{ record.issueType }}</span>
           </template>
           <template #priority="{ record }">
             <span class="priority-tag" :class="`priority-${record.priority?.toLowerCase()}`">
-              {{ localizePriority(record.priority) }}
+              {{ record.priority }}
             </span>
           </template>
           <template #deletedAt="{ record }">
@@ -140,7 +140,6 @@ import { IconUndo, IconDelete, IconSettings } from '@arco-design/web-vue/es/icon
 import { issueApi, projectApi } from '@/api'
 import { EmptyState } from '@/components/base'
 import { useAuthStore } from '@/stores/auth'
-import { localizeIssueType, localizePriority } from '@/utils/fieldLabels'
 import type { IssueTrashVO } from '@/api/types'
 import { usePagedList } from '@/composables/usePagedList'
 

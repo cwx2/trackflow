@@ -4,7 +4,6 @@ import type { Ref, ComputedRef } from 'vue'
 import { boardApi } from '@/api'
 import type { SprintVO } from '@/api/types'
 import type { BoardIssue, SwimlaneGroupBy, SwimlaneRow } from './useKanbanBoard'
-import { localizeIssueType, localizePriority } from '@/utils/fieldLabels'
 
 const SWIMLANE_STORAGE_KEY = 'tf_kanban_swimlane'
 const COLLAPSED_SWIMLANES_KEY = 'tf_kanban_collapsed_swimlanes'

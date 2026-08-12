@@ -21,7 +21,7 @@ import type { UndoEntry } from './useBoardDrag'
 import { useBoardData } from './useBoardData'
 import type { BoardIssue, SwimlaneGroupBy, CardSize, EffectiveColumn, SwimlaneRow } from './types'
 import { useManualOrder } from '@/composables/useManualOrder'
-import { localizeStatusName, localizeIssueType, localizePriority } from '@/utils/fieldLabels'
+import { localizeStatusName } from '@/utils/fieldLabels'
 import { extractVersion, showActionFeedback } from '@/utils/transition'
 import { getDueDateInfo } from '@/utils/dueDate'
 import { useIssueProjectSubscription } from '@/composables/useWebSocket'
@@ -2080,7 +2080,7 @@ function priorityIcon(priority: string): string {
 }
 
 function typeLabel(type: string): string {
-  return localizeIssueType(type)
+  return type
 }
 
 /**
@@ -2088,8 +2088,7 @@ function typeLabel(type: string): string {
  */
 function typeInitial(type: string): string {
   if (!type) return '?'
-  const label = localizeIssueType(type)
-  return label.charAt(0).toUpperCase()
+  return type.charAt(0).toUpperCase()
 }
 
 function openIssue(issue: BoardIssue) {
@@ -2241,7 +2240,7 @@ async function onDrop(event: DragEvent, targetStatusId: string) {
         allowedTargetStatuses.value.clear()
         Modal.warning({
           title: 'WIP 限制',
-          content: `目标优先级列「${localizePriority(targetPriority)}」已达到 WIP 上限（${currentCount}/${targetColConfig.wipMax}），确定要继续移入吗？`,
+          content: `目标优先级列「${targetPriority}」已达到 WIP 上限（${currentCount}/${targetColConfig.wipMax}），确定要继续移入吗？`,
           okText: '继续移入',
           cancelText: '取消',
           hideCancel: false,
@@ -2253,7 +2252,7 @@ async function onDrop(event: DragEvent, targetStatusId: string) {
               await issueApi.update(issue.id, { priority: targetPriority, forceWip: true })
               issue.version = (issue.version || 0) + 1
               flushIssues()
-              Message.success(`${issue.issueKey} 优先级已变更为「${localizePriority(targetPriority)}」`)
+              Message.success(`${issue.issueKey} 优先级已变更为「${targetPriority}」`)
               await handleCrossSwimlaneUpdate(issue, targetLaneKey)
             } catch (e: any) {
               issue.priority = oldPriority
@@ -2275,7 +2274,7 @@ async function onDrop(event: DragEvent, targetStatusId: string) {
       await issueApi.update(issue.id, { priority: targetPriority })
       issue.version = (issue.version || 0) + 1
       flushIssues()
-      Message.success(`${issue.issueKey} 优先级已变更为「${localizePriority(targetPriority)}」`)
+      Message.success(`${issue.issueKey} 优先级已变更为「${targetPriority}」`)
       // ★ Cross-swimlane field update in priority mode
       await handleCrossSwimlaneUpdate(issue, targetLaneKey)
     } catch (e: any) {
@@ -2296,7 +2295,7 @@ async function onDrop(event: DragEvent, targetStatusId: string) {
               await issueApi.update(issue.id, { priority: targetPriority, forceWip: true })
               issue.version = (issue.version || 0) + 1
               flushIssues()
-              Message.success(`${issue.issueKey} 优先级已变更为「${localizePriority(targetPriority)}」`)
+              Message.success(`${issue.issueKey} 优先级已变更为「${targetPriority}」`)
               await handleCrossSwimlaneUpdate(issue, targetLaneKey)
             } catch (e2: any) {
               issue.priority = oldPriority
@@ -3589,7 +3588,7 @@ useIssueProjectSubscription(
     // Board truncated
     boardTruncated, boardTotalCount, boardTotalEstimation,
     // Helper functions
-    localizeStatusName, localizePriority, localizeIssueType,
+    localizeStatusName,
     getInitials, getSprintName,
     priorityIcon, typeLabel, typeInitial, getActiveSprintId,
     // onBatch handlers

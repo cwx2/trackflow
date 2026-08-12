@@ -57,63 +57,18 @@ export function localizeFieldName(name?: string | null): string | undefined {
 
 /**
  * Issue 类型英文值 → 中文映射
- * 
- * @deprecated 自 V274 数据迁移后，数据库中已存储中文值。
- * 保留此映射仅用于兼容可能残留的历史英文值（如活动记录中未迁移的旧数据）。
+ *
+ * @deprecated 调用方已全部移除。V274 后数据库直接存储中文值，无需翻译。
+ * 保留此注释供历史参考，实际代码已删除。
  */
-export const issueTypeLabelMap: Record<string, string> = {
-  Bug: '缺陷',
-  Task: '任务',
-  Feature: '需求',
-  Epic: '史诗',
-  Story: '故事',
-}
-
-/**
- * 本地化 Issue 类型名称
- * V274 后数据库已存中文，此函数直接返回输入值。
- * 仅在遇到残留英文值时做兼容翻译。
- * @param type 类型值（中文或历史英文值）
- * @returns 中文类型名
- */
-export function localizeIssueType(type?: string | null): string {
-  if (!type) return '未知'
-  return issueTypeLabelMap[type] || type
-}
 
 /**
  * 优先级英文值 → 中文映射
  *
- * @deprecated 自 V274 数据迁移后，数据库中已存储中文值。
- * 保留此映射仅用于兼容可能残留的历史英文值。
- * 中文值不需要在此列——localizePriority 的 fallback 直接原样返回。
+ * @deprecated 调用方已全部移除。V274 后数据库直接存储中文值（custom_field_option.value），
+ * issue.priority 直接存储显示值，前端无需翻译层。
+ * 保留此注释供历史参考，实际代码已删除。
  */
-export const priorityLabelMap: Record<string, string> = {
-  'Show-stopper': '阻塞',
-  Critical: '紧急',
-  High: '高',
-  Medium: '普通',
-  Normal: '普通',
-  Low: '低',
-  'show-stopper': '阻塞',
-  critical: '紧急',
-  high: '高',
-  medium: '普通',
-  normal: '普通',
-  low: '低',
-}
-
-/**
- * 本地化优先级名称
- * V274 后数据库已存中文，此函数直接返回输入值。
- * 仅在遇到残留英文值时做兼容翻译。
- * @param priority 优先级值（中文或历史英文值）
- * @returns 中文优先级名
- */
-export function localizePriority(priority?: string | null): string {
-  if (!priority) return '普通'
-  return priorityLabelMap[priority] || priority
-}
 
 /**
  * 状态英文名 → 中文映射
@@ -205,18 +160,22 @@ function looksLikeInternalIdentifier(value: string): boolean {
 
 /**
  * 根据字段名，本地化字段值
- * 适用于活动记录中展示 old_value / new_value 的场景
- * @param fieldName 字段标识（如 "priority"、"status"）
- * @param value 英文原值
- * @returns 中文值或原值
+ * 适用于活动记录中展示 old_value / new_value 的场景。
+ * V274 后数据库已存中文，此函数仅作为历史英文值的兼容兜底。
  */
 export function localizeFieldValue(fieldName?: string | null, value?: string | null): string | undefined {
   if (!value) return undefined
   if (!fieldName) return value
 
-  // 优先级字段
+  // 优先级字段：兼容活动记录里可能残留的历史英文值
   if (fieldName === 'priority') {
-    return priorityLabelMap[value] || value
+    const PRIORITY_COMPAT: Record<string, string> = {
+      'Show-stopper': '阻塞', Critical: '紧急', High: '高',
+      Medium: '普通', Normal: '普通', Low: '低',
+      'show-stopper': '阻塞', critical: '紧急', high: '高',
+      medium: '普通', normal: '普通', low: '低',
+    }
+    return PRIORITY_COMPAT[value] ?? value
   }
 
   // 状态字段：额外处理无法识别的历史状态值
@@ -231,9 +190,12 @@ export function localizeFieldValue(fieldName?: string | null, value?: string | n
     return value
   }
 
-  // Issue 类型字段
+  // Issue 类型字段：兼容活动记录里可能残留的历史英文值
   if (fieldName === 'issueType' || fieldName === 'issue_type') {
-    return issueTypeLabelMap[value] || value
+    const TYPE_COMPAT: Record<string, string> = {
+      Bug: '缺陷', Task: '任务', Feature: '需求', Epic: '史诗', Story: '故事',
+    }
+    return TYPE_COMPAT[value] ?? value
   }
 
   return value
@@ -371,17 +333,3 @@ export const queryFieldKeyToLabel: Record<string, string> = {
   keyword: '关键词',
 }
 
-/**
- * 优先级中文→存储值的反向映射（用于查询解析）
- *
- * V274 后数据库存储值已是中文，此 map 仅保留英文兼容条目。
- * 中文输入直接作为存储值使用，不需要映射自身。
- */
-export const priorityReverseLabelMap: Record<string, string> = {
-  // 兼容可能的英文输入（如旧查询、API 参数）
-  'Show-stopper': '阻塞',
-  'Critical': '紧急',
-  'High': '高',
-  'Normal': '普通',
-  'Low': '低',
-}

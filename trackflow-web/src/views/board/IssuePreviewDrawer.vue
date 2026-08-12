@@ -77,7 +77,7 @@
           @update:popup-visible="v => v ? editingPriority = true : editingPriority = false"
         >
           <span class="preview-priority preview-priority--editable" title="点击修改优先级">
-            {{ priorityIcon(detail.priority) }} {{ localizePriority(detail.priority) }} <span class="edit-chevron">▾</span>
+            {{ priorityIcon(detail.priority) }} {{ detail.priority }} <span class="edit-chevron">▾</span>
           </span>
           <template #content>
             <div class="inline-edit-panel">
@@ -268,7 +268,7 @@ import { issueApi, projectApi } from '@/api'
 import type { IssueDetailVO, IssueCommentVO, IssueStatusVO } from '@/api/types'
 import { Message, Modal } from '@arco-design/web-vue'
 import TimeProgressIndicator from '@/components/base/TimeProgressIndicator.vue'
-import { localizeStatusName, localizeIssueType, localizePriority } from '@/utils/fieldLabels'
+import { localizeStatusName } from '@/utils/fieldLabels'
 import { renderMarkdown, renderHtmlWithMarkdown } from '@/utils/markdown'
 import { getDueDateInfo } from '@/utils/dueDate'
 import type { DueDateInfo } from '@/utils/dueDate'
@@ -472,7 +472,7 @@ async function selectPriority(priority: string) {
 
   try {
     await issueApi.update(props.issueId, { priority })
-    Message.success(`优先级已变更为「${localizePriority(priority)}」`)
+    Message.success(`优先级已变更为「${priority}」`)
     emit('issue-updated', props.issueId, { priority })
   } catch (e: any) {
     detail.value.priority = oldPriority
@@ -624,7 +624,7 @@ function priorityIcon(priority: string): string {
 }
 
 function typeLabel(type: string): string {
-  return localizeIssueType(type)
+  return type
 }
 
 

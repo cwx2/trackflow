@@ -47,7 +47,7 @@
           </div>
           <div class="activity-context">
             <span class="context-tag">{{ activity.roleName || '—' }}</span>
-            <span class="context-tag">{{ activity.issueType === '*' ? '所有类型' : localizeIssueType(activity.issueType) }}</span>
+            <span class="context-tag">{{ activity.issueType === '*' ? '所有类型' : activity.issueType }}</span>
             <span class="context-tag">{{ activity.projectName }}</span>
           </div>
           <div v-if="activity.summary" class="activity-summary">
@@ -99,7 +99,6 @@ import { formatDateTime } from '@/utils/date'
 import { ref, watch } from 'vue'
 import { IconPlusCircle, IconMinusCircle } from '@arco-design/web-vue/es/icon'
 import { workflowApi } from '@/api'
-import { localizeIssueType } from '@/utils/fieldLabels'
 import { AdminPagination } from '@/components/admin'
 import DataContainer from '@/components/base/DataContainer.vue'
 import type { WorkflowActivityVO } from '@/api/types'

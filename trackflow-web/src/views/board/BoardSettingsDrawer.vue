@@ -176,7 +176,7 @@
                 <span class="col-drag-handle" style="visibility: hidden">⠿</span>
                 <div class="col-name-cell" style="flex: 1">
                   <span class="column-color" :style="{ backgroundColor: getPriorityColor(pWip.fieldValue) }"></span>
-                  <span class="column-name">{{ localizePriority(pWip.fieldValue) }}</span>
+                  <span class="column-name">{{ pWip.fieldValue }}</span>
                 </div>
                 <div class="col-count-cell">
                   <span class="issue-count-badge">{{ getPriorityIssueCount(pWip.fieldValue) }}</span>
@@ -331,7 +331,7 @@ import { ref, watch, computed } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { boardApi, queryApi, projectApi } from '@/api'
 import type { BoardColumnVO, BoardColumnItem, ProjectVO } from '@/api/types'
-import { localizeStatusName, localizePriority } from '@/utils/fieldLabels'
+import { localizeStatusName } from '@/utils/fieldLabels'
 import { getPriorityColor } from '@/composables/usePriorityOptions'
 import CardSettingsPanel from './CardSettingsPanel.vue'
 import ChartSettingsPanel from './ChartSettingsPanel.vue'
@@ -968,7 +968,7 @@ async function handleSave() {
     // 优先级列 WIP 校验
     for (const pWip of editablePriorityWip.value) {
       if (pWip.wipMin != null && pWip.wipMax != null && pWip.wipMin > pWip.wipMax) {
-        Message.warning(`优先级「${localizePriority(pWip.fieldValue)}」的 Min WIP 不能大于 Max WIP`)
+        Message.warning(`优先级「${pWip.fieldValue}」的 Min WIP 不能大于 Max WIP`)
         saving.value = false
         return
       }

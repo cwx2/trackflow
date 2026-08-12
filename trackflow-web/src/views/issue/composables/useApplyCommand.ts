@@ -1,7 +1,7 @@
 import { ref, type Ref } from 'vue'
 import type { IssueVO, IssueStatusVO, ProjectMemberVO, SprintVO, IssueTagVO } from '@/api/types'
 import { issueApi, projectApi, sprintApi, tagApi } from '@/api'
-import { localizeStatusName, localizePriority, statusLabelMap } from '@/utils/fieldLabels'
+import { localizeStatusName, statusLabelMap } from '@/utils/fieldLabels'
 import type { BatchResult } from './useBatchOps'
 
 /**
@@ -267,7 +267,7 @@ export function useApplyCommand(selectedIssues: Ref<IssueVO[]>) {
         const resolved = PRIORITY_ALIASES[rawValue.toLowerCase()] || PRIORITY_ALIASES[rawValue]
         if (resolved) {
           cmd.resolvedValue = resolved
-          cmd.value = localizePriority(resolved)
+          cmd.value = resolved
         } else {
           cmd.error = `未知优先级「${rawValue}」，可选：紧急/高/普通/低`
         }

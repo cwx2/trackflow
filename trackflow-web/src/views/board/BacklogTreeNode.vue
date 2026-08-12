@@ -31,7 +31,7 @@
           <span
             class="backlog-card-priority"
             :class="node.issue.priority?.toLowerCase()"
-            :title="localizePriority(node.issue.priority)"
+            :title="node.issue.priority"
           >
             {{ priorityIcon(node.issue.priority) }}
           </span>
@@ -64,7 +64,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import type { IssueVO } from '@/api/types'
-import { localizeIssueType, localizePriority } from '@/utils/fieldLabels'
 import type { BacklogTreeNodeData } from './BacklogPanel.vue'
 
 const props = defineProps<{
@@ -87,7 +86,7 @@ function priorityIcon(priority: string): string {
 }
 
 function typeLabel(type: string): string {
-  return localizeIssueType(type)
+  return type
 }
 </script>
 

@@ -154,7 +154,7 @@
                     <span class="card-due-text">{{ formatDueDate(issue.dueDate) }}</span>
                   </div>
                   <div class="card-meta">
-                    <span class="card-type">{{ localizeIssueType(issue.issueType) }}</span>
+                    <span class="card-type">{{ issue.issueType }}</span>
                     <span v-if="issue.estimatedHours" class="card-estimation"><icon-clock-circle class="estimation-icon" /> {{ issue.estimatedHours }}h</span>
                     <span v-if="issue.assigneeName" class="card-assignee">{{ issue.assigneeName }}</span>
                   </div>
@@ -337,7 +337,7 @@
                     <span class="card-due-text">{{ formatDueDate(issue.dueDate) }}</span>
                   </div>
                   <div class="card-meta">
-                    <span class="card-type">{{ localizeIssueType(issue.issueType) }}</span>
+                    <span class="card-type">{{ issue.issueType }}</span>
                     <span v-if="issue.estimatedHours" class="card-estimation"><icon-clock-circle class="estimation-icon" /> {{ issue.estimatedHours }}h</span>
                     <span v-if="issue.assigneeName" class="card-assignee">{{ issue.assigneeName }}</span>
                   </div>
@@ -454,7 +454,6 @@ import { issueApi, sprintApi, projectApi } from '@/api'
 import { useProjectStore } from '@/stores/project'
 import { useProjectList } from '@/composables/useProjectList'
 import { usePermission } from '@/composables/usePermission'
-import { localizeIssueType } from '@/utils/fieldLabels'
 import { getPriorityColor } from '@/composables/usePriorityOptions'
 import IssuePriorityBadge from '@/components/base/IssuePriorityBadge.vue'
 import IssueCreatePanel from '@/components/IssueCreatePanel.vue'

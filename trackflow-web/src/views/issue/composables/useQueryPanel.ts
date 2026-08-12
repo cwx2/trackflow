@@ -6,7 +6,7 @@ import type { IssueStatusVO, QueryPanelItemVO, SavedQueryFilter, UpdateSavedQuer
 import type { TagPanelItemVO, AvailableTagVO } from '@/api/tag'
 import { useAuthStore } from '@/stores/auth'
 import {
-  localizeStatusName, priorityLabelMap, priorityReverseLabelMap,
+  localizeStatusName,
   queryFieldKeyToLabel, queryFieldLabelToKey
 } from '@/utils/fieldLabels'
 import axios from 'axios'
@@ -545,7 +545,7 @@ export function useQueryPanel(options: QueryPanelOptions) {
         values = f.value.map((v: string) => {
           if (v === '${currentUser}') return '我'
           if (f.field === 'type') return getIssueTypeLabelForRecord(v)
-          if (f.field === 'priority') return priorityLabelMap[v] || v
+          if (f.field === 'priority') return v
           if (f.field === 'status') {
             const st = statusCache.value.find(s => s.code === v || s.id === v)
             return st ? localizeStatusName(st.name) : v
@@ -645,7 +645,7 @@ export function useQueryPanel(options: QueryPanelOptions) {
       const p = projectList.value.find(pr => pr.key === v || pr.name === v)
       return p ? p.id : v
     }
-    if (fieldKey === 'priority') return priorityReverseLabelMap[v] || v
+    if (fieldKey === 'priority') return v
     if (fieldKey === 'type') {
       const entry = issueTypeOptions.value.find(o => o.label === v || o.value === v)
       return entry ? entry.value : v

@@ -99,7 +99,7 @@
                 <span
                   class="backlog-card-priority"
                   :class="issue.priority?.toLowerCase()"
-                  :title="localizePriority(issue.priority)"
+                  :title="issue.priority"
                 >
                   {{ priorityIcon(issue.priority) }}
                 </span>
@@ -147,7 +147,6 @@ import { Message } from '@arco-design/web-vue'
 import { issueApi, queryApi } from '@/api'
 import type { IssueVO } from '@/api/types'
 import { IconClose, IconList, IconBranch } from '@arco-design/web-vue/es/icon'
-import { localizeIssueType, localizePriority } from '@/utils/fieldLabels'
 import BacklogTreeNode from './BacklogTreeNode.vue'
 import { EmptyState } from '@/components/base'
 
@@ -394,7 +393,7 @@ function priorityIcon(priority: string): string {
 }
 
 function typeLabel(type: string): string {
-  return localizeIssueType(type)
+  return type
 }
 
 /** Called by parent to refresh after a successful drop */

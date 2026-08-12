@@ -152,7 +152,7 @@
               <a-table-column title="适用类型" :width="140">
                 <template #cell="{ record }">
                   <span v-if="!record.issueTypes || record.issueTypes.length === 0" class="text-muted">所有类型</span>
-                  <span v-else>{{ record.issueTypes.map((t: string) => localizeIssueType(t)).join(', ') }}</span>
+                  <span v-else>{{ record.issueTypes.join(', ') }}</span>
                 </template>
               </a-table-column>
               <a-table-column title="操作" :width="120" align="center">
@@ -224,7 +224,7 @@
               <div class="detail-row">
                 <span class="detail-label">适用类型</span>
                 <span class="detail-value">
-                  {{ (!selectedField.issueTypes || selectedField.issueTypes.length === 0) ? '所有' : selectedField.issueTypes.map(t => localizeIssueType(t)).join(', ') }}
+                  {{ (!selectedField.issueTypes || selectedField.issueTypes.length === 0) ? '所有' : selectedField.issueTypes.join(', ') }}
                 </span>
               </div>
               <div v-if="selectedField.options && selectedField.options.length > 0" class="detail-section">
@@ -832,7 +832,6 @@ import { Message, Modal } from '@arco-design/web-vue'
 import { useConfirmDelete } from '@/composables/useConfirmDelete'
 import { customFieldApi, projectApi, workflowApi, userApi } from '@/api'
 import type { CustomFieldDefinitionVO, CustomFieldUsageVO, UserVO, AvailableConversionsVO, ConversionOptionVO } from '@/api/types'
-import { localizeIssueType } from '@/utils/fieldLabels'
 import FieldsInProjects from './FieldsInProjects.vue'
 import DefaultValueInput from './components/DefaultValueInput.vue'
 import { AdminPageLayout, AdminDataTable } from '@/components/admin'
@@ -1027,7 +1026,7 @@ async function loadIssueTypes() {
   try {
     const res = await workflowApi.listIssueTypes()
     const types = res.data || []
-    issueTypeOptions.value = types.map(t => ({ value: t, label: localizeIssueType(t) }))
+    issueTypeOptions.value = types.map(t => ({ value: t, label: t }))
   } catch {
     // Fallback to basic types if API fails
     issueTypeOptions.value = [

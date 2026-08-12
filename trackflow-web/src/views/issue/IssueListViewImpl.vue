@@ -600,7 +600,7 @@ import { projectApi, issueApi, sprintApi, customFieldApi } from '@/api'
 import type { IssueVO, IssueStatusVO, ProjectMemberVO, SprintVO, CustomFieldValueVO } from '@/api/types'
 import type { TableData } from '@arco-design/web-vue'
 import { useAuthStore } from '@/stores/auth'
-import { localizeStatusName, localizePriority, queryFieldKeyToLabel } from '@/utils/fieldLabels'
+import { localizeStatusName, queryFieldKeyToLabel } from '@/utils/fieldLabels'
 import { highlightKeyword } from '@/utils/highlight'
 import { DEFAULT_PRIORITY_OPTIONS, DEFAULT_PRIORITY_COLOR } from '@/composables/usePriorityOptions'
 import { DEFAULT_ISSUE_TYPE_OPTIONS, DEFAULT_ISSUE_TYPE_COLOR } from './composables/useIssueTypeOptions'
@@ -1148,7 +1148,7 @@ const activeQueryReadonlyLabels = computed<string[]>(() => {
         if (v === '${currentUser}') return '我'
         if (f.field === 'type') return getIssueTypeLabelForRecord(v)
         if (f.field === 'status') return statusCodeMap[v] || statusIdMap[v] || localizeStatusName(v) || v
-        if (f.field === 'priority') return localizePriority(v)
+        if (f.field === 'priority') return v
         return v
       }).join(', ')
     } else { values = String(f.value || '') }
@@ -1217,7 +1217,7 @@ const activeQueryParsedFilters = computed(() => {
         const s = statusCache.value.find(st => st.id === v || st.code === v)
         return s ? localizeStatusName(s.name) : v
       }
-      if (fieldKey === 'priority') return localizePriority(v)
+      if (fieldKey === 'priority') return v
       if (fieldKey === 'issueType') return getIssueTypeLabelForRecord(v)
       if (fieldKey === 'project') {
         const p = projectList.value.find(pr => pr.id === v)

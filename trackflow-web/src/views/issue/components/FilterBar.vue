@@ -218,7 +218,7 @@ import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { IconFilter, IconSearch, IconPlus } from '@arco-design/web-vue/es/icon'
 import { projectApi, sprintApi, tagApi } from '@/api'
 import type { IssueStatusVO, IssueTagVO, ProjectVO, SprintVO } from '@/api/types'
-import { localizeStatusName, issueTypeLabelMap } from '@/utils/fieldLabels'
+import { localizeStatusName } from '@/utils/fieldLabels'
 import { PRIORITY_COLORS } from '@/utils/issueColors'
 import { loadIssueTypeOptions } from '../composables/useIssueTypeOptions'
 import QueryInput from './QueryInput.vue'
@@ -719,9 +719,10 @@ async function loadValueOptions(fieldKey: string) {
             valueOptions.value = typeOpts.map(o => ({ id: o.value, label: o.label, color: o.color || undefined }))
           }
         } else {
-          // 全部项目模式且无项目筛选条件时，回退到静态映射
-          // 使用中文 label 作为 id，因为 DB 中 issue.issue_type 存储中文值
-          valueOptions.value = Object.values(issueTypeLabelMap).map(label => ({ id: label, label }))
+          // 全部项目模式且无项目筛选条件时，回退到静态列表
+          // DB 中 issue.issue_type 直接存储显示值（中文）
+          const DEFAULT_TYPES = ['缺陷', '任务', '需求', '史诗', '故事']
+          valueOptions.value = DEFAULT_TYPES.map(label => ({ id: label, label }))
         }
         break
       }

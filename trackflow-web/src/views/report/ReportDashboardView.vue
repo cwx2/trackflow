@@ -373,7 +373,7 @@ import { EmptyState } from '@/components/base'
 import { projectApi, sprintApi } from '@/api'
 import type { DashboardData } from '@/api/reportStatistics'
 import type { ProjectVO } from '@/api/types'
-import { localizeStatusName, priorityLabelMap } from '@/utils/fieldLabels'
+import { localizeStatusName } from '@/utils/fieldLabels'
 import { useChartColors, SERIES_ACCENT, SERIES_ACCENT_LIGHT, SERIES_SUCCESS, SERIES_DANGER, SERIES_TERTIARY, areaGradient, getChartDownloadBgColor } from '@/utils/chartColors'
 
 // 注册 ECharts 组件
@@ -496,7 +496,7 @@ const priorityChartOption = computed(() => {
     grid: { left: 40, right: 20, top: 16, bottom: 30 },
     xAxis: {
       type: 'category',
-      data: labels.map(l => priorityLabelMap[l] || l),
+      data: labels,
       axisLine: { lineStyle: { color: c.axisColor } },
       axisLabel: { color: c.textColor, fontSize: 11 },
       axisTick: { show: false }
@@ -874,7 +874,7 @@ function handlePriorityChartClick(params: any) {
   if (priorityName) {
     navigateToDrillDown({
       priority: priorityName,
-      label: priorityLabelMap[priorityName] || priorityName
+      label: priorityName
     })
   }
 }
@@ -1231,7 +1231,7 @@ function exportCSV() {
   lines.push('=== 优先级分布 ===')
   lines.push('优先级,数量')
   data.priorityDistribution.labels.forEach((label, idx) => {
-    lines.push(`${priorityLabelMap[label] || label},${data.priorityDistribution.data[idx]}`)
+    lines.push(`${label},${data.priorityDistribution.data[idx]}`)
   })
   lines.push('')
 

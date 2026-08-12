@@ -4,7 +4,7 @@
     <div class="sticky-header">
       <div class="identity-row">
         <span class="iss-key">{{ issueKey }}</span>
-        <span class="type-badge" :class="'t-' + issueType.toLowerCase()">{{ localizeIssueType(issueType) }}</span>
+        <span class="type-badge" :class="'t-' + issueType.toLowerCase()">{{ issueType }}</span>
         <a-tooltip content="复制 ID 和摘要" position="right" mini>
           <button class="copy-id-btn" @click="onCopyIdAndSummary" aria-label="复制 ID 和摘要">
             <icon-copy />
@@ -212,7 +212,6 @@ import { ref, computed, nextTick } from 'vue'
 
 import { IconCopy, IconDelete, IconBranch, IconSwap, IconPrinter, IconClockCircle, IconUpload, IconLock, IconSearch, IconPlus, IconEdit, IconLink, IconMore, IconAttachment, IconClose } from '@arco-design/web-vue/es/icon'
 import { renderMarkdown } from '@/utils/markdown'
-import { localizeIssueType } from '@/utils/fieldLabels'
 import { IssuePriorityBadge } from '@/components/base'
 import RichEditor from '@/components/RichEditor.vue'
 import ChildIssuesList from './ChildIssuesList.vue'

@@ -34,7 +34,7 @@
 import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { projectApi, customFieldApi } from '@/api'
 import type { IssueStatusVO, ProjectVO } from '@/api/types'
-import { localizeStatusName, issueTypeLabelMap } from '@/utils/fieldLabels'
+import { localizeStatusName } from '@/utils/fieldLabels'
 import { loadIssueTypeOptions } from '../composables/useIssueTypeOptions'
 
 // ==================== Types ====================
@@ -116,9 +116,12 @@ function getBuiltinFields(): FieldDef[] {
     },
     {
       key: 'type', label: '类型', queryKey: '类型', valueType: 'enum',
-      getValues: () => issueTypeCache.value.length > 0
-        ? issueTypeCache.value
-        : Object.values(issueTypeLabelMap).map(label => ({ id: label, label }))
+      getValues: () => {
+        const DEFAULT_TYPES = ['缺陷', '任务', '需求', '史诗', '故事']
+        return issueTypeCache.value.length > 0
+          ? issueTypeCache.value
+          : DEFAULT_TYPES.map(label => ({ id: label, label }))
+      }
     },
     {
       key: 'sprint', label: 'Sprint', queryKey: 'Sprint', valueType: 'enum',
