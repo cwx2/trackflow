@@ -1341,11 +1341,16 @@ function selectTag(tag: any) {
 }
 function onFilterChange() {
   currentPage.value = 1
+  activeQueryId.value = null
+  activeQueryObj.value = null
+  activeTagId.value = null
+  globalFilterParams.value = {}
   skipRouteQueryWatch = true
-  if (filterProject.value) { const matched = projectList.value.find(p => p.id === filterProject.value); activeProjectId.value = filterProject.value; activeQueryName.value = matched?.name || '所有工单'; router.replace({ query: { ...route.query, project: matched?.key || filterProject.value } }) }
-  else { activeProjectId.value = null; activeQueryName.value = '所有工单'; const { project, ...rest } = route.query; router.replace({ query: rest }) }
+  if (filterProject.value) { const matched = projectList.value.find(p => p.id === filterProject.value); activeProjectId.value = filterProject.value; activeQueryName.value = matched?.name || '所有工单'; router.replace({ query: { project: matched?.key || filterProject.value } }) }
+  else { activeProjectId.value = null; activeQueryName.value = '所有工单'; router.replace({ query: {} }) }
   nextTick(() => { skipRouteQueryWatch = false })
-  refreshList()
+  localStorage.removeItem('tf_last_active_query_id')
+  refreshList(); queryPanelRef.value?.loadPanel(); queryPanelRef.value?.loadTags()
 }
 
 // ===== Navigation helper: carry Saved Query context to detail page =====
