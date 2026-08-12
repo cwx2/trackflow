@@ -1,8 +1,15 @@
 <template>
   <div class="admin-page-layout" :style="maxWidthStyle">
-    <!-- 面包屑（可选） -->
-    <div v-if="$slots.breadcrumb" class="admin-page-breadcrumb">
-      <slot name="breadcrumb" />
+    <!-- 面包屑：有 slot 用 slot，否则自动渲染"管理 > {title}" -->
+    <div class="admin-page-breadcrumb">
+      <slot name="breadcrumb">
+        <a-breadcrumb>
+          <a-breadcrumb-item>
+            <router-link to="/admin">管理</router-link>
+          </a-breadcrumb-item>
+          <a-breadcrumb-item>{{ title }}</a-breadcrumb-item>
+        </a-breadcrumb>
+      </slot>
     </div>
 
     <!-- 页面头部：标题 + 操作按钮 -->
