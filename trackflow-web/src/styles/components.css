@@ -28,6 +28,12 @@
 
 .arco-table-td {
   color: var(--tf-text-primary);
+  border-bottom: 1px solid var(--tf-border-light) !important;
+}
+
+/* 最后一行不需要底部分割线 */
+.arco-table-tr:last-child .arco-table-td {
+  border-bottom: none !important;
 }
 
 .arco-table-tr:hover .arco-table-td {
