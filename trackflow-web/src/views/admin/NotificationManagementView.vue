@@ -1,11 +1,12 @@
 ﻿<template>
-  <div class="notification-management">
-    <!-- Header -->
-    <div class="settings-header">
+  <AdminPageLayout
+    title="通知管理"
+    subtitle="配置全局通知策略、默认偏好和保留策略。管理系统级通知行为。"
+    :max-width="720"
+  >
+    <template #breadcrumb>
       <router-link to="/admin" class="back-link">← 返回管理</router-link>
-      <h1 class="settings-title">通知管理</h1>
-      <p class="settings-desc">配置全局通知策略、默认偏好和保留策略。管理系统级通知行为。</p>
-    </div>
+    </template>
 
     <DataContainer :loading="loading" :is-empty="false">
       <!-- 通知统计概览 -->
@@ -398,7 +399,7 @@
         </a-button>
       </div>
     </DataContainer>
-  </div>
+  </AdminPageLayout>
 </template>
 
 <script setup lang="ts">
@@ -408,6 +409,7 @@ import { Message } from '@arco-design/web-vue'
 import { notificationAdminApi } from '@/api/notificationAdmin'
 import type { NotificationSettingsVO, NotificationStatsVO, NotificationOutboxVO, OutboxStats } from '@/api/notificationAdmin'
 import DataContainer from '@/components/base/DataContainer.vue'
+import { AdminPageLayout } from '@/components/admin'
 
 const loading = ref(true)
 const saving = ref(false)
@@ -694,42 +696,16 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.notification-management {
-  padding: 32px;
-  max-width: 720px;
-  height: 100%;
-  overflow-y: auto;
-}
-
-.settings-header {
-  margin-bottom: 32px;
-}
-
 .back-link {
   font-size: 12px;
   color: var(--tf-text-tertiary);
   text-decoration: none;
   display: inline-block;
-  margin-bottom: 12px;
   transition: color 0.15s;
 }
 
 .back-link:hover {
   color: var(--tf-accent);
-}
-
-.settings-title {
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--tf-text-primary);
-  margin: 0 0 8px 0;
-}
-
-.settings-desc {
-  font-size: 13px;
-  color: var(--tf-text-tertiary);
-  margin: 0;
-  line-height: 1.5;
 }
 
 .settings-loading {

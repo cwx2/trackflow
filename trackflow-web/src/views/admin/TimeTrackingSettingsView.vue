@@ -1,11 +1,12 @@
 <template>
-  <div class="time-tracking-settings">
-    <!-- Back button + title -->
-    <div class="settings-header">
+  <AdminPageLayout
+    title="时间追踪设置"
+    subtitle="配置系统级时间追踪参数，影响所有项目的工时单位换算和时间表显示。"
+    :max-width="720"
+  >
+    <template #breadcrumb>
       <router-link to="/admin" class="back-link">← 返回管理</router-link>
-      <h1 class="settings-title">时间追踪设置</h1>
-      <p class="settings-desc">配置系统级时间追踪参数，影响所有项目的工时单位换算和时间表显示。</p>
-    </div>
+    </template>
 
     <DataContainer :loading="loading" :is-empty="false">
       <!-- Hours per day -->
@@ -190,7 +191,7 @@
         </div>
       </div>
     </a-modal>
-  </div>
+  </AdminPageLayout>
 </template>
 
 <script setup lang="ts">
@@ -199,6 +200,7 @@ import { Message } from '@arco-design/web-vue'
 import { systemSettingApi } from '@/api/systemSetting'
 import type { TimeTrackingSettingsVO, UpdateTimeTrackingSettingsDTO } from '@/api/systemSetting'
 import DataContainer from '@/components/base/DataContainer.vue'
+import { AdminPageLayout } from '@/components/admin'
 
 const loading = ref(true)
 const saving = ref(false)
@@ -360,42 +362,16 @@ onMounted(loadSettings)
 </script>
 
 <style scoped>
-.time-tracking-settings {
-  padding: 32px;
-  max-width: 720px;
-  height: 100%;
-  overflow-y: auto;
-}
-
-.settings-header {
-  margin-bottom: 32px;
-}
-
 .back-link {
   font-size: 12px;
   color: var(--tf-text-tertiary);
   text-decoration: none;
   display: inline-block;
-  margin-bottom: 12px;
   transition: color 0.15s;
 }
 
 .back-link:hover {
   color: var(--tf-accent);
-}
-
-.settings-title {
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--tf-text-primary);
-  margin: 0 0 8px 0;
-}
-
-.settings-desc {
-  font-size: 13px;
-  color: var(--tf-text-tertiary);
-  margin: 0;
-  line-height: 1.5;
 }
 
 .settings-loading {
