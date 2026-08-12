@@ -537,37 +537,7 @@ const createForm = reactive({
   options: [] as Array<{ value: string; isDefault: boolean }>
 })
 
-const fieldTypeOptions = [
-  { value: 'string', label: '文本(单行)' },
-  { value: 'text', label: '文本(多行/Markdown)' },
-  { value: 'int', label: '整数' },
-  { value: 'float', label: '小数' },
-  { value: 'date', label: '日期' },
-  { value: 'datetime', label: '日期时间' },
-  { value: 'bool', label: '布尔' },
-  { value: 'list', label: '列表(枚举)' },
-  { value: 'user', label: '用户' },
-  { value: 'period', label: '时间周期' },
-  { value: 'version', label: '版本(Version)' },
-  { value: 'build', label: '构建号(Build)' },
-  { value: 'group', label: '用户组(Group)' }
-]
-
-const fieldTypeLabels: Record<string, string> = {
-  string: '文本(单行)',
-  text: '文本(多行)',
-  int: '整数',
-  float: '小数',
-  date: '日期',
-  datetime: '日期时间',
-  bool: '布尔',
-  list: '列表(枚举)',
-  user: '用户',
-  period: '时间周期',
-  version: '版本(Version)',
-  build: '构建号(Build)',
-  group: '用户组(Group)'
-}
+import { FIELD_TYPE_OPTIONS, formatFieldType } from './constants/fieldType'
 
 // === 汇总统计 ===
 const totalFieldCount = computed(() => {
@@ -597,8 +567,10 @@ function truncateValue(value: string): string {
   return value.length > 10 ? value.substring(0, 10) + '...' : value
 }
 
+const fieldTypeOptions = FIELD_TYPE_OPTIONS
+
 function formatType(format: string) {
-  return fieldTypeLabels[format] || format
+  return formatFieldType(format)
 }
 
 function toggleGroup(id: string) {

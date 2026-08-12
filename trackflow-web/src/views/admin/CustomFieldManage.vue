@@ -834,6 +834,7 @@ import { customFieldApi, projectApi, workflowApi, userApi } from '@/api'
 import type { CustomFieldDefinitionVO, CustomFieldUsageVO, UserVO, AvailableConversionsVO, ConversionOptionVO } from '@/api/types'
 import FieldsInProjects from './FieldsInProjects.vue'
 import DefaultValueInput from './components/DefaultValueInput.vue'
+import { FIELD_TYPE_OPTIONS, formatFieldType } from './constants/fieldType'
 import { AdminPageLayout, AdminDataTable } from '@/components/admin'
 
 
@@ -954,26 +955,10 @@ const presetColors = [
   '#795548', '#FFC107'
 ]
 
-const fieldTypeOptions = [
-  { value: 'string', label: '文本(单行)' },
-  { value: 'text', label: '文本(多行/Markdown)' },
-  { value: 'int', label: '整数' },
-  { value: 'float', label: '小数' },
-  { value: 'date', label: '日期' },
-  { value: 'datetime', label: '日期时间' },
-  { value: 'bool', label: '布尔' },
-  { value: 'list', label: '列表(枚举)' },
-  { value: 'ownedField', label: '子系统(Owned Field)' },
-  { value: 'state', label: '状态(State)' },
-  { value: 'user', label: '用户' },
-  { value: 'period', label: '时间周期' },
-  { value: 'version', label: '版本(Version)' },
-  { value: 'build', label: '构建号(Build)' },
-  { value: 'group', label: '用户组(Group)' }
-]
+const fieldTypeOptions = FIELD_TYPE_OPTIONS
 
 function formatTypeLabel(format: string) {
-  return fieldTypeOptions.find(t => t.value === format)?.label || format
+  return formatFieldType(format)
 }
 
 /** 根据项目 ID 获取项目名称 */
