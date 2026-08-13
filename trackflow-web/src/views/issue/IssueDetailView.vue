@@ -527,7 +527,8 @@ const availableTransitions = computed<StatusInfo[]>(() => {
   return transitions.value.map(s => ({
     id: s.id, name: s.displayName || s.name, color: s.color,
     blocked: s.blocked || false, blockedBy: s.blockedBy || [],
-    requireComment: s.requireComment || false, transitionName: s.transitionName || undefined
+    requireComment: s.requireComment || false, transitionName: s.transitionName || undefined,
+    requiredFieldIds: s.requiredFieldIds || undefined
   }))
 })
 
@@ -655,7 +656,7 @@ function buildSprintOptions(allSprints: SprintVO[], projectId: string): FieldOpt
   return options
 }
 
-function buildCustomFieldSidebarEntries(i: IssueDetailVO, canEdit: boolean): SidebarField[] {
+function buildCustomFieldSidebarEntries(i: IssueDetailVO, canEdit: boolean, workflowRequiredFieldIds: Set<string>): SidebarField[] {
   if (!customFieldDefs.value.length) return []
   const valuesMap = new Map<string, { value: string; values?: string[]; displayValue: string; displayValues?: string[]; isMulti?: boolean; color?: string | null; colors?: (string | null)[] }>()
   if (i.customFieldDetails) {
@@ -712,13 +713,15 @@ function buildCustomFieldSidebarEntries(i: IssueDetailVO, canEdit: boolean): Sid
       if (isMulti && stored.colors?.length) { fieldColor = stored.colors.find(c => c != null) || undefined }
       else if (stored.color) { fieldColor = stored.color }
     }
+    const isFieldWorkflowRequired = workflowRequiredFieldIds.has(cf.id)
     return {
       key: `cf_${cf.id}`, label: cf.name, value: displayValue, dot: fieldColor,
       editType: editType as any, rawValue, rawValues: isMulti ? rawValues : undefined,
       readonly: !canEdit || cf.editable === false, options,
       canAddOption: (cf.fieldFormat === 'list' || cf.fieldFormat === 'ownedField' || cf.fieldFormat === 'version' || cf.fieldFormat === 'build') && canManageCustomFieldsComputed.value,
       customFieldId: cf.id, isSetValuePrompt,
-      isEmptyCustomField: !isSetValuePrompt && !rawValue && !(isMulti && rawValues.length > 0)
+      isEmptyCustomField: !isSetValuePrompt && !rawValue && !(isMulti && rawValues.length > 0) && !isFieldWorkflowRequired,
+      isWorkflowRequired: isFieldWorkflowRequired
     }
   })
 }
@@ -741,6 +744,13 @@ const sidebarFields = computed<SidebarField[]>(() => {
   // 判断当前 Sprint 是否已完成（用于字段面板视觉标识）
   const sprintCompleted = i.sprintStatus?.toLowerCase() === 'completed' ||
     (i.sprintId ? sprints.value.find(s => s.id === i.sprintId)?.status?.toLowerCase() === 'completed' : false)
+  // 收集所有可用转换所需的必填字段 ID
+  const workflowRequiredFieldIds = new Set<string>()
+  for (const t of availableTransitions.value) {
+    if (t.requiredFieldIds) {
+      for (const fid of t.requiredFieldIds) workflowRequiredFieldIds.add(fid)
+    }
+  }
   return [
     { key: 'project', label: '项目', value: projectName.value, readonly: true, readonlyReason: '工单创建后不可变更项目' },
     { key: 'priority', label: '优先级', value: i.priority, dot: priorityDot(i.priority), editType: 'select' as const, rawValue: i.priority, readonly: !canEdit, options: dynamicPriorityOptions.value.map(o => ({ value: o.value, label: o.label })) },
@@ -756,7 +766,7 @@ const sidebarFields = computed<SidebarField[]>(() => {
     ] : []),
     ...(projectTimeTrackingEnabled.value && i.derivedEstimatedHours != null ? [{ key: 'derivedEstimatedHours', label: '总预估工时', value: `${i.derivedEstimatedHours}h`, readonly: true, readonlyReason: 'derived' }] : []),
     ...(projectTimeTrackingEnabled.value && i.derivedSpentHours != null ? [{ key: 'derivedSpentHours', label: '总花费时间', value: `${i.derivedSpentHours}h`, readonly: true, readonlyReason: 'derived', class: (i.derivedEstimatedHours && i.derivedEstimatedHours > 0 && i.derivedSpentHours > i.derivedEstimatedHours) ? 'time-over-budget' : undefined, tooltip: (i.derivedEstimatedHours && i.derivedEstimatedHours > 0 && i.derivedSpentHours > i.derivedEstimatedHours) ? `已超出预估 ${(i.derivedSpentHours - i.derivedEstimatedHours).toFixed(1)}h` : undefined }] : []),
-    ...buildCustomFieldSidebarEntries(i, canEditCF),
+    ...buildCustomFieldSidebarEntries(i, canEditCF, workflowRequiredFieldIds),
     { key: '_sep', label: '', value: '', readonly: true },
     { key: 'visibility', label: '可见性', value: i.visibility === 'restricted' ? '受限访问' : '所有成员', editType: 'select' as const, rawValue: i.visibility || 'public', readonly: !(canEdit || hasProjectPermission('project:admin')), options: [{ value: 'public', label: '所有成员' }, { value: 'restricted', label: '受限访问（仅指定用户）' }] },
     { key: 'createdAt', label: '创建时间', value: formatDateTime(i.createdAt), readonly: true },

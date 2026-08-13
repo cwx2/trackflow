@@ -144,6 +144,8 @@ export interface IssueStatusVO {
   requireComment?: boolean
   /** 转换显示名（如"开始处理"），为空时使用目标状态名 */
   transitionName?: string
+  /** 此转换所需的必填字段 ID 列表（来自 require_field 工作流动作配置） */
+  requiredFieldIds?: string[]
 }
 
 /** 批量操作中每个状态的可达性信息 */

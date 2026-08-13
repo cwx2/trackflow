@@ -37,4 +37,11 @@ public class IssueStatusVO {
      * 转换显示名（如"开始处理"），为空时前端使用目标状态名 fallback
      */
     private String transitionName;
+
+    /**
+     * 此转换所需的必填字段列表（字段 ID）。
+     * 来自 workflow transition_action 的 require_field 配置。
+     * 前端用此信息在字段面板中标注"必填"标识。
+     */
+    private List<String> requiredFieldIds;
 }

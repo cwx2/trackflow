@@ -121,8 +121,33 @@ public class TransitionActionEngine {
     }
 
     /**
-     * 校验单个必填字段。
+     * 获取指定转换路径上所有 require_field 动作的字段 ID 列表。
+     * 用于 available-transitions 接口预告知前端哪些字段是当前转换所需。
      *
+     * @param projectId   项目 ID
+     * @param issueType   Issue 类型
+     * @param oldStatusId 当前状态 ID
+     * @param newStatusId 目标状态 ID
+     * @return 必填字段 ID 列表（Long），如果无 require_field 动作则返回空列表
+     */
+    public List<Long> getRequiredFieldIds(Long projectId, String issueType,
+                                          Long oldStatusId, Long newStatusId) {
+        List<TransitionAction> actions = actionResolver.resolve(projectId, issueType, oldStatusId, newStatusId);
+        if (actions == null || actions.isEmpty()) {
+            return List.of();
+        }
+        return actions.stream()
+                .filter(a -> "require_field".equals(a.getActionType()))
+                .map(a -> {
+                    ActionConfig config = actionConfigValidator.parseConfig(a.getActionConfig());
+                    return config != null ? config.getRequiredFieldId() : null;
+                })
+                .filter(java.util.Objects::nonNull)
+                .toList();
+    }
+
+    /**
+
      * @return 校验失败时返回 FIELD_VALIDATION_FAILED 结果；校验通过时返回 null
      */
     private ActionExecutionResult validateRequiredField(TransitionAction action, Issue issue) {

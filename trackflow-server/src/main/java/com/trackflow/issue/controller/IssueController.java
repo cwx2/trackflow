@@ -55,6 +55,7 @@ public class IssueController {
     private final com.trackflow.issue.service.IssueCommentService commentService;
     private final com.trackflow.issue.service.IssueAttachmentService attachmentService;
     private final com.trackflow.issue.service.IssueActivityService activityService;
+    private final com.trackflow.workflow.service.TransitionActionEngine transitionActionEngine;
 
     @PostMapping
     @PreAuthorize("@perm.check(#dto.projectId, 'issue:create')")
@@ -287,6 +288,7 @@ public class IssueController {
     @PreAuthorize("@perm.checkIssue(#id, 'issue:change_status')")
     public R<List<IssueStatusVO>> getAvailableTransitions(@PathVariable("id") Long id) {
         IssueService.AvailableTransitionsResult data = issueService.getAvailableTransitionsData(id);
+        Issue issue = issueService.getById(id);
         List<IssueStatusVO> voList = issueConverter.toStatusVOList(data.statuses());
 
         // 附加转换显示名
@@ -311,6 +313,16 @@ public class IssueController {
                     vo.setBlocked(true);
                     vo.setBlockedBy(data.blockerKeys());
                 }
+            }
+        }
+
+        // 附加每个转换所需的必填字段 ID 列表（来自 require_field 动作配置）
+        for (IssueStatusVO vo : voList) {
+            List<Long> requiredIds = transitionActionEngine.getRequiredFieldIds(
+                    issue.getProjectId(), issue.getIssueType(),
+                    issue.getStatusId(), Long.valueOf(vo.getId()));
+            if (!requiredIds.isEmpty()) {
+                vo.setRequiredFieldIds(requiredIds.stream().map(String::valueOf).toList());
             }
         }
 

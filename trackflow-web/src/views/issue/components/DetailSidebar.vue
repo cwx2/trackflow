@@ -46,7 +46,10 @@
       :data-field-key="field.key"
     >
       <template v-if="field.key !== '_sep'">
-        <div class="sb-label">{{ field.label }}</div>
+        <div class="sb-label">
+          {{ field.label }}
+          <span v-if="field.isWorkflowRequired" class="workflow-required-mark" title="当前转换需要填写此字段">*</span>
+        </div>
 
         <!-- 可编辑字段用 a-trigger 包裹 -->
         <a-trigger
@@ -303,6 +306,11 @@ export interface SidebarField {
    */
   isEmptyCustomField?: boolean
   /**
+   * 标记此字段是当前可用状态转换的前置必填字段。
+   * 当为 true 时，面板中显示红色 * 必填标识，提示用户填写后方可执行转换。
+   */
+  isWorkflowRequired?: boolean
+  /**
    * 关联的用户 ID（用于 reporter/assignee 字段）。
    * 当有值时，字段值可点击跳转到该用户的公开资料页 /users/{userId}。
    */
@@ -326,6 +334,8 @@ export interface StatusInfo {
   requireComment?: boolean
   /** 转换显示名（如"开始处理"），有值时优先展示 */
   transitionName?: string
+  /** 此转换所需的必填字段 ID 列表 */
+  requiredFieldIds?: string[]
 }
 
 const props = defineProps<{
@@ -346,8 +356,12 @@ const emit = defineEmits<{
 
 // ========== 空值自定义字段折叠控制 ==========
 const SHOW_ALL_FIELDS_KEY = 'tf_issue_detail_show_all_fields'
-/** 是否展开空值自定义字段（从 localStorage 恢复偏好） */
-const showAllFields = ref<boolean>(localStorage.getItem(SHOW_ALL_FIELDS_KEY) === 'true')
+/**
+ * 是否展开空值自定义字段（从 localStorage 恢复偏好）。
+ * 默认展开（YouTrack 标准行为：所有项目关联的自定义字段始终在面板中可见）。
+ * 仅当用户主动点击"隐藏空字段"后才折叠。
+ */
+const showAllFields = ref<boolean>(localStorage.getItem(SHOW_ALL_FIELDS_KEY) !== 'false')
 
 /** 被隐藏的空值自定义字段数量 */
 const hiddenFieldCount = computed(() => {
@@ -844,6 +858,13 @@ defineExpose({ highlightField })
   font-size: 11px;
   color: var(--tf-text-muted);
   margin-bottom: 2px;
+}
+
+/* 工作流必填标识 */
+.workflow-required-mark {
+  color: var(--tf-error, #f85149);
+  font-weight: 600;
+  margin-left: 2px;
 }
 
 /* ========== Value 通用 ========== */
