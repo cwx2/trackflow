@@ -10,10 +10,10 @@
     @cancel="handleCancel"
   >
     <div class="transition-comment-modal">
-      <div class="transition-info">
+      <div v-if="targetStatus" class="transition-info">
         <span class="transition-label">目标状态：</span>
-        <span class="status-badge" :style="{ backgroundColor: targetStatus?.color || '#6b7280' }">
-          {{ targetStatus?.name }}
+        <span class="status-badge" :style="{ backgroundColor: targetStatus.color || '#6b7280' }">
+          {{ targetStatus.name }}
         </span>
       </div>
 
@@ -89,6 +89,9 @@ const modalTitle = computed(() => {
 })
 
 const okText = computed(() => {
+  if (props.targetStatus?.name) {
+    return `变更为「${props.targetStatus.name}」`
+  }
   return '确认变更'
 })
 

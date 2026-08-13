@@ -379,13 +379,10 @@ export function useIssueDetailActions(deps: ActionDeps) {
   async function onQuickActionExecuted() { await deps.loadAll() }
 
   async function onTransition(target: StatusInfo) {
-    if (target.requireComment) {
-      transitionTarget.value = target
-      transitionRequireComment.value = true
-      showTransitionModal.value = true
-      return
-    }
-    await executeTransition(target, undefined)
+    // 始终设置目标状态（弹窗 show-assignee 为 true 时需要让用户确认目标状态并选择 assignee）
+    transitionTarget.value = target
+    transitionRequireComment.value = target.requireComment || false
+    showTransitionModal.value = true
   }
 
   async function onTransitionConfirm(comment: string, assigneeId: string | undefined, assigneeExplicit: boolean) {
