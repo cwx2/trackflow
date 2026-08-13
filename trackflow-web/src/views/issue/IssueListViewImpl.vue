@@ -1197,7 +1197,7 @@ const activeQueryParsedFilters = computed(() => {
               fieldKey: 'status',
               operator: 'any_of',
               values: openStatuses.map(s => s.id),
-              valueLabels: openStatuses.map(s => s.name)
+              valueLabels: openStatuses.map(s => s.displayName || s.name)
             })
           }
         }
@@ -1216,7 +1216,7 @@ const activeQueryParsedFilters = computed(() => {
       if (v === '${currentUser}') return '我'
       if (fieldKey === 'status') {
         const s = statusCache.value.find(st => st.id === v || st.code === v)
-        return s ? s.name : v
+        return s ? (s.displayName || s.name) : v
       }
       if (fieldKey === 'priority') return v
       if (fieldKey === 'issueType') return getIssueTypeLabelForRecord(v)

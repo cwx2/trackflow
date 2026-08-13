@@ -49,7 +49,7 @@ export function useDashboardFilter(options: DashboardFilterOptions) {
 
       const statusNames = statusIds.map(id => {
         const s = statusCache.value.find(st => st.id === id)
-        return s?.name || id
+        return s?.displayName || s?.name || id
       })
       chips.push({
         fieldKey: 'status',
@@ -69,7 +69,7 @@ export function useDashboardFilter(options: DashboardFilterOptions) {
           fieldKey: 'status',
           operator: 'any_of',
           values: [matchedStatus.id],
-          valueLabels: [matchedStatus.name]
+          valueLabels: [matchedStatus.displayName || matchedStatus.name]
         })
       }
     }
@@ -84,7 +84,7 @@ export function useDashboardFilter(options: DashboardFilterOptions) {
           fieldKey: 'status',
           operator: 'any_of',
           values: [matchedStatus.id],
-          valueLabels: [matchedStatus.name]
+          valueLabels: [matchedStatus.displayName || matchedStatus.name]
         })
       }
     }
@@ -102,7 +102,7 @@ export function useDashboardFilter(options: DashboardFilterOptions) {
           fieldKey: 'status',
           operator: 'any_of',
           values: [matchedStatus.id],
-          valueLabels: [matchedStatus.name]
+          valueLabels: [matchedStatus.displayName || matchedStatus.name]
         })
       }
     }
@@ -118,7 +118,7 @@ export function useDashboardFilter(options: DashboardFilterOptions) {
           fieldKey: 'status',
           operator: 'any_of',
           values: ids,
-          valueLabels: matchedStatuses.map(s => s.name)
+          valueLabels: matchedStatuses.map(s => s.displayName || s.name)
         })
       }
     }
@@ -328,7 +328,12 @@ export function useDashboardFilter(options: DashboardFilterOptions) {
       chips.push({ fieldKey: 'assignee', operator: 'is', values: [val], valueLabels: [label] })
     }
     if (route.query.statusIdNot) {
-      chips.push({ fieldKey: 'status', operator: 'is_not', values: String(route.query.statusIdNot).split(','), valueLabels: String(route.query.statusIdNot).split(',') })
+      const statusIds = String(route.query.statusIdNot).split(',')
+      const statusLabels = statusIds.map(id => {
+        const s = statusCache.value.find(st => st.id === id)
+        return s?.displayName || s?.name || id
+      })
+      chips.push({ fieldKey: 'status', operator: 'is_not', values: statusIds, valueLabels: statusLabels })
     }
     if (route.query.priorityNot) {
       chips.push({ fieldKey: 'priority', operator: 'is_not', values: String(route.query.priorityNot).split(','), valueLabels: String(route.query.priorityNot).split(',') })
