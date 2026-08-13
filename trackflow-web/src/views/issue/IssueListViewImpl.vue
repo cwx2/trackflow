@@ -629,6 +629,7 @@ import {
 import { loadPriorityOptions } from './composables/usePriorityOptions'
 import { loadIssueTypeOptions } from './composables/useIssueTypeOptions'
 import type { IssueDraft } from './composables'
+import { usePermission as useProjectPermission } from '@/composables/usePermission'
 import { useIssueProjectSubscription } from '@/composables/useWebSocket'
 import { useNavBadge } from '@/composables/useNavBadge'
 import type { IssueRealtimeEvent } from '@/composables/useWebSocket'
@@ -678,29 +679,53 @@ const {
   loadManualOrder, saveOrder: saveManualOrder, discardOrder: discardManualOrder, reset: resetManualOrder
 } = useManualOrder()
 
+// Shared state (declared early for composable dependencies)
+const activeProjectId = ref<string | null>(null)
+
 // Auth & permissions
 const authStore = useAuthStore()
 
+// 项目级权限：当选中特定项目时，加载该项目的权限用于精确控制 UI
+const {
+  canCreateIssue: projectCanCreate,
+  hasPermission: hasActiveProjectPermission
+} = useProjectPermission(() => activeProjectId.value || undefined)
+
 // 用 computed 保持响应式，权限刷新后视图自动更新；deny-by-default（未加载时隐藏操作入口）
+// 当选中特定项目时，使用项目级权限；未选中项目时使用全局导航权限
 const canCreateIssueGlobal = computed(() => {
+  if (authStore.hasGlobalPermission('system:admin')) return true
   if (!authStore.permissionsLoaded) return false
+  if (activeProjectId.value) {
+    // 选中特定项目：按该项目的 issue:create 权限判断
+    return projectCanCreate.value
+  }
+  // 未选中项目（全部项目视图）：使用全局导航权限
   return authStore.canCreateIssue
 })
 
 const canBatchOps = computed(() => {
   if (authStore.hasGlobalPermission('system:admin')) return true
-  if (authStore.permissionsLoaded) return authStore.hasGlobalPermission('nav:batch_ops')
-  return false
+  if (!authStore.permissionsLoaded) return false
+  if (activeProjectId.value) {
+    // 选中特定项目：按该项目的具体写权限判断
+    return hasActiveProjectPermission('issue:edit')
+      || hasActiveProjectPermission('issue:delete')
+      || hasActiveProjectPermission('issue:assign')
+      || hasActiveProjectPermission('issue:change_status')
+  }
+  // 未选中项目：使用全局导航权限
+  return authStore.hasGlobalPermission('nav:batch_ops')
 })
 
 const canViewSprintGlobal = computed(() => {
   if (authStore.hasGlobalPermission('system:admin')) return true
-  if (authStore.permissionsLoaded) return authStore.hasGlobalPermission('nav:sprint_view') || authStore.hasGlobalPermission('nav:sprint_manage')
-  return false
+  if (!authStore.permissionsLoaded) return false
+  if (activeProjectId.value) {
+    return hasActiveProjectPermission('sprint:view')
+  }
+  return authStore.hasGlobalPermission('nav:sprint_view') || authStore.hasGlobalPermission('nav:sprint_manage')
 })
-
-// Shared state (declared early for composable dependencies)
-const activeProjectId = ref<string | null>(null)
 const filterBarRef = ref<InstanceType<typeof FilterBar> | null>(null)
 const filterProject = ref<string | undefined>(undefined)
 const searchKeyword = ref('')
