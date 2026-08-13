@@ -680,18 +680,23 @@ const {
 
 // Auth & permissions
 const authStore = useAuthStore()
-const canCreateIssueGlobal = authStore.canCreateIssue
+
+// 用 computed 保持响应式，权限刷新后视图自动更新；deny-by-default（未加载时隐藏操作入口）
+const canCreateIssueGlobal = computed(() => {
+  if (!authStore.permissionsLoaded) return false
+  return authStore.canCreateIssue
+})
 
 const canBatchOps = computed(() => {
   if (authStore.hasGlobalPermission('system:admin')) return true
   if (authStore.permissionsLoaded) return authStore.hasGlobalPermission('nav:batch_ops')
-  return true
+  return false
 })
 
 const canViewSprintGlobal = computed(() => {
   if (authStore.hasGlobalPermission('system:admin')) return true
   if (authStore.permissionsLoaded) return authStore.hasGlobalPermission('nav:sprint_view') || authStore.hasGlobalPermission('nav:sprint_manage')
-  return true
+  return false
 })
 
 // Shared state (declared early for composable dependencies)
