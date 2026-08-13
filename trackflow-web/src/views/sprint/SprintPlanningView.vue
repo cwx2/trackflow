@@ -290,15 +290,17 @@
               ></textarea>
             </template>
             <template v-else>
-              <div
-                class="sprint-goal-display"
-                :class="{ 'sprint-goal-empty': !sprint.goal, 'sprint-goal-editable': canEditSprint }"
-                @click="canEditSprint && startGoalEdit(sprint)"
-              >
-                <icon-trophy class="sprint-goal-icon" />
-                <span class="sprint-goal-text">{{ sprint.goal || '设置 Sprint 目标...' }}</span>
-                <span v-if="canEditSprint" class="sprint-goal-edit-hint">点击编辑</span>
-              </div>
+              <a-tooltip :content="canEditSprint ? '' : '需要 Sprint 编辑权限'" :disabled="canEditSprint">
+                <div
+                  class="sprint-goal-display"
+                  :class="{ 'sprint-goal-empty': !sprint.goal, 'sprint-goal-editable': canEditSprint }"
+                  @click="handleGoalClick(sprint)"
+                >
+                  <icon-trophy class="sprint-goal-icon" />
+                  <span class="sprint-goal-text">{{ sprint.goal || '设置 Sprint 目标...' }}</span>
+                  <span v-if="canEditSprint" class="sprint-goal-edit-hint">点击编辑</span>
+                </div>
+              </a-tooltip>
             </template>
           </div>
 
@@ -1113,6 +1115,13 @@ const editingGoalSprintId = ref<string | null>(null)
 const editingGoalValue = ref('')
 const goalTextareaRef = ref<HTMLTextAreaElement | null>(null)
 const savingGoalId = ref<string | null>(null)
+
+function handleGoalClick(sprint: SprintVO) {
+  if (canEditSprint.value) {
+    startGoalEdit(sprint)
+  }
+  // 无权限时由 a-tooltip 显示提示，无需额外操作
+}
 
 function startGoalEdit(sprint: SprintVO) {
   editingGoalSprintId.value = sprint.id
