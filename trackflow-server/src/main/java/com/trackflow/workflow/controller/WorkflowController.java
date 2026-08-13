@@ -190,10 +190,11 @@ public class WorkflowController {
 
     /**
      * 获取指定项目的初始状态配置列表。
-     * 用于工作流编辑器展示哪些状态被标记为初始状态。
+     * 用于工作流编辑器展示哪些状态被标记为初始状态，也用于创建工单时确定默认初始状态。
+     * 权限：任何能查看项目工单的用户都可读取（只读端点）。
      */
     @GetMapping("/projects/{projectId}/workflows/initial-statuses")
-    @PreAuthorize("T(com.trackflow.workflow.WorkflowScope).isGlobal(#projectId) ? @perm.checkGlobal('system:admin') : @perm.check(#projectId, 'project:manage_workflow')")
+    @PreAuthorize("T(com.trackflow.workflow.WorkflowScope).isGlobal(#projectId) ? @perm.checkGlobal('system:admin') : @perm.check(#projectId, 'issue:view')")
     public R<List<WorkflowInitialStatusVO>> listInitialStatuses(@PathVariable("projectId") Long projectId) {
         Long effectiveProjectId = WorkflowScope.fromApi(projectId);
         List<WorkflowInitialStatus> configs = workflowService.listInitialStatuses(effectiveProjectId);
