@@ -147,8 +147,7 @@
                 :disabled="savingRoles"
                 @change="() => toggleRole(role.id)"
               >
-                <span class="role-name">{{ role.name }}</span>
-                <span class="role-code">{{ role.code }}</span>
+                <span class="role-name" :title="role.code">{{ role.name }}</span>
               </a-checkbox>
             </div>
           </div>
@@ -890,7 +889,6 @@ onMounted(() => {
 .form-error { display: flex; align-items: center; gap: 6px; padding: 8px 12px; background: var(--tf-danger-bg); border: 1px solid var(--tf-danger-strong); border-radius: var(--radius-md); color: var(--accent-red); font-size: var(--font-size-xs); margin-top: 12px; }
 
 .role-item { margin-bottom: 8px; }
-.role-item .role-code { font-size: var(--font-size-xs); color: var(--text-muted); margin-left: 8px; }
 .role-item .role-name { font-size: var(--font-size-sm); color: var(--text-primary); }
 
 /* Role Panel (inside a-modal) */
