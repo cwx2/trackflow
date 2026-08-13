@@ -43,6 +43,7 @@
           <WidgetCard
             :widget="getOverviewWidgetById(item.i)"
             :is-owner="canEdit && !isArchived"
+            :dashboard-project-id="overviewDashboard?.projectId"
             @edit="editOverviewWidget"
             @delete="deleteOverviewWidget"
             @move="() => {}"

@@ -31,6 +31,8 @@ import { fieldLabelMap } from '@/utils/fieldLabels'
 
 const props = defineProps<{
   config: Record<string, any>
+  /** 仪表盘所属项目 ID（来自 project_overview 仪表盘），用作隐式过滤条件 */
+  dashboardProjectId?: string
 }>()
 
 const emit = defineEmits<{
@@ -125,6 +127,7 @@ async function loadData(_force = false) {
     const config = props.config
     const params: Record<string, any> = {}
     if (config.projectIds && config.projectIds.length > 0) params.projectIds = config.projectIds
+    else if (props.dashboardProjectId) params.projectIds = [props.dashboardProjectId]
     if (config.actions && config.actions.length > 0) params.actions = config.actions
     if (config.userIds && config.userIds.length > 0) params.userIds = config.userIds
     params.limit = config.limit || 10

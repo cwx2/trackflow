@@ -105,6 +105,8 @@ import { getWidget } from '@/widgets'
 const props = defineProps<{
   widget: DashboardWidgetVO | undefined
   isOwner: boolean
+  /** 仪表盘所属项目 ID（project_overview 类型时有值），传递给子 Widget 作为隐式过滤条件 */
+  dashboardProjectId?: string
 }>()
 
 defineEmits<{
@@ -210,11 +212,12 @@ const widgetProps = computed(() => {
     return {
       config,
       reportId: props.widget.reportId,
-      widgetType
+      widgetType,
+      dashboardProjectId: props.dashboardProjectId
     }
   }
 
-  return { config }
+  return { config, dashboardProjectId: props.dashboardProjectId }
 })
 
 // ─── 事件处理 ─────────────────────────────────────────

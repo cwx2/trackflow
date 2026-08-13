@@ -1,6 +1,6 @@
 <template>
   <!-- 未配置项目时显示引导 -->
-  <div v-if="!config.projectId" class="widget-configure-hint">
+  <div v-if="!effectiveProjectId" class="widget-configure-hint">
     <icon-calendar :size="32" class="hint-icon" />
     <span class="hint-text">点击「编辑配置」选择项目</span>
   </div>
@@ -65,6 +65,8 @@ import type { IssueVO } from '@/api/types'
 
 const props = defineProps<{
   config: Record<string, any>
+  /** 仪表盘所属项目 ID（来自 project_overview 仪表盘），用作隐式过滤条件 */
+  dashboardProjectId?: string
 }>()
 
 const emit = defineEmits<{
@@ -78,6 +80,9 @@ const router = useRouter()
 const calendarYear = ref(new Date().getFullYear())
 const calendarMonth = ref(new Date().getMonth() + 1)
 const calendarIssueMap = ref<Map<string, IssueVO[]>>(new Map())
+
+/** 有效项目 ID：config 中的显式配置优先，否则使用仪表盘级别的项目 ID */
+const effectiveProjectId = computed(() => props.config.projectId || props.dashboardProjectId)
 
 interface CalendarCell {
   date: string
@@ -124,8 +129,8 @@ function navigateToIssue(issueId: string) {
 }
 
 async function loadCalendarData() {
-  const config = props.config
-  if (!config.projectId) {
+  const projId = effectiveProjectId.value
+  if (!projId) {
     calendarIssueMap.value = new Map()
     return
   }
@@ -138,7 +143,7 @@ async function loadCalendarData() {
     const dueBefore = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
 
     const res = await issueApi.list({
-      projectId: config.projectId,
+      projectId: projId,
       dueAfter,
       dueBefore,
       pageSize: 100,
@@ -166,7 +171,7 @@ async function loadCalendarData() {
 }
 
 async function loadData(_force = false) {
-  if (!props.config.projectId) {
+  if (!effectiveProjectId.value) {
     emit('loaded')
     return
   }

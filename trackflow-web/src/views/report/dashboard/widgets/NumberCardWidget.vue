@@ -16,6 +16,8 @@ import { CHART_PALETTE, SERIES_ACCENT, SERIES_SUCCESS, SERIES_DANGER, SERIES_WAR
 
 const props = defineProps<{
   config: Record<string, any>
+  /** 仪表盘所属项目 ID（来自 project_overview 仪表盘），用作隐式过滤条件 */
+  dashboardProjectId?: string
 }>()
 
 const emit = defineEmits<{
@@ -90,6 +92,7 @@ async function loadData(_force = false) {
     try {
       const params: Record<string, string> = {}
       if (config.projectId) params.projectId = config.projectId
+      else if (props.dashboardProjectId) params.projectId = props.dashboardProjectId
       const res = await reportStatisticsApi.dashboard(params, { _silent403: true })
       overviewData.value = res.data?.overview || null
       emit('loaded')

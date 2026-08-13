@@ -31,6 +31,8 @@ const props = defineProps<{
   config: Record<string, any>
   reportId?: string | null
   widgetType: 'report' | 'report_distribution'
+  /** 仪表盘所属项目 ID（来自 project_overview 仪表盘） */
+  dashboardProjectId?: string
 }>()
 
 const emit = defineEmits<{

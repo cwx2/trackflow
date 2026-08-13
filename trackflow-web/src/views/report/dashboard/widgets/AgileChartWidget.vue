@@ -25,6 +25,8 @@ use([CanvasRenderer, LineChart, TooltipComponent, LegendComponent, GridComponent
 
 const props = defineProps<{
   config: Record<string, any>
+  /** 仪表盘所属项目 ID（来自 project_overview 仪表盘），用作隐式过滤条件 */
+  dashboardProjectId?: string
 }>()
 
 const emit = defineEmits<{
@@ -168,7 +170,7 @@ function buildCumulativeFlowOption(data: { dates: string[]; series: Array<{ name
 async function loadData(_force = false) {
   const config = props.config
   const sprintId = config.sprintId
-  const projectId = config.projectId
+  const projectId = config.projectId || props.dashboardProjectId
   const chartType = config.chartType || 'burndown'
 
   if (!sprintId && !projectId) {

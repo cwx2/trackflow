@@ -24,6 +24,8 @@ import { parseWidgetFilterQuery, buildIssueListRoute } from '../utils/widgetFilt
 
 const props = defineProps<{
   config: Record<string, any>
+  /** 仪表盘所属项目 ID（来自 project_overview 仪表盘），用作隐式过滤条件 */
+  dashboardProjectId?: string
 }>()
 
 const emit = defineEmits<{
@@ -106,6 +108,7 @@ async function loadData(_force = false) {
       params.assignedToMe = 'true'
     }
     if (config.projectId) params.projectId = config.projectId
+    else if (props.dashboardProjectId) params.projectId = props.dashboardProjectId
     params.sort = config.sort || '-updatedAt'
 
     // Parse advanced filter query and merge into params

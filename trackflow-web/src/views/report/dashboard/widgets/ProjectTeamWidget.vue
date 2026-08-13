@@ -49,7 +49,7 @@
 
   <div v-else class="widget-configure-hint">
     <icon-user-group :size="32" class="hint-icon" />
-    <span class="hint-text">{{ !config.projectId ? '点击「编辑配置」选择项目' : '该项目暂无成员' }}</span>
+    <span class="hint-text">{{ !(config.projectId || dashboardProjectId) ? '点击「编辑配置」选择项目' : '该项目暂无成员' }}</span>
   </div>
 </template>
 
@@ -63,6 +63,8 @@ import { UserAvatar } from '@/components/base'
 
 const props = defineProps<{
   config: Record<string, any>
+  /** 仪表盘所属项目 ID（来自 project_overview 仪表盘），用作隐式过滤条件 */
+  dashboardProjectId?: string
 }>()
 
 const emit = defineEmits<{
@@ -108,15 +110,16 @@ function goToMemberIssues(member: ProjectTeamMemberVO) {
     assignee: member.userId,
     label: `${name} 的未关闭工单`
   }
-  if (props.config.projectId) {
-    query.projectId = props.config.projectId
+  const projectId = props.config.projectId || props.dashboardProjectId
+  if (projectId) {
+    query.projectId = projectId
   }
   router.push({ path: '/issues', query })
 }
 
 async function loadData(_force = false) {
   try {
-    const projectId = props.config.projectId
+    const projectId = props.config.projectId || props.dashboardProjectId
     if (!projectId) {
       teamMembers.value = []
       emit('loaded')

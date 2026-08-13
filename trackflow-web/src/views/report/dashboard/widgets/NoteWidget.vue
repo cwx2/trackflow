@@ -12,6 +12,8 @@ import { computed } from 'vue'
 
 const props = defineProps<{
   config: Record<string, any>
+  /** 仪表盘所属项目 ID（来自 project_overview 仪表盘） */
+  dashboardProjectId?: string
 }>()
 
 const content = computed(() => props.config.content || '')

@@ -30,6 +30,10 @@ export interface DashboardDetailVO {
   layoutVersion: number
   /** 是否为系统默认仪表盘 */
   isSystemDefault: boolean
+  /** 仪表盘类型：personal / project_overview */
+  dashboardType?: string
+  /** 所属项目 ID（project_overview 类型时有值） */
+  projectId?: string
   shareCount: number
   createdAt: string
   updatedAt: string
