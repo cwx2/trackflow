@@ -421,12 +421,15 @@ public class BoardColumnService {
                 // 标记：如果隐藏且有工单使用该状态
                 vo.setHasHiddenIssues(!config.getVisible() && usedStatusIds.contains(status.getId()));
             } else {
-                // 新增的全局状态（没有配置记录）：默认不可见
+                // 新增的全局状态（没有配置记录）：
+                // 如果该状态已有工单或在项目工作流中，自动设为可见（防止工单在看板上"消失"）
                 boolean hasIssues = usedStatusIds.contains(status.getId());
-                vo.setVisible(false);
+                boolean inProjectWorkflow = workflowStatusIds.contains(status.getId());
+                boolean autoVisible = hasIssues || inProjectWorkflow;
+                vo.setVisible(autoVisible);
                 vo.setSortOrder(status.getSortOrder() + 1000);
                 vo.setCollapsed(false);
-                vo.setHasHiddenIssues(hasIssues);
+                vo.setHasHiddenIssues(false);
             }
 
             // 新增字段
