@@ -7,8 +7,8 @@
       </div>
       <div class="activity-body">
         <span class="activity-action">{{ formatActivityAction(item.action, item.fieldName) }}</span>
-        <span class="activity-issue">{{ item.issueKey }}</span>
-        <span v-if="item.issueTitle" class="activity-issue-title">{{ item.issueTitle }}</span>
+        <router-link :to="`/issues/${item.issueKey}`" class="activity-issue" @click.stop>{{ item.issueKey }}</router-link>
+        <router-link v-if="item.issueTitle" :to="`/issues/${item.issueKey}`" class="activity-issue-title" @click.stop>{{ item.issueTitle }}</router-link>
       </div>
       <div v-if="item.oldValue || item.newValue" class="activity-change">
         <span v-if="item.oldValue" class="change-old">{{ item.oldValue }}</span>
@@ -202,15 +202,30 @@ defineExpose({ loadData })
   font-weight: 500;
   color: var(--tf-accent);
   white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+  transition: text-decoration 0.15s;
+}
+
+.activity-issue:hover {
+  text-decoration: underline;
 }
 
 .activity-issue-title {
   font-size: 11px;
-  color: var(--tf-text-tertiary);
+  color: var(--tf-text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 200px;
+  text-decoration: none;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.activity-issue-title:hover {
+  color: var(--tf-accent);
+  text-decoration: underline;
 }
 
 .activity-change {
