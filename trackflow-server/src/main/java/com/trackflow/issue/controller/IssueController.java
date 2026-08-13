@@ -563,9 +563,10 @@ public class IssueController {
     }
 
     /**
-     * 为搜索结果填充 matchContext 字段。
+     * 为搜索结果填充 matchContext 和 matchSource 字段。
      * 当关键词匹配来自描述（而非标题）时，提取匹配位置附近的上下文片段，
      * 帮助用户理解为什么该工单出现在搜索结果中。
+     * matchSource 标识匹配来源（description/issueKey），前端据此展示不同的视觉样式。
      */
     private void fillMatchContext(List<Issue> issues, List<IssueVO> voList, String keyword) {
         String lowerKeyword = keyword.toLowerCase();
@@ -581,9 +582,10 @@ public class IssueController {
             // Try to extract context from description
             String description = issue.getDescription();
             if (description != null && !description.isBlank()) {
-                String context = extractSnippet(description, lowerKeyword, 120);
+                String context = extractSnippet(description, lowerKeyword, 80);
                 if (context != null) {
-                    vo.setMatchContext("描述: " + context);
+                    vo.setMatchContext(context);
+                    vo.setMatchSource("description");
                     continue;
                 }
             }
@@ -591,7 +593,8 @@ public class IssueController {
             // Provide a hint for issue_key match
             String issueKey = issue.getIssueKey();
             if (issueKey != null && issueKey.toLowerCase().contains(lowerKeyword)) {
-                vo.setMatchContext("工单编号匹配: " + issueKey);
+                vo.setMatchContext(issueKey);
+                vo.setMatchSource("issueKey");
             }
             // Note: assignee name match context is not easily extractable here without
             // an extra query; the highlight on title is the primary UX improvement.

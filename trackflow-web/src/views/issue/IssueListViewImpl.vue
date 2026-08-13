@@ -260,7 +260,10 @@
         <template #title-cell="{ record }">
           <span v-if="searchKeyword" class="issue-title-text" v-html="highlightKeyword(record.title, searchKeyword)"></span>
           <span v-else class="issue-title-text">{{ record.title }}</span>
-          <span v-if="searchKeyword && record.matchContext" class="issue-match-context" v-html="highlightKeyword(record.matchContext, searchKeyword)"></span>
+          <span v-if="searchKeyword && record.matchContext" class="issue-match-context">
+            <span class="match-source-label">{{ record.matchSource === 'issueKey' ? '编号' : '描述' }}</span>
+            <span v-html="highlightKeyword(record.matchContext, searchKeyword)"></span>
+          </span>
           <template v-if="record.tags && record.tags.length > 0">
             <span
               v-for="tag in record.tags.slice(0, 3)"
@@ -1593,7 +1596,8 @@ onBeforeRouteLeave((_to, _from, next) => {
 .issue-key:hover { text-decoration: underline; }
 .issue-title-text { color: var(--tf-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .issue-title-text :deep(.search-highlight) { background: var(--tf-highlight-bg, rgba(255, 200, 50, 0.35)); color: inherit; border-radius: 2px; padding: 0 1px; }
-.issue-match-context { display: block; font-size: 11px; color: var(--tf-text-tertiary); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.issue-match-context { display: block; font-size: 11px; color: var(--tf-text-quaternary, var(--tf-text-tertiary)); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; line-height: 1.3; }
+.issue-match-context .match-source-label { display: inline-block; font-size: 10px; color: var(--tf-text-quaternary, var(--tf-text-tertiary)); background: var(--tf-bg-hover, rgba(255,255,255,0.05)); border-radius: 2px; padding: 0 4px; margin-right: 4px; vertical-align: baseline; }
 .issue-match-context :deep(.search-highlight) { background: var(--tf-highlight-bg, rgba(255, 200, 50, 0.35)); color: inherit; border-radius: 2px; padding: 0 1px; }
 
 /* Tag badges (inline in title cell) */

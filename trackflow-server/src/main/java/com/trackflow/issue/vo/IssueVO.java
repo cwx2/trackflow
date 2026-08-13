@@ -91,4 +91,10 @@ public class IssueVO {
      * 帮助用户理解为什么该工单出现在搜索结果中。
      */
     private String matchContext;
+
+    /**
+     * 搜索匹配来源类型（仅关键词搜索时填充）。
+     * 可选值：description / issueKey，用于前端区分显示样式。
+     */
+    private String matchSource;
 }

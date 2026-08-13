@@ -58,7 +58,10 @@
     <!-- Title -->
     <span v-if="searchKeyword" class="item-title" v-html="highlightKeyword(issue.title, searchKeyword)"></span>
     <span v-else class="item-title">{{ issue.title }}</span>
-    <span v-if="searchKeyword && issue.matchContext" class="item-match-context" v-html="highlightKeyword(issue.matchContext, searchKeyword)"></span>
+    <span v-if="searchKeyword && issue.matchContext" class="item-match-context">
+      <span class="match-source-label">{{ issue.matchSource === 'issueKey' ? '编号' : '描述' }}</span>
+      <span v-html="highlightKeyword(issue.matchContext, searchKeyword)"></span>
+    </span>
 
     <!-- Tags (colored badges, max 3 shown) -->
     <template v-if="issue.tags && issue.tags.length > 0">
@@ -551,12 +554,24 @@ function truncateDescription(desc?: string): string {
   width: 100%;
   display: block;
   font-size: 11px;
-  color: var(--tf-text-tertiary, var(--color-text-3));
+  color: var(--tf-text-quaternary, var(--tf-text-tertiary, var(--color-text-3)));
   margin-top: 2px;
   padding-left: 46px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  line-height: 1.3;
+}
+
+.item-match-context .match-source-label {
+  display: inline-block;
+  font-size: 10px;
+  color: var(--tf-text-quaternary, var(--tf-text-tertiary, var(--color-text-3)));
+  background: var(--tf-bg-hover, rgba(255,255,255,0.05));
+  border-radius: 2px;
+  padding: 0 4px;
+  margin-right: 4px;
+  vertical-align: baseline;
 }
 
 .item-match-context :deep(.search-highlight) {

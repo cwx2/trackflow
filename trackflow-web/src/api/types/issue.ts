@@ -69,6 +69,8 @@ export interface IssueVO {
   tags?: IssueTagVO[]
   /** 搜索匹配上下文片段（仅关键词搜索时由后端填充） */
   matchContext?: string
+  /** 搜索匹配来源类型：description / issueKey（仅关键词搜索时由后端填充） */
+  matchSource?: string
 }
 
 export interface IssueDetailVO extends IssueVO {
