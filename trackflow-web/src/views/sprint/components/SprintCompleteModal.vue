@@ -2,7 +2,7 @@
   <a-modal
     v-model:visible="localVisible"
     :title="`完成迭代：${sprintName}`"
-    :width="560"
+    :width="640"
     :ok-loading="completing"
     :ok-text="okButtonText"
     @ok="confirmComplete"
@@ -36,12 +36,22 @@
       <!-- 未完成工单列表 -->
       <div class="open-issues-list">
         <div v-for="issue in preview.openIssues" :key="issue.id" class="open-issue-item">
-          <span class="issue-key">{{ issue.issueKey }}</span>
+          <a class="issue-key" :href="`/issue/${issue.id}`" target="_blank" @click.stop>{{ issue.issueKey }}</a>
           <span class="issue-title">{{ issue.title }}</span>
+          <IssuePriorityBadge
+            v-if="issue.priority"
+            :priority="issue.priority"
+            :color="issue.priorityColor"
+            mode="dot"
+            size="small"
+          />
           <IssueStatusTag
             :name="issue.statusName"
             :color="issue.statusColor || DEFAULT_STATUS_COLOR"
           />
+          <span class="issue-due-date" :class="{ overdue: isOverdue(issue.dueDate) }" v-if="issue.dueDate">
+            <icon-calendar class="due-icon" />{{ formatDueDate(issue.dueDate) }}
+          </span>
           <span class="issue-assignee" v-if="issue.assigneeName">{{ issue.assigneeName }}</span>
         </div>
       </div>
@@ -93,9 +103,9 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { Message } from '@arco-design/web-vue'
-import { IconExclamationCircle, IconCheckCircle } from '@arco-design/web-vue/es/icon'
+import { IconExclamationCircle, IconCheckCircle, IconCalendar } from '@arco-design/web-vue/es/icon'
 import { sprintApi } from '@/api'
-import { IssueStatusTag } from '@/components/base'
+import { IssueStatusTag, IssuePriorityBadge } from '@/components/base'
 import { DEFAULT_STATUS_COLOR, getSprintStatusColor } from '@/utils/uiColors'
 import type { SprintVO, CompletionPreviewVO } from '@/api/types'
 
@@ -127,6 +137,23 @@ const okButtonText = computed(() => {
   if (preview.value.openIssues.length > 0) return '处理并完成'
   return '确认完成'
 })
+
+/** 判断日期是否已过期 */
+function isOverdue(dateStr?: string): boolean {
+  if (!dateStr) return false
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  return new Date(dateStr) < today
+}
+
+/** 格式化截止日期为简短显示 */
+function formatDueDate(dateStr?: string): string {
+  if (!dateStr) return ''
+  const date = new Date(dateStr)
+  const month = date.getMonth() + 1
+  const day = date.getDate()
+  return `${month}/${day}`
+}
 
 watch(() => props.visible, async (val) => {
   if (val && props.sprint) {
@@ -215,7 +242,7 @@ async function confirmComplete() {
 .warning-icon { font-size: 16px; color: var(--tf-warning); flex-shrink: 0; }
 
 .open-issues-list {
-  max-height: 200px;
+  max-height: 240px;
   overflow-y: auto;
   border: 1px solid var(--color-border);
   border-radius: 6px;
@@ -229,9 +256,28 @@ async function confirmComplete() {
   border-bottom: 1px solid var(--color-border);
 }
 .open-issue-item:last-child { border-bottom: none; }
-.issue-key { color: var(--color-text-3); font-family: monospace; font-size: 11px; flex-shrink: 0; }
-.issue-title { color: var(--color-text-1); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.issue-assignee { color: var(--color-text-3); font-size: 11px; flex-shrink: 0; }
+.issue-key {
+  color: var(--color-text-3);
+  font-family: monospace;
+  font-size: 11px;
+  flex-shrink: 0;
+  text-decoration: none;
+  transition: color 0.15s;
+}
+.issue-key:hover { color: var(--tf-accent, rgb(var(--primary-6))); }
+.issue-title { color: var(--color-text-1); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.issue-due-date {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  color: var(--color-text-3);
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.issue-due-date .due-icon { font-size: 12px; }
+.issue-due-date.overdue { color: var(--tf-error, rgb(var(--danger-6))); font-weight: 500; }
+.issue-assignee { color: var(--color-text-3); font-size: 11px; flex-shrink: 0; max-width: 64px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .move-option-section { display: flex; flex-direction: column; gap: 12px; }
 .move-option-label { font-size: 13px; font-weight: 500; color: var(--color-text-1); margin: 0; }

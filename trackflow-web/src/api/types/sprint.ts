@@ -153,9 +153,12 @@ export interface CompletionPreviewIssue {
   issueKey: string
   title: string
   priority: string
+  priorityColor?: string
   statusName: string
   statusColor: string
   assigneeName?: string
+  dueDate?: string
+  estimatedHours?: number
 }
 
 export interface CompletionPreviewTarget {

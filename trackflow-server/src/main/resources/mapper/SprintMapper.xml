@@ -215,9 +215,12 @@
         <result property="issueKey" column="issue_key"/>
         <result property="title" column="title"/>
         <result property="priority" column="priority"/>
+        <result property="priorityColor" column="priority_color"/>
         <result property="statusName" column="status_name"/>
         <result property="statusColor" column="status_color"/>
         <result property="assigneeName" column="assignee_name"/>
+        <result property="dueDate" column="due_date"/>
+        <result property="estimatedHours" column="estimated_hours"/>
     </resultMap>
 
     <select id="selectOpenIssuesForCompletion" resultMap="openIssueItemMap">
@@ -226,12 +229,16 @@
             i.issue_key,
             i.title,
             i.priority,
+            cfo.color AS priority_color,
             ist.name AS status_name,
             ist.color AS status_color,
-            u.display_name AS assignee_name
+            u.display_name AS assignee_name,
+            i.due_date,
+            i.estimated_hours
         FROM issue i
         JOIN issue_status ist ON ist.id = i.status_id
         LEFT JOIN sys_user u ON u.id = i.assignee_id
+        LEFT JOIN custom_field_option cfo ON cfo.id = i.priority_option_id
         WHERE i.sprint_id = #{sprintId}
           AND i.deleted_at IS NULL
           AND ist.is_closed = false

@@ -28,9 +28,12 @@ public class CompletionPreviewVO {
         private String issueKey;
         private String title;
         private String priority;
+        private String priorityColor;
         private String statusName;
         private String statusColor;
         private String assigneeName;
+        private java.time.LocalDate dueDate;
+        private java.math.BigDecimal estimatedHours;
     }
 
     @Data
