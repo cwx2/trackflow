@@ -154,7 +154,7 @@
                     <span class="card-due-text">{{ formatDueDate(issue.dueDate) }}</span>
                   </div>
                   <div class="card-meta">
-                    <span class="card-type">{{ issue.issueType }}</span>
+                    <span class="card-type"><span class="type-color-dot" :style="{ background: issue.issueTypeColor || getIssueTypeColorFallback(issue.issueType) }"></span>{{ issue.issueType }}</span>
                     <span v-if="issue.estimatedHours" class="card-estimation"><icon-clock-circle class="estimation-icon" /> {{ issue.estimatedHours }}h</span>
                     <span v-if="issue.assigneeName" class="card-assignee">{{ issue.assigneeName }}</span>
                   </div>
@@ -339,7 +339,7 @@
                     <span class="card-due-text">{{ formatDueDate(issue.dueDate) }}</span>
                   </div>
                   <div class="card-meta">
-                    <span class="card-type">{{ issue.issueType }}</span>
+                    <span class="card-type"><span class="type-color-dot" :style="{ background: issue.issueTypeColor || getIssueTypeColorFallback(issue.issueType) }"></span>{{ issue.issueType }}</span>
                     <span v-if="issue.estimatedHours" class="card-estimation"><icon-clock-circle class="estimation-icon" /> {{ issue.estimatedHours }}h</span>
                     <span v-if="issue.assigneeName" class="card-assignee">{{ issue.assigneeName }}</span>
                   </div>
@@ -457,6 +457,7 @@ import { useProjectStore } from '@/stores/project'
 import { useProjectList } from '@/composables/useProjectList'
 import { usePermission } from '@/composables/usePermission'
 import { getPriorityColor } from '@/composables/usePriorityOptions'
+import { getIssueTypeColor } from '@/views/issue/composables/useIssueTypeOptions'
 import IssuePriorityBadge from '@/components/base/IssuePriorityBadge.vue'
 import IssueCreatePanel from '@/components/IssueCreatePanel.vue'
 import { EmptyState } from '@/components/base'
@@ -542,6 +543,10 @@ const activeFilterCount = computed(() => {
 })
 
 // ===== Methods =====
+
+function getIssueTypeColorFallback(issueType: string | undefined): string {
+  return getIssueTypeColor(issueType, selectedProject.value || undefined)
+}
 
 function getSprintIssues(sprintId: string): IssueVO[] {
   return sprintIssuesMap.value.get(sprintId) || []
@@ -1491,6 +1496,15 @@ onMounted(async () => {
   background: var(--color-fill-2);
   padding: 1px 5px;
   border-radius: 3px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.type-color-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  flex-shrink: 0;
 }
 .card-assignee {
   font-size: 10px;
