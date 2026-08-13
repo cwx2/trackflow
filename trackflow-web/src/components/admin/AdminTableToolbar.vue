@@ -8,7 +8,8 @@
       allow-clear
       :style="{ width: typeof searchWidth === 'number' ? `${searchWidth}px` : (searchWidth || '280px') }"
       @input="modelValue = $event"
-      @search="$emit('search', $event)"
+      @search="$emit('search', modelValue)"
+      @press-enter="$emit('search', modelValue)"
       @clear="$emit('clear')"
     />
 
