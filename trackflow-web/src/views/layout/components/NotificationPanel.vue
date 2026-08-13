@@ -101,7 +101,7 @@
               >
                 <!-- 分组头部（多条通知时显示） -->
                 <div v-if="group.items.length > 1 && group.resourceType" class="group-header">
-                  <span class="group-title">{{ group.resourceTitle }}</span>
+                  <span class="group-title" :title="group.resourceTitle">{{ group.resourceTitle }}</span>
                   <span class="group-count">{{ group.items.length }} 条通知</span>
                   <button
                     v-if="group.resourceType === 'issue'"
@@ -333,8 +333,9 @@ const groupedNotifications = computed<NotificationGroup[]>(() => {
   return groups
 })
 
-/** 从通知标题中提取资源标识 */
+/** 从通知中提取资源标识（优先使用后端返回的 resourceTitle，含工单编号+标题） */
 function extractResourceTitle(item: NotificationVO): string {
+  if (item.resourceTitle) return item.resourceTitle
   const match = item.title.match(/^([A-Z0-9]+-\d+)/)
   return match ? match[1] : item.title.split(' ')[0]
 }
@@ -672,10 +673,16 @@ function handleDeleteAllRead() {
 .group-title {
   font-weight: 600;
   color: var(--tf-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 1;
 }
 
 .group-count {
   color: var(--tf-text-tertiary);
+  flex-shrink: 0;
 }
 
 .group-mute-btn {

@@ -15,6 +15,8 @@ import com.trackflow.integration.mapper.NotificationMapper;
 import com.trackflow.integration.vo.NotificationVO;
 import com.trackflow.integration.vo.CategoryUnreadCountVO;
 import com.trackflow.integration.converter.NotificationConverter;
+import com.trackflow.issue.entity.Issue;
+import com.trackflow.issue.mapper.IssueMapper;
 import com.trackflow.system.entity.SysUser;
 import com.trackflow.system.mapper.SysUserMapper;
 import com.trackflow.system.service.SystemSettingService;
@@ -37,6 +39,7 @@ public class NotificationService {
 
     private final NotificationMapper notificationMapper;
     private final SysUserMapper sysUserMapper;
+    private final IssueMapper issueMapper;
     private final NotificationConverter notificationConverter;
     private final MutedThreadService mutedThreadService;
     private final EmailSendService emailSendService;
@@ -712,6 +715,17 @@ public class NotificationService {
                 .collect(Collectors.toSet());
         Set<Long> mutedResourceIds = mutedThreadService.getMutedResourceIds(userId, "issue", resourceIds);
 
+        // 批量查询工单标题（resourceType=issue 的通知需要展示工单标题）
+        Set<Long> issueResourceIds = records.stream()
+                .filter(n -> "issue".equals(n.getResourceType()) && n.getResourceId() != null)
+                .map(Notification::getResourceId)
+                .collect(Collectors.toSet());
+        Map<Long, Issue> issueMap = Collections.emptyMap();
+        if (!issueResourceIds.isEmpty()) {
+            List<Issue> issues = issueMapper.selectBatchIds(issueResourceIds);
+            issueMap = issues.stream().collect(Collectors.toMap(Issue::getId, i -> i));
+        }
+
         // 转换为 VO 并填充 actor 信息和静音状态
         List<NotificationVO> voList = notificationConverter.toVOList(records);
         for (int i = 0; i < voList.size(); i++) {
@@ -727,6 +741,13 @@ public class NotificationService {
             }
             // 设置静音状态
             vo.setResourceMuted(record.getResourceId() != null && mutedResourceIds.contains(record.getResourceId()));
+            // 设置资源标题（工单标题）
+            if ("issue".equals(record.getResourceType()) && record.getResourceId() != null) {
+                Issue issue = issueMap.get(record.getResourceId());
+                if (issue != null) {
+                    vo.setResourceTitle(issue.getIssueKey() + " " + issue.getTitle());
+                }
+            }
             // 设置 reason 中文标签
             if (record.getReason() != null && !record.getReason().isBlank()) {
                 try {

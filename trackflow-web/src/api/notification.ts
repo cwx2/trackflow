@@ -61,6 +61,8 @@ export interface NotificationVO {
   resourceId?: string
   /** 资源直链路径（前端路由相对路径），如 /issues/DE4-123#c_456 */
   resourceUrl?: string
+  /** 资源标题（如工单 Key + 标题），后端批量填充 */
+  resourceTitle?: string
   /** 来源子资源 ID（如评论 ID），前端用于 hash 精准定位 */
   sourceId?: string
   isRead: boolean
