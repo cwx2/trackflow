@@ -207,8 +207,7 @@
               :checked="currentRoleIds.includes(String(role.id))"
               @change="toggleRole(role.id)"
             />
-            <span class="role-name">{{ role.name }}</span>
-            <span class="role-code">{{ role.code }}</span>
+            <span class="role-name" :title="role.code">{{ role.name }}</span>
           </label>
         </div>
       </div>
@@ -918,10 +917,6 @@ onMounted(() => {
 }
 .role-check input { accent-color: var(--accent-blue); }
 .role-name { flex: 1; }
-.role-code {
-  font-size: var(--font-size-xs);
-  color: var(--text-muted);
-}
 
 /* 弹窗 footer（赋予项目角色） */
 .modal-footer {
