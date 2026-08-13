@@ -1,7 +1,7 @@
 ﻿<template>
   <AdminPageLayout title="规则引擎" subtitle="配置自动化规则，实现工单计分与统计">
     <template #actions>
-      <a-button type="primary" @click="showCreateForm">
+      <a-button type="primary" aria-label="创建规则" @click="showCreateForm">
         <template #icon><icon-plus /></template>
         创建规则
       </a-button>

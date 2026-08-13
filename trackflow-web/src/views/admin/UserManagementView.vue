@@ -1,7 +1,7 @@
 ﻿<template>
   <AdminPageLayout title="用户管理" subtitle="管理系统所有用户的账号、角色和权限">
     <template #actions>
-      <a-button type="primary" size="small" @click="showCreateDialog = true">
+      <a-button type="primary" size="small" aria-label="新建用户" @click="showCreateDialog = true">
         <template #icon><icon-plus /></template>
         新建用户
       </a-button>

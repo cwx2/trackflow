@@ -48,7 +48,7 @@
         </template>
         <template v-else>保存工作流</template>
       </a-button>
-      <a-button @click="showHistory = true">
+      <a-button aria-label="变更历史" @click="showHistory = true">
         <template #icon><icon-history /></template>
         变更历史
       </a-button>

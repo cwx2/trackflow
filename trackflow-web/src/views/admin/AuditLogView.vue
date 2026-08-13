@@ -1,7 +1,7 @@
 <template>
   <AdminPageLayout title="审计日志">
     <template #actions>
-      <a-button size="small" @click="exportJson" :loading="exporting">
+      <a-button size="small" aria-label="导出 JSON" @click="exportJson" :loading="exporting">
         <template #icon><icon-download /></template>
         导出 JSON
       </a-button>

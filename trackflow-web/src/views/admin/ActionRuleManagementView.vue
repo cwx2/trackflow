@@ -1,7 +1,7 @@
 <template>
   <AdminPageLayout title="自定义动作" subtitle="配置工单快捷动作按钮，如「一键延期」、「标记为重复」、「升级优先级」">
     <template #actions>
-      <a-button type="primary" @click="showCreateForm">
+      <a-button type="primary" aria-label="创建动作" @click="showCreateForm">
         <template #icon><icon-plus /></template>
         创建动作
       </a-button>

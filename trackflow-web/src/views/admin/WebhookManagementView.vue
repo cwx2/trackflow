@@ -1,7 +1,7 @@
 ﻿<template>
   <AdminPageLayout title="Webhook 管理" subtitle="管理项目的 Webhook 通知，当事件发生时自动推送到外部系统。">
     <template #actions>
-      <a-button v-if="selectedProjectId" type="primary" size="small" @click="openCreateDialog">
+      <a-button v-if="selectedProjectId" type="primary" size="small" aria-label="新建 Webhook" @click="openCreateDialog">
         <template #icon><icon-plus /></template>
         新建 Webhook
       </a-button>

@@ -1,7 +1,7 @@
 <template>
   <AdminPageLayout title="角色管理" subtitle="管理系统中所有角色及其权限配置">
     <template #actions>
-      <a-button type="primary" size="small" @click="openCreateDialog">
+      <a-button type="primary" size="small" aria-label="新建角色" @click="openCreateDialog">
         <template #icon><icon-plus /></template>
         新建角色
       </a-button>

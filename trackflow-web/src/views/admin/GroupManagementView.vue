@@ -1,7 +1,7 @@
 ﻿<template>
   <AdminPageLayout title="用户组管理" subtitle="通过用户组批量管理团队权限">
     <template #actions>
-      <a-button type="primary" size="small" @click="openCreateDialog">
+      <a-button type="primary" size="small" aria-label="新建用户组" @click="openCreateDialog">
         <template #icon><icon-plus /></template>
         新建用户组
       </a-button>

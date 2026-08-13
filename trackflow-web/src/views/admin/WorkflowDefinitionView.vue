@@ -1,7 +1,7 @@
 ﻿<template>
   <AdminPageLayout title="工作流">
     <template #actions>
-      <a-button type="primary" @click="showCreateModal = true">
+      <a-button type="primary" aria-label="创建工作流" @click="showCreateModal = true">
         <template #icon><icon-plus /></template>
         创建工作流
       </a-button>

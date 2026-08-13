@@ -1,7 +1,7 @@
 <template>
   <AdminPageLayout title="自定义字段管理">
     <template #actions>
-      <a-button v-if="activeTab === 'list'" type="primary" size="small" @click="openCreate">
+      <a-button v-if="activeTab === 'list'" type="primary" size="small" aria-label="创建自定义字段" @click="openCreate">
         <template #icon><icon-plus /></template>
         创建自定义字段
       </a-button>

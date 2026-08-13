@@ -1,7 +1,7 @@
 ﻿<template>
   <AdminPageLayout title="组织管理" subtitle="管理组织结构，对项目和团队进行分组">
     <template #actions>
-      <a-button type="primary" size="small" @click="openCreateDialog">
+      <a-button type="primary" size="small" aria-label="新建组织" @click="openCreateDialog">
         <template #icon><icon-plus /></template>
         新建组织
       </a-button>
