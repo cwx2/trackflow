@@ -126,6 +126,7 @@
       :sprint-id="sprint.id"
       :sprint-name="sprint.name"
       :project-key="projectKey || sprint.projectKey"
+      :default-expanded="isActive"
       @view-issues="(filter: string) => $emit('viewIssuesFiltered', sprint, filter)"
     />
 

@@ -95,30 +95,41 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, watch, onMounted } from 'vue'
 import { sprintApi } from '@/api'
 import type { SprintAssigneeDistributionVO } from '@/api/types'
 import { UserAvatar, DataContainer } from '@/components/base'
 import { IconDown, IconRight } from '@arco-design/web-vue/es/icon'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   sprintId: string
   sprintName: string
   projectKey?: string
-}>()
+  /** 是否默认展开（Active Sprint 默认展开，让技术负责人直接看到成员负载） */
+  defaultExpanded?: boolean
+}>(), {
+  defaultExpanded: false
+})
 
 const emit = defineEmits<{
   (e: 'view-issues', filter: 'unassigned' | string): void
 }>()
 
 const visible = ref(true)
-const expanded = ref(false)
+const expanded = ref(props.defaultExpanded)
 const loading = ref(false)
 const error = ref(false)
 const distribution = ref<SprintAssigneeDistributionVO | null>(null)
 
 watch(expanded, (val) => {
   if (val && !distribution.value && !loading.value) {
+    loadDistribution()
+  }
+})
+
+// 默认展开时自动加载数据
+onMounted(() => {
+  if (props.defaultExpanded && !distribution.value && !loading.value) {
     loadDistribution()
   }
 })
