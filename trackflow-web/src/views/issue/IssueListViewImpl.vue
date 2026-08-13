@@ -39,8 +39,8 @@
         :status-list="statusCache"
         :project-list="(projectList as any)"
         :initial-filters="initialFilterChips"
-        :active-query-name="activeQueryId ? activeQueryName : null"
-        :is-owned-query="activeQueryOwned"
+        :active-query-name="(activeQueryId || isDashboardFilterActive) ? activeQueryName : null"
+        :is-owned-query="activeQueryId ? activeQueryOwned : false"
         :readonly-filter-labels="activeQueryReadonlyLabels"
         :query-filters="activeQueryParsedFilters"
         @search="onGlobalSearch"
@@ -79,9 +79,19 @@
               :class="{ clickable: activeProjectId !== null || activeQueryId !== null || activeTagId !== null || searchKeyword !== '' || Object.keys(globalFilterParams).length > 0 }"
               @click="selectAllProjects"
             >所有工单</span>
-            <template v-if="activeProjectId && !activeQueryId">
+            <template v-if="activeProjectId && !activeQueryId && !isDashboardFilterActive">
               <span class="breadcrumb-separator"><icon-right /></span>
               <span class="breadcrumb-item current">{{ activeProjectName }}</span>
+            </template>
+            <template v-if="activeProjectId && !activeQueryId && isDashboardFilterActive">
+              <span class="breadcrumb-separator"><icon-right /></span>
+              <span class="breadcrumb-item clickable" @click="onClearQuery">{{ activeProjectName }}</span>
+              <span class="breadcrumb-separator"><icon-right /></span>
+              <span class="breadcrumb-item current">{{ activeQueryName }}</span>
+            </template>
+            <template v-if="!activeProjectId && !activeQueryId && isDashboardFilterActive">
+              <span class="breadcrumb-separator"><icon-right /></span>
+              <span class="breadcrumb-item current">{{ activeQueryName }}</span>
             </template>
             <template v-if="activeQueryId">
               <template v-if="activeQueryProjectName">
@@ -1098,6 +1108,17 @@ function onRefreshForUpdates() { hasNewUpdates.value = false; refreshList() }
 // ===== Navigation & Selection Computed =====
 const isDraggable = computed(() => isListLayout.value && (!!activeProjectId.value || !!activeQueryId.value))
 const sortedIssueIds = computed(() => manualOrderData.value?.issueIds || [])
+
+/**
+ * Whether a dashboard/external filter context is active (came from Sprint/Dashboard/Report drill-down)
+ * Distinct from saved queries: no activeQueryId, but globalFilterParams is non-empty and
+ * the activeQueryName has been overridden to a descriptive label (not default "所有工单").
+ */
+const isDashboardFilterActive = computed(() => {
+  if (activeQueryId.value) return false
+  return Object.keys(globalFilterParams.value).length > 0 && activeQueryName.value !== '所有工单'
+})
+
 const activeQueryOwned = computed(() => {
   if (!activeQueryObj.value) return false
   const currentUserId = String(authStore.user?.userId || authStore.user?.id || '')
@@ -1129,6 +1150,13 @@ function navigateToQueryProject() {
 }
 
 const activeQueryReadonlyLabels = computed<string[]>(() => {
+  // When dashboard filter is active (no saved query but filters from URL), show chip labels
+  if (!activeQueryObj.value && isDashboardFilterActive.value && initialFilterChips.value.length > 0) {
+    return initialFilterChips.value.map((c: any) => {
+      const labels = c.valueLabels?.join(', ') || c.values?.join(', ') || ''
+      return labels
+    }).filter((l: string) => l && l.trim())
+  }
   if (!activeQueryObj.value?.filters) return []
   let filters: any[]; if (typeof activeQueryObj.value.filters === 'string') { try { filters = JSON.parse(activeQueryObj.value.filters) } catch { return [] } } else { filters = activeQueryObj.value.filters }
   if (!Array.isArray(filters)) return []
@@ -1292,7 +1320,7 @@ function syncFiltersToUrl(filters: Record<string, any>) {
   nextTick(() => { skipRouteQueryWatch = false })
 }
 function onClearQuery() {
-  activeQueryId.value = null; activeQueryName.value = '所有工单'; activeQueryObj.value = null; searchKeyword.value = ''; globalFilterParams.value = {}; currentPage.value = 1
+  activeQueryId.value = null; activeQueryName.value = '所有工单'; activeQueryObj.value = null; searchKeyword.value = ''; globalFilterParams.value = {}; initialFilterChips.value = []; currentPage.value = 1
   skipRouteQueryWatch = true
   const { project } = route.query; router.replace({ query: project ? { project } : {} })
   nextTick(() => { skipRouteQueryWatch = false })
@@ -1316,7 +1344,7 @@ function selectQuery(q: any) {
 }
 function selectAllProjects() {
   if (activeProjectId.value === null && activeTagId.value === null && activeQueryId.value === null && searchKeyword.value === '' && Object.keys(globalFilterParams.value).length === 0 && Object.keys(route.query).length === 0) return
-  activeProjectId.value = null; activeQueryId.value = null; activeTagId.value = null; activeQueryName.value = '所有工单'; activeQueryObj.value = null; filterProject.value = undefined; searchKeyword.value = ''; globalFilterParams.value = {}; currentPage.value = 1
+  activeProjectId.value = null; activeQueryId.value = null; activeTagId.value = null; activeQueryName.value = '所有工单'; activeQueryObj.value = null; filterProject.value = undefined; searchKeyword.value = ''; globalFilterParams.value = {}; initialFilterChips.value = []; currentPage.value = 1
   skipRouteQueryWatch = true
   sortState.value = { field: null, direction: null }; router.replace({ query: {} })
   nextTick(() => { skipRouteQueryWatch = false })
