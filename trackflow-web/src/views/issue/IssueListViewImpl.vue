@@ -547,7 +547,7 @@
             @click="ctxSetStatus(st)"
           >
             <span class="ctx-status-dot" :style="{ background: st.color }"></span>
-            <span>{{ st.name }}</span>
+            <span>{{ st.transitionName || st.displayName || st.name }}</span>
           </div>
           <div class="ctx-menu-separator"></div>
         </template>
