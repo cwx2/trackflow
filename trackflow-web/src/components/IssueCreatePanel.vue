@@ -246,7 +246,7 @@
           </div>
           <div class="prop-row">
             <span class="prop-label">状态</span>
-            <a-select v-model="form.statusId" size="small" allow-clear placeholder="默认初始状态">
+            <a-select v-model="form.statusId" size="small" allow-clear :placeholder="statusPlaceholder">
               <a-option v-for="s in statuses" :key="s.id" :value="s.id">
                 <span class="status-dot" :style="{ backgroundColor: s.color || '#6b7280' }"></span>{{ s.displayName || s.name }}
               </a-option>
@@ -713,7 +713,7 @@ import { formatFileSize } from '@/utils/attachment'
 import { ref, reactive, computed, onMounted, onBeforeUnmount, onUnmounted, watch } from 'vue'
 import { Message, Modal } from '@arco-design/web-vue'
 import { IconDown, IconAttachment, IconClose, IconPlus, IconUp, IconLink, IconSearch, IconCheck, IconFullscreen, IconFile, IconCloseCircleFill } from '@arco-design/web-vue/es/icon'
-import { projectApi, issueApi, sprintApi, customFieldApi, issueTemplateApi, tagApi } from '@/api'
+import { projectApi, issueApi, sprintApi, customFieldApi, issueTemplateApi, tagApi, workflowApi } from '@/api'
 import { IssuePriorityBadge } from '@/components/base'
 import { useProjectList } from '@/composables/useProjectList'
 import { usePermission } from '@/composables/usePermission'
@@ -1000,6 +1000,9 @@ const sprints = ref<any[]>([])
 const statuses = ref<IssueStatusVO[]>([])
 const projectTags = ref<any[]>([])
 
+// 项目工作流初始状态名称（选择项目后动态加载）
+const initialStatusName = ref('')
+
 // 优先级选项（从自定义字段系统动态加载）
 const prioritySelectOptions = ref(DEFAULT_PRIORITY_OPTIONS.map(o => ({ ...o })))
 
@@ -1023,9 +1026,23 @@ const form = reactive({
   estimatedHours: undefined as number | undefined
 })
 
+/** 状态字段动态占位文案：选择项目后显示实际初始状态名称，未选择项目时引导用户先选项目 */
+const statusPlaceholder = computed(() => {
+  if (!form.projectId) return '请先选择项目'
+  if (initialStatusName.value) return `默认：${initialStatusName.value}`
+  return '自动设置'
+})
+
 // Watch title changes to trigger similar issue search
 watch(() => form.title, (newTitle) => {
   searchSimilarIssues(newTitle)
+})
+
+// 工单类型变化时重新解析初始状态名称（不同类型可能配置不同初始状态）
+watch(() => form.issueType, () => {
+  if (form.projectId) {
+    loadInitialStatusName(form.projectId)
+  }
 })
 
 // 自定义字段集成
@@ -1533,9 +1550,28 @@ async function loadStatuses() {
   }
 }
 
+/** 加载项目工作流的初始状态名称，匹配当前工单类型 */
+async function loadInitialStatusName(projectId: string) {
+  try {
+    const res = await workflowApi.listInitialStatuses(projectId)
+    const configs = res.data || []
+    // 查找匹配当前工单类型的配置，或通配 '*' 配置
+    const matched = configs.find(c => c.issueType === form.issueType)
+      || configs.find(c => c.issueType === '*')
+    if (matched) {
+      const status = statuses.value.find(s => s.id === matched.statusId)
+      initialStatusName.value = status ? (status.displayName || status.name) : ''
+    } else {
+      initialStatusName.value = ''
+    }
+  } catch {
+    initialStatusName.value = ''
+  }
+}
+
 async function onProjectChange(val: any) {
   const pid = val ? String(val) : ''
-  if (!pid) { members.value = []; allProjectMembers.value = []; sprints.value = []; templates.value = []; selectedTemplateId.value = null; projectTags.value = []; return }
+  if (!pid) { members.value = []; allProjectMembers.value = []; sprints.value = []; templates.value = []; selectedTemplateId.value = null; projectTags.value = []; initialStatusName.value = ''; return }
   try { const res = await projectApi.listAssignableMembers(pid); members.value = res.data || [] } catch { members.value = [] }
   try { const res = await projectApi.listMembers(pid); allProjectMembers.value = res.data || [] } catch { allProjectMembers.value = [] }
   try { const res = await sprintApi.listByProject(pid, { _silent403: true }); sprints.value = (res.data?.list || []).filter((s: any) => s.status !== 'Completed' && s.status !== 'completed' && s.status !== 'Archived' && s.status !== 'archived') } catch { sprints.value = [] }
@@ -1556,6 +1592,8 @@ async function onProjectChange(val: any) {
   if (props.sprintId !== undefined && props.sprintId !== null && props.lockSprint) {
     form.sprintId = props.sprintId || undefined
   }
+  // 加载项目工作流初始状态名称（用于状态字段占位文案）
+  loadInitialStatusName(pid)
 }
 
 // ========== 草稿下拉交互函数 ==========
@@ -1733,6 +1771,7 @@ function resetForm() {
   form.tagIds = []
   form.dueDate = ''
   form.estimatedHours = undefined
+  initialStatusName.value = ''
   selectedTemplateId.value = null
   // 重置自定义字段值（防止 isDirty 残留导致 beforeunload 误触发）
   customFieldValues.value = {}
