@@ -52,53 +52,24 @@
         @open-command="showCommandDialog = true"
       />
 
-      <!-- Filter bar -->
+      <!-- Unified filter+toolbar bar -->
       <div v-if="selectedCount === 0" class="filter-bar">
-        <div class="filter-left">
-          <!-- Breadcrumb filter navigation (YouTrack style) -->
-          <nav class="breadcrumb-nav" aria-label="筛选导航">
-            <span
-              class="breadcrumb-item"
-              :class="{ clickable: activeProjectId !== null || activeQueryId !== null || activeTagId !== null || searchKeyword !== '' || Object.keys(globalFilterParams).length > 0 }"
-              @click="selectAllProjects"
-            >所有工单</span>
-            <template v-if="activeProjectId && !activeQueryId && !isDashboardFilterActive">
-              <span class="breadcrumb-separator"><icon-right /></span>
-              <span class="breadcrumb-item current">{{ activeProjectName }}</span>
-            </template>
-            <template v-if="activeProjectId && !activeQueryId && isDashboardFilterActive">
-              <span class="breadcrumb-separator"><icon-right /></span>
-              <span class="breadcrumb-item clickable" @click="onClearQuery">{{ activeProjectName }}</span>
-              <span class="breadcrumb-separator"><icon-right /></span>
-              <span class="breadcrumb-item current">{{ activeQueryName }}</span>
-            </template>
-            <template v-if="!activeProjectId && !activeQueryId && isDashboardFilterActive">
-              <span class="breadcrumb-separator"><icon-right /></span>
-              <span class="breadcrumb-item current">{{ activeQueryName }}</span>
-            </template>
-            <template v-if="activeQueryId">
-              <template v-if="activeQueryProjectName">
-                <span class="breadcrumb-separator"><icon-right /></span>
-                <span
-                  class="breadcrumb-item clickable"
-                  @click="navigateToQueryProject"
-                >{{ activeQueryProjectName }}</span>
-              </template>
-              <span class="breadcrumb-separator"><icon-right /></span>
-              <span class="breadcrumb-item current">{{ activeQueryName }}</span>
-            </template>
-          </nav>
-          <span class="issue-total-badge">{{ totalIssues }} 个问题</span>
-          <button
-            class="hide-resolved-toggle"
-            :class="{ active: hideResolved }"
-            :title="hideResolved ? '点击显示已解决工单' : '点击隐藏已解决工单'"
-            @click="toggleHideResolved"
-          >
-            <icon-check-circle />
-            <span class="toggle-label">{{ hideResolved ? '已隐藏已解决' : '隐藏已解决' }}</span>
-          </button>
-        </div>
+        <!-- Search/Filter bar (YouTrack style with mode toggle) -->
+        <FilterBar
+          ref="filterBarRef"
+          :project-id="activeProjectId"
+          :status-list="statusCache"
+          :project-list="(projectList as any)"
+          :initial-filters="initialFilterChips"
+          :active-query-name="(activeQueryId || isDashboardFilterActive) ? activeQueryName : null"
+          :is-owned-query="activeQueryId ? activeQueryOwned : false"
+          :readonly-filter-labels="activeQueryReadonlyLabels"
+          :query-filters="activeQueryParsedFilters"
+          @search="onGlobalSearch"
+          @filter="onGlobalFilter"
+          @clear-query="onClearQuery"
+          @chip-click="onQueryChipClick"
+        />
         <div class="filter-right">
           <a-select v-model="filterProject" placeholder="所有项目" size="small" style="width: 120px" allow-clear @change="onFilterChange">
             <a-option v-for="p in projectList" :key="p.id" :value="p.id">{{ p.key }}</a-option>
@@ -1527,7 +1498,7 @@ onBeforeRouteLeave((_to, _from, next) => {
 /* Right area */
 .issue-list-area { flex: 1; display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
 
-.filter-bar { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--tf-border); flex-shrink: 0; }
+.filter-bar { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--tf-border); flex-shrink: 0; }
 .filter-left { display: flex; align-items: center; gap: 12px; }
 .current-query-name { font-size: 14px; font-weight: 500; color: var(--tf-text-primary); }
 .issue-total-badge { font-size: 12px; color: var(--tf-text-tertiary); }
@@ -1591,7 +1562,7 @@ onBeforeRouteLeave((_to, _from, next) => {
   color: var(--tf-accent);
 }
 .hide-resolved-toggle .toggle-label { font-size: 12px; }
-.filter-right { display: flex; gap: 8px; align-items: center; }
+.filter-right { display: flex; gap: 8px; align-items: center; flex-shrink: 0; padding: 0 16px 0 8px; }
 
 /* Inline create */
 .inline-create { padding: 8px 16px; background: var(--tf-bg-surface); border-bottom: 1px solid var(--tf-border); flex-shrink: 0; }
