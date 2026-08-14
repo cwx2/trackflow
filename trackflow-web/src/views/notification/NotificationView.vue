@@ -73,37 +73,40 @@
               @mark-unread="handleMarkUnread"
             >
               <template #actions>
-                <button
-                  v-if="!item.isRead"
-                  class="item-action-btn"
-                  title="标记已读"
-                  @click.stop="handleMarkRead(item.id)"
-                >
-                  <icon-check :size="14" />
-                </button>
-                <button
-                  v-else
-                  class="item-action-btn"
-                  title="标记未读"
-                  @click.stop="handleMarkUnread(item.id)"
-                >
-                  <icon-record :size="14" />
-                </button>
-                <button
-                  v-if="canReply(item)"
-                  class="item-action-btn item-reply-btn"
-                  title="回复"
-                  @click.stop="toggleReply(item.id)"
-                >
-                  <icon-reply :size="14" />
-                </button>
-                <button
-                  class="item-action-btn item-delete-btn"
-                  title="删除通知"
-                  @click.stop="handleDelete(item.id)"
-                >
-                  <icon-close :size="14" />
-                </button>
+                <a-tooltip content="标记已读" position="top" mini>
+                  <button
+                    v-if="!item.isRead"
+                    class="item-action-btn"
+                    @click.stop="handleMarkRead(item.id)"
+                  >
+                    <icon-check :size="14" />
+                  </button>
+                </a-tooltip>
+                <a-tooltip content="标记未读" position="top" mini>
+                  <button
+                    v-else
+                    class="item-action-btn"
+                    @click.stop="handleMarkUnread(item.id)"
+                  >
+                    <icon-record :size="14" />
+                  </button>
+                </a-tooltip>
+                <a-tooltip v-if="canReply(item)" content="回复" position="top" mini>
+                  <button
+                    class="item-action-btn item-reply-btn"
+                    @click.stop="toggleReply(item.id)"
+                  >
+                    <icon-reply :size="14" />
+                  </button>
+                </a-tooltip>
+                <a-tooltip content="删除通知" position="top" mini>
+                  <button
+                    class="item-action-btn item-delete-btn"
+                    @click.stop="handleDelete(item.id)"
+                  >
+                    <icon-close :size="14" />
+                  </button>
+                </a-tooltip>
               </template>
             </NotificationItem>
           <!-- 内联回复编辑器 -->

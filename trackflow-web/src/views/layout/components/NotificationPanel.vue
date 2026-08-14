@@ -5,53 +5,61 @@
         <div class="notification-panel">
           <!-- 面板头部 -->
           <div class="panel-header">
-            <h3 class="panel-title panel-title-link" title="在全页面中打开通知中心" @click="openFullPage">通知</h3>
+            <a-tooltip content="在全页面中打开通知中心" position="bottom" mini>
+              <h3 class="panel-title panel-title-link" @click="openFullPage">通知</h3>
+            </a-tooltip>
             <div class="panel-actions">
-              <button
-                class="panel-action-btn"
-                title="展开为全页面"
-                @click="openFullPage"
-              >
-                <icon-expand :size="14" />
-              </button>
-              <button
-                v-if="currentTabUnreadCount > 0"
-                class="panel-action-btn"
-                title="跳转到第一条未读"
-                @click="scrollToFirstUnread"
-              >
-                <icon-to-bottom :size="14" />
-              </button>
-              <button
-                class="panel-action-btn"
-                :class="{ active: unreadOnly }"
-                title="仅显示未读"
-                @click="toggleUnreadOnly"
-              >
-                <icon-check-circle :size="14" />
-              </button>
-              <button
-                class="panel-action-btn"
-                title="全部标记已读"
-                :disabled="unreadCount === 0"
-                @click="handleMarkAllRead"
-              >
-                <!-- 保留 SVG：Arco 无 Git 分支/合并等效图标（用于标记已读全部操作） -->
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                  <path d="M1.5 3.25a2.25 2.25 0 1 1 3 2.122v5.256a2.251 2.251 0 1 1-1.5 0V5.372A2.25 2.25 0 0 1 1.5 3.25Zm5.677-.177L9.573.677A.25.25 0 0 1 10 .854V2.5h1A2.5 2.5 0 0 1 13.5 5v5.628a2.251 2.251 0 1 1-1.5 0V5a1 1 0 0 0-1-1h-1v1.646a.25.25 0 0 1-.427.177L7.177 3.427a.25.25 0 0 1 0-.354Z"/>
-                </svg>
-              </button>
-              <button
-                class="panel-action-btn"
-                title="清除所有已读通知"
-                :disabled="!hasRead"
-                @click="handleDeleteAllRead"
-              >
-                <icon-delete :size="14" />
-              </button>
-              <button class="panel-action-btn panel-close-btn" title="关闭" @click="closePanel">
-                <icon-close :size="14" />
-              </button>
+              <a-tooltip content="展开为全页面" position="bottom" mini>
+                <button
+                  class="panel-action-btn"
+                  @click="openFullPage"
+                >
+                  <icon-expand :size="14" />
+                </button>
+              </a-tooltip>
+              <a-tooltip v-if="currentTabUnreadCount > 0" content="跳转到第一条未读" position="bottom" mini>
+                <button
+                  class="panel-action-btn"
+                  @click="scrollToFirstUnread"
+                >
+                  <icon-to-bottom :size="14" />
+                </button>
+              </a-tooltip>
+              <a-tooltip :content="unreadOnly ? '显示全部' : '仅显示未读'" position="bottom" mini>
+                <button
+                  class="panel-action-btn"
+                  :class="{ active: unreadOnly }"
+                  @click="toggleUnreadOnly"
+                >
+                  <icon-check-circle :size="14" />
+                </button>
+              </a-tooltip>
+              <a-tooltip content="全部标记已读" position="bottom" mini>
+                <button
+                  class="panel-action-btn"
+                  :disabled="unreadCount === 0"
+                  @click="handleMarkAllRead"
+                >
+                  <!-- 保留 SVG：Arco 无 Git 分支/合并等效图标（用于标记已读全部操作） -->
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                    <path d="M1.5 3.25a2.25 2.25 0 1 1 3 2.122v5.256a2.251 2.251 0 1 1-1.5 0V5.372A2.25 2.25 0 0 1 1.5 3.25Zm5.677-.177L9.573.677A.25.25 0 0 1 10 .854V2.5h1A2.5 2.5 0 0 1 13.5 5v5.628a2.251 2.251 0 1 1-1.5 0V5a1 1 0 0 0-1-1h-1v1.646a.25.25 0 0 1-.427.177L7.177 3.427a.25.25 0 0 1 0-.354Z"/>
+                  </svg>
+                </button>
+              </a-tooltip>
+              <a-tooltip content="清除所有已读通知" position="bottom" mini>
+                <button
+                  class="panel-action-btn"
+                  :disabled="!hasRead"
+                  @click="handleDeleteAllRead"
+                >
+                  <icon-delete :size="14" />
+                </button>
+              </a-tooltip>
+              <a-tooltip content="关闭" position="bottom" mini>
+                <button class="panel-action-btn panel-close-btn" @click="closePanel">
+                  <icon-close :size="14" />
+                </button>
+              </a-tooltip>
             </div>
           </div>
 
@@ -105,32 +113,39 @@
                   @mark-read="handleMarkRead"
                 >
                   <template #actions>
-                    <button
-                      v-if="!item.isRead"
-                      class="item-action-btn"
-                      title="标记已读"
-                      @click.stop="handleMarkRead(item.id)"
-                    >
-                      <icon-check :size="12" />
-                    </button>
+                    <a-tooltip content="标记已读" position="top" mini>
+                      <button
+                        v-if="!item.isRead"
+                        class="item-action-btn"
+                        @click.stop="handleMarkRead(item.id)"
+                      >
+                        <icon-check :size="12" />
+                      </button>
+                    </a-tooltip>
                     <!-- 单条通知的静音按钮（仅单条分组时显示） -->
-                    <button
+                    <a-tooltip
                       v-if="group.items.length === 1 && item.resourceType === 'issue' && item.resourceId"
-                      class="item-action-btn"
-                      :class="{ 'muted-active': item.resourceMuted }"
-                      :title="item.resourceMuted ? '取消静音此工单' : '静音此工单'"
-                      @click.stop="handleMuteToggle(group)"
+                      :content="item.resourceMuted ? '取消静音此工单' : '静音此工单'"
+                      position="top"
+                      mini
                     >
-                      <icon-mute v-if="item.resourceMuted" :size="12" />
-                      <icon-notification v-else :size="12" />
-                    </button>
-                    <button
-                      class="item-action-btn item-delete-btn"
-                      title="删除通知"
-                      @click.stop="handleDelete(item.id)"
-                    >
-                      <icon-close :size="12" />
-                    </button>
+                      <button
+                        class="item-action-btn"
+                        :class="{ 'muted-active': item.resourceMuted }"
+                        @click.stop="handleMuteToggle(group)"
+                      >
+                        <icon-mute v-if="item.resourceMuted" :size="12" />
+                        <icon-notification v-else :size="12" />
+                      </button>
+                    </a-tooltip>
+                    <a-tooltip content="删除通知" position="top" mini>
+                      <button
+                        class="item-action-btn item-delete-btn"
+                        @click.stop="handleDelete(item.id)"
+                      >
+                        <icon-close :size="12" />
+                      </button>
+                    </a-tooltip>
                   </template>
                 </NotificationItem>
 
