@@ -172,6 +172,11 @@ export const timeEntryApi = {
     return request.get<any, R<boolean>>('/time-entries/can-log-for-others')
   },
 
+  /** 检查当前用户是否有权记录工时（在任意项目中拥有 time:log 权限） */
+  canLogTime() {
+    return request.get<any, R<boolean>>('/time-entries/can-log-time')
+  },
+
   // ========== 计时器 API ==========
 
   /** 启动计时器 */

@@ -243,4 +243,14 @@ public class TimeEntryController {
         Long currentUserId = SecurityUtils.getCurrentUserId();
         return R.ok(timeEntryService.canLogForOthers(currentUserId));
     }
+
+    /**
+     * 检查当前用户是否有权记录工时（在任意项目中拥有 time:log 权限）
+     */
+    @GetMapping("/can-log-time")
+    @PreAuthorize("isAuthenticated()")
+    public R<Boolean> checkCanLogTime() {
+        Long currentUserId = SecurityUtils.getCurrentUserId();
+        return R.ok(timeEntryService.canLogTime(currentUserId));
+    }
 }

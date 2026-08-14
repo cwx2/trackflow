@@ -748,6 +748,13 @@ public class TimeEntryService {
         return permissionService.hasPermissionInAnyProject(userId, PERM_TIME_LOG_FOR_OTHERS);
     }
 
+    /**
+     * 检查用户是否有权记录工时（在任意项目中拥有 time:log 权限）
+     */
+    public boolean canLogTime(Long userId) {
+        return permissionService.hasPermissionInAnyProject(userId, PERM_TIME_LOG);
+    }
+
     // ========== 内部方法 ==========
 
     /**

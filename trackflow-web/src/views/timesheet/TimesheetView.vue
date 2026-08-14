@@ -23,6 +23,7 @@
           :current-user-id="authStore.user?.id"
           :current-user-name="currentUserName"
           :can-view-others="canViewOthers"
+          :can-log-time="canLogTime"
           :selected-user-id="selectedUserId"
           :selectable-users="selectableUsers"
           :filter-project-id="filterProjectId"
@@ -139,6 +140,7 @@ const timeEntries = ref<TimeEntryVO[]>([])
 const canViewOthers = ref(false)
 const canEditOthers = ref(false)
 const canLogForOthers = ref(false)
+const canLogTime = ref(false)
 const selectableUsers = ref<TimeEntryUserVO[]>([])
 const selectedUserId = ref<string | undefined>(undefined)
 
@@ -368,6 +370,17 @@ async function loadCanLogForOthers() {
   }
 }
 
+async function loadCanLogTime() {
+  try {
+    const res = await timeEntryApi.canLogTime()
+    if (res.code === 0) {
+      canLogTime.value = res.data === true
+    }
+  } catch (e) {
+    console.error('[Timesheet] 加载 canLogTime 权限失败:', e)
+  }
+}
+
 async function loadSelectableUsers(keyword?: string) {
   try {
     const params = keyword ? { keyword } : undefined
@@ -488,7 +501,7 @@ onMounted(async () => {
   // Load time tracking settings first (needed for parseDuration + quota)
   await loadTTSettings()
   // Check if user can view/edit others' time entries
-  await Promise.all([loadCanViewOthers(), loadCanEditOthers(), loadCanLogForOthers()])
+  await Promise.all([loadCanViewOthers(), loadCanEditOthers(), loadCanLogForOthers(), loadCanLogTime()])
   if (canViewOthers.value) {
     await loadSelectableUsers()
   }

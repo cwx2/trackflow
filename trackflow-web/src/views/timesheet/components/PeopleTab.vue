@@ -14,7 +14,7 @@
     @update:view-mode="$emit('update:viewMode', $event)"
   >
     <template #actions>
-      <a-button type="primary" size="small" @click="$emit('openAdd')">添加已花费时间</a-button>
+      <a-button v-if="canLogTime" type="primary" size="small" @click="$emit('openAdd')">添加已花费时间</a-button>
     </template>
   </TimesheetDateBar>
 
@@ -144,6 +144,7 @@ defineProps<{
   currentUserId: string | undefined
   currentUserName: string
   canViewOthers: boolean
+  canLogTime: boolean
   selectedUserId: string | undefined
   selectableUsers: TimeEntryUserVO[]
   filterProjectId: string | undefined
