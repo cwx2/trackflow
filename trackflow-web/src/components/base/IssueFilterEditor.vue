@@ -167,7 +167,7 @@
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { IconPlus } from '@arco-design/web-vue/es/icon'
 import { customFieldApi, projectApi, sprintApi, tagApi } from '@/api'
-import type { CustomFieldDefinitionVO, CustomFieldOptionVO, IssueStatusVO, ProjectVO, SprintVO } from '@/api/types'
+import type { CustomFieldDefinitionVO, CustomFieldOptionVO, AvailableColumnVO, IssueStatusVO, ProjectVO, SprintVO } from '@/api/types'
 
 // ===== 类型定义 =====
 
@@ -456,17 +456,42 @@ async function loadProjectFields(projectId: string) {
   }
 }
 
-/** 无 projectId（全部项目视图）时，加载全局 isForAll 字段 */
+/** 无 projectId（全部项目视图）时，通过 availableColumns 接口加载所有自定义字段 */
 async function loadGlobalFields() {
   try {
-    const res = await customFieldApi.listGlobal()
-    const fields = res.data || []
-    projectFields.value = fields.map(cfToFieldDef)
+    const res = await customFieldApi.availableColumns()
+    const cols = res.data || []
+    // 只取 group=custom 的自定义字段列，按 key / label / fieldFormat 映射为 FieldDef
+    projectFields.value = cols
+      .filter(c => c.group === 'custom' && c.key.startsWith('cf.'))
+      .map(c => columnToFieldDef(c))
     projectFieldsLoaded.value = true
   } catch {
     projectFields.value = []
     projectFieldsLoaded.value = true
   }
+}
+
+/** 将 AvailableColumnVO（自定义字段列）转换为 FieldDef，用于无 projectId 时 */
+function columnToFieldDef(col: AvailableColumnVO): FieldDef {
+  // fieldFormat 逻辑与 cfToFieldDef 保持一致
+  let valueType: FieldDef['valueType'] = 'text'
+  let operators: OperatorDef[] = OPERATORS_TEXT
+  switch (col.fieldFormat) {
+    case 'list': case 'version': case 'build': case 'ownedField':
+      valueType = 'enum'; operators = OPERATORS_ENUM; break
+    case 'state':
+      valueType = 'state'; operators = OPERATORS_STATE; break
+    case 'user': case 'group':
+      valueType = 'user'; operators = OPERATORS_USER; break
+    case 'date': case 'datetime':
+      valueType = 'date'; operators = OPERATORS_DATE_DUE; break
+    case 'int': case 'float':
+      valueType = 'number'; operators = OPERATORS_NUMBER; break
+    case 'bool':
+      valueType = 'bool'; operators = OPERATORS_BOOL; break
+  }
+  return { key: col.key, label: col.label, valueType, operators }
 }
 
 /** 将 CustomFieldDefinitionVO 转换为 FieldDef */

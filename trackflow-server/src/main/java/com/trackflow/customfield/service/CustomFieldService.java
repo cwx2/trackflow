@@ -1715,34 +1715,6 @@ public class CustomFieldService {
         return voList;
     }
 
-    /**
-     * 获取全局字段（isForAll=true）列表，供「全部项目」视图筛选器使用。
-     * 不依赖特定项目，不过滤可见性（全局字段对所有用户可见）。
-     */
-    @Transactional(readOnly = true)
-    public List<CustomFieldDefinitionVO> listGlobalFieldsForUser() {
-        List<CustomFieldDefinition> fields = definitionMapper.selectList(
-                new LambdaQueryWrapper<CustomFieldDefinition>()
-                        .eq(CustomFieldDefinition::getIsForAll, true)
-                        .orderByAsc(CustomFieldDefinition::getPosition));
-
-        List<CustomFieldDefinitionVO> voList = converter.toVOList(fields);
-        List<Long> fieldIds = fields.stream().map(CustomFieldDefinition::getId).toList();
-        Map<Long, List<CustomFieldOption>> optionsMap = getBatchOptions(fieldIds);
-
-        for (int i = 0; i < fields.size(); i++) {
-            CustomFieldDefinition field = fields.get(i);
-            Long fieldId = field.getId();
-            CustomFieldDefinitionVO vo = voList.get(i);
-
-            vo.setIsBuiltIn(BUILTIN_FIELD_IDS.contains(fieldId));
-            List<CustomFieldOptionVO> optVOs = converter.toOptionVOList(optionsMap.getOrDefault(fieldId, List.of()));
-            enrichOptionOwnerDisplayNames(optVOs);
-            vo.setOptions(optVOs);
-        }
-        return voList;
-    }
-
     @Transactional(readOnly = true)
     public List<CustomFieldDefinitionVO> listProjectSettingsFieldsVO(Long projectId) {
         List<CustomFieldDefinition> fields = listProjectFields(projectId);
