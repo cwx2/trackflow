@@ -13,6 +13,8 @@ import com.trackflow.report.mapper.ReportStatisticsMapper;
 import com.trackflow.report.mapper.result.*;
 import com.trackflow.report.vo.*;
 import com.trackflow.sprint.service.SprintStatsService;
+import com.trackflow.issue.service.PriorityFieldService;
+import com.trackflow.issue.service.IssueTypeFieldService;
 import com.trackflow.workitemattr.service.WorkItemAttributeService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -48,8 +50,8 @@ public class ReportStatisticsService {
     private final StringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
     private final QueryExecutor queryExecutor;
-    private final com.trackflow.issue.service.PriorityFieldService priorityFieldService;
-    private final com.trackflow.issue.service.IssueTypeFieldService issueTypeFieldService;
+    private final PriorityFieldService priorityFieldService;
+    private final IssueTypeFieldService issueTypeFieldService;
 
     private static final String CACHE_PREFIX = "report:dashboard:";
     private static final long CACHE_TTL_SECONDS = 90;
@@ -162,8 +164,13 @@ public class ReportStatisticsService {
     /**
      * REQ-486：支持指定 estimationFieldId 的燃尽图计算。
      * 当 calculation=estimation 且 estimationFieldId 不为 null 时，从自定义字段读取估算值。
+     * calculation 参数白名单校验：不合法值 fallback 为 issue_count。
      */
     public BurndownVO getBurndown(Long projectId, Long sprintId, String calculation, Long estimationFieldId) {
+        // 白名单校验：不合法值 fallback 为 issue_count（业务规则，不应由 Controller 处理）
+        if (!Set.of("issue_count", "estimation", "work_items").contains(calculation)) {
+            calculation = "issue_count";
+        }
         return buildBurndown(projectId, sprintId, calculation, estimationFieldId);
     }
 
@@ -1096,6 +1103,11 @@ public class ReportStatisticsService {
             Long projectId, LocalDate startDate, LocalDate endDate,
             String viewType, int page, int pageSize, Long userId) {
 
+        // 分页参数安全约束（业务规则，不应由 Controller 处理）
+        if (page < 1) page = 1;
+        if (pageSize < 1) pageSize = 1;
+        if (pageSize > 200) pageSize = 200;
+
         List<Long> projectIds = resolveProjectIds(projectId, userId);
 
         if (endDate == null) endDate = LocalDate.now();
@@ -1279,6 +1291,11 @@ public class ReportStatisticsService {
      * 获取预估对比报表：estimation vs spent
      */
     public EstimationReportVO getEstimationReport(Long projectId, Long userId, int page, int pageSize) {
+        // 分页参数安全约束（业务规则，不应由 Controller 处理）
+        if (page < 1) page = 1;
+        if (pageSize < 1) pageSize = 1;
+        if (pageSize > 200) pageSize = 200;
+
         List<Long> projectIds = resolveProjectIds(projectId, userId);
 
         // 1. 聚合汇总（不受分页影响，基于全量数据计算）

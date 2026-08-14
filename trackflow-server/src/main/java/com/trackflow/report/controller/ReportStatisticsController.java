@@ -12,7 +12,6 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
 import java.util.List;
-import java.util.Set;
 
 /**
  * 报表统计数据 API — 提供仪表盘图表所需的统计数据
@@ -132,10 +131,7 @@ public class ReportStatisticsController {
             @RequestParam(value = "estimationFieldId", required = false) Long estimationFieldId) {
         Long userId = SecurityUtils.getCurrentUserId();
         projectService.assertProjectAccessible(userId, projectId);
-        // 白名单校验，防止非法 calculation 值
-        if (!Set.of("issue_count", "estimation", "work_items").contains(calculation)) {
-            calculation = "issue_count";
-        }
+        // 白名单校验已下沉到 ReportStatisticsService.getBurndown()
         return R.ok(statisticsService.getBurndown(projectId, sprintId, calculation, estimationFieldId));
     }
 
@@ -186,10 +182,6 @@ public class ReportStatisticsController {
         if (projectId != null) {
             projectService.assertProjectAccessible(userId, projectId);
         }
-        // 约束 pageSize 范围
-        if (page < 1) page = 1;
-        if (pageSize < 1) pageSize = 1;
-        if (pageSize > 200) pageSize = 200;
         return R.ok(statisticsService.getTimeReportGrouped(projectId, startDate, endDate, viewType, page, pageSize, userId));
     }
 
@@ -227,10 +219,7 @@ public class ReportStatisticsController {
         if (projectId != null) {
             projectService.assertProjectAccessible(userId, projectId);
         }
-        // 约束 pageSize 范围
-        if (page < 1) page = 1;
-        if (pageSize < 1) pageSize = 1;
-        if (pageSize > 200) pageSize = 200;
+        // 分页范围约束已下沉到 ReportStatisticsService.getEstimationReport()
         return R.ok(statisticsService.getEstimationReport(projectId, userId, page, pageSize));
     }
 }
