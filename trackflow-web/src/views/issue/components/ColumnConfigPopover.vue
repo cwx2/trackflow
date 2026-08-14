@@ -63,7 +63,7 @@ defineEmits<{
   border: 1px solid var(--tf-border);
   border-radius: 6px;
   padding: 8px;
-  min-width: 200px;
+  min-width: 280px;
   max-height: 360px;
   overflow-y: auto;
 }
@@ -88,7 +88,11 @@ defineEmits<{
   font-weight: 500;
 }
 
-.config-list { display: flex; flex-direction: column; gap: 2px; }
+.config-list {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px;
+}
 
 .config-item {
   padding: 4px 8px;
