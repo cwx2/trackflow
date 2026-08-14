@@ -364,6 +364,11 @@ router.beforeEach(async (to, _from, next) => {
     await authStore.loadGlobalPermissions()
   }
 
+  // 确保数据库 userId 已加载（看板"仅我的"等功能依赖此值）
+  if (authStore.isAuthenticated) {
+    await authStore.ensureUserId()
+  }
+
   // 如果权限加载失败（permissionsLoaded 仍为 false），对于管理路由拒绝访问（deny-by-default），
   // 对于其他需要权限的路由依赖后端 @PreAuthorize 做最终校验
   const permissionCheckAvailable = authStore.permissionsLoaded

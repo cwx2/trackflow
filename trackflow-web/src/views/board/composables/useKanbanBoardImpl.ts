@@ -325,12 +325,19 @@ const effectiveAssigneeId = computed(() => {
 })
 
 /** 切换"仅显示我的"按钮 */
-function toggleMyIssues() {
+async function toggleMyIssues() {
   if (assigneeFilter.value === 'me') {
     assigneeFilter.value = undefined
     localStorage.removeItem(ASSIGNEE_FILTER_KEY)
   } else {
     // 确保 userId 可用（首次登录时可能尚未从 /me 接口加载）
+    if (!authStore.user?.userId) {
+      try {
+        await authStore.ensureUserId()
+      } catch {
+        // ignore — will check again below
+      }
+    }
     if (!authStore.user?.userId) {
       Message.warning('正在加载用户信息，请稍候...')
       return

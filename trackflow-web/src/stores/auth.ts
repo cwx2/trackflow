@@ -238,6 +238,17 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  /**
+   * 确保 userId 已加载。
+   * 如果已有 userId 则立即返回；否则调用 /me 接口获取。
+   * 用于路由守卫保证看板"仅我的"等依赖 userId 的功能在页面刷新后正常工作。
+   */
+  async function ensureUserId(): Promise<void> {
+    if (!user.value) return
+    if (user.value.userId) return
+    await fetchUserProfile()
+  }
+
   async function login() {
     const { url, codeVerifier, state } = await buildLoginUrl()
     sessionStorage.setItem('pkce_code_verifier', codeVerifier)
@@ -367,6 +378,7 @@ export const useAuthStore = defineStore('auth', () => {
     handleCallback,
     refresh,
     logout,
+    ensureUserId,
     permissionsLoaded,
     globalPermissions,
     canCreateIssue,
