@@ -91,26 +91,29 @@
               @keydown.down.prevent="moveFieldSuggestion(1)"
               @keydown.up.prevent="moveFieldSuggestion(-1)"
             />
-            <!-- Field suggestions dropdown -->
-            <div v-if="filteredFieldSuggestions.length > 0" class="suggestions-dropdown">
-              <div
-                v-for="(field, i) in filteredFieldSuggestions"
-                :key="field.key"
-                class="suggestion-item"
-                :class="{ active: fieldSuggestionIndex === i }"
-                @click="selectField(field)"
-                @mouseenter="fieldSuggestionIndex = i"
-              >
-                <span class="suggestion-icon">{{ field.icon }}</span>
-                <span class="suggestion-label">{{ field.label }}</span>
-              </div>
-            </div>
           </div>
           <button v-else class="add-filter-btn" @click="startAddFilter">
             <icon-plus :size="12" />
             <span>添加筛选</span>
           </button>
         </div>
+
+        <!-- Field suggestions dropdown (teleported to body to escape overflow:hidden) -->
+        <Teleport to="body">
+          <div v-if="showFieldInput && filteredFieldSuggestions.length > 0" class="field-suggestions-dropdown" :style="fieldSuggestionsPosition">
+            <div
+              v-for="(field, i) in filteredFieldSuggestions"
+              :key="field.key"
+              class="suggestion-item"
+              :class="{ active: fieldSuggestionIndex === i }"
+              @click="selectField(field)"
+              @mouseenter="fieldSuggestionIndex = i"
+            >
+              <span class="suggestion-icon">{{ field.icon }}</span>
+              <span class="suggestion-label">{{ field.label }}</span>
+            </div>
+          </div>
+        </Teleport>
       </div>
 
       <!-- Operator selector popup -->
@@ -359,6 +362,7 @@ const fieldSearchText = ref('')
 const fieldInputRef = ref<HTMLInputElement | null>(null)
 const fieldInputWrapperRef = ref<HTMLElement | null>(null)
 const fieldSuggestionIndex = ref(0)
+const fieldSuggestionsPosition = ref<{ top: string; left: string; minWidth: string }>({ top: '0px', left: '0px', minWidth: '180px' })
 
 // Editing state
 const editingChip = ref<{ index: number; part: 'field' | 'operator' | 'value' } | null>(null)
@@ -509,7 +513,22 @@ function startAddFilter() {
   showFieldInput.value = true
   fieldSearchText.value = ''
   fieldSuggestionIndex.value = 0
-  nextTick(() => fieldInputRef.value?.focus())
+  nextTick(() => {
+    fieldInputRef.value?.focus()
+    updateFieldSuggestionsPosition()
+  })
+}
+
+function updateFieldSuggestionsPosition() {
+  const el = fieldInputWrapperRef.value
+  if (el) {
+    const rect = el.getBoundingClientRect()
+    fieldSuggestionsPosition.value = {
+      top: `${rect.bottom + 4}px`,
+      left: `${rect.left}px`,
+      minWidth: `${Math.max(rect.width, 180)}px`
+    }
+  }
 }
 
 function cancelFieldInput() {
@@ -1579,6 +1598,19 @@ defineExpose({ clearAll, setFilters, setSearchKeyword })
   box-shadow: var(--tf-shadow-xl);
   padding: 4px;
   z-index: 300;
+}
+
+/* Field suggestions dropdown - teleported to body (fixed positioning) */
+.field-suggestions-dropdown {
+  position: fixed;
+  background: var(--tf-bg-elevated);
+  border: 1px solid var(--tf-border);
+  border-radius: var(--tf-radius-lg);
+  box-shadow: var(--tf-shadow-xl);
+  padding: 4px;
+  z-index: 9999;
+  max-height: 280px;
+  overflow-y: auto;
 }
 
 .suggestion-item {
