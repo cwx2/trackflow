@@ -84,10 +84,7 @@ public class GroupController {
     @PostMapping
     @PreAuthorize("@perm.checkGlobal('system:manage_groups')")
     public R<UserGroupVO> create(@Valid @RequestBody CreateGroupDTO dto) {
-        UserGroup group = groupService.create(dto);
-        // 返回包含统计信息的 VO
-        return R.ok(groupService.getDetail(group.getId()) != null ?
-                toSimpleVO(groupService.getDetail(group.getId())) : null);
+        return R.ok(groupService.createAndGetVO(dto));
     }
 
     /**
@@ -148,17 +145,5 @@ public class GroupController {
     public R<Void> removeRole(@PathVariable("id") Long id, @PathVariable("roleId") Long roleId) {
         groupService.removeRole(id, roleId);
         return R.ok();
-    }
-
-    private UserGroupVO toSimpleVO(UserGroupDetailVO detail) {
-        UserGroupVO vo = new UserGroupVO();
-        vo.setId(detail.getId());
-        vo.setName(detail.getName());
-        vo.setDescription(detail.getDescription());
-        vo.setMemberCount(detail.getMembers() != null ? detail.getMembers().size() : 0);
-        vo.setRoleCount(detail.getRoles() != null ? detail.getRoles().size() : 0);
-        vo.setCreatedAt(detail.getCreatedAt());
-        vo.setUpdatedAt(detail.getUpdatedAt());
-        return vo;
     }
 }

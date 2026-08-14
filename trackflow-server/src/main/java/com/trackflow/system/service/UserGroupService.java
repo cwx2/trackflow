@@ -158,6 +158,15 @@ public class UserGroupService {
     }
 
     /**
+     * 创建用户组并返回 VO（含成员数/角色数统计）。
+     * 将原 GroupController.create() 中的 toSimpleVO 逻辑内聚至此。
+     */
+    public UserGroupVO createAndGetVO(CreateGroupDTO dto) {
+        UserGroup group = create(dto);
+        return toVO(group);
+    }
+
+    /**
      * 更新用户组
      */
     @AuditLog(action = "update_group", targetType = "user_group", targetId = "#groupId")

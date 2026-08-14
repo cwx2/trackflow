@@ -7,6 +7,7 @@ import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.model.PageResult;
 import com.trackflow.common.model.R;
 import com.trackflow.common.util.PageHelper;
+import com.trackflow.common.util.SecurityUtils;
 import com.trackflow.system.converter.UserConverter;
 import com.trackflow.system.dto.AssignRoleDTO;
 import com.trackflow.system.dto.CreateUserDTO;
@@ -84,13 +85,7 @@ public class UserController {
     @GetMapping("/{id}")
     @PreAuthorize("@perm.checkGlobal('system:manage_users')")
     public R<UserDetailVO> getById(@PathVariable("id") Long id) {
-        SysUser user = userService.getById(id);
-        List<Long> roleIds = userService.getUserGlobalRoleIds(id);
-
-        UserDetailVO detail = new UserDetailVO();
-        detail.setUser(userConverter.toVO(user));
-        detail.setRoleIds(roleIds.stream().map(String::valueOf).toList());
-        return R.ok(detail);
+        return R.ok(userVOAssembler.getUserDetail(id));
     }
 
     @GetMapping("/{id}/profile")
@@ -117,16 +112,7 @@ public class UserController {
     @PostMapping("/{id}/roles")
     @PreAuthorize("@perm.checkGlobal('system:manage_users')")
     public R<Void> assignRole(@PathVariable("id") Long id, @Valid @RequestBody AssignRoleDTO dto) {
-        Long roleId = dto.getRoleId();
-
-        // 检查角色类型必须是 global
-        SysRole role = roleService.getById(roleId);
-        if (!RoleTypes.GLOBAL.equals(role.getRoleType())) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST,
-                    "此处只能分配全局角色，项目角色请通过项目成员管理进行分配");
-        }
-
-        userService.assignGlobalRole(id, roleId);
+        userService.assignGlobalRole(id, dto.getRoleId());
         return R.ok();
     }
 
@@ -197,7 +183,7 @@ public class UserController {
     @GetMapping("/{id}/public-profile")
     @PreAuthorize("isAuthenticated()")
     public R<UserPublicProfileVO> getPublicProfile(@PathVariable("id") Long id) {
-        Long requesterId = com.trackflow.common.util.SecurityUtils.getCurrentUserId();
+        Long requesterId = SecurityUtils.getCurrentUserId();
         UserPublicProfileVO profile = userVOAssembler.getUserPublicProfile(id, requesterId);
         return R.ok(profile);
     }

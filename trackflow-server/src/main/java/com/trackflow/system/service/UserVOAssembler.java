@@ -2,14 +2,18 @@ package com.trackflow.system.service;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.trackflow.common.model.PageResult;
+import com.trackflow.system.converter.UserConverter;
 import com.trackflow.system.dto.UpdateMyProfileDTO;
 import com.trackflow.system.entity.SysUser;
 import com.trackflow.system.vo.UserDataExportVO;
+import com.trackflow.system.vo.UserDetailVO;
 import com.trackflow.system.vo.UserProfileVO;
 import com.trackflow.system.vo.UserPublicProfileVO;
 import com.trackflow.system.vo.UserVO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
+
+import java.util.List;
 
 /**
  * 用户 VO 组装器 — 负责将 UserService 的数据查询结果组装为 VO。
@@ -28,6 +32,20 @@ import org.springframework.stereotype.Component;
 public class UserVOAssembler {
 
     private final UserService userService;
+    private final UserConverter userConverter;
+
+    /**
+     * 获取用户详情（含全局角色 ID 列表）。
+     * 将原 UserController.getById() 中的手工 VO 构建逻辑迁移至此。
+     */
+    public UserDetailVO getUserDetail(Long userId) {
+        SysUser user = userService.getById(userId);
+        List<Long> roleIds = userService.getUserGlobalRoleIds(userId);
+        UserDetailVO detail = new UserDetailVO();
+        detail.setUser(userConverter.toVO(user));
+        detail.setRoleIds(roleIds.stream().map(String::valueOf).toList());
+        return detail;
+    }
 
     /**
      * 分页查询用户列表（含全局角色信息）

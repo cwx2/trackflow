@@ -41,9 +41,7 @@ public class OrganizationController {
     @PreAuthorize("@perm.checkGlobal('system:manage_orgs')")
     public R<OrgVO> create(@Valid @RequestBody CreateOrgDTO dto) {
         Organization org = organizationService.create(dto);
-        OrgVO vo = orgConverter.toVO(org);
-        vo.setProjectCount(organizationService.getProjectCount(org.getId()));
-        return R.ok(vo);
+        return R.ok(orgConverter.toVOWithCount(org, organizationService.getProjectCount(org.getId())));
     }
 
     @GetMapping("/stats")
@@ -66,7 +64,7 @@ public class OrganizationController {
 
         List<OrgVO> voList = orgConverter.toVOList(result.getRecords());
 
-        // 批量填充项目数量
+        // 批量填充项目数量（一次查询，避免 N+1）
         List<Long> orgIds = result.getRecords().stream().map(Organization::getId).collect(Collectors.toList());
         Map<Long, Integer> countMap = organizationService.getProjectCountMap(orgIds);
         for (int i = 0; i < voList.size(); i++) {
@@ -84,18 +82,14 @@ public class OrganizationController {
     @PreAuthorize("@perm.checkGlobal('system:manage_orgs')")
     public R<OrgDetailVO> getById(@PathVariable("id") Long id) {
         Organization org = organizationService.getById(id);
-        OrgDetailVO vo = orgConverter.toDetailVO(org);
-        vo.setProjectCount(organizationService.getProjectCount(id));
-        return R.ok(vo);
+        return R.ok(orgConverter.toDetailVOWithCount(org, organizationService.getProjectCount(id)));
     }
 
     @PutMapping("/{id}")
     @PreAuthorize("@perm.checkGlobal('system:manage_orgs')")
     public R<OrgVO> update(@PathVariable("id") Long id, @Valid @RequestBody UpdateOrgDTO dto) {
         Organization org = organizationService.update(id, dto);
-        OrgVO vo = orgConverter.toVO(org);
-        vo.setProjectCount(organizationService.getProjectCount(id));
-        return R.ok(vo);
+        return R.ok(orgConverter.toVOWithCount(org, organizationService.getProjectCount(id)));
     }
 
     @DeleteMapping("/{id}")
