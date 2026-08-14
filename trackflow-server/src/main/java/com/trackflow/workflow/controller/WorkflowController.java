@@ -198,15 +198,7 @@ public class WorkflowController {
     public R<List<WorkflowInitialStatusVO>> listInitialStatuses(@PathVariable("projectId") Long projectId) {
         Long effectiveProjectId = WorkflowScope.fromApi(projectId);
         List<WorkflowInitialStatus> configs = workflowService.listInitialStatuses(effectiveProjectId);
-        List<WorkflowInitialStatusVO> voList = configs.stream().map(config -> {
-            WorkflowInitialStatusVO vo = new WorkflowInitialStatusVO();
-            vo.setId(String.valueOf(config.getId()));
-            vo.setProjectId(config.getProjectId() != null ? String.valueOf(config.getProjectId()) : null);
-            vo.setIssueType(config.getIssueType());
-            vo.setStatusId(String.valueOf(config.getStatusId()));
-            return vo;
-        }).toList();
-        return R.ok(voList);
+        return R.ok(workflowConverter.toInitialStatusVOList(configs));
     }
 
     /**

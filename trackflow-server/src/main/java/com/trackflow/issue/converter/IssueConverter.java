@@ -2,11 +2,13 @@ package com.trackflow.issue.converter;
 
 import com.trackflow.common.converter.BaseConverter;
 import com.trackflow.issue.entity.*;
+import com.trackflow.issue.mapper.result.TrashRow;
 import com.trackflow.issue.vo.*;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * Issue 实体/VO 转换器 (MapStruct)
@@ -96,4 +98,27 @@ public interface IssueConverter extends BaseConverter {
     IssueTagVO toTagVO(IssueTag entity);
 
     List<IssueTagVO> toTagVOList(List<IssueTag> entities);
+
+    /**
+     * 回收站查询结果行 → VO（Long ID 转 String，其余字段直接复制）
+     */
+    default IssueTrashVO trashRowToVO(TrashRow row) {
+        if (row == null) return null;
+        IssueTrashVO vo = new IssueTrashVO();
+        vo.setId(longToString(row.getId()));
+        vo.setProjectId(longToString(row.getProjectId()));
+        vo.setIssueKey(row.getIssueKey());
+        vo.setTitle(row.getTitle());
+        vo.setIssueType(row.getIssueType());
+        vo.setPriority(row.getPriority());
+        vo.setAssigneeName(row.getAssigneeName());
+        vo.setDeletedAt(row.getDeletedAt());
+        vo.setDeletedByName(row.getDeletedByName());
+        return vo;
+    }
+
+    default List<IssueTrashVO> trashRowToVOList(List<TrashRow> rows) {
+        if (rows == null) return List.of();
+        return rows.stream().map(this::trashRowToVO).collect(Collectors.toList());
+    }
 }

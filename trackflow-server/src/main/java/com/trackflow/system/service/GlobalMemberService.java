@@ -29,6 +29,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * 全局项目角色分配服务。
@@ -145,11 +147,46 @@ public class GlobalMemberService {
     }
 
     /**
+     * Entity → 简化 VO（仅包含 ID 字段，用于 assign 接口的返回值）
+     */
+    public GlobalMemberVO toSimpleVO(GlobalMember gm) {
+        GlobalMemberVO vo = new GlobalMemberVO();
+        vo.setId(String.valueOf(gm.getId()));
+        vo.setUserId(String.valueOf(gm.getUserId()));
+        vo.setRoleId(String.valueOf(gm.getRoleId()));
+        vo.setCreatedAt(gm.getCreatedAt());
+        return vo;
+    }
+
+    /**
      * 列出所有全局分配记录（管理界面用）
+     * 批量预加载用户和角色信息，避免 N+1 查询
      */
     public List<GlobalMemberVO> listAll() {
         List<GlobalMember> members = globalMemberMapper.selectList(
                 new LambdaQueryWrapper<GlobalMember>().orderByDesc(GlobalMember::getCreatedAt));
+        if (members.isEmpty()) return List.of();
+
+        // 批量预加载
+        Set<Long> userIds = members.stream()
+                .flatMap(gm -> {
+                    List<Long> ids = new ArrayList<>();
+                    ids.add(gm.getUserId());
+                    if (gm.getCreatedBy() != null) ids.add(gm.getCreatedBy());
+                    return ids.stream();
+                })
+                .filter(java.util.Objects::nonNull)
+                .collect(java.util.stream.Collectors.toSet());
+        Set<Long> roleIds = members.stream()
+                .map(GlobalMember::getRoleId)
+                .collect(java.util.stream.Collectors.toSet());
+
+        Map<Long, SysUser> userMap = userIds.isEmpty() ? Map.of() :
+                userMapper.selectBatchIds(userIds).stream()
+                        .collect(java.util.stream.Collectors.toMap(SysUser::getId, u -> u));
+        Map<Long, SysRole> roleMap = roleIds.isEmpty() ? Map.of() :
+                roleMapper.selectBatchIds(roleIds).stream()
+                        .collect(java.util.stream.Collectors.toMap(SysRole::getId, r -> r));
 
         List<GlobalMemberVO> result = new ArrayList<>();
         for (GlobalMember gm : members) {
@@ -159,29 +196,25 @@ public class GlobalMemberService {
             vo.setRoleId(String.valueOf(gm.getRoleId()));
             vo.setCreatedAt(gm.getCreatedAt());
 
-            // 填充用户信息
-            SysUser user = userMapper.selectById(gm.getUserId());
+            SysUser user = userMap.get(gm.getUserId());
             if (user != null) {
                 vo.setUsername(user.getUsername());
                 vo.setDisplayName(user.getDisplayName());
                 vo.setEmail(user.getEmail());
             }
 
-            // 填充角色信息
-            SysRole role = roleMapper.selectById(gm.getRoleId());
+            SysRole role = roleMap.get(gm.getRoleId());
             if (role != null) {
                 vo.setRoleName(role.getName());
                 vo.setRoleCode(role.getCode());
             }
 
-            // 填充操作人
             if (gm.getCreatedBy() != null) {
-                SysUser creator = userMapper.selectById(gm.getCreatedBy());
+                SysUser creator = userMap.get(gm.getCreatedBy());
                 if (creator != null) {
                     vo.setCreatedByName(creator.getDisplayName());
                 }
             }
-
             result.add(vo);
         }
         return result;
@@ -189,12 +222,20 @@ public class GlobalMemberService {
 
     /**
      * 列出指定用户的全局角色分配
+     * 批量预加载角色信息，避免 N+1 查询
      */
     public List<GlobalMemberVO> listByUser(Long userId) {
         List<GlobalMember> members = globalMemberMapper.selectList(
                 new LambdaQueryWrapper<GlobalMember>()
                         .eq(GlobalMember::getUserId, userId)
                         .orderByDesc(GlobalMember::getCreatedAt));
+        if (members.isEmpty()) return List.of();
+
+        Set<Long> roleIds = members.stream()
+                .map(GlobalMember::getRoleId)
+                .collect(java.util.stream.Collectors.toSet());
+        Map<Long, SysRole> roleMap = roleMapper.selectBatchIds(roleIds).stream()
+                .collect(java.util.stream.Collectors.toMap(SysRole::getId, r -> r));
 
         List<GlobalMemberVO> result = new ArrayList<>();
         for (GlobalMember gm : members) {
@@ -204,7 +245,7 @@ public class GlobalMemberService {
             vo.setRoleId(String.valueOf(gm.getRoleId()));
             vo.setCreatedAt(gm.getCreatedAt());
 
-            SysRole role = roleMapper.selectById(gm.getRoleId());
+            SysRole role = roleMap.get(gm.getRoleId());
             if (role != null) {
                 vo.setRoleName(role.getName());
                 vo.setRoleCode(role.getCode());

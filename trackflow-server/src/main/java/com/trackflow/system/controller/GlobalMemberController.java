@@ -32,13 +32,7 @@ public class GlobalMemberController {
     @PreAuthorize("@perm.checkGlobal('system:manage_users')")
     public R<GlobalMemberVO> assign(@Valid @RequestBody GlobalMemberDTO dto) {
         GlobalMember gm = globalMemberService.assign(dto);
-        // 返回简化的 VO
-        GlobalMemberVO vo = new GlobalMemberVO();
-        vo.setId(String.valueOf(gm.getId()));
-        vo.setUserId(String.valueOf(gm.getUserId()));
-        vo.setRoleId(String.valueOf(gm.getRoleId()));
-        vo.setCreatedAt(gm.getCreatedAt());
-        return R.ok(vo);
+        return R.ok(globalMemberService.toSimpleVO(gm));
     }
 
     /**

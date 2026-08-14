@@ -159,19 +159,7 @@ public class IssueController {
             @RequestParam(value = "page", defaultValue = "1") int page,
             @RequestParam(value = "pageSize", defaultValue = "20") int pageSize) {
         Page<TrashRow> result = issueService.listTrashPage(projectId, page, pageSize);
-        List<IssueTrashVO> voList = result.getRecords().stream().map(row -> {
-            IssueTrashVO vo = new IssueTrashVO();
-            vo.setId(String.valueOf(row.getId()));
-            vo.setProjectId(String.valueOf(row.getProjectId()));
-            vo.setIssueKey(row.getIssueKey());
-            vo.setTitle(row.getTitle());
-            vo.setIssueType(row.getIssueType());
-            vo.setPriority(row.getPriority());
-            vo.setAssigneeName(row.getAssigneeName());
-            vo.setDeletedByName(row.getDeletedByName());
-            vo.setDeletedAt(row.getDeletedAt());
-            return vo;
-        }).toList();
+        List<IssueTrashVO> voList = issueConverter.trashRowToVOList(result.getRecords());
         return R.ok(new PageResult<>(voList, result.getTotal(),
                 (int) result.getCurrent(), (int) result.getSize()));
     }
