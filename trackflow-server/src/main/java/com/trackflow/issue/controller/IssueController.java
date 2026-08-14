@@ -7,6 +7,8 @@ import com.trackflow.common.model.PageResult;
 import com.trackflow.common.model.R;
 import com.trackflow.customfield.converter.CustomFieldConverter;
 import com.trackflow.customfield.service.CustomFieldService;
+import com.trackflow.customfield.dto.UpdateCustomFieldValueDTO;
+import com.trackflow.customfield.vo.CustomFieldOptionVO;
 import com.trackflow.issue.converter.IssueConverter;
 import com.trackflow.issue.dto.*;
 import com.trackflow.issue.entity.Issue;
@@ -24,7 +26,12 @@ import com.trackflow.issue.service.IssueTagService;
 import com.trackflow.issue.service.IssueTypeFieldService;
 import com.trackflow.issue.service.IssueVOAssembler;
 import com.trackflow.issue.service.PriorityFieldService;
+import com.trackflow.issue.service.IssueCommentService;
+import com.trackflow.issue.service.IssueAttachmentService;
+import com.trackflow.issue.service.IssueActivityService;
+import com.trackflow.workflow.service.TransitionActionEngine;
 import com.trackflow.issue.vo.*;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -32,6 +39,9 @@ import org.springframework.security.core.parameters.P;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 @RestController
@@ -52,10 +62,10 @@ public class IssueController {
     private final CustomFieldService customFieldService;
     private final PriorityFieldService priorityFieldService;
     private final IssueTypeFieldService issueTypeFieldService;
-    private final com.trackflow.issue.service.IssueCommentService commentService;
-    private final com.trackflow.issue.service.IssueAttachmentService attachmentService;
-    private final com.trackflow.issue.service.IssueActivityService activityService;
-    private final com.trackflow.workflow.service.TransitionActionEngine transitionActionEngine;
+    private final IssueCommentService commentService;
+    private final IssueAttachmentService attachmentService;
+    private final IssueActivityService activityService;
+    private final TransitionActionEngine transitionActionEngine;
 
     @PostMapping
     @PreAuthorize("@perm.check(#dto.projectId, 'issue:create')")
@@ -69,9 +79,8 @@ public class IssueController {
         Page<Issue> page = issueService.listIssuesPage(query);
         List<IssueVO> voList = issueConverter.toVOList(page.getRecords());
         issueVOAssembler.assemble(page.getRecords(), voList);
-        // Populate matchContext when keyword search is active
         if (query.getKeyword() != null && !query.getKeyword().isBlank()) {
-            fillMatchContext(page.getRecords(), voList, query.getKeyword().trim());
+            issueVOAssembler.fillMatchContext(page.getRecords(), voList, query.getKeyword().trim());
         }
         return R.ok(new PageResult<>(voList, page.getTotal(),
                 (int) page.getCurrent(), (int) page.getSize()));
@@ -117,7 +126,7 @@ public class IssueController {
     public R<IssueDetailVO> updateCustomFieldValue(
             @PathVariable("id") Long id,
             @PathVariable("fieldId") Long fieldId,
-            @Valid @RequestBody com.trackflow.customfield.dto.UpdateCustomFieldValueDTO dto) {
+            @Valid @RequestBody UpdateCustomFieldValueDTO dto) {
         Issue issue = issueService.getById(id);
 
         // Check field-level editability (role-based)
@@ -259,12 +268,12 @@ public class IssueController {
     @PostMapping("/export")
     @PreAuthorize("isAuthenticated()")
     public void exportIssues(@Valid @RequestBody IssueExportDTO dto,
-                             jakarta.servlet.http.HttpServletResponse response) throws java.io.IOException {
+                             HttpServletResponse response) throws IOException {
         IssueExportService.ExportResult result = issueExportService.export(dto);
 
         response.setContentType(result.contentType());
         response.setHeader("Content-Disposition",
-                "attachment; filename=\"" + java.net.URLEncoder.encode(result.filename(), java.nio.charset.StandardCharsets.UTF_8) + "\"");
+                "attachment; filename=\"" + URLEncoder.encode(result.filename(), StandardCharsets.UTF_8) + "\"");
         response.setContentLength(result.content().length);
         response.getOutputStream().write(result.content());
         response.getOutputStream().flush();
@@ -278,42 +287,7 @@ public class IssueController {
         IssueService.AvailableTransitionsResult data = issueService.getAvailableTransitionsData(id);
         Issue issue = issueService.getById(id);
         List<IssueStatusVO> voList = issueConverter.toStatusVOList(data.statuses());
-
-        // 附加转换显示名
-        for (IssueStatusVO vo : voList) {
-            String tName = data.transitionNames().get(Long.valueOf(vo.getId()));
-            if (tName != null) {
-                vo.setTransitionName(tName);
-            }
-        }
-
-        // 附加强制评论标记
-        for (IssueStatusVO vo : voList) {
-            if (data.requireCommentStatusIds().contains(Long.valueOf(vo.getId()))) {
-                vo.setRequireComment(true);
-            }
-        }
-
-        // 附加阻塞信息
-        if (!data.blockerKeys().isEmpty()) {
-            for (IssueStatusVO vo : voList) {
-                if (Boolean.TRUE.equals(vo.getIsClosed())) {
-                    vo.setBlocked(true);
-                    vo.setBlockedBy(data.blockerKeys());
-                }
-            }
-        }
-
-        // 附加每个转换所需的必填字段 ID 列表（来自 require_field 动作配置）
-        for (IssueStatusVO vo : voList) {
-            List<Long> requiredIds = transitionActionEngine.getRequiredFieldIds(
-                    issue.getProjectId(), issue.getIssueType(),
-                    issue.getStatusId(), Long.valueOf(vo.getId()));
-            if (!requiredIds.isEmpty()) {
-                vo.setRequiredFieldIds(requiredIds.stream().map(String::valueOf).toList());
-            }
-        }
-
+        issueVOAssembler.assembleAvailableTransitions(data, issue, voList);
         return R.ok(voList);
     }
 
@@ -407,7 +381,7 @@ public class IssueController {
     public R<IssueAttachmentVO> updateAttachmentVisibility(
             @PathVariable("id") Long id,
             @PathVariable("attachmentId") Long attachmentId,
-            @Valid @RequestBody com.trackflow.issue.dto.UpdateAttachmentVisibilityDTO dto) {
+            @Valid @RequestBody UpdateAttachmentVisibilityDTO dto) {
         IssueAttachment attachment = attachmentService.updateAttachmentVisibility(id, attachmentId, dto.getVisibleToGroupIds());
         return R.ok(attachmentService.buildAttachmentVO(attachment));
     }
@@ -493,7 +467,7 @@ public class IssueController {
     @PatchMapping("/statuses/{statusId}/position")
     @PreAuthorize("@perm.checkGlobal('system:admin')")
     public R<Void> updateStatusPosition(@PathVariable("statusId") Long statusId,
-                                        @Valid @RequestBody com.trackflow.issue.dto.UpdateStatusPositionDTO dto) {
+                                        @Valid @RequestBody UpdateStatusPositionDTO dto) {
         issueService.updateStatusPosition(statusId, dto.getCanvasX(), dto.getCanvasY());
         return R.ok();
     }
@@ -503,7 +477,7 @@ public class IssueController {
      */
     @PutMapping("/statuses/positions")
     @PreAuthorize("@perm.checkGlobal('system:admin')")
-    public R<Void> batchUpdateStatusPositions(@Valid @RequestBody com.trackflow.issue.dto.BatchUpdateStatusPositionDTO dto) {
+    public R<Void> batchUpdateStatusPositions(@Valid @RequestBody BatchUpdateStatusPositionDTO dto) {
         issueService.batchUpdateStatusPositions(dto.getPositions());
         return R.ok();
     }
@@ -513,7 +487,7 @@ public class IssueController {
     @PostMapping("/{id}/move")
     @PreAuthorize("@perm.checkIssue(#id, 'issue:move')")
     public R<IssueDetailVO> move(@PathVariable("id") Long id,
-                                 @Valid @RequestBody com.trackflow.issue.dto.MoveIssueDTO dto) {
+                                 @Valid @RequestBody MoveIssueDTO dto) {
         Issue moved = issueService.moveToProject(id, dto);
         return R.ok(assembleDetail(moved.getId()));
     }
@@ -526,7 +500,7 @@ public class IssueController {
      * 当 projectId 为空时返回全局选项集。
      */
     @GetMapping("/priority-options")
-    public R<List<com.trackflow.customfield.vo.CustomFieldOptionVO>> getPriorityOptions(
+    public R<List<CustomFieldOptionVO>> getPriorityOptions(
             @RequestParam(value = "projectId", required = false) Long projectId) {
         var options = projectId != null
                 ? priorityFieldService.getPriorityOptions(projectId)
@@ -542,7 +516,7 @@ public class IssueController {
      * 当 projectId 为空时返回全局选项集。
      */
     @GetMapping("/issue-type-options")
-    public R<List<com.trackflow.customfield.vo.CustomFieldOptionVO>> getIssueTypeOptions(
+    public R<List<CustomFieldOptionVO>> getIssueTypeOptions(
             @RequestParam(value = "projectId", required = false) Long projectId) {
         var options = projectId != null
                 ? issueTypeFieldService.getIssueTypeOptions(projectId)
@@ -566,68 +540,5 @@ public class IssueController {
     private IssueDetailVO assembleDetailFromRow(IssueDetailRow row) {
         List<ChildIssueRow> children = issueService.listChildrenRows(row.getId());
         return issueDetailVOAssembler.assemble(row, children);
-    }
-
-    /**
-     * 为搜索结果填充 matchContext 和 matchSource 字段。
-     * 当关键词匹配来自描述（而非标题）时，提取匹配位置附近的上下文片段，
-     * 帮助用户理解为什么该工单出现在搜索结果中。
-     * matchSource 标识匹配来源（description/issueKey），前端据此展示不同的视觉样式。
-     */
-    private void fillMatchContext(List<Issue> issues, List<IssueVO> voList, String keyword) {
-        String lowerKeyword = keyword.toLowerCase();
-        for (int i = 0; i < issues.size(); i++) {
-            Issue issue = issues.get(i);
-            IssueVO vo = voList.get(i);
-            // Only show matchContext if title does NOT contain the keyword
-            // (if title already contains it, the highlight on title is sufficient)
-            String title = issue.getTitle();
-            if (title != null && title.toLowerCase().contains(lowerKeyword)) {
-                continue;
-            }
-            // Try to extract context from description
-            String description = issue.getDescription();
-            if (description != null && !description.isBlank()) {
-                String context = extractSnippet(description, lowerKeyword, 80);
-                if (context != null) {
-                    vo.setMatchContext(context);
-                    vo.setMatchSource("description");
-                    continue;
-                }
-            }
-            // If no match in title or description, it might have matched via issue_key or assignee.
-            // Provide a hint for issue_key match
-            String issueKey = issue.getIssueKey();
-            if (issueKey != null && issueKey.toLowerCase().contains(lowerKeyword)) {
-                vo.setMatchContext(issueKey);
-                vo.setMatchSource("issueKey");
-            }
-            // Note: assignee name match context is not easily extractable here without
-            // an extra query; the highlight on title is the primary UX improvement.
-        }
-    }
-
-    /**
-     * 从文本中提取关键词匹配位置附近的上下文片段。
-     * 先去除 Markdown/HTML 标签简单清理后再匹配。
-     */
-    private String extractSnippet(String text, String lowerKeyword, int maxLength) {
-        // Strip basic markdown/HTML for cleaner snippets
-        String cleaned = text.replaceAll("<[^>]+>", "").replaceAll("[#*_~`>]", "").trim();
-        if (cleaned.isBlank()) return null;
-
-        String lowerCleaned = cleaned.toLowerCase();
-        int idx = lowerCleaned.indexOf(lowerKeyword);
-        if (idx == -1) return null;
-
-        int contextBefore = 30;
-        int start = Math.max(0, idx - contextBefore);
-        int end = Math.min(cleaned.length(), start + maxLength);
-
-        StringBuilder sb = new StringBuilder();
-        if (start > 0) sb.append("...");
-        sb.append(cleaned, start, end);
-        if (end < cleaned.length()) sb.append("...");
-        return sb.toString();
     }
 }

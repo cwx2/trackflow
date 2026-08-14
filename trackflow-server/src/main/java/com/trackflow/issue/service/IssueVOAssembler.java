@@ -23,6 +23,7 @@ import com.trackflow.common.util.SecurityUtils;
 import com.trackflow.system.entity.SysUser;
 import com.trackflow.system.mapper.SysUserMapper;
 import com.trackflow.workflow.service.WorkflowService;
+import com.trackflow.workflow.service.TransitionActionEngine;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -58,6 +59,7 @@ public class IssueVOAssembler {
     private final CustomFieldOptionMapper customFieldOptionMapper;
     private final IssueTagService tagService;
     private final WorkflowService workflowService;
+    private final TransitionActionEngine transitionActionEngine;
     private final com.trackflow.board.mapper.BoardGeneralConfigMapper boardGeneralConfigMapper;
 
     /**
@@ -426,5 +428,115 @@ public class IssueVOAssembler {
         boolean isAssignee = currentUserId.equals(issue.getAssigneeId());
         return issue.getProjectId() + ":" + issue.getIssueType() + ":"
                 + issue.getStatusId() + ":" + isAuthor + ":" + isAssignee;
+    }
+
+    /**
+     * 为关键词搜索结果填充 matchContext 和 matchSource 字段。
+     * 当关键词匹配来自描述（而非标题）时，提取匹配位置附近的上下文片段，
+     * 帮助用户理解为什么该工单出现在搜索结果中。
+     * 从 IssueController 迁移至此，遵循"VO 组装逻辑不在 Controller"原则。
+     *
+     * @param issues  原始 Issue 实体列表（与 voList 顺序一一对应）
+     * @param voList  已组装的 IssueVO 列表（将被原地填充 matchContext/matchSource）
+     * @param keyword 用户搜索关键词（原始大小写）
+     */
+    public void fillMatchContext(List<Issue> issues, List<IssueVO> voList, String keyword) {
+        String lowerKeyword = keyword.toLowerCase();
+        for (int i = 0; i < issues.size(); i++) {
+            Issue issue = issues.get(i);
+            IssueVO vo = voList.get(i);
+            // 标题已含关键词时无需额外 context（前端高亮标题即可）
+            String title = issue.getTitle();
+            if (title != null && title.toLowerCase().contains(lowerKeyword)) {
+                continue;
+            }
+            // 尝试从描述中提取上下文片段
+            String description = issue.getDescription();
+            if (description != null && !description.isBlank()) {
+                String context = extractSnippet(description, lowerKeyword, 80);
+                if (context != null) {
+                    vo.setMatchContext(context);
+                    vo.setMatchSource("description");
+                    continue;
+                }
+            }
+            // issueKey 匹配时给出提示
+            String issueKey = issue.getIssueKey();
+            if (issueKey != null && issueKey.toLowerCase().contains(lowerKeyword)) {
+                vo.setMatchContext(issueKey);
+                vo.setMatchSource("issueKey");
+            }
+        }
+    }
+
+    /**
+     * 从文本中提取关键词匹配位置附近的上下文片段。
+     * 先去除 Markdown/HTML 标签做简单清理后再匹配。
+     */
+    private String extractSnippet(String text, String lowerKeyword, int maxLength) {
+        String cleaned = text.replaceAll("<[^>]+>", "").replaceAll("[#*_~`>]", "").trim();
+        if (cleaned.isBlank()) return null;
+
+        String lowerCleaned = cleaned.toLowerCase();
+        int idx = lowerCleaned.indexOf(lowerKeyword);
+        if (idx == -1) return null;
+
+        int contextBefore = 30;
+        int start = Math.max(0, idx - contextBefore);
+        int end = Math.min(cleaned.length(), start + maxLength);
+
+        StringBuilder sb = new StringBuilder();
+        if (start > 0) sb.append("...");
+        sb.append(cleaned, start, end);
+        if (end < cleaned.length()) sb.append("...");
+        return sb.toString();
+    }
+
+    /**
+     * 组装可用状态转换 VO 列表，附加转换显示名、强制评论标记、阻塞信息、必填字段列表。
+     * 将原 IssueController.getAvailableTransitions 中的 4 个 for 循环下沉至此，
+     * 遵循"Controller 只编排，不写业务逻辑"原则。
+     *
+     * @param data    IssueService 查询到的原始转换数据
+     * @param issue   当前工单（用于查询 requiredFieldIds）
+     * @param voList  已由 Converter 转换好的 IssueStatusVO 列表（将被原地填充）
+     */
+    public void assembleAvailableTransitions(IssueService.AvailableTransitionsResult data,
+                                             com.trackflow.issue.entity.Issue issue,
+                                             List<com.trackflow.issue.vo.IssueStatusVO> voList) {
+        // 附加转换显示名
+        for (com.trackflow.issue.vo.IssueStatusVO vo : voList) {
+            String tName = data.transitionNames().get(Long.valueOf(vo.getId()));
+            if (tName != null) {
+                vo.setTransitionName(tName);
+            }
+        }
+
+        // 附加强制评论标记
+        for (com.trackflow.issue.vo.IssueStatusVO vo : voList) {
+            if (data.requireCommentStatusIds().contains(Long.valueOf(vo.getId()))) {
+                vo.setRequireComment(true);
+            }
+        }
+
+        // 附加阻塞信息
+        if (!data.blockerKeys().isEmpty()) {
+            for (com.trackflow.issue.vo.IssueStatusVO vo : voList) {
+                if (Boolean.TRUE.equals(vo.getIsClosed())) {
+                    vo.setBlocked(true);
+                    vo.setBlockedBy(data.blockerKeys());
+                }
+            }
+        }
+
+        // 附加每个转换所需的必填字段 ID 列表（来自 require_field 动作配置）
+        for (com.trackflow.issue.vo.IssueStatusVO vo : voList) {
+            List<Long> requiredIds = transitionActionEngine.getRequiredFieldIds(
+                    issue.getProjectId(), issue.getIssueType(),
+                    issue.getStatusId(), Long.valueOf(vo.getId()));
+            if (!requiredIds.isEmpty()) {
+                vo.setRequiredFieldIds(requiredIds.stream().map(String::valueOf).toList());
+            }
+        }
     }
 }
