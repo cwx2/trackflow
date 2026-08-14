@@ -219,6 +219,14 @@ public class CustomFieldController {
         return R.ok(customFieldService.listByProjectForUser(projectId, issueType));
     }
 
+    /**
+     * 获取全局自定义字段（isForAll=true），供「全部项目」视图筛选器使用
+     */
+    @GetMapping("/custom-fields/global")
+    public R<List<CustomFieldDefinitionVO>> listGlobalFields() {
+        return R.ok(customFieldService.listGlobalFieldsForUser());
+    }
+
     @GetMapping("/projects/{projectId}/available-columns")
     public R<List<AvailableColumnVO>> availableColumnsByProject(@PathVariable("projectId") Long projectId) {
         return R.ok(customFieldService.getAvailableColumns(projectId));

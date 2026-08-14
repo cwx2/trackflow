@@ -441,12 +441,25 @@ const filteredValueOptions = computed<ValueOption[]>(() => {
 
 watch(() => props.projectId, (newId) => {
   if (newId) loadProjectFields(newId)
-  else { projectFields.value = []; projectFieldsLoaded.value = true }
+  else loadGlobalFields()
 }, { immediate: true })
 
 async function loadProjectFields(projectId: string) {
   try {
     const res = await customFieldApi.listByProject(projectId)
+    const fields = res.data || []
+    projectFields.value = fields.map(cfToFieldDef)
+    projectFieldsLoaded.value = true
+  } catch {
+    projectFields.value = []
+    projectFieldsLoaded.value = true
+  }
+}
+
+/** 无 projectId（全部项目视图）时，加载全局 isForAll 字段 */
+async function loadGlobalFields() {
+  try {
+    const res = await customFieldApi.listGlobal()
     const fields = res.data || []
     projectFields.value = fields.map(cfToFieldDef)
     projectFieldsLoaded.value = true

@@ -145,6 +145,11 @@ export const customFieldApi = {
     return request.get<any, R<CustomFieldDefinitionVO[]>>(`/projects/${projectId}/custom-fields`, { params })
   },
 
+  /** 获取全局自定义字段（isForAll=true），供「全部项目」视图筛选器使用 */
+  listGlobal() {
+    return request.get<any, R<CustomFieldDefinitionVO[]>>('/custom-fields/global')
+  },
+
   /** 获取项目可用的列配置（固定列 + 自定义字段列） */
   availableColumns(projectId?: string) {
     if (projectId) {
