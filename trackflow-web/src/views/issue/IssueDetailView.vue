@@ -189,6 +189,7 @@
     :require-comment="transitionRequireComment"
     :show-assignee="true"
     :members="members"
+    :all-members="allProjectMembers"
     :required-field-ids="transitionTarget?.requiredFieldIds"
     :custom-field-defs="customFieldDefs"
     @confirm="onTransitionConfirm"

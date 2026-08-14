@@ -34,10 +34,10 @@
             :placeholder="`请选择${field.name}`"
             allow-clear
             :allow-search="true"
-            :filter-option="filterMemberOption"
+            :filter-option="filterFieldMemberOption"
             :class="{ 'field-error': fieldErrors[field.id] }"
           >
-            <a-option v-for="member in members" :key="member.userId" :value="member.userId">
+            <a-option v-for="member in fieldMembers" :key="member.userId" :value="member.userId">
               {{ member.displayName || member.username }}
             </a-option>
           </a-select>
@@ -137,8 +137,10 @@ const props = defineProps<{
   requireComment: boolean
   /** 是否显示负责人选择器 */
   showAssignee?: boolean
-  /** 可分配的项目成员列表 */
+  /** 可分配的项目成员列表（用于指派人选择器，按 issue:edit 权限过滤） */
   members?: ProjectMemberVO[]
+  /** 所有项目成员列表（用于 user 类型自定义字段选择器，包含所有角色） */
+  allMembers?: ProjectMemberVO[]
   /** 目标状态所需的必填字段 ID 列表 */
   requiredFieldIds?: string[]
   /** 项目的自定义字段定义列表（用于匹配 requiredFieldIds 并渲染输入控件） */
@@ -207,9 +209,24 @@ const canSubmit = computed(() => {
   return true
 })
 
-/** Filter member options for search */
+/** 用于 user 类型自定义字段的成员列表（优先使用 allMembers，fallback 到 members） */
+const fieldMembers = computed(() => {
+  if (props.allMembers && props.allMembers.length > 0) return props.allMembers
+  return props.members || []
+})
+
+/** Filter member options for assignee selector (uses members prop) */
 function filterMemberOption(inputValue: string, option: any) {
   const member = props.members?.find(m => m.userId === option.value)
+  if (!member) return false
+  const keyword = inputValue.toLowerCase()
+  return (member.displayName || '').toLowerCase().includes(keyword) ||
+    (member.username || '').toLowerCase().includes(keyword)
+}
+
+/** Filter member options for user-type custom field selector (uses allMembers/fieldMembers) */
+function filterFieldMemberOption(inputValue: string, option: any) {
+  const member = fieldMembers.value.find(m => m.userId === option.value)
   if (!member) return false
   const keyword = inputValue.toLowerCase()
   return (member.displayName || '').toLowerCase().includes(keyword) ||
