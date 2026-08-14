@@ -379,10 +379,17 @@ export function useIssueDetailActions(deps: ActionDeps) {
   async function onQuickActionExecuted() { await deps.loadAll() }
 
   async function onTransition(target: StatusInfo) {
-    // 始终设置目标状态（弹窗 show-assignee 为 true 时需要让用户确认目标状态并选择 assignee）
-    transitionTarget.value = target
-    transitionRequireComment.value = target.requireComment || false
-    showTransitionModal.value = true
+    // 判断是否为需要额外输入的复杂转换（需要填写评论或有必填字段）
+    const needsModal = target.requireComment || (target.requiredFieldIds && target.requiredFieldIds.length > 0)
+    if (needsModal) {
+      // 复杂转换：弹出确认弹窗让用户填写必要信息
+      transitionTarget.value = target
+      transitionRequireComment.value = target.requireComment || false
+      showTransitionModal.value = true
+    } else {
+      // 简单转换：直接执行，无需确认弹窗（YouTrack 标准行为）
+      await executeTransition(target, undefined, undefined, undefined, false)
+    }
   }
 
   async function onTransitionConfirm(comment: string, assigneeId: string | undefined, assigneeExplicit: boolean) {
