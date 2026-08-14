@@ -5,6 +5,7 @@ import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.project.entity.ProjectEnabledModule;
 import com.trackflow.project.mapper.ProjectEnabledModuleMapper;
+import com.trackflow.project.vo.ProjectModulesVO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -211,5 +212,18 @@ public class ProjectModuleService {
     public void invalidateCache(Long projectId) {
         String cacheKey = CACHE_KEY_PREFIX + projectId;
         redisTemplate.delete(cacheKey);
+    }
+
+    /**
+     * 构建项目模块配置 VO（封装 Controller 里重复的构建逻辑）
+     *
+     * @param enabledModules 当前项目已启用的模块集合
+     */
+    public ProjectModulesVO buildModulesVO(Set<String> enabledModules) {
+        ProjectModulesVO vo = new ProjectModulesVO();
+        vo.setEnabledModules(new java.util.ArrayList<>(enabledModules));
+        vo.setAllModules(ALL_MODULES);
+        vo.setCoreModules(new java.util.ArrayList<>(CORE_MODULES));
+        return vo;
     }
 }

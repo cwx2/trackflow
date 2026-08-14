@@ -10,4 +10,10 @@ public class AssignedIssueCountVO {
 
     /** 该成员在该项目中被分配的工单数量 */
     private Integer count;
+
+    public static AssignedIssueCountVO of(int count) {
+        AssignedIssueCountVO vo = new AssignedIssueCountVO();
+        vo.setCount(count);
+        return vo;
+    }
 }

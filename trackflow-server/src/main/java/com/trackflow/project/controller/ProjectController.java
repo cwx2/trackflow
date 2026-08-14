@@ -217,9 +217,7 @@ public class ProjectController {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "至少需要指定一个角色");
         }
         int affectedIssueCount = projectService.updateMemberRoles(projectId, userId, effectiveRoleIds);
-        MemberOperationResultVO vo = new MemberOperationResultVO();
-        vo.setAffectedIssueCount(affectedIssueCount);
-        return R.ok(vo);
+        return R.ok(MemberOperationResultVO.of(affectedIssueCount));
     }
 
     @DeleteMapping("/{id}/members/{userId}")
@@ -227,9 +225,7 @@ public class ProjectController {
     public R<MemberOperationResultVO> removeMember(@PathVariable("id") String id, @PathVariable("userId") Long userId) {
         Long projectId = projectService.resolveProjectId(id);
         int affectedCount = projectService.removeMember(projectId, userId);
-        MemberOperationResultVO vo = new MemberOperationResultVO();
-        vo.setAffectedIssueCount(affectedCount);
-        return R.ok(vo);
+        return R.ok(MemberOperationResultVO.of(affectedCount));
     }
 
     @GetMapping("/{id}/members/{userId}/assigned-issue-count")
@@ -237,9 +233,7 @@ public class ProjectController {
     public R<AssignedIssueCountVO> getAssignedIssueCount(@PathVariable("id") String id, @PathVariable("userId") Long userId) {
         Long projectId = projectService.resolveProjectId(id);
         int count = projectService.countAssignedIssues(projectId, userId);
-        AssignedIssueCountVO vo = new AssignedIssueCountVO();
-        vo.setCount(count);
-        return R.ok(vo);
+        return R.ok(AssignedIssueCountVO.of(count));
     }
 
     // ========== 项目组成员管理（对标 YouTrack People 页面） ==========
@@ -357,11 +351,7 @@ public class ProjectController {
     public R<ProjectModulesVO> getEnabledModules(@PathVariable("id") String id) {
         Long projectId = projectService.resolveProjectId(id);
         Set<String> enabledModules = projectModuleService.getEnabledModules(projectId);
-        ProjectModulesVO vo = new ProjectModulesVO();
-        vo.setEnabledModules(new java.util.ArrayList<>(enabledModules));
-        vo.setAllModules(ProjectModuleService.ALL_MODULES);
-        vo.setCoreModules(new java.util.ArrayList<>(ProjectModuleService.CORE_MODULES));
-        return R.ok(vo);
+        return R.ok(projectModuleService.buildModulesVO(enabledModules));
     }
 
     /**
@@ -378,11 +368,7 @@ public class ProjectController {
         permissionService.invalidateCacheForProject(projectId);
         // 返回最新状态
         Set<String> enabledModules = projectModuleService.getEnabledModules(projectId);
-        ProjectModulesVO vo = new ProjectModulesVO();
-        vo.setEnabledModules(new java.util.ArrayList<>(enabledModules));
-        vo.setAllModules(ProjectModuleService.ALL_MODULES);
-        vo.setCoreModules(new java.util.ArrayList<>(ProjectModuleService.CORE_MODULES));
-        return R.ok(vo);
+        return R.ok(projectModuleService.buildModulesVO(enabledModules));
     }
 
     // ========== 项目收藏 ==========
@@ -396,9 +382,7 @@ public class ProjectController {
         Long projectId = projectService.resolveProjectId(id);
         Long userId = SecurityUtils.getCurrentUserId();
         boolean favorited = projectService.toggleFavorite(projectId, userId);
-        FavoriteToggleVO vo = new FavoriteToggleVO();
-        vo.setFavorited(favorited);
-        return R.ok(vo);
+        return R.ok(FavoriteToggleVO.of(favorited));
     }
 
     // ========== 项目概览仪表盘 ==========

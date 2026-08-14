@@ -1,6 +1,7 @@
 package com.trackflow.project.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.trackflow.auth.service.PermissionService;
@@ -61,15 +62,36 @@ import com.trackflow.project.vo.ProjectMemberVO;
 import com.trackflow.project.vo.ProjectMembersViewVO;
 import com.trackflow.project.vo.ProjectStatisticsVO;
 import com.trackflow.project.vo.ProjectTrashSettingsVO;
+import com.trackflow.project.vo.ProjectTimeTrackingSettingsVO;
+import com.trackflow.project.vo.TimeTrackingDisableImpactVO;
 import com.trackflow.project.vo.ProjectVO;
 import com.trackflow.project.dto.AddGroupMemberDTO;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.trackflow.customfield.entity.CustomFieldDefinition;
+import com.trackflow.customfield.entity.CustomFieldProject;
+import com.trackflow.customfield.mapper.CustomFieldDefinitionMapper;
+import com.trackflow.customfield.mapper.CustomFieldProjectMapper;
+import com.trackflow.common.event.ProjectVisibilityChangedEvent;
+import com.trackflow.integration.service.MutedThreadService;
+import com.trackflow.system.mapper.UserGroupMapper;
+import com.trackflow.system.mapper.UserGroupMemberMapper;
+import com.trackflow.system.mapper.UserGroupRoleMapper;
+import com.trackflow.system.service.GlobalMemberService;
+import com.trackflow.system.entity.UserGroup;
+import com.trackflow.system.entity.UserGroupMember;
+import com.trackflow.system.entity.UserGroupRole;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * 项目管理服务
@@ -100,16 +122,16 @@ public class ProjectService {
     private final ProjectWorkflowMapper projectWorkflowMapper;
     private final ProjectActivityService projectActivityService;
     private final ProjectInitializationService projectInitializationService;
-    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+    private final ObjectMapper objectMapper;
     private final ApplicationEventPublisher eventPublisher;
-    private final com.trackflow.integration.service.MutedThreadService mutedThreadService;
-    private final com.trackflow.system.service.GlobalMemberService globalMemberService;
-    private final com.trackflow.project.service.ProjectModuleService projectModuleService;
-    private final com.trackflow.customfield.mapper.CustomFieldDefinitionMapper customFieldDefinitionMapper;
-    private final com.trackflow.customfield.mapper.CustomFieldProjectMapper customFieldProjectMapper;
-    private final com.trackflow.system.mapper.UserGroupRoleMapper userGroupRoleMapper;
-    private final com.trackflow.system.mapper.UserGroupMapper userGroupMapper;
-    private final com.trackflow.system.mapper.UserGroupMemberMapper userGroupMemberMapper;
+    private final MutedThreadService mutedThreadService;
+    private final GlobalMemberService globalMemberService;
+    private final ProjectModuleService projectModuleService;
+    private final CustomFieldDefinitionMapper customFieldDefinitionMapper;
+    private final CustomFieldProjectMapper customFieldProjectMapper;
+    private final UserGroupRoleMapper userGroupRoleMapper;
+    private final UserGroupMapper userGroupMapper;
+    private final UserGroupMemberMapper userGroupMemberMapper;
 
     /**
      * 创建项目
@@ -205,20 +227,20 @@ public class ProjectService {
      * 参考 YouTrack 行为：Enable auto-attach 使字段自动附加到新创建的项目。
      */
     private void autoAttachCustomFieldsToProject(Long projectId) {
-        List<com.trackflow.customfield.entity.CustomFieldDefinition> autoAttachFields =
+        List<CustomFieldDefinition> autoAttachFields =
                 customFieldDefinitionMapper.selectList(
-                        new LambdaQueryWrapper<com.trackflow.customfield.entity.CustomFieldDefinition>()
-                                .eq(com.trackflow.customfield.entity.CustomFieldDefinition::getIsAutoAttach, true)
-                                .orderByAsc(com.trackflow.customfield.entity.CustomFieldDefinition::getPosition));
+                        new LambdaQueryWrapper<CustomFieldDefinition>()
+                                .eq(CustomFieldDefinition::getIsAutoAttach, true)
+                                .orderByAsc(CustomFieldDefinition::getPosition));
 
         for (int i = 0; i < autoAttachFields.size(); i++) {
-            com.trackflow.customfield.entity.CustomFieldDefinition field = autoAttachFields.get(i);
+            CustomFieldDefinition field = autoAttachFields.get(i);
             // 跳过已经是 isForAll=true 的字段（它们已经通过全局逻辑在项目中可见）
             if (Boolean.TRUE.equals(field.getIsForAll())) {
                 continue;
             }
             // 创建 custom_field_project 关联记录
-            com.trackflow.customfield.entity.CustomFieldProject mapping = new com.trackflow.customfield.entity.CustomFieldProject();
+            CustomFieldProject mapping = new CustomFieldProject();
             mapping.setCustomFieldId(field.getId());
             mapping.setProjectId(projectId);
             mapping.setPosition(i);
@@ -255,7 +277,7 @@ public class ProjectService {
             // 通过用户组角色获得权限的项目
             List<Long> groupPermProjectIds = userGroupRoleMapper.selectProjectIdsWithPermissionViaGroups(userId, requiredPermission);
 
-            Set<Long> permittedIds = new java.util.LinkedHashSet<>(directPermProjectIds);
+            Set<Long> permittedIds = new LinkedHashSet<>(directPermProjectIds);
             permittedIds.addAll(groupPermProjectIds);
 
             if (permittedIds.isEmpty()) {
@@ -270,7 +292,7 @@ public class ProjectService {
             List<Long> groupProjectIds = getProjectIdsByUserViaGroups(userId);
 
             // 合并去重
-            Set<Long> allAccessibleIds = new java.util.LinkedHashSet<>(memberProjectIds);
+            Set<Long> allAccessibleIds = new LinkedHashSet<>(memberProjectIds);
             allAccessibleIds.addAll(groupProjectIds);
 
             // 显示：用户可访问的项目 OR visibility 为 internal/public 的项目
@@ -315,7 +337,7 @@ public class ProjectService {
         // 1. SQL 聚合：一次查询获取每个项目的去重成员数
         Map<Long, Integer> countMap = memberMapper.countDistinctUsersByProjects(projectIds)
                 .stream()
-                .collect(java.util.stream.Collectors.toMap(
+                .collect(Collectors.toMap(
                         com.trackflow.project.mapper.result.MemberCountRow::getProjectId,
                         com.trackflow.project.mapper.result.MemberCountRow::getMemberCount
                 ));
@@ -323,14 +345,14 @@ public class ProjectService {
         // 2. SQL 窗口函数：一次查询获取每个项目前 5 名成员的 displayName
         Map<Long, List<String>> topMembersMap = memberMapper.selectTopMembersByProjects(projectIds, 5)
                 .stream()
-                .collect(java.util.stream.Collectors.groupingBy(
+                .collect(Collectors.groupingBy(
                         com.trackflow.project.mapper.result.TopMemberRow::getProjectId,
-                        java.util.stream.Collectors.mapping(
+                        Collectors.mapping(
                                 row -> {
                                     String name = row.getDisplayName();
                                     return (name != null && !name.isBlank()) ? name : "?";
                                 },
-                                java.util.stream.Collectors.toList()
+                                Collectors.toList()
                         )
                 ));
 
@@ -445,8 +467,8 @@ public class ProjectService {
         if (permissionService.isSystemAdmin(currentUserId)) {
             vo.setMyRoleName("系统管理员");
             vo.setMyRoleCode("system_admin");
-            vo.setMyRoleNames(java.util.List.of("系统管理员"));
-            vo.setMyRoleCodes(java.util.List.of("system_admin"));
+            vo.setMyRoleNames(List.of("系统管理员"));
+            vo.setMyRoleCodes(List.of("system_admin"));
         } else {
             List<Long> roleIds = memberMapper.selectRoleIdsByUserAndProject(currentUserId, projectId);
             if (!roleIds.isEmpty()) {
@@ -462,8 +484,8 @@ public class ProjectService {
                 if (ProjectVisibility.INTERNAL == visibility || ProjectVisibility.PUBLIC == visibility) {
                     vo.setMyRoleName("非成员");
                     vo.setMyRoleCode("non_member");
-                    vo.setMyRoleNames(java.util.List.of("非成员"));
-                    vo.setMyRoleCodes(java.util.List.of("non_member"));
+                    vo.setMyRoleNames(List.of("非成员"));
+                    vo.setMyRoleCodes(List.of("non_member"));
                 }
             }
         }
@@ -504,7 +526,7 @@ public class ProjectService {
                 }
                 String oldName = project.getName();
                 project.setName(trimmedName);
-                Map<String, Object> detail = new java.util.LinkedHashMap<>();
+                Map<String, Object> detail = new LinkedHashMap<>();
                 detail.put("field", "name");
                 detail.put("old_value", oldName);
                 detail.put("new_value", trimmedName);
@@ -518,7 +540,7 @@ public class ProjectService {
             if (!trimmedDesc.equals(project.getDescription() != null ? project.getDescription() : "")) {
                 String oldDesc = project.getDescription();
                 project.setDescription(trimmedDesc);
-                Map<String, Object> detail = new java.util.LinkedHashMap<>();
+                Map<String, Object> detail = new LinkedHashMap<>();
                 detail.put("field", "description");
                 detail.put("old_value", oldDesc != null ? oldDesc : "");
                 detail.put("new_value", trimmedDesc);
@@ -535,7 +557,7 @@ public class ProjectService {
                 project.setVisibility(newVisibility);
 
                 // 发布事件，由 ProjectCacheEventListener 在事务提交后执行缓存清理
-                eventPublisher.publishEvent(new com.trackflow.common.event.ProjectVisibilityChangedEvent(
+                eventPublisher.publishEvent(new ProjectVisibilityChangedEvent(
                         id, oldVisibilityValue, newVisibility.getValue()));
 
                 // 计算权限影响范围（非成员用户数）
@@ -547,7 +569,7 @@ public class ProjectService {
                                 .eq(ProjectMember::getProjectId, id));
                 long affectedNonMembers = Math.max(0, totalUsers - memberCount);
 
-                Map<String, Object> detail = new java.util.LinkedHashMap<>();
+                Map<String, Object> detail = new LinkedHashMap<>();
                 detail.put("field", "visibility");
                 detail.put("old_value", oldVisibilityValue);
                 detail.put("new_value", newVisibility.getValue());
@@ -583,7 +605,7 @@ public class ProjectService {
                     || (newOrgId != null && !newOrgId.equals(project.getOrgId()))) {
                 Long oldOrgId = project.getOrgId();
                 project.setOrgId(newOrgId);
-                Map<String, Object> detail = new java.util.LinkedHashMap<>();
+                Map<String, Object> detail = new LinkedHashMap<>();
                 detail.put("field", "orgId");
                 detail.put("old_value", oldOrgId != null ? oldOrgId.toString() : null);
                 detail.put("new_value", newOrgId != null ? newOrgId.toString() : null);
@@ -601,7 +623,7 @@ public class ProjectService {
         // 审计日志：记录项目更新
         AuditContext.put("project_name", project.getName());
         AuditContext.put("project_key", project.getKey());
-        List<String> changedFields = new java.util.ArrayList<>();
+        List<String> changedFields = new ArrayList<>();
         if (dto.getName() != null) changedFields.add("name");
         if (dto.getDescription() != null) changedFields.add("description");
         if (dto.getVisibility() != null) changedFields.add("visibility");
@@ -660,7 +682,7 @@ public class ProjectService {
                     .filter(Objects::nonNull)
                     .map(SysRole::getName)
                     .toList();
-            Map<String, Object> roleDetailMap = new java.util.LinkedHashMap<>();
+            Map<String, Object> roleDetailMap = new LinkedHashMap<>();
             roleDetailMap.put("old_role_ids", newLeadRoleIds);
             roleDetailMap.put("old_role_names", String.join(", ", oldRoleNames));
             roleDetailMap.put("added_role_id", PROJECT_ADMIN_ROLE_ID);
@@ -683,7 +705,7 @@ public class ProjectService {
             }
         }
         String newLeadName = newLead.getDisplayName() != null ? newLead.getDisplayName() : newLead.getUsername();
-        Map<String, Object> leadDetailMap = new java.util.LinkedHashMap<>();
+        Map<String, Object> leadDetailMap = new LinkedHashMap<>();
         leadDetailMap.put("old_lead_id", oldLeadId);
         leadDetailMap.put("old_lead_name", oldLeadName);
         leadDetailMap.put("new_lead_id", newLeadId);
@@ -728,7 +750,7 @@ public class ProjectService {
         int suspendedSprintCount = suspendActiveSprintsForProject(id);
 
         // 3. 记录活动日志
-        Map<String, Object> detail = new java.util.LinkedHashMap<>();
+        Map<String, Object> detail = new LinkedHashMap<>();
         if (suspendedSprintCount > 0) {
             detail.put("suspended_sprint_count", suspendedSprintCount);
         }
@@ -846,52 +868,22 @@ public class ProjectService {
         List<Long> userIds = members.stream().map(ProjectMember::getUserId).distinct().toList();
         var users = userMapper.selectBatchIds(userIds);
         Map<Long, com.trackflow.system.entity.SysUser> userMap = users.stream()
-                .collect(java.util.stream.Collectors.toMap(com.trackflow.system.entity.SysUser::getId, u -> u));
+                .collect(Collectors.toMap(com.trackflow.system.entity.SysUser::getId, u -> u));
 
         // 获取角色信息（用于填充 roleNames）
         List<Long> roleIds = members.stream().map(ProjectMember::getRoleId).distinct().toList();
         var roles = roleMapper.selectBatchIds(roleIds);
         Map<Long, String> roleNameMap = roles.stream()
-                .collect(java.util.stream.Collectors.toMap(SysRole::getId, SysRole::getName));
+                .collect(Collectors.toMap(SysRole::getId, SysRole::getName));
 
         // 按 userId 聚合（一个用户一条 VO，含多角色）
         Map<Long, List<ProjectMember>> membersByUser = members.stream()
-                .collect(java.util.stream.Collectors.groupingBy(ProjectMember::getUserId));
+                .collect(Collectors.groupingBy(ProjectMember::getUserId));
 
         return membersByUser.entrySet().stream().map(entry -> {
             Long userId = entry.getKey();
             List<ProjectMember> userMembers = entry.getValue();
-            ProjectMember first = userMembers.get(0);
-
-            ProjectMemberVO vo = new ProjectMemberVO();
-            vo.setId(first.getId() != null ? first.getId().toString() : null);
-            vo.setProjectId(first.getProjectId() != null ? first.getProjectId().toString() : null);
-            vo.setUserId(userId.toString());
-            // 向后兼容：roleId 取第一个角色
-            vo.setRoleId(first.getRoleId() != null ? first.getRoleId().toString() : null);
-            // 多角色列表
-            List<String> allRoleIds = userMembers.stream()
-                    .map(m -> m.getRoleId().toString())
-                    .toList();
-            vo.setRoleIds(allRoleIds);
-            List<String> allRoleNames = userMembers.stream()
-                    .map(m -> roleNameMap.getOrDefault(m.getRoleId(), ""))
-                    .filter(name -> !name.isEmpty())
-                    .toList();
-            vo.setRoleNames(allRoleNames);
-            // 取最早的 joinedAt
-            vo.setJoinedAt(userMembers.stream()
-                    .map(ProjectMember::getJoinedAt)
-                    .filter(java.util.Objects::nonNull)
-                    .min(LocalDateTime::compareTo)
-                    .orElse(null));
-            var user = userMap.get(userId);
-            if (user != null) {
-                vo.setUsername(user.getUsername());
-                vo.setDisplayName(user.getDisplayName());
-                vo.setEmail(user.getEmail());
-            }
-            return vo;
+            return buildMemberVO(userId, userMembers, roleNameMap, userMap);
         }).toList();
     }
 
@@ -951,50 +943,48 @@ public class ProjectService {
      */
     List<ProjectGroupMemberVO> assembleGroupMembers(Long projectId) {
         // 1. 查询绑定到该项目的组角色分配
-        List<com.trackflow.system.entity.UserGroupRole> groupRoles =
+        List<UserGroupRole> groupRoles =
                 userGroupRoleMapper.selectGroupRolesByProjectId(projectId);
         if (groupRoles.isEmpty()) return List.of();
 
         // 2. 收集组ID和角色ID
         List<Long> groupIds = groupRoles.stream()
-                .map(com.trackflow.system.entity.UserGroupRole::getGroupId)
+                .map(UserGroupRole::getGroupId)
                 .distinct().toList();
         List<Long> roleIds = groupRoles.stream()
-                .map(com.trackflow.system.entity.UserGroupRole::getRoleId)
+                .map(UserGroupRole::getRoleId)
                 .distinct().toList();
 
         // 3. 批量查询组信息
         var groups = userGroupMapper.selectBatchIds(groupIds);
-        Map<Long, com.trackflow.system.entity.UserGroup> groupMap = groups.stream()
-                .collect(java.util.stream.Collectors.toMap(
-                        com.trackflow.system.entity.UserGroup::getId, g -> g));
+        Map<Long, UserGroup> groupMap = groups.stream()
+                .collect(Collectors.toMap(
+                        UserGroup::getId, g -> g));
 
         // 4. 批量查询角色名称
         var roles = roleMapper.selectBatchIds(roleIds);
         Map<Long, String> roleNameMap = roles.stream()
-                .collect(java.util.stream.Collectors.toMap(SysRole::getId, SysRole::getName));
+                .collect(Collectors.toMap(SysRole::getId, SysRole::getName));
 
         // 5. 查询组成员 - 避免 N+1
-        Map<Long, List<Long>> groupMembersMap = new java.util.HashMap<>();
-        Set<Long> allUserIds = new java.util.HashSet<>();
-        for (Long groupId : groupIds) {
-            List<com.trackflow.system.entity.UserGroupMember> members =
-                    userGroupMemberMapper.selectList(
-                            new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<com.trackflow.system.entity.UserGroupMember>()
-                                    .eq(com.trackflow.system.entity.UserGroupMember::getGroupId, groupId));
-            List<Long> userIds = members.stream()
-                    .map(com.trackflow.system.entity.UserGroupMember::getUserId).toList();
-            groupMembersMap.put(groupId, userIds);
-            allUserIds.addAll(userIds);
+        Map<Long, List<Long>> groupMembersMap = new HashMap<>();
+        Set<Long> allUserIds = new HashSet<>();
+        // 一次查询所有组的成员，避免 N+1（每个组一次 selectList）
+        List<UserGroupMember> allGroupMembers = userGroupMemberMapper.selectList(
+                new LambdaQueryWrapper<UserGroupMember>()
+                        .in(UserGroupMember::getGroupId, groupIds));
+        for (UserGroupMember ugm : allGroupMembers) {
+            groupMembersMap.computeIfAbsent(ugm.getGroupId(), k -> new ArrayList<>())
+                    .add(ugm.getUserId());
+            allUserIds.add(ugm.getUserId());
         }
 
         // 6. 批量查询用户信息
-        Map<Long, com.trackflow.system.entity.SysUser> userMap = new java.util.HashMap<>();
+        Map<Long, SysUser> userMap = new HashMap<>();
         if (!allUserIds.isEmpty()) {
             var users = userMapper.selectBatchIds(allUserIds);
             userMap = users.stream()
-                    .collect(java.util.stream.Collectors.toMap(
-                            com.trackflow.system.entity.SysUser::getId, u -> u));
+                    .collect(Collectors.toMap(SysUser::getId, u -> u));
         }
 
         // 7. 组装 VO
@@ -1050,27 +1040,27 @@ public class ProjectService {
         // 检查组是否存在
         var group = userGroupMapper.selectById(dto.getGroupId());
         if (group == null) {
-            throw new com.trackflow.common.exception.BusinessException(
-                    com.trackflow.common.exception.ErrorCode.RESOURCE_NOT_FOUND, "用户组不存在: " + dto.getGroupId());
+            throw new BusinessException(
+                    ErrorCode.RESOURCE_NOT_FOUND, "用户组不存在: " + dto.getGroupId());
         }
         // 检查角色是否存在
         var role = roleMapper.selectById(dto.getRoleId());
         if (role == null) {
-            throw new com.trackflow.common.exception.BusinessException(
-                    com.trackflow.common.exception.ErrorCode.RESOURCE_NOT_FOUND, "角色不存在: " + dto.getRoleId());
+            throw new BusinessException(
+                    ErrorCode.RESOURCE_NOT_FOUND, "角色不存在: " + dto.getRoleId());
         }
         // 检查是否已经分配
         var existing = userGroupRoleMapper.selectList(
-                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<com.trackflow.system.entity.UserGroupRole>()
-                        .eq(com.trackflow.system.entity.UserGroupRole::getGroupId, dto.getGroupId())
-                        .eq(com.trackflow.system.entity.UserGroupRole::getProjectId, projectId)
+                new LambdaQueryWrapper<UserGroupRole>()
+                        .eq(UserGroupRole::getGroupId, dto.getGroupId())
+                        .eq(UserGroupRole::getProjectId, projectId)
         );
         if (!existing.isEmpty()) {
-            throw new com.trackflow.common.exception.BusinessException(
-                    com.trackflow.common.exception.ErrorCode.BAD_REQUEST, "该用户组已在项目团队中");
+            throw new BusinessException(
+                    ErrorCode.BAD_REQUEST, "该用户组已在项目团队中");
         }
         // 插入记录
-        com.trackflow.system.entity.UserGroupRole ugr = new com.trackflow.system.entity.UserGroupRole();
+        UserGroupRole ugr = new UserGroupRole();
         ugr.setGroupId(dto.getGroupId());
         ugr.setRoleId(dto.getRoleId());
         ugr.setProjectId(projectId);
@@ -1092,13 +1082,13 @@ public class ProjectService {
     public void removeGroupMember(Long projectId, Long groupId) {
         // 查找并删除
         var records = userGroupRoleMapper.selectList(
-                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<com.trackflow.system.entity.UserGroupRole>()
-                        .eq(com.trackflow.system.entity.UserGroupRole::getGroupId, groupId)
-                        .eq(com.trackflow.system.entity.UserGroupRole::getProjectId, projectId)
+                new LambdaQueryWrapper<UserGroupRole>()
+                        .eq(UserGroupRole::getGroupId, groupId)
+                        .eq(UserGroupRole::getProjectId, projectId)
         );
         if (records.isEmpty()) {
-            throw new com.trackflow.common.exception.BusinessException(
-                    com.trackflow.common.exception.ErrorCode.RESOURCE_NOT_FOUND, "该用户组不在项目团队中");
+            throw new BusinessException(
+                    ErrorCode.RESOURCE_NOT_FOUND, "该用户组不在项目团队中");
         }
         for (var record : records) {
             userGroupRoleMapper.deleteById(record.getId());
@@ -1129,16 +1119,16 @@ public class ProjectService {
         List<Long> formerAssigneeIds = memberMapper.selectFormerAssigneeUserIds(projectId);
 
         // 合并活跃成员和历史 assignee 用户 ID（去重）
-        Set<Long> allUserIds = new java.util.LinkedHashSet<>(assignableUserIds);
+        Set<Long> allUserIds = new LinkedHashSet<>(assignableUserIds);
         allUserIds.addAll(formerAssigneeIds);
 
         if (allUserIds.isEmpty()) return List.of();
 
         // 获取用户信息
-        var users = userMapper.selectBatchIds(new java.util.ArrayList<>(allUserIds));
+        var users = userMapper.selectBatchIds(new ArrayList<>(allUserIds));
         Map<Long, SysUser> userMap = users.stream()
                 .filter(u -> !"disabled".equals(u.getStatus()))
-                .collect(java.util.stream.Collectors.toMap(SysUser::getId, u -> u));
+                .collect(Collectors.toMap(SysUser::getId, u -> u));
 
         if (userMap.isEmpty()) return List.of();
 
@@ -1155,50 +1145,22 @@ public class ProjectService {
         if (!roleIds.isEmpty()) {
             var roles = roleMapper.selectBatchIds(roleIds);
             roleNameMap = roles.stream()
-                    .collect(java.util.stream.Collectors.toMap(SysRole::getId, SysRole::getName));
+                    .collect(Collectors.toMap(SysRole::getId, SysRole::getName));
         }
 
         // 按 userId 聚合活跃成员
         Map<Long, List<ProjectMember>> membersByUser = members.stream()
-                .collect(java.util.stream.Collectors.groupingBy(ProjectMember::getUserId));
+                .collect(Collectors.groupingBy(ProjectMember::getUserId));
 
         // 构建结果列表
-        List<ProjectMemberVO> result = new java.util.ArrayList<>();
+        List<ProjectMemberVO> result = new ArrayList<>();
 
         // 1. 添加活跃成员
         Map<Long, String> finalRoleNameMap = roleNameMap;
         membersByUser.entrySet().stream()
                 .filter(entry -> userMap.containsKey(entry.getKey()))
                 .forEach(entry -> {
-                    Long userId = entry.getKey();
-                    List<ProjectMember> userMembers = entry.getValue();
-                    ProjectMember first = userMembers.get(0);
-
-                    ProjectMemberVO vo = new ProjectMemberVO();
-                    vo.setId(first.getId() != null ? first.getId().toString() : null);
-                    vo.setProjectId(first.getProjectId() != null ? first.getProjectId().toString() : null);
-                    vo.setUserId(userId.toString());
-                    vo.setRoleId(first.getRoleId() != null ? first.getRoleId().toString() : null);
-                    List<String> allRoleIds = userMembers.stream()
-                            .map(m -> m.getRoleId().toString())
-                            .toList();
-                    vo.setRoleIds(allRoleIds);
-                    List<String> allRoleNames = userMembers.stream()
-                            .map(m -> finalRoleNameMap.getOrDefault(m.getRoleId(), ""))
-                            .filter(name -> !name.isEmpty())
-                            .toList();
-                    vo.setRoleNames(allRoleNames);
-                    vo.setJoinedAt(userMembers.stream()
-                            .map(ProjectMember::getJoinedAt)
-                            .filter(Objects::nonNull)
-                            .min(LocalDateTime::compareTo)
-                            .orElse(null));
-                    var user = userMap.get(userId);
-                    if (user != null) {
-                        vo.setUsername(user.getUsername());
-                        vo.setDisplayName(user.getDisplayName());
-                        vo.setEmail(user.getEmail());
-                    }
+                    ProjectMemberVO vo = buildMemberVO(entry.getKey(), entry.getValue(), finalRoleNameMap, userMap);
                     vo.setFormerMember(false);
                     result.add(vo);
                 });
@@ -1287,7 +1249,7 @@ public class ProjectService {
 
         // 6. 插入新角色记录
         LocalDateTime now = LocalDateTime.now();
-        List<String> addedRoleNames = new java.util.ArrayList<>();
+        List<String> addedRoleNames = new ArrayList<>();
         for (Long roleId : newRoleIds) {
             ProjectMember member = new ProjectMember();
             member.setProjectId(projectId);
@@ -1416,7 +1378,7 @@ public class ProjectService {
         Long currentUserId = SecurityUtils.getCurrentUserId();
         List<String> oldRoleNames = oldRoleIds.stream()
                 .map(rid -> roleMapper.selectById(rid))
-                .filter(java.util.Objects::nonNull)
+                .filter(Objects::nonNull)
                 .map(SysRole::getName)
                 .toList();
         List<String> newRoleNames = newRoles.stream().map(SysRole::getName).toList();
@@ -1766,13 +1728,13 @@ public class ProjectService {
                 List.of(ProjectVisibility.INTERNAL.getValue(), ProjectVisibility.PUBLIC.getValue()));
 
         // 合并去重
-        Set<Long> allIds = new java.util.LinkedHashSet<>(memberProjectIds);
+        Set<Long> allIds = new LinkedHashSet<>(memberProjectIds);
         allIds.addAll(groupProjectIds);
         allIds.addAll(visibleProjectIds);
-        List<Long> projectIds = new java.util.ArrayList<>(allIds);
+        List<Long> projectIds = new ArrayList<>(allIds);
 
         // 原子写入（set 自带 TTL，即使并发重复写入也只是覆盖相同值）
-        String value = projectIds.isEmpty() ? "[]" : projectIds.stream().map(String::valueOf).collect(java.util.stream.Collectors.joining(","));
+        String value = projectIds.isEmpty() ? "[]" : projectIds.stream().map(String::valueOf).collect(Collectors.joining(","));
         redisTemplate.opsForValue().set(cacheKey, value, java.time.Duration.ofSeconds(30));
 
         return projectIds;
@@ -1783,6 +1745,45 @@ public class ProjectService {
      * 路径: user_group_member(user_id) → user_group_role(group_id, project_id IS NOT NULL)
      * 使用已有 Mapper 方法组合查询，避免依赖未编译的新 Mapper 方法。
      */
+    /**
+     * 将多角色成员记录列表组装为 ProjectMemberVO。
+     * 用于消除 assembleMembers / assembleAssignableMembers 中的重复代码。
+     *
+     * @param userId      用户 ID
+     * @param userMembers 该用户在项目中的所有 ProjectMember 记录（可能多角色）
+     * @param roleNameMap 角色 ID → 角色名称 的映射
+     * @param userMap     用户 ID → 用户对象 的映射
+     * @return 组装好的 ProjectMemberVO
+     */
+    private ProjectMemberVO buildMemberVO(Long userId,
+                                          List<ProjectMember> userMembers,
+                                          Map<Long, String> roleNameMap,
+                                          Map<Long, com.trackflow.system.entity.SysUser> userMap) {
+        ProjectMember first = userMembers.get(0);
+        ProjectMemberVO vo = new ProjectMemberVO();
+        vo.setId(first.getId() != null ? first.getId().toString() : null);
+        vo.setProjectId(first.getProjectId() != null ? first.getProjectId().toString() : null);
+        vo.setUserId(userId.toString());
+        vo.setRoleId(first.getRoleId() != null ? first.getRoleId().toString() : null);
+        vo.setRoleIds(userMembers.stream().map(m -> m.getRoleId().toString()).toList());
+        vo.setRoleNames(userMembers.stream()
+                .map(m -> roleNameMap.getOrDefault(m.getRoleId(), ""))
+                .filter(name -> !name.isEmpty())
+                .toList());
+        vo.setJoinedAt(userMembers.stream()
+                .map(ProjectMember::getJoinedAt)
+                .filter(Objects::nonNull)
+                .min(LocalDateTime::compareTo)
+                .orElse(null));
+        var user = userMap.get(userId);
+        if (user != null) {
+            vo.setUsername(user.getUsername());
+            vo.setDisplayName(user.getDisplayName());
+            vo.setEmail(user.getEmail());
+        }
+        return vo;
+    }
+
     private List<Long> getProjectIdsByUserViaGroups(Long userId) {
         // 获取用户所属的所有组
         List<Long> groupIds = userGroupMemberMapper.selectGroupIdsByUserId(userId);
@@ -1790,13 +1791,13 @@ public class ProjectService {
             return List.of();
         }
         // 查询这些组的项目角色分配中有 project_id 的记录
-        List<com.trackflow.system.entity.UserGroupRole> groupRoles = userGroupRoleMapper.selectList(
-                new LambdaQueryWrapper<com.trackflow.system.entity.UserGroupRole>()
-                        .in(com.trackflow.system.entity.UserGroupRole::getGroupId, groupIds)
-                        .isNotNull(com.trackflow.system.entity.UserGroupRole::getProjectId)
+        List<UserGroupRole> groupRoles = userGroupRoleMapper.selectList(
+                new LambdaQueryWrapper<UserGroupRole>()
+                        .in(UserGroupRole::getGroupId, groupIds)
+                        .isNotNull(UserGroupRole::getProjectId)
         );
         return groupRoles.stream()
-                .map(com.trackflow.system.entity.UserGroupRole::getProjectId)
+                .map(UserGroupRole::getProjectId)
                 .distinct()
                 .toList();
     }
@@ -1818,7 +1819,7 @@ public class ProjectService {
     public int nextIssueSequence(Long projectId) {
         // 使用 FOR UPDATE 悲观锁锁定项目行，防止并发生成重复序号
         Project project = projectMapper.selectOne(
-                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Project>()
+                new LambdaQueryWrapper<Project>()
                         .eq(Project::getId, projectId)
                         .last("FOR UPDATE")
         );
@@ -1864,7 +1865,7 @@ public class ProjectService {
         Set<Long> doneStatusIds = statuses.stream()
                 .filter(s -> IssueStatusCategory.isClosed(s.getCategory()))
                 .map(IssueStatus::getId)
-                .collect(java.util.stream.Collectors.toSet());
+                .collect(Collectors.toSet());
         long openIssueCount = issueMapper.selectCount(
                 new LambdaQueryWrapper<Issue>()
                         .eq(Issue::getProjectId, projectId)
@@ -1991,7 +1992,7 @@ public class ProjectService {
         // 1. 查询各状态工单数量（聚合查询，不加载全量数据）
         List<IssueStatus> allStatuses = issueStatusMapper.selectList(null);
         Map<Long, IssueStatus> statusMap = allStatuses.stream()
-                .collect(java.util.stream.Collectors.toMap(IssueStatus::getId, s -> s));
+                .collect(Collectors.toMap(IssueStatus::getId, s -> s));
 
         // 按状态分组统计
         LambdaQueryWrapper<Issue> baseWrapper = new LambdaQueryWrapper<Issue>()
@@ -2001,9 +2002,9 @@ public class ProjectService {
         int total = totalCount != null ? totalCount.intValue() : 0;
 
         // 统计各状态数量（用 selectMaps 做 GROUP BY）
-        Map<Long, Integer> statusCountMap = new java.util.HashMap<>();
+        Map<Long, Integer> statusCountMap = new HashMap<>();
         if (total > 0) {
-            var groupWrapper = new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<Issue>();
+            var groupWrapper = new QueryWrapper<Issue>();
             groupWrapper.select("status_id", "count(*) as cnt")
                         .eq("project_id", projectId)
                         .isNull("deleted_at")
@@ -2166,8 +2167,8 @@ public class ProjectService {
     /**
      * 获取项目时间追踪设置 VO。
      */
-    com.trackflow.project.vo.ProjectTimeTrackingSettingsVO assembleTimeTrackingSettings(Long projectId) {
-        com.trackflow.project.vo.ProjectTimeTrackingSettingsVO vo = new com.trackflow.project.vo.ProjectTimeTrackingSettingsVO();
+    ProjectTimeTrackingSettingsVO assembleTimeTrackingSettings(Long projectId) {
+        ProjectTimeTrackingSettingsVO vo = new ProjectTimeTrackingSettingsVO();
         vo.setEnabled(isTimeTrackingEnabled(projectId));
         return vo;
     }
@@ -2176,7 +2177,7 @@ public class ProjectService {
      * 更新项目时间追踪设置并返回最新的设置 VO。
      */
     @Transactional(rollbackFor = Exception.class)
-    com.trackflow.project.vo.ProjectTimeTrackingSettingsVO assembleUpdateTimeTrackingSettings(
+    ProjectTimeTrackingSettingsVO assembleUpdateTimeTrackingSettings(
             Long projectId, com.trackflow.project.dto.UpdateTimeTrackingSettingsDTO dto) {
         if (dto.getEnabled() != null) {
             updateTimeTrackingEnabled(projectId, dto.getEnabled());
@@ -2207,10 +2208,10 @@ public class ProjectService {
     /**
      * 获取禁用时间追踪功能的影响评估。
      */
-    com.trackflow.project.vo.TimeTrackingDisableImpactVO assembleTimeTrackingDisableImpact(Long projectId) {
+    TimeTrackingDisableImpactVO assembleTimeTrackingDisableImpact(Long projectId) {
         // 确保项目存在
         getById(projectId);
-        var vo = new com.trackflow.project.vo.TimeTrackingDisableImpactVO();
+        var vo = new TimeTrackingDisableImpactVO();
         vo.setTotalTimeEntries(timeEntryMapper.countByProjectId(projectId));
         vo.setAffectedUsers(timeEntryMapper.countDistinctUsersByProjectId(projectId));
         vo.setActiveTimers(timeEntryMapper.countActiveTimersByProjectId(projectId));
@@ -2320,7 +2321,7 @@ public class ProjectService {
      */
     public Set<Long> getUserFavoriteProjectIds(Long userId) {
         List<Long> ids = favoriteMapper.selectFavoriteProjectIds(userId);
-        return new java.util.HashSet<>(ids);
+        return new HashSet<>(ids);
     }
 
     /**

@@ -10,4 +10,10 @@ public class MemberOperationResultVO {
 
     /** 受影响的工单数量 */
     private Integer affectedIssueCount;
+
+    public static MemberOperationResultVO of(int affectedIssueCount) {
+        MemberOperationResultVO vo = new MemberOperationResultVO();
+        vo.setAffectedIssueCount(affectedIssueCount);
+        return vo;
+    }
 }
