@@ -193,7 +193,7 @@
     <!-- 附件 -->
     <AttachmentSection
       :attachments="attachments"
-      :readonly="readonly"
+      :readonly="readonly && !canManageAttachments"
       @upload="$emit('upload')"
       @upload-private="$emit('upload-private')"
       @upload-files="(files: File[]) => $emit('upload-files', files)"
@@ -232,6 +232,7 @@ const props = defineProps<{
   links: LinkItem[]
   attachments: AttachmentItem[]
   readonly?: boolean
+  canManageAttachments?: boolean
   canDelete?: boolean
   canMove?: boolean
   showAddTime?: boolean

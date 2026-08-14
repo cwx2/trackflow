@@ -405,7 +405,7 @@ public class IssueController {
     }
 
     @PostMapping("/{id}/attachments")
-    @PreAuthorize("@perm.checkIssue(#id, 'issue:edit')")
+    @PreAuthorize("@perm.checkIssueAttachment(#id)")
     public R<IssueAttachmentVO> uploadAttachment(
             @PathVariable("id") Long id,
             @RequestParam("file") MultipartFile file,
@@ -415,7 +415,7 @@ public class IssueController {
     }
 
     @PutMapping("/{id}/attachments/{attachmentId}/visibility")
-    @PreAuthorize("@perm.checkIssue(#id, 'issue:edit')")
+    @PreAuthorize("@perm.checkIssueAttachment(#id)")
     public R<IssueAttachmentVO> updateAttachmentVisibility(
             @PathVariable("id") Long id,
             @PathVariable("attachmentId") Long attachmentId,
@@ -425,7 +425,7 @@ public class IssueController {
     }
 
     @DeleteMapping("/{id}/attachments/{attachmentId}")
-    @PreAuthorize("@perm.checkIssue(#id, 'issue:edit')")
+    @PreAuthorize("@perm.checkIssueAttachment(#id)")
     public R<Void> deleteAttachment(@PathVariable("id") Long id, @PathVariable("attachmentId") Long attachmentId) {
         attachmentService.deleteAttachment(id, attachmentId);
         return R.ok();

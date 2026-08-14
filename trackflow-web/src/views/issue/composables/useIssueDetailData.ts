@@ -101,6 +101,7 @@ export function useIssueDetailData() {
   )
 
   const canManageComments = computed(() => hasProjectPermission('issue:manage_comments'))
+  const canManageAttachments = computed(() => hasProjectPermission('issue:manage_attachments'))
   const canManageCustomFieldsComputed = computed(() => hasProjectPermission('project:manage_custom_fields'))
 
   const isReporter = computed(() => {
@@ -461,7 +462,7 @@ export function useIssueDetailData() {
     // Permissions
     canCreateIssue, canEditIssue, canDeleteIssue, canChangeStatus, canComment,
     canAssignIssue, canEditSprint, canLogTime, hasProjectPermission,
-    canManageComments, canManageCustomFieldsComputed,
+    canManageComments, canManageAttachments, canManageCustomFieldsComputed,
     isReporter, isAssignee,
     canEditIssueEffective, canChangeStatusEffective, canCommentEffective, canMoveIssue,
 

@@ -44,6 +44,7 @@
           :links="issueLinks"
           :attachments="issueAttachments"
           :readonly="!canEditIssueEffective"
+          :can-manage-attachments="canManageAttachments || canEditIssueEffective"
           :can-delete="canDeleteIssue"
           :can-move="canMoveIssue"
           :show-add-time="projectTimeTrackingEnabled && canLogTime"
@@ -289,7 +290,7 @@ const {
   isProjectArchived, currentUserId,
   canCreateIssue, canEditIssue, canDeleteIssue,
   canAssignIssue, canEditSprint, canLogTime, hasProjectPermission,
-  canManageComments, canManageCustomFieldsComputed,
+  canManageComments, canManageAttachments, canManageCustomFieldsComputed,
   canEditIssueEffective, canChangeStatusEffective, canCommentEffective, canMoveIssue,
   activityStreamRef, onRemoteCommentAdded,
   loadAll, loadMoreActivities, loadAttachments, loadLinks,
