@@ -182,7 +182,7 @@ import { projectApi, issueApi } from '@/api'
 import type { NotificationVO, NotificationCategory } from '@/api/notification'
 import { Message } from '@arco-design/web-vue'
 import { EmptyState } from '@/components/base'
-import NotificationItem from '@/views/layout/NotificationItem.vue'
+import NotificationItem from '@/views/layout/components/NotificationItem.vue'
 
 const router = useRouter()
 const {
