@@ -22,7 +22,7 @@ import { useToast } from '@/composables/useToast'
 import { useAuthStore } from '@/stores/auth'
 import { useTabStore } from '@/stores/tabs'
 import { useRecentIssues } from './useRecentIssues'
-import { loadPriorityOptions } from './usePriorityOptions'
+import { loadPriorityOptions } from '@/composables/usePriorityOptions'
 import { loadIssueTypeOptions } from './useIssueTypeOptions'
 import type {
   IssueDetailVO, IssueStatusVO, IssueCommentVO, IssueActivityVO,
