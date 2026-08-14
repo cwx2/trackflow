@@ -8,6 +8,7 @@ import com.trackflow.common.event.WorkflowRuleEvent;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.service.MinioService;
+import com.trackflow.common.util.EntityUtils;
 import com.trackflow.common.util.SecurityUtils;
 import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.entity.IssueAttachment;
@@ -81,7 +82,7 @@ public class IssueAttachmentService {
         if (attachment.getUploadedBy() != null && attachment.getUploadedBy().equals(currentUserId)) {
             return true;
         }
-        Issue issue = getIssueById(attachment.getIssueId());
+        Issue issue = EntityUtils.requireFound(issueMapper.selectById(attachment.getIssueId()), "工单", attachment.getIssueId());
         if (permissionService.hasPermission(currentUserId, issue.getProjectId(), "issue:read_private")) {
             return true;
         }
@@ -130,7 +131,7 @@ public class IssueAttachmentService {
      */
     @Transactional(rollbackFor = Exception.class)
     public IssueAttachment uploadAttachment(Long issueId, MultipartFile file, List<Long> visibleToGroupIds) {
-        Issue issue = getIssueById(issueId);
+        Issue issue = EntityUtils.requireFound(issueMapper.selectById(issueId), "工单", issueId);
         projectService.assertProjectActive(issue.getProjectId());
 
         validateAttachmentFile(file);
@@ -166,7 +167,7 @@ public class IssueAttachmentService {
      */
     @Transactional(rollbackFor = Exception.class)
     public void deleteAttachment(Long issueId, Long attachmentId) {
-        Issue issue = getIssueById(issueId);
+        Issue issue = EntityUtils.requireFound(issueMapper.selectById(issueId), "工单", issueId);
         projectService.assertProjectActive(issue.getProjectId());
 
         IssueAttachment attachment = attachmentMapper.selectById(attachmentId);
@@ -193,7 +194,7 @@ public class IssueAttachmentService {
      */
     @Transactional(rollbackFor = Exception.class)
     public IssueAttachment updateAttachmentVisibility(Long issueId, Long attachmentId, List<Long> visibleToGroupIds) {
-        Issue issue = getIssueById(issueId);
+        Issue issue = EntityUtils.requireFound(issueMapper.selectById(issueId), "工单", issueId);
         projectService.assertProjectActive(issue.getProjectId());
 
         IssueAttachment attachment = attachmentMapper.selectById(attachmentId);
@@ -248,7 +249,7 @@ public class IssueAttachmentService {
             return attachments;
         }
 
-        Issue issue = getIssueById(issueId);
+        Issue issue = EntityUtils.requireFound(issueMapper.selectById(issueId), "工单", issueId);
         if (permissionService.hasPermission(currentUserId, issue.getProjectId(), "issue:read_private")) {
             return attachments;
         }
@@ -315,14 +316,6 @@ public class IssueAttachmentService {
             return "";
         }
         return filename.substring(filename.lastIndexOf(".") + 1).toLowerCase();
-    }
-
-    private Issue getIssueById(Long issueId) {
-        Issue issue = issueMapper.selectById(issueId);
-        if (issue == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Issue not found: " + issueId);
-        }
-        return issue;
     }
 
     /**

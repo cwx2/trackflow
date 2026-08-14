@@ -8,6 +8,7 @@ import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.annotation.AuditLog;
 import com.trackflow.common.model.PageResult;
+import com.trackflow.common.util.EntityUtils;
 import com.trackflow.common.util.SecurityUtils;
 import com.trackflow.customfield.converter.CustomFieldConverter;
 import com.trackflow.customfield.dto.CreateCustomFieldDTO;
@@ -202,10 +203,7 @@ public class CustomFieldService {
 
     @Transactional(rollbackFor = Exception.class)
     public CustomFieldDefinition update(Long id, UpdateCustomFieldDTO dto) {
-        CustomFieldDefinition entity = definitionMapper.selectById(id);
-        if (entity == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "自定义字段不存在");
-        }
+        CustomFieldDefinition entity = EntityUtils.requireFound(definitionMapper.selectById(id), "自定义字段", id);
 
         // 内置字段限制：不允许修改名称（其他配置如 isPrivate、isRequired 等允许修改）
         if (BUILTIN_FIELD_IDS.contains(id) && dto.getName() != null
@@ -306,18 +304,12 @@ public class CustomFieldService {
     }
 
     public CustomFieldDefinition getById(Long id) {
-        CustomFieldDefinition entity = definitionMapper.selectById(id);
-        if (entity == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "自定义字段不存在");
-        }
+        CustomFieldDefinition entity = EntityUtils.requireFound(definitionMapper.selectById(id), "自定义字段", id);
         return entity;
     }
 
     public CustomFieldUsageVO getUsage(Long id) {
-        CustomFieldDefinition field = definitionMapper.selectById(id);
-        if (field == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "自定义字段不存在");
-        }
+        CustomFieldDefinition field = EntityUtils.requireFound(definitionMapper.selectById(id), "自定义字段", id);
 
         CustomFieldUsageVO usage = new CustomFieldUsageVO();
 
@@ -364,7 +356,7 @@ public class CustomFieldService {
     @Transactional(rollbackFor = Exception.class)
     public void delete(Long id, boolean confirm) {
         if (definitionMapper.selectById(id) == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "自定义字段不存在");
+            throw BusinessException.notFound("自定义字段", id);
         }
 
         // 内置字段不可删除（Priority / Type / Due Date）
@@ -444,10 +436,7 @@ public class CustomFieldService {
 
     @Transactional(rollbackFor = Exception.class)
     public void setAutoAttach(Long fieldId, boolean enabled) {
-        CustomFieldDefinition field = definitionMapper.selectById(fieldId);
-        if (field == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "自定义字段不存在");
-        }
+        CustomFieldDefinition field = EntityUtils.requireFound(definitionMapper.selectById(fieldId), "自定义字段", fieldId);
         field.setIsAutoAttach(enabled);
         definitionMapper.updateById(field);
         log.info("字段 {} 的 auto-attach 状态设置为: {}", fieldId, enabled);
@@ -897,10 +886,7 @@ public class CustomFieldService {
 
     @Transactional(rollbackFor = Exception.class)
     public void attachFieldToProject(Long projectId, Long customFieldId) {
-        CustomFieldDefinition field = definitionMapper.selectById(customFieldId);
-        if (field == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "自定义字段不存在");
-        }
+        CustomFieldDefinition field = EntityUtils.requireFound(definitionMapper.selectById(customFieldId), "自定义字段", customFieldId);
 
         if (Boolean.TRUE.equals(field.getIsForAll())) {
             // 全局字段：检查是否有排除记录，有则删除（恢复全局可见性）
@@ -941,10 +927,7 @@ public class CustomFieldService {
 
     @Transactional(rollbackFor = Exception.class)
     public void detachFieldFromProject(Long projectId, Long customFieldId) {
-        CustomFieldDefinition field = definitionMapper.selectById(customFieldId);
-        if (field == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "自定义字段不存在");
-        }
+        CustomFieldDefinition field = EntityUtils.requireFound(definitionMapper.selectById(customFieldId), "自定义字段", customFieldId);
 
         CustomFieldProject mapping = projectMapper.selectOne(
                 new LambdaQueryWrapper<CustomFieldProject>()

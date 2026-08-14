@@ -7,6 +7,7 @@ import com.baomidou.mybatisplus.extension.toolkit.Db;
 import com.trackflow.auth.service.PermissionService;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
+import com.trackflow.common.util.EntityUtils;
 import com.trackflow.project.entity.Project;
 import com.trackflow.project.mapper.ProjectMapper;
 import com.trackflow.report.converter.DashboardConverter;
@@ -140,10 +141,7 @@ public class CustomDashboardService {
      * 获取仪表盘详情（含所有 Widget）
      */
     public DashboardDetailVO getDetail(Long dashboardId, Long userId) {
-        Dashboard dashboard = dashboardMapper.selectById(dashboardId);
-        if (dashboard == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "仪表盘不存在");
-        }
+        Dashboard dashboard = EntityUtils.requireFound(dashboardMapper.selectById(dashboardId), "仪表盘", dashboardId);
 
         // 权限检查：系统默认仪表盘所有认证用户可见 / owner / 全局共享 / 精确共享
         if (!Boolean.TRUE.equals(dashboard.getIsSystemDefault())
@@ -277,10 +275,7 @@ public class CustomDashboardService {
      */
     @Transactional(rollbackFor = Exception.class)
     public DashboardDetailVO update(Long dashboardId, UpdateDashboardDTO dto, Long userId) {
-        Dashboard dashboard = dashboardMapper.selectById(dashboardId);
-        if (dashboard == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "仪表盘不存在");
-        }
+        Dashboard dashboard = EntityUtils.requireFound(dashboardMapper.selectById(dashboardId), "仪表盘", dashboardId);
 
         // 系统默认仪表盘：只有系统管理员可修改，且不允许取消共享
         if (Boolean.TRUE.equals(dashboard.getIsSystemDefault())) {
@@ -328,10 +323,7 @@ public class CustomDashboardService {
      */
     @Transactional(rollbackFor = Exception.class)
     public void delete(Long dashboardId, Long userId) {
-        Dashboard dashboard = dashboardMapper.selectById(dashboardId);
-        if (dashboard == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "仪表盘不存在");
-        }
+        Dashboard dashboard = EntityUtils.requireFound(dashboardMapper.selectById(dashboardId), "仪表盘", dashboardId);
         if (Boolean.TRUE.equals(dashboard.getIsSystemDefault())) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "系统默认仪表盘不可删除");
         }
@@ -356,10 +348,7 @@ public class CustomDashboardService {
      */
     @Transactional(rollbackFor = Exception.class)
     public List<DashboardShareVO> setShares(Long dashboardId, ShareDashboardDTO dto, Long userId) {
-        Dashboard dashboard = dashboardMapper.selectById(dashboardId);
-        if (dashboard == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "仪表盘不存在");
-        }
+        Dashboard dashboard = EntityUtils.requireFound(dashboardMapper.selectById(dashboardId), "仪表盘", dashboardId);
         if (!dashboard.getOwnerId().equals(userId)) {
             throw new BusinessException(ErrorCode.ACCESS_DENIED, "只有仪表盘创建者可以管理共享");
         }
@@ -391,10 +380,7 @@ public class CustomDashboardService {
      * 获取仪表盘的共享列表
      */
     public List<DashboardShareVO> getShares(Long dashboardId, Long userId) {
-        Dashboard dashboard = dashboardMapper.selectById(dashboardId);
-        if (dashboard == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "仪表盘不存在");
-        }
+        Dashboard dashboard = EntityUtils.requireFound(dashboardMapper.selectById(dashboardId), "仪表盘", dashboardId);
         // 只有 owner 可以查看完整共享列表
         if (!dashboard.getOwnerId().equals(userId)) {
             throw new BusinessException(ErrorCode.ACCESS_DENIED, "只有仪表盘创建者可以查看共享设置");
@@ -452,10 +438,7 @@ public class CustomDashboardService {
      */
     @Transactional(rollbackFor = Exception.class)
     public void removeShare(Long dashboardId, Long shareId, Long userId) {
-        Dashboard dashboard = dashboardMapper.selectById(dashboardId);
-        if (dashboard == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "仪表盘不存在");
-        }
+        Dashboard dashboard = EntityUtils.requireFound(dashboardMapper.selectById(dashboardId), "仪表盘", dashboardId);
         if (!dashboard.getOwnerId().equals(userId)) {
             throw new BusinessException(ErrorCode.ACCESS_DENIED, "只有仪表盘创建者可以管理共享");
         }
@@ -771,10 +754,7 @@ public class CustomDashboardService {
     @Transactional(rollbackFor = Exception.class)
     public void updateLayout(Long dashboardId, UpdateLayoutDTO dto, Long userId) {
         // 1. 权限校验 + 乐观锁校验
-        Dashboard dashboard = dashboardMapper.selectById(dashboardId);
-        if (dashboard == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "仪表盘不存在");
-        }
+        Dashboard dashboard = EntityUtils.requireFound(dashboardMapper.selectById(dashboardId), "仪表盘", dashboardId);
 
         // 允许 owner 或有 edit 权限的用户操作布局
         assertCanEdit(dashboardId, userId);
@@ -818,10 +798,7 @@ public class CustomDashboardService {
      * 对 project_overview 类型，还允许有项目 project:edit 权限的用户编辑 Widget
      */
     private void assertCanEdit(Long dashboardId, Long userId) {
-        Dashboard dashboard = dashboardMapper.selectById(dashboardId);
-        if (dashboard == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "仪表盘不存在");
-        }
+        Dashboard dashboard = EntityUtils.requireFound(dashboardMapper.selectById(dashboardId), "仪表盘", dashboardId);
         if (dashboard.getOwnerId().equals(userId)) {
             return; // owner 始终可编辑
         }
@@ -847,10 +824,7 @@ public class CustomDashboardService {
      * 校验用户是否有查看权限（系统默认 / owner / 全局共享 / 精确共享 / project_overview 项目成员）
      */
     private void assertCanView(Long dashboardId, Long userId) {
-        Dashboard dashboard = dashboardMapper.selectById(dashboardId);
-        if (dashboard == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "仪表盘不存在");
-        }
+        Dashboard dashboard = EntityUtils.requireFound(dashboardMapper.selectById(dashboardId), "仪表盘", dashboardId);
         if (Boolean.TRUE.equals(dashboard.getIsSystemDefault())) {
             return; // 系统默认仪表盘对所有认证用户可见
         }

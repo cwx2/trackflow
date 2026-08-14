@@ -8,6 +8,7 @@ import com.trackflow.common.event.IssueNotificationEvent;
 import com.trackflow.common.event.WorkflowRuleEvent;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
+import com.trackflow.common.util.EntityUtils;
 import com.trackflow.common.util.SecurityUtils;
 import com.trackflow.issue.converter.IssueConverter;
 import com.trackflow.issue.entity.Issue;
@@ -81,7 +82,7 @@ public class IssueCommentService {
      */
     @Transactional(rollbackFor = Exception.class)
     public IssueComment addComment(Long issueId, String content, List<Long> visibleToGroupIds) {
-        Issue issue = getIssueById(issueId);
+        Issue issue = EntityUtils.requireFound(issueMapper.selectById(issueId), "工单", issueId);
         projectService.assertProjectActive(issue.getProjectId());
 
         Long currentUserId = SecurityUtils.getCurrentUserId();
@@ -140,7 +141,7 @@ public class IssueCommentService {
     @Transactional(rollbackFor = Exception.class)
     public IssueComment updateComment(Long issueId, Long commentId, String newContent,
                                        List<Long> visibleToGroupIds, boolean updateVisibility) {
-        Issue issue = getIssueById(issueId);
+        Issue issue = EntityUtils.requireFound(issueMapper.selectById(issueId), "工单", issueId);
         projectService.assertProjectActive(issue.getProjectId());
 
         IssueComment comment = commentMapper.selectById(commentId);
@@ -179,7 +180,7 @@ public class IssueCommentService {
      */
     @Transactional(rollbackFor = Exception.class)
     public void deleteComment(Long issueId, Long commentId) {
-        Issue issue = getIssueById(issueId);
+        Issue issue = EntityUtils.requireFound(issueMapper.selectById(issueId), "工单", issueId);
         projectService.assertProjectActive(issue.getProjectId());
 
         IssueComment comment = commentMapper.selectById(commentId);
@@ -208,7 +209,7 @@ public class IssueCommentService {
      */
     @Transactional(rollbackFor = Exception.class)
     public void restoreComment(Long issueId, Long commentId) {
-        Issue issue = getIssueById(issueId);
+        Issue issue = EntityUtils.requireFound(issueMapper.selectById(issueId), "工单", issueId);
         projectService.assertProjectActive(issue.getProjectId());
 
         IssueComment comment = commentMapper.selectByIdIgnoreDeleted(commentId);
@@ -239,7 +240,7 @@ public class IssueCommentService {
      */
     @Transactional(rollbackFor = Exception.class)
     public void permanentlyDeleteComment(Long issueId, Long commentId) {
-        Issue issue = getIssueById(issueId);
+        Issue issue = EntityUtils.requireFound(issueMapper.selectById(issueId), "工单", issueId);
         projectService.assertProjectActive(issue.getProjectId());
 
         IssueComment comment = commentMapper.selectByIdIgnoreDeleted(commentId);
@@ -298,7 +299,7 @@ public class IssueCommentService {
         Long currentUserId = SecurityUtils.getCurrentUserId();
         List<Long> currentUserGroupIds = userGroupMemberMapper.selectGroupIdsByUserId(currentUserId);
 
-        Issue issue = getIssueById(issueId);
+        Issue issue = EntityUtils.requireFound(issueMapper.selectById(issueId), "工单", issueId);
         boolean canManageComments = permissionService.hasPermission(currentUserId, issue.getProjectId(), "issue:manage_comments");
 
         return rows.stream()
@@ -385,13 +386,5 @@ public class IssueCommentService {
             return text.substring(0, 497) + "...";
         }
         return text;
-    }
-
-    private Issue getIssueById(Long issueId) {
-        Issue issue = issueMapper.selectById(issueId);
-        if (issue == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Issue not found: " + issueId);
-        }
-        return issue;
     }
 }
