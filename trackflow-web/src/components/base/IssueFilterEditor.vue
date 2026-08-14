@@ -42,6 +42,7 @@
     <Teleport to="body">
       <div
         v-if="showFieldInput && filteredFields.length > 0"
+        ref="fieldDropdownRef"
         class="ife-dropdown ife-field-dropdown"
         :style="dropdownPosition"
       >
@@ -347,6 +348,7 @@ const showFieldInput = ref(false)
 const fieldSearchText = ref('')
 const fieldInputRef = ref<HTMLInputElement | null>(null)
 const fieldInputWrapperRef = ref<HTMLElement | null>(null)
+const fieldDropdownRef = ref<HTMLElement | null>(null)
 const fieldHighlightIndex = ref(0)
 
 // 操作符/值下拉
@@ -1004,6 +1006,8 @@ function closeDropdowns() {
 
 function handleClickOutside(e: MouseEvent) {
   if (showFieldInput.value && fieldInputWrapperRef.value && !fieldInputWrapperRef.value.contains(e.target as Node)) {
+    // 不关闭字段输入：如果点击的是字段建议下拉内部
+    if (fieldDropdownRef.value && fieldDropdownRef.value.contains(e.target as Node)) return
     cancelFieldInput()
   }
 }
