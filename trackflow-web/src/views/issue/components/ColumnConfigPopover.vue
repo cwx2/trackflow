@@ -1,8 +1,10 @@
 <template>
   <a-trigger trigger="click" position="bl" :popup-offset="4">
-    <a-button type="text" size="mini" class="config-btn" title="列配置">
-      <template #icon><icon-ordered-list /></template>
-    </a-button>
+    <a-tooltip content="列配置" position="bottom" mini>
+      <a-button type="text" size="mini" class="config-btn">
+        <template #icon><icon-ordered-list /></template>
+      </a-button>
+    </a-tooltip>
     <template #content>
       <div class="column-config-panel">
         <div class="config-header">

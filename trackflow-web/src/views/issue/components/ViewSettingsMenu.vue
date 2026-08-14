@@ -1,8 +1,9 @@
 <template>
-  <a-dropdown trigger="click" position="br" :popup-max-height="false">
-    <a-button size="small" type="text" title="视图设置">
-      <template #icon><icon-settings /></template>
-    </a-button>
+  <a-tooltip content="视图设置" position="bottom" mini>
+    <a-dropdown trigger="click" position="br" :popup-max-height="false">
+      <a-button size="small" type="text">
+        <template #icon><icon-settings /></template>
+      </a-button>
     <template #content>
       <div class="view-settings-menu">
         <!-- Layout section -->
@@ -70,6 +71,7 @@
       </div>
     </template>
   </a-dropdown>
+  </a-tooltip>
 </template>
 
 <script setup lang="ts">
