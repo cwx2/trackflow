@@ -1,7 +1,7 @@
 <template>
   <a-trigger trigger="click" position="bl" :popup-offset="4">
-    <a-button type="text" size="mini" class="config-btn">
-      <template #icon><icon-settings /></template>
+    <a-button type="text" size="mini" class="config-btn" title="列配置">
+      <template #icon><icon-ordered-list /></template>
     </a-button>
     <template #content>
       <div class="column-config-panel">
@@ -37,7 +37,7 @@
 </template>
 
 <script setup lang="ts">
-import { IconSettings } from '@arco-design/web-vue/es/icon'
+import { IconOrderedList } from '@arco-design/web-vue/es/icon'
 import type { ColumnDef } from '../composables/useColumnConfig'
 
 defineProps<{
