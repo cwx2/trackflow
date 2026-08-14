@@ -32,23 +32,6 @@
 
     <!-- Right issue list area -->
     <section class="issue-list-area">
-      <!-- Search/Filter bar (YouTrack style with mode toggle) -->
-      <FilterBar
-        ref="filterBarRef"
-        :project-id="activeProjectId"
-        :status-list="statusCache"
-        :project-list="(projectList as any)"
-        :initial-filters="initialFilterChips"
-        :active-query-name="(activeQueryId || isDashboardFilterActive) ? activeQueryName : null"
-        :is-owned-query="activeQueryId ? activeQueryOwned : false"
-        :readonly-filter-labels="activeQueryReadonlyLabels"
-        :query-filters="activeQueryParsedFilters"
-        @search="onGlobalSearch"
-        @filter="onGlobalFilter"
-        @clear-query="onClearQuery"
-        @chip-click="onQueryChipClick"
-      />
-
       <!-- Batch action toolbar (replaces filter bar when selected) -->
       <BatchActionToolbar
         v-if="selectedCount > 0"
