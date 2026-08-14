@@ -8,7 +8,7 @@
 
     <!-- 右侧（标签栏 + 内容区） -->
     <div class="main-area">
-      <TabBar v-if="showTabBar" />
+      <TabBar />
       <div class="main-content">
         <!--
           KeepAlive 缓存高频页面，避免来回切换时重建组件
@@ -59,7 +59,7 @@
  * - 通知铃铛 → AppSidebar + NotificationPanel
  */
 import { ref, computed, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useProjectStore } from '@/stores/project'
 import { useWebSocket } from '@/composables/useWebSocket'
@@ -71,7 +71,6 @@ import ServiceStatusBanner from './components/ServiceStatusBanner.vue'
 import IssueCreatePanel from '@/components/IssueCreatePanel.vue'
 import { ToastNotification } from '@/components/base'
 
-const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 const projectStore = useProjectStore()
@@ -99,12 +98,6 @@ watch(toast.toasts, (list) => {
     wsDisconnectToastId = null
   }
 }, { deep: true })
-
-// ===== TabBar 仅在 Issue 相关路由显示 =====
-const showTabBar = computed(() => {
-  const name = route.name
-  return name === 'Issues' || name === 'IssueDetail'
-})
 
 // ===== 权限（仅用于控制创建面板是否挂载） =====
 const canCreateIssue = computed(() => {
