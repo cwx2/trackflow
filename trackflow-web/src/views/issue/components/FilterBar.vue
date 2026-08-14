@@ -1331,7 +1331,8 @@ defineExpose({ clearAll, setFilters, setSearchKeyword })
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
+  min-width: 0;
+  overflow: hidden;
 }
 
 /* Saved Query chip */
@@ -1431,8 +1432,9 @@ defineExpose({ clearAll, setFilters, setSearchKeyword })
 .filter-chips {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 6px;
+  overflow: hidden;
 }
 
 /* Filter chip */
