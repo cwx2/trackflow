@@ -43,21 +43,8 @@ public class TransitionActionController {
         Long effectiveProjectId = WorkflowScope.fromApi(projectId);
         List<TransitionAction> actions = transitionActionService.list(
                 effectiveProjectId, issueType, oldStatusId, newStatusId);
-        List<TransitionActionVO> voList = transitionActionConverter.toVOList(actions);
-
-        // 查询当前有效的转换路径集合，标记每个动作的路径是否有效
         Set<String> validPaths = transitionActionService.getValidTransitionPaths(effectiveProjectId);
-        for (TransitionActionVO vo : voList) {
-            if (vo.getOldStatusId() == null) {
-                // on-create 动作（old_status_id IS NULL）始终有效
-                vo.setPathValid(true);
-            } else {
-                String pathKey = vo.getOldStatusId() + "->" + vo.getNewStatusId();
-                vo.setPathValid(validPaths.contains(pathKey));
-            }
-        }
-
-        return R.ok(voList);
+        return R.ok(transitionActionConverter.toVOListWithPaths(actions, validPaths));
     }
 
     /**

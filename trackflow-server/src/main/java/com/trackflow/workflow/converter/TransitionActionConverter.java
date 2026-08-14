@@ -14,6 +14,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * TransitionAction 实体到 VO 的转换器。
@@ -43,6 +44,27 @@ public abstract class TransitionActionConverter implements BaseConverter {
     public abstract TransitionActionVO toVO(TransitionAction entity);
 
     public abstract List<TransitionActionVO> toVOList(List<TransitionAction> entities);
+
+    /**
+     * 将 TransitionAction 列表转换为 VO 列表，并根据有效转换路径集合标记 pathValid。
+     * 将原 TransitionActionController.list() 中的路径有效性标记逻辑下沉至此。
+     *
+     * @param entities   TransitionAction 实体列表
+     * @param validPaths 有效转换路径集合，格式为 "oldStatusId->newStatusId"
+     */
+    public List<TransitionActionVO> toVOListWithPaths(List<TransitionAction> entities, Set<String> validPaths) {
+        List<TransitionActionVO> voList = toVOList(entities);
+        for (TransitionActionVO vo : voList) {
+            if (vo.getOldStatusId() == null) {
+                // on-create 动作（old_status_id IS NULL）始终有效
+                vo.setPathValid(true);
+            } else {
+                String pathKey = vo.getOldStatusId() + "->" + vo.getNewStatusId();
+                vo.setPathValid(validPaths.contains(pathKey));
+            }
+        }
+        return voList;
+    }
 
     /**
      * 将 action_config JSON 字符串解析为 Map

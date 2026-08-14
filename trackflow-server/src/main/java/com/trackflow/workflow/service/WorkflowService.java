@@ -340,13 +340,15 @@ public class WorkflowService {
         if (transition == null) {
             throw BusinessException.notFound("工作流转换规则", transitionId);
         }
+        // 空字符串视为 null（清除名称），回退到目标状态名显示
+        String effectiveName = (transitionName != null && transitionName.isBlank()) ? null : transitionName;
         // 使用 LambdaUpdateWrapper 显式 set，支持将 transitionName 设为 null（清除名称）
         // updateById 默认忽略 null 字段，无法清除已有值
         transitionMapper.update(new LambdaUpdateWrapper<WorkflowTransition>()
                 .eq(WorkflowTransition::getId, transitionId)
-                .set(WorkflowTransition::getTransitionName, transitionName));
+                .set(WorkflowTransition::getTransitionName, effectiveName));
         log.info("[Workflow] 更新转换显示名: transitionId={}, transitionName={}",
-                transitionId, transitionName);
+                transitionId, effectiveName);
     }
 
     /**

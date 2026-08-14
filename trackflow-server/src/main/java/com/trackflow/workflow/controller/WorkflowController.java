@@ -9,6 +9,8 @@ import com.trackflow.workflow.converter.WorkflowConverter;
 import com.trackflow.workflow.dto.UpdateWorkflowDTO;
 import com.trackflow.workflow.dto.WorkflowActivityQuery;
 import com.trackflow.workflow.dto.WorkflowImpactAnalysisDTO;
+import com.trackflow.workflow.dto.UpdateTransitionConditionsDTO;
+import com.trackflow.workflow.dto.UpdateTransitionNameDTO;
 import com.trackflow.workflow.entity.WorkflowActivity;
 import com.trackflow.workflow.entity.WorkflowInitialStatus;
 import com.trackflow.workflow.WorkflowScope;
@@ -136,19 +138,9 @@ public class WorkflowController {
                 ? dto.getProjectId() : null;
         String effectiveIssueType = (dto.getIssueType() != null && !"*".equals(dto.getIssueType()))
                 ? dto.getIssueType() : null;
-
         Map<Long, Long> counts = workflowService.getIssueCountByStatuses(
                 dto.getStatusIds(), effectiveProjectId, effectiveIssueType);
-
-        // 转换为 String key（前端 ID 为 String）
-        Map<String, Long> stringCounts = new java.util.LinkedHashMap<>();
-        long total = 0;
-        for (Map.Entry<Long, Long> entry : counts.entrySet()) {
-            stringCounts.put(String.valueOf(entry.getKey()), entry.getValue());
-            total += entry.getValue();
-        }
-
-        return R.ok(new WorkflowImpactAnalysisVO(stringCounts, total));
+        return R.ok(WorkflowImpactAnalysisVO.from(counts));
     }
 
     /**
@@ -163,7 +155,7 @@ public class WorkflowController {
     @PreAuthorize("@perm.checkGlobal('system:admin')")
     public R<Void> updateTransitionConditions(
             @PathVariable("transitionId") Long transitionId,
-            @Valid @RequestBody com.trackflow.workflow.dto.UpdateTransitionConditionsDTO dto) {
+            @Valid @RequestBody UpdateTransitionConditionsDTO dto) {
         workflowService.updateTransitionConditions(transitionId, dto);
         return R.ok();
     }
@@ -177,12 +169,8 @@ public class WorkflowController {
     @PreAuthorize("@perm.checkGlobal('system:admin')")
     public R<Void> updateTransitionName(
             @PathVariable("transitionId") Long transitionId,
-            @Valid @RequestBody com.trackflow.workflow.dto.UpdateTransitionNameDTO dto) {
-        String name = dto.getTransitionName();
-        if (name != null && name.isBlank()) {
-            name = null;
-        }
-        workflowService.updateTransitionName(transitionId, name);
+            @Valid @RequestBody UpdateTransitionNameDTO dto) {
+        workflowService.updateTransitionName(transitionId, dto.getTransitionName());
         return R.ok();
     }
 

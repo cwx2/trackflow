@@ -4,7 +4,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
@@ -26,4 +26,17 @@ public class WorkflowImpactAnalysisVO {
      * 总影响工单数（所有状态的合计）
      */
     private long totalAffectedIssues;
+
+    /**
+     * 从 Service 返回的 Long-key Map 构建 VO（将 Long ID 转为 String，并计算总数）
+     */
+    public static WorkflowImpactAnalysisVO from(Map<Long, Long> counts) {
+        Map<String, Long> stringCounts = new LinkedHashMap<>();
+        long total = 0;
+        for (Map.Entry<Long, Long> entry : counts.entrySet()) {
+            stringCounts.put(String.valueOf(entry.getKey()), entry.getValue());
+            total += entry.getValue();
+        }
+        return new WorkflowImpactAnalysisVO(stringCounts, total);
+    }
 }

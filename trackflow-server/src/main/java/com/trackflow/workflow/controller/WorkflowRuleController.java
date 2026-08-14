@@ -1,7 +1,9 @@
 package com.trackflow.workflow.controller;
 
 import com.trackflow.common.model.R;
+import com.trackflow.common.util.SecurityUtils;
 import com.trackflow.workflow.converter.WorkflowRuleConverter;
+import com.trackflow.workflow.WorkflowScope;
 import com.trackflow.workflow.dto.WorkflowRuleDTO;
 import com.trackflow.workflow.dto.WorkflowRuleExportDTO;
 import com.trackflow.workflow.dto.WorkflowRuleImportDTO;
@@ -35,9 +37,9 @@ public class WorkflowRuleController {
      * projectId=0 表示仅查全局规则
      */
     @GetMapping("/projects/{projectId}/workflow-rules")
-    @PreAuthorize("T(com.trackflow.workflow.WorkflowScope).isGlobal(#projectId) ? @perm.checkGlobal('system:admin') : @perm.check(#projectId, 'project:manage_workflow')")
+    @PreAuthorize("T(WorkflowScope).isGlobal(#projectId) ? @perm.checkGlobal('system:admin') : @perm.check(#projectId, 'project:manage_workflow')")
     public R<List<WorkflowRuleVO>> listRules(@PathVariable("projectId") Long projectId) {
-        Long effectiveProjectId = com.trackflow.workflow.WorkflowScope.fromApi(projectId);
+        Long effectiveProjectId = WorkflowScope.fromApi(projectId);
         return R.ok(workflowRuleConverter.toVOList(ruleService.listRules(effectiveProjectId)));
     }
 
@@ -54,10 +56,10 @@ public class WorkflowRuleController {
      * 创建规则
      */
     @PostMapping("/projects/{projectId}/workflow-rules")
-    @PreAuthorize("T(com.trackflow.workflow.WorkflowScope).isGlobal(#projectId) ? @perm.checkGlobal('system:admin') : @perm.check(#projectId, 'project:manage_workflow')")
+    @PreAuthorize("T(WorkflowScope).isGlobal(#projectId) ? @perm.checkGlobal('system:admin') : @perm.check(#projectId, 'project:manage_workflow')")
     public R<WorkflowRuleVO> createRule(@PathVariable("projectId") Long projectId,
                                          @Valid @RequestBody WorkflowRuleDTO dto) {
-        Long effectiveProjectId = com.trackflow.workflow.WorkflowScope.fromApi(projectId);
+        Long effectiveProjectId = WorkflowScope.fromApi(projectId);
         return R.ok(workflowRuleConverter.toVO(ruleService.createRule(effectiveProjectId, dto)));
     }
 
@@ -138,7 +140,7 @@ public class WorkflowRuleController {
     @GetMapping("/issues/{issueId}/action-rules")
     @PreAuthorize("isAuthenticated()")
     public R<List<WorkflowRuleVO>> getAvailableActionRules(@PathVariable("issueId") Long issueId) {
-        var issue = com.trackflow.common.util.SecurityUtils.getCurrentUserId() != null
+        var issue = SecurityUtils.getCurrentUserId() != null
                 ? ruleService.getIssueForActionRules(issueId) : null;
         if (issue == null) {
             return R.ok(List.of());
@@ -174,9 +176,9 @@ public class WorkflowRuleController {
      * 批量导出项目下的所有规则
      */
     @GetMapping("/projects/{projectId}/workflow-rules/export")
-    @PreAuthorize("T(com.trackflow.workflow.WorkflowScope).isGlobal(#projectId) ? @perm.checkGlobal('system:admin') : @perm.check(#projectId, 'project:manage_workflow')")
+    @PreAuthorize("T(WorkflowScope).isGlobal(#projectId) ? @perm.checkGlobal('system:admin') : @perm.check(#projectId, 'project:manage_workflow')")
     public R<WorkflowRuleExportDTO> exportProjectRules(@PathVariable("projectId") Long projectId) {
-        Long effectiveProjectId = com.trackflow.workflow.WorkflowScope.fromApi(projectId);
+        Long effectiveProjectId = WorkflowScope.fromApi(projectId);
         return R.ok(ruleService.exportRules(effectiveProjectId));
     }
 
@@ -184,11 +186,11 @@ public class WorkflowRuleController {
      * 导入规则到指定项目（JSON body 方式）
      */
     @PostMapping("/projects/{projectId}/workflow-rules/import")
-    @PreAuthorize("T(com.trackflow.workflow.WorkflowScope).isGlobal(#projectId) ? @perm.checkGlobal('system:admin') : @perm.check(#projectId, 'project:manage_workflow')")
+    @PreAuthorize("T(WorkflowScope).isGlobal(#projectId) ? @perm.checkGlobal('system:admin') : @perm.check(#projectId, 'project:manage_workflow')")
     public R<WorkflowRuleImportResultVO> importRules(
             @PathVariable("projectId") Long projectId,
             @Valid @RequestBody WorkflowRuleImportDTO importDTO) {
-        Long effectiveProjectId = com.trackflow.workflow.WorkflowScope.fromApi(projectId);
+        Long effectiveProjectId = WorkflowScope.fromApi(projectId);
         return R.ok(ruleService.importRules(effectiveProjectId, importDTO));
     }
 }
