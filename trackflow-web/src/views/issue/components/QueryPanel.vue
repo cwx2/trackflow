@@ -4,17 +4,6 @@
        宽度由 useQueryPanel 管理，支持拖拽调整和双击折叠 -->
   <aside class="query-panel" :style="{ width: panelWidth + 'px' }">
 
-    <!-- ===== 顶部标题栏：显示"查询"标签和工单总数 ===== -->
-    <div class="panel-top">
-      <div class="panel-top-title">
-        <span class="panel-label">查询</span>
-        <span class="panel-total">{{ totalIssues }}</span>
-      </div>
-      <a-button type="text" size="mini">
-        <template #icon><icon-plus /></template>
-      </a-button>
-    </div>
-
     <!-- ===== 搜索框：过滤已保存的查询列表 ===== -->
     <div class="panel-search">
       <a-input v-model="panelSearch" placeholder="过滤已保存的查询..." size="small" allow-clear>
