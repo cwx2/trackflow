@@ -1283,12 +1283,12 @@ function onGlobalSearch(keyword: string) {
   nextTick(() => { skipRouteQueryWatch = false })
   refreshList()
 }
-function onGlobalFilter(filters: Record<string, any>) {
-  searchKeyword.value = ''; globalFilterParams.value = filters
+function onGlobalFilter(filters: any[]) {
+  searchKeyword.value = ''; globalFilterParams.value = { filterConditions: filters }
   if (activeQueryId.value) { activeQueryId.value = null; activeQueryName.value = '所有工单'; activeQueryObj.value = null }
   currentPage.value = 1
-  // Sync filter params to URL (preserve project param)
-  syncFiltersToUrl(filters)
+  // Sync filter conditions to URL (preserve project param)
+  syncFiltersToUrl({})
   refreshList()
 }
 

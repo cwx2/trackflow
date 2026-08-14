@@ -11,3 +11,6 @@ export { default as ToastNotification } from './ToastNotification.vue'
 
 export { default as ShareTargetsModal } from './ShareTargetsModal.vue'
 export type { ShareTargetItem, PermissionOption } from './ShareTargetsModal.vue'
+
+export { default as IssueFilterEditor } from './IssueFilterEditor.vue'
+export type { FilterCondition } from './IssueFilterEditor.vue'

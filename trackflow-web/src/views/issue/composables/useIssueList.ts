@@ -1,13 +1,20 @@
 import { ref, shallowRef, computed, onUnmounted } from 'vue'
 import axios from 'axios'
 import { issueApi, queryApi } from '@/api'
-import type { IssueVO } from '@/api/types'
+import type { IssueVO, SavedQueryFilter } from '@/api/types'
 
 export type SortDirection = 'asc' | 'desc' | null
 
 export interface SortState {
   field: string | null
   direction: SortDirection
+}
+
+/** FilterCondition 格式（与 SavedQueryFilter 兼容，用于 QueryExecutor 路径） */
+export interface FilterCondition {
+  field: string
+  operator: string
+  value?: string[]
 }
 
 export interface IssueListFilters {
@@ -22,6 +29,8 @@ export interface IssueListFilters {
   issueType?: string
   keyword?: string
   queryId?: string | number
+  /** FilterCondition[] 条件（走 QueryExecutor 路径），优先于 URL 参数 */
+  filterConditions?: FilterCondition[]
   // Negative filters
   statusIdNot?: string
   priorityNot?: string
@@ -47,6 +56,39 @@ export interface IssueListFilters {
   reportedByMe?: string
   assignedToMe?: string
   hideResolved?: string
+}
+
+/**
+ * 将 FilterCondition[] 转换为 SavedQueryFilter[] 格式（QueryExecutor 接受的格式）
+ * 同时注入额外的上下文条件（如 projectId, hideResolved）
+ */
+function buildAdhocFilters(conditions: FilterCondition[], context: IssueListFilters): SavedQueryFilter[] {
+  const filters: SavedQueryFilter[] = []
+
+  // 注入项目 ID（如果不在 conditions 中已存在）
+  if (context.projectId) {
+    const hasProject = conditions.some(c => c.field === 'project')
+    if (!hasProject) {
+      filters.push({ field: 'project', operator: 'in', value: [String(context.projectId)] })
+    }
+  }
+
+  // 转换 FilterCondition → SavedQueryFilter
+  for (const cond of conditions) {
+    const filter: SavedQueryFilter = {
+      field: cond.field,
+      operator: cond.operator,
+      value: cond.value || []
+    }
+    filters.push(filter)
+  }
+
+  // 注入关键词搜索
+  if (context.keyword) {
+    filters.push({ field: 'keyword', operator: 'contains', value: [context.keyword] })
+  }
+
+  return filters
 }
 
 export function useIssueList() {
@@ -153,6 +195,14 @@ export function useIssueList() {
       if (filters.queryId) {
         // 通过已保存查询执行
         res = await queryApi.executeById(String(filters.queryId), params, currentAbortController.signal)
+      } else if (filters.filterConditions && filters.filterConditions.length > 0) {
+        // 通过 FilterCondition[] 走 QueryExecutor 路径（统一筛选器）
+        const adhocFilters = buildAdhocFilters(filters.filterConditions, filters)
+        res = await queryApi.executeAdhoc({
+          filters: adhocFilters,
+          page: currentPage.value,
+          pageSize: pageSize.value
+        })
       } else {
         res = await issueApi.list(params, currentAbortController.signal)
       }
