@@ -108,6 +108,7 @@ import { IconExclamationCircle, IconCheckCircle, IconCalendar } from '@arco-desi
 import { sprintApi } from '@/api'
 import { IssueStatusTag, IssuePriorityBadge } from '@/components/base'
 import { DEFAULT_STATUS_COLOR, getSprintStatusColor } from '@/utils/uiColors'
+import { formatDueDate } from '@/utils/date'
 import type { SprintVO, CompletionPreviewVO } from '@/api/types'
 
 const props = defineProps<{
@@ -145,15 +146,6 @@ function isOverdue(dateStr?: string): boolean {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   return new Date(dateStr) < today
-}
-
-/** 格式化截止日期为简短显示 */
-function formatDueDate(dateStr?: string): string {
-  if (!dateStr) return ''
-  const date = new Date(dateStr)
-  const month = date.getMonth() + 1
-  const day = date.getDate()
-  return `${month}/${day}`
 }
 
 watch(() => props.visible, async (val) => {

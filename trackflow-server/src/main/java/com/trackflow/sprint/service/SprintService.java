@@ -216,7 +216,7 @@ public class SprintService {
 
     public Sprint getById(Long id) {
         Sprint sprint = sprintMapper.selectById(id);
-        if (sprint == null) throw BusinessException.notFound("Sprint not found");
+        if (sprint == null) throw BusinessException.notFound("迭代", id);
         return sprint;
     }
 
@@ -750,6 +750,8 @@ public class SprintService {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "只有进行中的迭代才能完成");
         }
 
+        Long currentUserId = SecurityUtils.getCurrentUserId();
+
         // 查找未关闭工单（JOIN issue_status 判断 is_closed）
         List<Issue> openIssues = findOpenIssuesInSprint(id);
 
@@ -798,7 +800,6 @@ public class SprintService {
 
             // 批量更新工单的 sprint_id + updatedBy/updatedAt
             List<Long> openIssueIds = openIssues.stream().map(Issue::getId).collect(Collectors.toList());
-            Long currentUserId = SecurityUtils.getCurrentUserId();
             LocalDateTime now = LocalDateTime.now();
             issueMapper.update(null,
                     new LambdaUpdateWrapper<Issue>()
@@ -849,7 +850,6 @@ public class SprintService {
         clearDefaultSprintIfMatches(sprint.getProjectId(), sprint.getId());
 
         // 记录项目活动日志
-        Long completeUserId = SecurityUtils.getCurrentUserId();
         Map<String, Object> completeDetail = new LinkedHashMap<>();
         completeDetail.put("sprint_id", sprint.getId());
         completeDetail.put("sprint_name", sprint.getName());
@@ -858,11 +858,11 @@ public class SprintService {
             completeDetail.put("unresolved_issues_count", movedIssueCount);
             completeDetail.put("move_option", dto != null ? dto.getMoveOption() : "none");
         }
-        projectActivityService.log(sprint.getProjectId(), completeUserId, "complete_sprint", null, completeDetail);
+        projectActivityService.log(sprint.getProjectId(), currentUserId, "complete_sprint", null, completeDetail);
 
         // 通知项目成员 Sprint 已完成 — 事务提交后触发
         // 注意：completedIssues 已在方法开头计算，确保在工单迁移前统计
-        eventPublisher.publishEvent(new SprintNotificationEvent.Completed(sprint, Math.max(completedIssues, 0), completeUserId));
+        eventPublisher.publishEvent(new SprintNotificationEvent.Completed(sprint, Math.max(completedIssues, 0), currentUserId));
 
         // 失效 Dashboard 缓存 — 事务提交后触发
         eventPublisher.publishEvent(ReportCacheInvalidationEvent.of(sprint.getProjectId(), "sprint_completed"));
