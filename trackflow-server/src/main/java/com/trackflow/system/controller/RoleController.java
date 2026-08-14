@@ -42,13 +42,11 @@ public class RoleController {
     private final PermissionImplicationService permissionImplicationService;
 
     @PostMapping
-    @PreAuthorize("@perm.checkGlobal('system:manage_roles')")
     public R<RoleVO> create(@Valid @RequestBody CreateRoleDTO dto) {
         return R.ok(roleConverter.toVO(roleService.create(dto)));
     }
 
     @PostMapping("/{id}/clone")
-    @PreAuthorize("@perm.checkGlobal('system:manage_roles')")
     public R<RoleVO> clone(@PathVariable("id") Long id, @Valid @RequestBody CloneRoleDTO dto) {
         return R.ok(roleConverter.toVO(roleService.clone(id, dto.getName(), dto.getCode())));
     }
@@ -64,20 +62,17 @@ public class RoleController {
      * </p>
      */
     @PostMapping("/merge")
-    @PreAuthorize("@perm.checkGlobal('system:manage_roles')")
     public R<RoleVO> merge(@Valid @RequestBody MergeRolesDTO dto) {
         return R.ok(roleConverter.toVO(
                 roleService.mergeRoles(dto.getSourceRoleIds(), dto.getTargetRoleId())));
     }
 
     @GetMapping("/stats")
-    @PreAuthorize("@perm.checkGlobal('system:manage_roles')")
     public R<RoleStatsVO> stats() {
         return R.ok(roleService.getStats());
     }
 
     @GetMapping
-    @PreAuthorize("@perm.checkGlobal('system:manage_roles')")
     public R<PageResult<RoleVO>> list(
             @RequestParam(value = "roleType", required = false) String roleType,
             @RequestParam(value = "page", required = false) Integer page,
@@ -105,39 +100,33 @@ public class RoleController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("@perm.checkGlobal('system:manage_roles')")
     public R<RoleVO> getById(@PathVariable("id") Long id) {
         return R.ok(roleConverter.toVO(roleService.getById(id)));
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("@perm.checkGlobal('system:manage_roles')")
     public R<RoleVO> update(@PathVariable("id") Long id, @Valid @RequestBody UpdateRoleDTO dto) {
         return R.ok(roleConverter.toVO(roleService.update(id, dto)));
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("@perm.checkGlobal('system:manage_roles')")
     public R<Void> delete(@PathVariable("id") Long id) {
         roleService.delete(id);
         return R.ok();
     }
 
     @PatchMapping("/{id}/enabled")
-    @PreAuthorize("@perm.checkGlobal('system:manage_roles')")
     public R<RoleVO> setEnabled(@PathVariable("id") Long id, @RequestParam boolean enabled) {
         return R.ok(roleConverter.toVO(roleService.setEnabled(id, enabled)));
     }
 
     @PutMapping("/{id}/permissions")
-    @PreAuthorize("@perm.checkGlobal('system:manage_roles')")
     public R<Void> replacePermissions(@PathVariable("id") Long id, @Valid @RequestBody ReplacePermissionsDTO dto) {
         roleService.replacePermissions(id, dto.getPermissions());
         return R.ok();
     }
 
     @GetMapping("/{id}/permissions")
-    @PreAuthorize("@perm.checkGlobal('system:manage_roles')")
     public R<List<String>> getPermissions(@PathVariable("id") Long id) {
         return R.ok(roleService.getPermissions(id));
     }
@@ -146,13 +135,11 @@ public class RoleController {
      * 获取角色已分配用户列表（全局角色直接列出用户，项目角色按项目分组）
      */
     @GetMapping("/{id}/users")
-    @PreAuthorize("@perm.checkGlobal('system:manage_roles')")
     public R<RoleUsersVO> getRoleUsers(@PathVariable("id") Long id) {
         return R.ok(roleService.getRoleUsers(id));
     }
 
     @GetMapping("/all-permissions")
-    @PreAuthorize("@perm.checkGlobal('system:manage_roles')")
     public R<Map<String, List<String>>> getAllPermissions() {
         return R.ok(roleService.getAllPermissions());
     }
@@ -163,7 +150,6 @@ public class RoleController {
      * system_admin 返回 ["*"] 表示拥有所有权限。
      */
     @GetMapping("/my-grantable-permissions")
-    @PreAuthorize("@perm.checkGlobal('system:manage_roles')")
     public R<Set<String>> getMyGrantablePermissions() {
         return R.ok(roleService.getGrantablePermissions());
     }
@@ -172,7 +158,6 @@ public class RoleController {
      * 获取所有权限定义（含分类、名称、描述等元数据）
      */
     @GetMapping("/permission-definitions")
-    @PreAuthorize("@perm.checkGlobal('system:manage_roles')")
     public R<List<PermissionGroupVO>> getPermissionDefinitions() {
         return R.ok(roleService.getAllPermissionGroups());
     }
@@ -181,7 +166,6 @@ public class RoleController {
      * 获取所有权限隐含关系（用于前端权限分配 UI 自动勾选/取消）
      */
     @GetMapping("/permission-implications")
-    @PreAuthorize("@perm.checkGlobal('system:manage_roles')")
     public R<List<PermissionImplication>> getPermissionImplications() {
         return R.ok(permissionImplicationService.getAllImplications());
     }

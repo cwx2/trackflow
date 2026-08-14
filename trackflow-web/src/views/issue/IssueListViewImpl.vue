@@ -536,6 +536,7 @@ import { ref, reactive, computed, onMounted, onActivated, onUnmounted, watch, h,
 import { useRouter, useRoute, onBeforeRouteLeave } from 'vue-router'
 import { IconLoading, IconCheckCircle, IconEye, IconLayout, IconExpand, IconDownload, IconFile, IconCode, IconCopy, IconLink, IconCalendar, IconRight } from '@arco-design/web-vue/es/icon'
 import { Message, Modal } from '@arco-design/web-vue'
+import { handleApiError } from '@/utils/errorHandler'
 import { projectApi, issueApi, sprintApi, customFieldApi } from '@/api'
 import type { IssueVO, IssueStatusVO, ProjectMemberVO, SprintVO, CustomFieldValueVO } from '@/api/types'
 import type { TableData } from '@arco-design/web-vue'
@@ -905,7 +906,7 @@ async function performStatusTransition(issue: IssueVO, status: IssueStatusVO, co
     else if (res.code === ERROR_CODES.WIP_LIMIT_EXCEEDED) { Modal.warning({ title: 'WIP 限制', content: res.message, okText: '继续移入', cancelText: '取消', hideCancel: false, onOk: () => performStatusTransition(issue, status, comment, { ...forceFlags, forceWip: true }) }) }
     else if (res.code === ERROR_CODES.CLOSE_CONFIRMATION_REQUIRED) { Modal.warning({ title: '确认关闭', content: res.message, okText: '强制关闭', cancelText: '取消', hideCancel: false, onOk: () => performStatusTransition(issue, status, comment, { ...forceFlags, force: true }) }) }
     else { Message.error({ content: res.message || '状态变更失败', duration: 3000 }) }
-  } catch (e: any) { issue.statusId = oldStatusId; Message.error({ content: e.response?.data?.message || '状态变更失败', duration: 3000 }) }
+  } catch (e) { issue.statusId = oldStatusId; handleApiError(e, '状态变更失败') }
 }
 
 async function openAssigneeEdit(issue: IssueVO) {
