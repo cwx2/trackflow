@@ -553,7 +553,7 @@ import {
   useKeyboardNav, useContextMenu, useIssueExport,
   useDashboardFilter, useTableConfig
 } from './composables'
-import { loadPriorityOptions } from './composables/usePriorityOptions'
+import { loadPriorityOptions } from '@/composables/usePriorityOptions'
 import { loadIssueTypeOptions } from './composables/useIssueTypeOptions'
 import type { IssueDraft } from './composables'
 import { usePermission as useProjectPermission } from '@/composables/usePermission'
