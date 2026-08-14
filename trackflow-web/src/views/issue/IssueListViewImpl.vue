@@ -125,9 +125,11 @@
           </a-button>
           <a-button v-if="canCreateIssueGlobal" type="primary" size="small" @click="showCreatePanel = true">创建工单</a-button>
           <a-dropdown trigger="click" position="br" @select="handleExport">
-            <a-button size="small" type="text" title="导出数据" :loading="exportLoading">
-              <template #icon><icon-download /></template>
-            </a-button>
+            <a-tooltip content="导出数据" position="bottom" mini>
+              <a-button size="small" type="text" :loading="exportLoading">
+                <template #icon><icon-download /></template>
+              </a-button>
+            </a-tooltip>
             <template #content>
               <a-doption value="xlsx">
                 <template #icon><icon-file /></template>
@@ -156,9 +158,11 @@
             @update:structure="setStructure"
           />
           <a-dropdown trigger="click" position="br">
-            <a-button size="small" type="text" title="预览模式">
-              <template #icon><icon-eye /></template>
-            </a-button>
+            <a-tooltip content="预览模式" position="bottom" mini>
+              <a-button size="small" type="text">
+                <template #icon><icon-eye /></template>
+              </a-button>
+            </a-tooltip>
             <template #content>
               <a-doption @click="setPreviewMode('sidebar')" :class="{ 'doption-active': previewMode === 'sidebar' }">
                 <template #icon><icon-layout /></template>
