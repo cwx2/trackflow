@@ -5,6 +5,7 @@ import { ref, shallowRef, computed, watch, onMounted, h, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { Message, Modal, Notification } from '@arco-design/web-vue'
 import { issueApi, sprintApi, boardApi } from '@/api'
+import { handleApiError } from '@/utils/errorHandler'
 import type { IssueVO, IssueStatusVO, SprintVO, BoardColumnVO, BoardCardConfigVO, BoardColumnMergeGroupVO, BoardCardVO, R, TransitStatusResultVO, DeletionPreviewVO } from '@/api/types'
 import { ERROR_CODES } from '@/api/error-codes'
 import { useProjectStore } from '@/stores/project'
@@ -126,7 +127,7 @@ async function onCardSetAssignee(userId: string, issue: BoardIssue) {
   } catch (e: any) {
     // 回滚
     patchIssue(issue.id, { assigneeId: oldAssigneeId, assigneeName: oldAssigneeName })
-    Message.error(e.response?.data?.message || '设置负责人失败')
+    handleApiError(e, '设置负责人失败')
   }
 }
 
@@ -1197,7 +1198,7 @@ async function handleRestoreArchivedSprint() {
       sprints.value = res.data?.list || []
     }
   } catch (e: any) {
-    Message.error(e.response?.data?.message || '恢复失败')
+    handleApiError(e, '恢复失败')
   } finally {
     restoringArchivedSprint.value = false
   }
@@ -1218,7 +1219,7 @@ async function handleDeleteArchivedSprint() {
       deleteArchivedSprintTargetId.value = res.data.targetSprints[0].id
     }
   } catch (e: any) {
-    Message.error(e.response?.data?.message || '获取预览信息失败')
+    handleApiError(e, '获取预览信息失败')
     showDeleteArchivedSprintModal.value = false
   }
 }
@@ -1249,7 +1250,7 @@ async function confirmDeleteArchivedSprint() {
       sprints.value = res.data?.list || []
     }
   } catch (e: any) {
-    Message.error(e.response?.data?.message || '删除失败')
+    handleApiError(e, '删除失败')
   } finally {
     deletingArchivedSprint.value = false
   }
@@ -1345,7 +1346,7 @@ async function activatePlannedSprint(sprint: SprintVO) {
       guidanceDismissed.value = true
     }
   } catch (e: any) {
-    Message.error(e.response?.data?.message || '激活迭代失败')
+    handleApiError(e, '激活迭代失败')
   } finally {
     activatingSprintId.value = null
   }
@@ -2278,7 +2279,7 @@ async function onDrop(event: DragEvent, targetStatusId: string) {
         } catch (e: any) {
           issue.statusId = oldStatusId
           flushIssues()
-          Message.error(e.response?.data?.message || '状态变更失败')
+          handleApiError(e, '状态变更失败')
         } finally {
           transitioningIssueIds.value.delete(issue.id)
         }
@@ -3253,7 +3254,7 @@ async function submitNewSprintModal() {
       newSprintModalVisible.value = false
     }
   } catch (e: any) {
-    Message.error(e.response?.data?.message || '创建 Sprint 失败')
+    handleApiError(e, '创建 Sprint 失败')
   } finally {
     newSprintSubmitting.value = false
   }

@@ -14,6 +14,7 @@ import { ref, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { Message, Modal } from '@arco-design/web-vue'
 import { issueApi, tagApi, customFieldApi, timeEntryApi } from '@/api'
+import { handleApiError } from '@/utils/errorHandler'
 import { showActionFeedback } from '@/utils/transition'
 import { ERROR_CODES } from '@/api/error-codes'
 import { useNavBadge } from '@/composables/useNavBadge'
@@ -66,7 +67,7 @@ export function useIssueDetailActions(deps: ActionDeps) {
       await issueApi.deleteLink(deps.issue.value.id, linkId)
       Message.success('关联已删除')
       await deps.loadLinks()
-    } catch (e: any) { Message.error(e?.response?.data?.message || '删除关联失败') }
+    } catch (e) { handleApiError(e, '删除关联失败') }
   }
 
   // ============ Move modal ============
@@ -142,7 +143,7 @@ export function useIssueDetailActions(deps: ActionDeps) {
       }
       showTimeDialog.value = false
       await deps.loadAll()
-    } catch (e: any) { Message.error(e.response?.data?.message || '操作失败') }
+    } catch (e) { handleApiError(e, '操作失败') }
     finally { timeSaving.value = false }
   }
 
@@ -161,7 +162,7 @@ export function useIssueDetailActions(deps: ActionDeps) {
           Message.success('工时已删除')
           showTimeDialog.value = false
           await deps.loadAll()
-        } catch (e: any) { Message.error(e.response?.data?.message || '删除失败') }
+        } catch (e) { handleApiError(e, '删除失败') }
         finally { timeDeleting.value = false }
       }
     })
@@ -226,7 +227,7 @@ export function useIssueDetailActions(deps: ActionDeps) {
       await issueApi.uploadAttachment(deps.issue.value.id, file, undefined, visibleToGroupIds)
       Message.success(`${file.name} 上传成功`)
       deps.loadAttachments()
-    } catch (e: any) { Message.error(e.response?.data?.message || `${file.name} 上传失败`) }
+    } catch (e) { handleApiError(e, `${file.name} 上传失败`) }
   }
 
   async function onDeleteAttachment(attachmentId: string) {
@@ -235,7 +236,7 @@ export function useIssueDetailActions(deps: ActionDeps) {
       await issueApi.deleteAttachment(deps.issue.value.id, attachmentId)
       Message.success('附件已删除')
       deps.loadAttachments()
-    } catch (e: any) { Message.error(e.response?.data?.message || '删除附件失败') }
+    } catch (e) { handleApiError(e, '删除附件失败') }
   }
 
   async function onDeleteAllAttachments() {
@@ -246,7 +247,7 @@ export function useIssueDetailActions(deps: ActionDeps) {
       }
       Message.success('所有附件已删除')
       deps.loadAttachments()
-    } catch (e: any) { Message.error(e.response?.data?.message || '删除附件失败') }
+    } catch (e) { handleApiError(e, '删除附件失败') }
   }
 
   // ============ Delete / Move ============
@@ -263,7 +264,7 @@ export function useIssueDetailActions(deps: ActionDeps) {
           await issueApi.delete(deps.issue.value!.id)
           Message.success('工单已删除')
           router.push('/issues')
-        } catch (e: any) { Message.error(e.response?.data?.message || '删除失败') }
+        } catch (e) { handleApiError(e, '删除失败') }
       }
     })
   }
@@ -282,8 +283,8 @@ export function useIssueDetailActions(deps: ActionDeps) {
         Message.error(res.message || '移动失败')
         moveModalRef.value?.resetSubmitting()
       }
-    } catch (e: any) {
-      Message.error(e.response?.data?.message || '移动失败')
+    } catch (e) {
+      handleApiError(e, '移动失败')
       moveModalRef.value?.resetSubmitting()
     }
   }
@@ -325,17 +326,17 @@ export function useIssueDetailActions(deps: ActionDeps) {
 
   async function onRemoveTag(tagId: string) {
     try { await issueApi.removeTag(deps.issue.value!.id, tagId); await deps.loadAll() }
-    catch (e: any) { Message.error(e.response?.data?.message || '操作失败') }
+    catch (e) { handleApiError(e, '操作失败') }
   }
 
   async function onAddTag(tag: { id: string }) {
     try { await issueApi.addTag(deps.issue.value!.id, tag.id); await deps.loadAll() }
-    catch (e: any) { Message.error(e.response?.data?.message || '操作失败') }
+    catch (e) { handleApiError(e, '操作失败') }
   }
 
   async function onAddTags(tags: { id: string }[]) {
     try { await issueApi.addTags(deps.issue.value!.id, tags.map(t => t.id)); await deps.loadAll() }
-    catch (e: any) { Message.error(e.response?.data?.message || '操作失败') }
+    catch (e) { handleApiError(e, '操作失败') }
   }
 
   async function onCreateTag(name: string) {
@@ -343,7 +344,7 @@ export function useIssueDetailActions(deps: ActionDeps) {
       const res = await tagApi.createProjectTag(deps.issue.value!.projectId, { name })
       if (res.data) await issueApi.addTag(deps.issue.value!.id, res.data.id)
       await deps.loadAll()
-    } catch (e: any) { Message.error(e.response?.data?.message || '操作失败') }
+    } catch (e) { handleApiError(e, '操作失败') }
   }
 
   // ============ Comments ============
@@ -352,27 +353,27 @@ export function useIssueDetailActions(deps: ActionDeps) {
       await issueApi.addComment(deps.issue.value!.id, content, visibleToGroupIds)
       await deps.loadAll()
       Message.success('评论已发布')
-    } catch (e: any) { Message.error(e.response?.data?.message || '评论失败') }
+    } catch (e) { handleApiError(e, '评论失败') }
   }
 
   async function onEditComment(commentId: string, content: string) {
     try { await issueApi.updateComment(deps.issue.value!.id, commentId, content); await deps.loadAll(); Message.success('评论已更新') }
-    catch (e: any) { Message.error(e.response?.data?.message || '编辑评论失败') }
+    catch (e) { handleApiError(e, '编辑评论失败') }
   }
 
   async function onDeleteComment(commentId: string) {
     try { await issueApi.deleteComment(deps.issue.value!.id, commentId); await deps.loadAll(); Message.success('评论已删除') }
-    catch (e: any) { Message.error(e.response?.data?.message || '删除评论失败') }
+    catch (e) { handleApiError(e, '删除评论失败') }
   }
 
   async function onRestoreComment(commentId: string) {
     try { await issueApi.restoreComment(deps.issue.value!.id, commentId); await deps.loadAll(); Message.success('评论已还原') }
-    catch (e: any) { Message.error(e.response?.data?.message || '还原评论失败') }
+    catch (e) { handleApiError(e, '还原评论失败') }
   }
 
   async function onPermanentlyDeleteComment(commentId: string) {
     try { await issueApi.permanentlyDeleteComment(deps.issue.value!.id, commentId); await deps.loadAll(); Message.success('评论已永久删除') }
-    catch (e: any) { Message.error(e.response?.data?.message || '永久删除评论失败') }
+    catch (e) { handleApiError(e, '永久删除评论失败') }
   }
 
   // ============ Status transition ============
@@ -534,7 +535,7 @@ export function useIssueDetailActions(deps: ActionDeps) {
       Message.success(`已添加选项"${value}"`)
       // Caller should refresh custom field defs
       await deps.loadAll()
-    } catch (e: any) { Message.error(e.response?.data?.message || '添加选项失败') }
+    } catch (e) { handleApiError(e, '添加选项失败') }
   }
 
   async function onUpdateVisibility(visibility: string, userIds: string[] = []) {

@@ -632,6 +632,7 @@ import { Message, Modal } from '@arco-design/web-vue'
 import { customFieldApi } from '@/api'
 import { workflowApi } from '@/api'
 import { EmptyState, DataContainer } from '@/components/base'
+import { handleApiError } from '@/utils/errorHandler'
 import type { ProjectDetailVO, CustomFieldDefinitionVO, CustomFieldOptionVO, RoleVO, OptionSetStatusVO, ReplaceableFieldsVO } from '@/api/types'
 
 const props = defineProps<{
@@ -742,8 +743,7 @@ async function saveBadgeConfig() {
     selectedField.value.showAsBadge = badgeForm.showAsBadge
     selectedField.value.badgeColorRules = rulesJson
     Message.success('徽章配置已保存')
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '保存徽章配置失败')
+  } catch (e) {(e, '保存徽章配置失败')
   }
 }
 
@@ -889,8 +889,7 @@ async function onDrop(_event: DragEvent, targetIndex: number) {
     const fieldIds = newList.map(f => f.id)
     await customFieldApi.reorderProjectFields(props.project.id, fieldIds)
     Message.success('字段顺序已保存')
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '保存顺序失败')
+  } catch (e) {(e, '保存顺序失败')
     // 回滚失败时重新加载
     await loadFields()
   } finally {
@@ -955,8 +954,7 @@ async function saveCondition() {
     // 重新选中
     const updated = fieldList.value.find(f => f.id === selectedField.value?.id)
     if (updated) selectField(updated)
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '保存条件失败')
+  } catch (e) {(e, '保存条件失败')
   } finally {
     savingCondition.value = false
   }
@@ -978,8 +976,7 @@ async function clearCondition() {
     await loadFields()
     const updated = fieldList.value.find(f => f.id === selectedField.value?.id)
     if (updated) selectField(updated)
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '清除条件失败')
+  } catch (e) {(e, '清除条件失败')
   } finally {
     savingCondition.value = false
   }
@@ -998,8 +995,7 @@ async function handleClearHiddenValues() {
         const res = await customFieldApi.clearHiddenValues(props.project.id, selectedField.value!.id)
         const count = res.data || 0
         Message.success(count > 0 ? `已清除 ${count} 条隐藏值` : '没有需要清除的隐藏值')
-      } catch (e: any) {
-        Message.error(e.response?.data?.message || '清除失败')
+      } catch (e) {(e, '清除失败')
       } finally {
         clearingValues.value = false
       }
@@ -1044,8 +1040,7 @@ async function saveVisibility() {
     await loadFields()
     const updated = fieldList.value.find(f => f.id === selectedField.value?.id)
     if (updated) selectField(updated)
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '保存字段权限失败')
+  } catch (e) {(e, '保存字段权限失败')
   } finally {
     savingVisibility.value = false
   }
@@ -1067,8 +1062,7 @@ async function clearVisibility() {
     await loadFields()
     const updated = fieldList.value.find(f => f.id === selectedField.value?.id)
     if (updated) selectField(updated)
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '清除权限失败')
+  } catch (e) {(e, '清除权限失败')
   } finally {
     savingVisibility.value = false
   }
@@ -1111,8 +1105,7 @@ async function handleMakeIndependentCopy() {
     }
     independentCopyEmpty.value = false
     showIndependentCopyDialog.value = true
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '查询选项集状态失败')
+  } catch (e) {(e, '查询选项集状态失败')
   } finally {
     checkingOptionSetStatus.value = false
   }
@@ -1128,8 +1121,7 @@ async function submitMakeIndependentCopy() {
     await loadFields()
     const updated = fieldList.value.find(f => f.id === selectedField.value?.id)
     if (updated) selectField(updated)
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '创建独立副本失败')
+  } catch (e) {(e, '创建独立副本失败')
   } finally {
     makingIndependent.value = false
   }
@@ -1152,8 +1144,7 @@ async function handleTransferData() {
   try {
     const res = await customFieldApi.getAvailableReplacements(props.project.id, selectedField.value.id)
     replaceableFields.value = res.data
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '加载可替换字段失败')
+  } catch (e) {(e, '加载可替换字段失败')
     showTransferDrawer.value = false
   } finally {
     loadingReplacements.value = false
@@ -1174,8 +1165,7 @@ async function submitReplaceField() {
     showTransferDrawer.value = false
     selectedField.value = null
     await loadFields()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '转移数据失败')
+  } catch (e) {(e, '转移数据失败')
   } finally {
     replacing.value = false
   }
@@ -1242,8 +1232,7 @@ async function saveOverride() {
     await loadFields()
     const updated = fieldList.value.find(f => f.id === selectedField.value?.id)
     if (updated) selectField(updated)
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '保存项目级覆盖失败')
+  } catch (e) {(e, '保存项目级覆盖失败')
   } finally {
     savingOverride.value = false
   }
@@ -1264,8 +1253,7 @@ async function clearOverride() {
     await loadFields()
     const updated = fieldList.value.find(f => f.id === selectedField.value?.id)
     if (updated) selectField(updated)
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '恢复全局设置失败')
+  } catch (e) {(e, '恢复全局设置失败')
   } finally {
     savingOverride.value = false
   }
@@ -1291,8 +1279,7 @@ async function loadAvailableFields() {
   try {
     const res = await customFieldApi.listAvailableForProject(props.project.id)
     availableFields.value = res.data || []
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '加载可用字段失败')
+  } catch (e) {(e, '加载可用字段失败')
     availableFields.value = []
   } finally {
     availableLoading.value = false
@@ -1309,8 +1296,7 @@ async function handleAttach(field: CustomFieldDefinitionVO) {
     Message.success(`字段「${field.name}」已添加到项目`)
     availableFields.value = availableFields.value.filter(f => f.id !== field.id)
     await loadFields()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '添加字段失败')
+  } catch (e) {(e, '添加字段失败')
   }
 }
 
@@ -1332,8 +1318,7 @@ async function submitDetach() {
       selectedField.value = null
     }
     await loadFields()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '移除字段失败')
+  } catch (e) {(e, '移除字段失败')
   } finally {
     detaching.value = false
   }
