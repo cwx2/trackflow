@@ -1451,7 +1451,16 @@ onMounted(async () => {
       const matched = savedQueriesList.find((q: any) => q.id === lastQueryId)
       if (matched) selectQuery(matched)
       else { localStorage.removeItem('tf_last_active_query_id'); refreshList() }
-    } else { refreshList() }
+    } else {
+      // 无 localStorage 偏好时，按优先级选择默认视图（YouTrack 个人工作台行为）
+      // 优先级：用户设置的默认 > "分配给我"共享查询 > 所有工单
+      const userDefaultId = localStorage.getItem('tf_default_query_id')
+      const defaultQuery = userDefaultId ? savedQueriesList.find((q: any) => q.id === userDefaultId) : null
+      const assignedToMeQuery = savedQueriesList.find((q: any) => q.name === '分配给我')
+      if (defaultQuery) { selectQuery(defaultQuery) }
+      else if (assignedToMeQuery) { selectQuery(assignedToMeQuery) }
+      else { refreshList() }
+    }
   } else { refreshList() }
   window.addEventListener('trackflow:issues-restored', handleIssuesRestored)
   document.addEventListener('keydown', handleKeyboardNav)

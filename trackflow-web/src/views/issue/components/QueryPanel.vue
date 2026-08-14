@@ -252,6 +252,7 @@
           >
             <span v-if="q.icon" class="query-icon">{{ q.icon }}</span>
             <span class="query-name">{{ q.name }}</span>
+            <icon-home v-if="defaultQueryId === q.id" class="query-default-badge" title="默认视图" />
             <span class="query-count">{{ formatCount(q.count) }}</span>
             <span
               class="query-action-btn"
@@ -279,12 +280,20 @@
                 <template #icon><icon-pushpin /></template>
                 {{ q.pinned ? '取消置顶' : '置顶' }}
               </a-doption>
+              <a-doption @click="setAsDefaultQuery(q)">
+                <template #icon><icon-home /></template>
+                {{ defaultQueryId === q.id ? '取消默认视图' : '设为默认视图' }}
+              </a-doption>
               <a-doption class="query-ctx-delete" @click="confirmDeleteQuery(q)">
                 <template #icon><icon-delete /></template>
                 删除
               </a-doption>
             </template>
             <template v-else>
+              <a-doption @click="setAsDefaultQuery(q)">
+                <template #icon><icon-home /></template>
+                {{ defaultQueryId === q.id ? '取消默认视图' : '设为默认视图' }}
+              </a-doption>
               <a-doption @click="handleRemoveFavorite(q)">
                 <template #icon><icon-minus-circle /></template>
                 从面板移除
@@ -473,11 +482,11 @@
  * - Emits：用户操作后通知父组件（选中查询/项目/标签、打开草稿等）
  * - defineExpose：暴露 loadPanel/loadProjects/loadTags/savedQueries 供父组件在 onMounted 和路由变化时调用
  */
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import {
   IconPlus, IconSearch, IconEdit, IconPenFill, IconShareExternal,
   IconPushpin, IconDelete, IconSettings, IconMinusCircle, IconExclamationCircleFill,
-  IconFile
+  IconFile, IconHome
 } from '@arco-design/web-vue/es/icon'
 import { Message } from '@arco-design/web-vue'
 import { useConfirmDelete } from '@/composables/useConfirmDelete'
@@ -618,6 +627,24 @@ const {
   getIssueTypeLabelForRecord,
 })
 
+// ===== 默认查询视图管理 =====
+// 用户可通过右键菜单设置某个 Saved Query 为默认视图，下次登录时自动恢复该视图
+const DEFAULT_QUERY_KEY = 'tf_default_query_id'
+const defaultQueryId = ref<string | null>(localStorage.getItem(DEFAULT_QUERY_KEY))
+
+function setAsDefaultQuery(q: { id: string; name: string }) {
+  if (defaultQueryId.value === q.id) {
+    // 取消默认
+    localStorage.removeItem(DEFAULT_QUERY_KEY)
+    defaultQueryId.value = null
+    Message.success('已取消默认视图')
+  } else {
+    localStorage.setItem(DEFAULT_QUERY_KEY, q.id)
+    defaultQueryId.value = q.id
+    Message.success(`已将「${q.name}」设为默认视图`)
+  }
+}
+
 // ===== 工具函数 =====
 function formatCount(count: number) {
   if (count >= 10000) return Math.floor(count / 1000) + 'k+'
@@ -670,6 +697,7 @@ defineExpose({
 .query-item.active .query-name { color: var(--tf-accent); }
 .query-count { font-size: 11px; color: var(--tf-text-tertiary); flex-shrink: 0; margin-left: 8px; }
 .query-icon { font-size: 12px; flex-shrink: 0; margin-right: 4px; }
+.query-default-badge { font-size: 11px; color: var(--tf-accent); flex-shrink: 0; margin-left: 4px; opacity: 0.7; }
 .empty-queries { padding: 12px; font-size: 12px; color: var(--tf-text-tertiary); text-align: center; }
 
 /* Tags */
