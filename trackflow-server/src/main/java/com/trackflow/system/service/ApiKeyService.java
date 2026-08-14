@@ -160,7 +160,7 @@ public class ApiKeyService {
     public void revoke(Long id, Long userId) {
         ApiKey apiKey = apiKeyMapper.selectById(id);
         if (apiKey == null || !apiKey.getUserId().equals(userId)) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "API Key not found");
+            throw BusinessException.notFound("API Key not found");
         }
         apiKeyMapper.deleteById(id);
 

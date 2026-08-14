@@ -954,7 +954,7 @@ public class CustomFieldService {
         } else {
             // 非全局字段：删除映射记录
             if (mapping == null) {
-                throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "该字段未附加到本项目");
+                throw BusinessException.notFound("该字段未附加到本项目");
             }
             projectMapper.deleteById(mapping.getId());
         }
@@ -998,7 +998,7 @@ public class CustomFieldService {
     public void setFieldCondition(Long projectId, Long fieldId, Long conditionFieldId, List<String> conditionValues) {
         CustomFieldDefinition targetField = definitionMapper.selectById(fieldId);
         if (targetField == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "目标字段不存在");
+            throw BusinessException.notFound("目标字段不存在");
         }
 
         CustomFieldProject mapping = projectMapper.selectOne(
@@ -1027,7 +1027,7 @@ public class CustomFieldService {
 
         CustomFieldDefinition condField = definitionMapper.selectById(conditionFieldId);
         if (condField == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "条件源字段不存在");
+            throw BusinessException.notFound("条件源字段不存在");
         }
         if (!"list".equals(condField.getFieldFormat()) && !"ownedField".equals(condField.getFieldFormat()) && !"version".equals(condField.getFieldFormat())) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "条件源字段必须是列表(枚举)类型");
@@ -1129,7 +1129,7 @@ public class CustomFieldService {
     public void setFieldVisibility(Long projectId, Long fieldId, List<Long> visibleToRoles, List<Long> updatableByRoles) {
         CustomFieldDefinition field = definitionMapper.selectById(fieldId);
         if (field == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "字段不存在");
+            throw BusinessException.notFound("字段不存在");
         }
 
         CustomFieldProject mapping = projectMapper.selectOne(
@@ -1162,7 +1162,7 @@ public class CustomFieldService {
     public void setFieldProjectOverride(Long projectId, Long fieldId, Boolean isRequired, String defaultValue, Boolean canBeEmpty) {
         CustomFieldDefinition field = definitionMapper.selectById(fieldId);
         if (field == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "字段不存在");
+            throw BusinessException.notFound("字段不存在");
         }
 
         CustomFieldProject mapping = projectMapper.selectOne(
@@ -1211,7 +1211,7 @@ public class CustomFieldService {
     public void setFieldBadgeConfig(Long projectId, Long fieldId, Boolean showAsBadge, String badgeColorRules) {
         CustomFieldDefinition field = definitionMapper.selectById(fieldId);
         if (field == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "字段不存在");
+            throw BusinessException.notFound("字段不存在");
         }
 
         // 仅整数类型字段支持数字徽章
@@ -1282,7 +1282,7 @@ public class CustomFieldService {
                                      List<com.trackflow.customfield.dto.SetFieldFilterRulesDTO.FilterRuleItem> rules) {
         CustomFieldDefinition targetField = definitionMapper.selectById(fieldId);
         if (targetField == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "目标字段不存在");
+            throw BusinessException.notFound("目标字段不存在");
         }
 
         // 目标字段必须是枚举类型
@@ -1319,7 +1319,7 @@ public class CustomFieldService {
         // 校验源字段
         CustomFieldDefinition sourceField = definitionMapper.selectById(filterFieldId);
         if (sourceField == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "源字段不存在");
+            throw BusinessException.notFound("源字段不存在");
         }
         if (!"list".equals(sourceField.getFieldFormat()) && !"ownedField".equals(sourceField.getFieldFormat()) && !"version".equals(sourceField.getFieldFormat())) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "源字段必须是列表(枚举)类型");

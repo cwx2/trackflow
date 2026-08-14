@@ -221,6 +221,7 @@
 import { formatDateTime } from '@/utils/date'
 import { ref, reactive, computed, onMounted, h } from 'vue'
 import { Message } from '@arco-design/web-vue'
+import { handleApiError } from '@/utils/errorHandler'
 import { useRouter } from 'vue-router'
 import { scoreRuleApi } from '@/api'
 import AdminPageLayout from '@/components/admin/AdminPageLayout.vue'
@@ -482,8 +483,8 @@ async function handleFormSubmit() {
     }
     formVisible.value = false
     await loadRules()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '操作失败')
+  } catch (e) {
+    handleApiError(e, '操作失败')
   } finally {
     submitting.value = false
   }
@@ -493,8 +494,8 @@ async function handleToggle(rule: RuleDefinitionVO) {
   try {
     await scoreRuleApi.toggleRule(rule.id)
     await loadRules()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '操作失败')
+  } catch (e) {
+    handleApiError(e, '操作失败')
   }
 }
 
@@ -503,8 +504,8 @@ async function handleDelete(rule: RuleDefinitionVO) {
     await scoreRuleApi.deleteRule(rule.id)
     Message.success('规则已删除')
     await loadRules()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '删除失败')
+  } catch (e) {
+    handleApiError(e, '删除失败')
   }
 }
 
@@ -515,8 +516,8 @@ async function handleExecuteNow(rule: RuleDefinitionVO) {
       Message.success(`执行完成，新增 ${res.data.executedCount} 条记录`)
       await loadRules()
     }
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '执行失败')
+  } catch (e) {
+    handleApiError(e, '执行失败')
   }
 }
 
@@ -525,8 +526,8 @@ async function handleDeleteLog(log: RuleExecutionLogVO) {
     await scoreRuleApi.deleteLog(log.id)
     Message.success('记录已删除')
     await loadLogs()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '删除失败')
+  } catch (e) {
+    handleApiError(e, '删除失败')
   }
 }
 

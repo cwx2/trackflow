@@ -696,7 +696,7 @@ public class IssueService {
     public Issue getById(Long id) {
         Issue issue = issueMapper.selectById(id);
         if (issue == null || issue.getDeletedAt() != null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Issue not found");
+            throw BusinessException.notFound("Issue not found");
         }
         return issue;
     }
@@ -713,7 +713,7 @@ public class IssueService {
                         .isNull(Issue::getDeletedAt)
         );
         if (issue == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Issue not found");
+            throw BusinessException.notFound("Issue not found");
         }
         return issue.getProjectId();
     }
@@ -758,7 +758,7 @@ public class IssueService {
             }
         }
         if (issue == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Issue not found");
+            throw BusinessException.notFound("Issue not found");
         }
         return issue;
     }
@@ -1513,7 +1513,7 @@ public class IssueService {
     public void updateStatusPosition(Long statusId, Double canvasX, Double canvasY) {
         IssueStatus status = statusMapper.selectById(statusId);
         if (status == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "状态不存在: " + statusId);
+            throw BusinessException.notFound("状态", statusId);
         }
         IssueStatus update = new IssueStatus();
         update.setId(statusId);
@@ -1599,7 +1599,7 @@ public class IssueService {
         if (visibilityUserMapper.existsByIssueIdAndUserId(issueId, currentUserId)) {
             return;
         }
-        throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Issue not found");
+        throw BusinessException.notFound("Issue not found");
     }
 
     /**
@@ -1610,7 +1610,7 @@ public class IssueService {
     public IssueDetailRow getDetailRow(Long id) {
         IssueDetailRow row = issueMapper.selectDetailById(id);
         if (row == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Issue not found");
+            throw BusinessException.notFound("Issue not found");
         }
         return row;
     }
@@ -1705,7 +1705,7 @@ public class IssueService {
     public Long getDeletedIssueProjectId(Long issueId) {
         DeletedIssueRow row = issueMapper.selectByIdIgnoreDeleted(issueId);
         if (row == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Issue not found");
+            throw BusinessException.notFound("Issue not found");
         }
         return row.getProjectId();
     }

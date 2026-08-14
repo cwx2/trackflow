@@ -135,6 +135,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { Message } from '@arco-design/web-vue'
+import { handleApiError } from '@/utils/errorHandler'
 import { useConfirmDelete } from '@/composables/useConfirmDelete'
 import { IconUndo, IconDelete, IconSettings } from '@arco-design/web-vue/es/icon'
 import { issueApi, projectApi } from '@/api'
@@ -242,8 +243,8 @@ async function setRetention(days: number) {
     await projectApi.updateTrashSettings(selectedProjectId.value, { trashRetentionDays: days })
     retentionDays.value = days
     Message.success(days === 0 ? '已设为永久保留' : `已设为保留 ${days} 天`)
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '设置失败')
+  } catch (e) {
+    handleApiError(e, '设置失败')
   }
 }
 
@@ -256,8 +257,8 @@ async function handleRestore(record: IssueTrashVO) {
     await issueApi.restore(record.id)
     Message.success(`工单 ${record.issueKey} 已恢复`)
     loadTrash()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '恢复失败')
+  } catch (e) {
+    handleApiError(e, '恢复失败')
   }
 }
 
@@ -276,8 +277,8 @@ async function batchRestoreSelected() {
     }
     selectedIds.value = []
     loadTrash()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '批量恢复失败')
+  } catch (e) {
+    handleApiError(e, '批量恢复失败')
   }
 }
 
@@ -292,8 +293,8 @@ function handlePermanentDelete(record: IssueTrashVO) {
         await issueApi.permanentDelete(record.id)
         Message.success(`工单 ${record.issueKey} 已永久删除`)
         loadTrash()
-      } catch (e: any) {
-        Message.error(e.response?.data?.message || '永久删除失败')
+      } catch (e) {
+        handleApiError(e, '永久删除失败')
       }
     }
   })

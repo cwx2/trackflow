@@ -712,6 +712,7 @@
 import { formatFileSize } from '@/utils/attachment'
 import { ref, reactive, computed, onMounted, onBeforeUnmount, onUnmounted, watch } from 'vue'
 import { Message, Modal } from '@arco-design/web-vue'
+import { handleApiError } from '@/utils/errorHandler'
 import { IconDown, IconAttachment, IconClose, IconPlus, IconUp, IconLink, IconSearch, IconCheck, IconFullscreen, IconFile, IconCloseCircleFill } from '@arco-design/web-vue/es/icon'
 import { projectApi, issueApi, sprintApi, customFieldApi, issueTemplateApi, tagApi, workflowApi } from '@/api'
 import { IssuePriorityBadge } from '@/components/base'
@@ -1113,8 +1114,8 @@ async function confirmAddOptionInSelect(cf: CustomFieldDefinitionVO) {
     // Reload custom fields to get the new option
     await resetCustomFields()
     cancelAddOptionInSelect()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '添加选项失败')
+  } catch (e) {
+    handleApiError(e, '添加选项失败')
   }
 }
 

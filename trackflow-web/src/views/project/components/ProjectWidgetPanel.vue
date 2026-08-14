@@ -149,6 +149,7 @@ import { ref, watch } from 'vue'
 import { GridLayout, GridItem } from 'grid-layout-plus'
 import { IconPlus } from '@arco-design/web-vue/es/icon'
 import { Message, Modal } from '@arco-design/web-vue'
+import { handleApiError } from '@/utils/errorHandler'
 import { projectApi } from '@/api'
 import { customDashboardApi } from '@/api/customDashboard'
 import type { DashboardDetailVO, DashboardWidgetVO } from '@/api/customDashboard'
@@ -262,8 +263,8 @@ async function addOverviewWidget(widgetType: string, defaultTitle: string) {
       buildWidgetGridLayout(overviewDashboard.value.widgets)
     }
     Message.success('Widget 已添加')
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '添加 Widget 失败')
+  } catch (e) {
+    handleApiError(e, '添加 Widget 失败')
   }
 }
 
@@ -305,8 +306,8 @@ async function handleWidgetConfigSave() {
     showWidgetConfigModal.value = false
     await loadOverviewDashboard(props.projectId)
     Message.success('Widget 配置已保存')
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '保存失败')
+  } catch (e) {
+    handleApiError(e, '保存失败')
   } finally {
     savingWidgetConfig.value = false
   }
@@ -327,8 +328,8 @@ async function deleteOverviewWidget(widget: DashboardWidgetVO) {
           buildWidgetGridLayout(overviewDashboard.value.widgets)
         }
         Message.success('Widget 已删除')
-      } catch (e: any) {
-        Message.error(e.response?.data?.message || '删除失败')
+      } catch (e) {
+        handleApiError(e, '删除失败')
       }
     }
   })

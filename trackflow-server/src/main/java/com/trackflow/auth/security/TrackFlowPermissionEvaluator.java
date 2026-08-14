@@ -94,7 +94,7 @@ public class TrackFlowPermissionEvaluator implements PermissionEvaluator {
         }
 
         // 两者都未命中
-        throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "项目不存在: " + identifier);
+        throw BusinessException.notFound("项目", identifier);
     }
 
     /**
@@ -130,7 +130,7 @@ public class TrackFlowPermissionEvaluator implements PermissionEvaluator {
                         .isNull(Issue::getDeletedAt)
         );
         if (issue == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Issue not found");
+            throw BusinessException.notFound("Issue not found");
         }
 
         return permissionService.hasIssuePermission(userId, issue, permission);
@@ -160,7 +160,7 @@ public class TrackFlowPermissionEvaluator implements PermissionEvaluator {
                         .isNull(Issue::getDeletedAt)
         );
         if (issue == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Issue not found");
+            throw BusinessException.notFound("Issue not found");
         }
 
         // 先检查完整编辑权限（issue:edit + 资源级规则）
@@ -195,7 +195,7 @@ public class TrackFlowPermissionEvaluator implements PermissionEvaluator {
                         .isNull(Issue::getDeletedAt)
         );
         if (issue == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Issue not found");
+            throw BusinessException.notFound("Issue not found");
         }
 
         // 先检查完整编辑权限（issue:edit + 资源级规则）
@@ -222,7 +222,7 @@ public class TrackFlowPermissionEvaluator implements PermissionEvaluator {
 
         TransitionAction action = transitionActionMapper.selectById(actionId);
         if (action == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "转换动作不存在");
+            throw BusinessException.notFound("转换动作不存在");
         }
 
         // Scope 过滤已下沉到 PermissionService 内部
@@ -253,7 +253,7 @@ public class TrackFlowPermissionEvaluator implements PermissionEvaluator {
 
         com.trackflow.issue.mapper.result.DeletedIssueRow row = issueMapper.selectByIdIgnoreDeleted(issueId);
         if (row == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Issue not found");
+            throw BusinessException.notFound("Issue not found");
         }
         Long projectId = row.getProjectId();
         return permissionService.hasPermission(userId, projectId, permission);
@@ -277,7 +277,7 @@ public class TrackFlowPermissionEvaluator implements PermissionEvaluator {
 
         Sprint sprint = sprintMapper.selectById(sprintId);
         if (sprint == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Sprint not found");
+            throw BusinessException.notFound("Sprint not found");
         }
         return permissionService.hasPermission(userId, sprint.getProjectId(), permission);
     }

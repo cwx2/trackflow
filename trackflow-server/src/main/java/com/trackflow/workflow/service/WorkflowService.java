@@ -307,8 +307,7 @@ public class WorkflowService {
                                            com.trackflow.workflow.dto.UpdateTransitionConditionsDTO dto) {
         WorkflowTransition transition = transitionMapper.selectById(transitionId);
         if (transition == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND,
-                    "工作流转换规则不存在: " + transitionId);
+            throw BusinessException.notFound("工作流转换规则", transitionId);
         }
 
         String conditionsJson;
@@ -339,8 +338,7 @@ public class WorkflowService {
     public void updateTransitionName(Long transitionId, String transitionName) {
         WorkflowTransition transition = transitionMapper.selectById(transitionId);
         if (transition == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND,
-                    "工作流转换规则不存在: " + transitionId);
+            throw BusinessException.notFound("工作流转换规则", transitionId);
         }
         // 使用 LambdaUpdateWrapper 显式 set，支持将 transitionName 设为 null（清除名称）
         // updateById 默认忽略 null 字段，无法清除已有值

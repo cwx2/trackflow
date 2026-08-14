@@ -49,7 +49,7 @@ public class CustomFieldReplacementService {
     public ReplaceableFieldsVO getAvailableReplacements(Long projectId, Long fieldId) {
         CustomFieldDefinition currentField = definitionMapper.selectById(fieldId);
         if (currentField == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "自定义字段不存在");
+            throw BusinessException.notFound("自定义字段不存在");
         }
 
         ReplaceableFieldsVO vo = new ReplaceableFieldsVO();
@@ -118,18 +118,18 @@ public class CustomFieldReplacementService {
         // 验证字段存在
         CustomFieldDefinition sourceField = definitionMapper.selectById(sourceFieldId);
         if (sourceField == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "源字段不存在");
+            throw BusinessException.notFound("源字段不存在");
         }
 
         CustomFieldDefinition targetField = definitionMapper.selectById(targetFieldId);
         if (targetField == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "目标字段不存在");
+            throw BusinessException.notFound("目标字段不存在");
         }
 
         // 验证项目存在
         Project project = projectMapper.selectById(projectId);
         if (project == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "项目不存在");
+            throw BusinessException.notFound("项目不存在");
         }
 
         // 验证字段类型相同

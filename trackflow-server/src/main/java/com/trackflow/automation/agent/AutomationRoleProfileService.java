@@ -31,7 +31,7 @@ public class AutomationRoleProfileService {
     public AutomationRoleProfile get(Long id) {
         AutomationRoleProfile profile = mapper.selectById(id);
         if (profile == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Agent 角色不存在: " + id);
+            throw BusinessException.notFound("Agent 角色", id);
         }
         return profile;
     }

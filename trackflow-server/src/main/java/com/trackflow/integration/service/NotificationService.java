@@ -791,7 +791,7 @@ public class NotificationService {
         public void markRead(Long id, Long userId) {
         Notification n = notificationMapper.selectById(id);
         if (n == null || !n.getUserId().equals(userId)) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "通知不存在");
+            throw BusinessException.notFound("通知不存在");
         }
         n.setIsRead(true);
         notificationMapper.updateById(n);
@@ -804,7 +804,7 @@ public class NotificationService {
     public void markUnread(Long id, Long userId) {
         Notification n = notificationMapper.selectById(id);
         if (n == null || !n.getUserId().equals(userId)) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "通知不存在");
+            throw BusinessException.notFound("通知不存在");
         }
         n.setIsRead(false);
         notificationMapper.updateById(n);
@@ -888,7 +888,7 @@ public class NotificationService {
         public void delete(Long id, Long userId) {
         Notification n = notificationMapper.selectById(id);
         if (n == null || !n.getUserId().equals(userId)) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "通知不存在");
+            throw BusinessException.notFound("通知不存在");
         }
         notificationMapper.deleteById(id);
     }

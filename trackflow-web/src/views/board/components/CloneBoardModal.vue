@@ -51,6 +51,7 @@
 <script setup lang="ts">
 import { ref, reactive, watch } from 'vue'
 import { Message } from '@arco-design/web-vue'
+import { handleApiError } from '@/utils/errorHandler'
 import { boardApi } from '@/api'
 import { useRouter } from 'vue-router'
 
@@ -155,8 +156,8 @@ async function handleConfirm() {
     } else {
       Message.error(res.message || '克隆失败')
     }
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '克隆失败，请重试')
+  } catch (e) {
+    handleApiError(e, '克隆失败，请重试')
   } finally {
     loading.value = false
   }

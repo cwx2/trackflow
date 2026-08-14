@@ -114,6 +114,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { Message } from '@arco-design/web-vue'
+import { handleApiError } from '@/utils/errorHandler'
 import { useConfirmDelete } from '@/composables/useConfirmDelete'
 import { notificationSubscriptionApi } from '@/api'
 import type { NotificationSubscriptionVO, SubscriptionEventsVO } from '@/api/notificationSubscription'
@@ -286,8 +287,8 @@ async function handleCreate() {
     } else {
       Message.error(res.message || '创建失败')
     }
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '创建失败')
+  } catch (e) {
+    handleApiError(e, '创建失败')
   } finally {
     creating.value = false
   }

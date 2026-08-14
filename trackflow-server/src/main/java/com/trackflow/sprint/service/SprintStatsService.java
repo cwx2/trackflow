@@ -234,7 +234,7 @@ public class SprintStatsService {
     private Sprint findSprintById(Long id) {
         Sprint sprint = sprintMapper.selectById(id);
         if (sprint == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Sprint not found: " + id);
+            throw BusinessException.notFound("Sprint", id);
         }
         return sprint;
     }

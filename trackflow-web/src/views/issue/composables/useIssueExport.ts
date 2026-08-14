@@ -1,5 +1,6 @@
 import { ref, type Ref } from 'vue'
 import { Message } from '@arco-design/web-vue'
+import { handleApiError } from '@/utils/errorHandler'
 import { issueApi } from '@/api'
 
 export interface ExportOptions {
@@ -85,7 +86,7 @@ export function useIssueExport(options: ExportOptions) {
           Message.error('导出失败')
         }
       } else {
-        Message.error(e.response?.data?.message || '导出失败')
+        handleApiError(e, '导出失败')
       }
     } finally {
       exportLoading.value = false

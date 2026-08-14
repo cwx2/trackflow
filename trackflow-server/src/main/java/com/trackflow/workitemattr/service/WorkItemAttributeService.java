@@ -67,8 +67,7 @@ public class WorkItemAttributeService {
                             .eq("code", c)
                             .eq("is_builtin", true));
             if (attr == null) {
-                throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND,
-                        "内建属性未找到: code=" + c);
+                throw BusinessException.notFound("内建属性", c);
             }
             return attr.getId();
         });
@@ -155,7 +154,7 @@ public class WorkItemAttributeService {
     public WorkItemAttributeVO getById(Long id) {
         WorkItemAttribute attr = attributeMapper.selectById(id);
         if (attr == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "工作项属性不存在");
+            throw BusinessException.notFound("工作项属性不存在");
         }
 
         WorkItemAttributeVO vo = new WorkItemAttributeVO();
@@ -245,7 +244,7 @@ public class WorkItemAttributeService {
     public WorkItemAttributeVO update(Long id, UpdateWorkItemAttributeDTO dto) {
         WorkItemAttribute attr = attributeMapper.selectById(id);
         if (attr == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "工作项属性不存在");
+            throw BusinessException.notFound("工作项属性不存在");
         }
 
         // 更新名称
@@ -282,7 +281,7 @@ public class WorkItemAttributeService {
     public void delete(Long id) {
         WorkItemAttribute attr = attributeMapper.selectById(id);
         if (attr == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "工作项属性不存在");
+            throw BusinessException.notFound("工作项属性不存在");
         }
         if (Boolean.TRUE.equals(attr.getIsBuiltin())) {
             throw new BusinessException(ErrorCode.VALIDATION_ERROR, "内置属性不可删除");
@@ -321,7 +320,7 @@ public class WorkItemAttributeService {
     public WorkItemAttributeVO manageProjects(Long id, ManageAttributeProjectsDTO dto) {
         WorkItemAttribute attr = attributeMapper.selectById(id);
         if (attr == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "工作项属性不存在");
+            throw BusinessException.notFound("工作项属性不存在");
         }
 
         // 获取旧的项目分配列表
@@ -430,7 +429,7 @@ public class WorkItemAttributeService {
         // 校验属性存在
         WorkItemAttribute attr = attributeMapper.selectById(attributeId);
         if (attr == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "工作项属性不存在");
+            throw BusinessException.notFound("工作项属性不存在");
         }
 
         // 校验项目已关联该属性
@@ -684,7 +683,7 @@ public class WorkItemAttributeService {
         // 校验源值存在且属于该属性
         WorkItemAttributeValue fromValue = valueMapper.selectById(fromValueId);
         if (fromValue == null || !fromValue.getAttributeId().equals(attributeId)) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "源属性值不存在或不属于该属性");
+            throw BusinessException.notFound("源属性值不存在或不属于该属性");
         }
 
         // 校验目标值存在且属于同一属性

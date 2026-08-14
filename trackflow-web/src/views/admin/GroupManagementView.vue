@@ -221,6 +221,7 @@ import { groupApi, userApi, projectApi } from '@/api'
 import type { UserGroupVO, UserGroupDetailVO } from '@/api/group'
 import type { UserVO, ProjectVO } from '@/api/types'
 import { Message } from '@arco-design/web-vue'
+import { handleApiError } from '@/utils/errorHandler'
 import { useRequest } from '@/composables/useRequest'
 import { UserAvatar } from '@/components/base'
 import { AdminPageLayout, AdminDataTable, AdminStatsBar } from '@/components/admin'
@@ -332,8 +333,8 @@ async function submitForm() {
     }
     showFormDialog.value = false
     await loadGroups()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '操作失败')
+  } catch (e) {
+    handleApiError(e, '操作失败')
   }
 }
 
@@ -395,8 +396,8 @@ async function submitAddMembers() {
     searchedUsers.value = []
     await reloadDetail()
     await loadGroups()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '添加失败')
+  } catch (e) {
+    handleApiError(e, '添加失败')
   }
 }
 
@@ -406,8 +407,8 @@ async function removeMember(member: { userId: string; displayName: string }) {
     Message.success(`已移除 ${member.displayName}`)
     await reloadDetail()
     await loadGroups()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '移除失败')
+  } catch (e) {
+    handleApiError(e, '移除失败')
   }
 }
 
@@ -460,8 +461,8 @@ async function submitAssignRole() {
     selectedRoleType.value = ''
     await reloadDetail()
     await loadGroups()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '分配失败')
+  } catch (e) {
+    handleApiError(e, '分配失败')
   }
 }
 
@@ -471,8 +472,8 @@ async function removeRole(role: { id: string; roleName: string }) {
     Message.success(`已移除角色 ${role.roleName}`)
     await reloadDetail()
     await loadGroups()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '移除失败')
+  } catch (e) {
+    handleApiError(e, '移除失败')
   }
 }
 
@@ -490,8 +491,8 @@ async function executeDelete() {
     showDeleteDialog.value = false
     deletingGroup.value = null
     await loadGroups()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '删除失败')
+  } catch (e) {
+    handleApiError(e, '删除失败')
   }
 }
 

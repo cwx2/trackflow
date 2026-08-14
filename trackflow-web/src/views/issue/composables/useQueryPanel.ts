@@ -1,5 +1,6 @@
 import { ref, reactive, computed, type Ref } from 'vue'
 import { Message } from '@arco-design/web-vue'
+import { handleApiError } from '@/utils/errorHandler'
 import { useConfirmDelete } from '@/composables/useConfirmDelete'
 import { queryApi, tagApi, projectApi } from '@/api'
 import type { IssueStatusVO, QueryPanelItemVO, SavedQueryFilter, UpdateSavedQueryDTO } from '@/api/types'
@@ -178,7 +179,7 @@ export function useQueryPanel(options: QueryPanelOptions) {
       loadPanel()
     } catch (e: unknown) {
       const err = e as { response?: { data?: { message?: string } } }
-      Message.error(err.response?.data?.message || '保存查询失败')
+      handleApiError(err, '保存查询失败')
     } finally {
       createQueryLoading.value = false
     }
@@ -201,7 +202,7 @@ export function useQueryPanel(options: QueryPanelOptions) {
           loadPanel()
         } catch (e: unknown) {
           const err = e as { response?: { data?: { message?: string } } }
-          Message.error(err.response?.data?.message || '删除失败')
+          handleApiError(err, '删除失败')
         }
       }
     })
@@ -278,7 +279,7 @@ export function useQueryPanel(options: QueryPanelOptions) {
       loadPanel()
     } catch (e: unknown) {
       const err = e as { response?: { data?: { message?: string } } }
-      Message.error(err.response?.data?.message || '更新失败')
+      handleApiError(err, '更新失败')
     } finally {
       editQueryLoading.value = false
     }
@@ -311,7 +312,7 @@ export function useQueryPanel(options: QueryPanelOptions) {
       loadPanel()
     } catch (e: unknown) {
       const err = e as { response?: { data?: { message?: string } } }
-      Message.error(err.response?.data?.message || '重命名失败')
+      handleApiError(err, '重命名失败')
     } finally {
       renameQueryLoading.value = false
     }
@@ -325,7 +326,7 @@ export function useQueryPanel(options: QueryPanelOptions) {
       loadPanel()
     } catch (e: unknown) {
       const err = e as { response?: { data?: { message?: string } } }
-      Message.error(err.response?.data?.message || '操作失败')
+      handleApiError(err, '操作失败')
     }
   }
 
@@ -336,7 +337,7 @@ export function useQueryPanel(options: QueryPanelOptions) {
       loadPanel()
     } catch (e: unknown) {
       const err = e as { response?: { data?: { message?: string } } }
-      Message.error(err.response?.data?.message || '操作失败')
+      handleApiError(err, '操作失败')
     }
   }
 
@@ -377,7 +378,7 @@ export function useQueryPanel(options: QueryPanelOptions) {
       loadPanel()
     } catch (e: unknown) {
       const err = e as { response?: { data?: { message?: string } } }
-      Message.error(err.response?.data?.message || '操作失败')
+      handleApiError(err, '操作失败')
     }
   }
 
@@ -388,7 +389,7 @@ export function useQueryPanel(options: QueryPanelOptions) {
       loadPanel()
     } catch (e: unknown) {
       const err = e as { response?: { data?: { message?: string } } }
-      Message.error(err.response?.data?.message || '操作失败')
+      handleApiError(err, '操作失败')
     }
   }
 
@@ -437,7 +438,7 @@ export function useQueryPanel(options: QueryPanelOptions) {
       }
     } catch (e: unknown) {
       const err = e as { response?: { data?: { message?: string } } }
-      Message.error(err.response?.data?.message || '操作失败')
+      handleApiError(err, '操作失败')
     }
   }
 
@@ -495,7 +496,7 @@ export function useQueryPanel(options: QueryPanelOptions) {
       await loadTags()
     } catch (e: unknown) {
       const err = e as { response?: { data?: { message?: string } } }
-      Message.error(err.response?.data?.message || '操作失败')
+      handleApiError(err, '操作失败')
     }
   }
 

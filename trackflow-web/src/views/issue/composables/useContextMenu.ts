@@ -1,6 +1,7 @@
 ﻿import { copyToClipboard } from '@/utils/clipboard'
 import { ref, reactive, computed } from 'vue'
 import { Message } from '@arco-design/web-vue'
+import { handleApiError } from '@/utils/errorHandler'
 import { issueApi, sprintApi } from '@/api'
 import type { IssueVO, IssueStatusVO, SprintVO } from '@/api/types'
 
@@ -110,8 +111,8 @@ export function useContextMenu(options: ContextMenuOptions) {
       await issueApi.transitStatus(issue.id, st.id, undefined, issue.version)
       Message.success(`状态已更新为 ${st.name}`)
       await refreshList()
-    } catch (e: any) {
-      Message.error(e?.response?.data?.message || '状态变更失败')
+    } catch (e) {
+      handleApiError(e, '状态变更失败')
     }
   }
 
@@ -155,8 +156,8 @@ export function useContextMenu(options: ContextMenuOptions) {
       await issueApi.update(issue.id, { sprintId: sprint?.id || null, version: issue.version })
       Message.success(sprint ? `已移至 Sprint: ${sprint.name}` : '已移出 Sprint')
       await refreshList()
-    } catch (e: any) {
-      Message.error(e?.response?.data?.message || 'Sprint 更新失败')
+    } catch (e) {
+      handleApiError(e, 'Sprint 更新失败')
     }
   }
 

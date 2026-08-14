@@ -147,19 +147,19 @@ public class NotificationSubscriptionService {
         if ("tag".equals(dto.getSourceType())) {
             IssueTag tag = tagMapper.selectById(sourceId);
             if (tag == null) {
-                throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "标签不存在");
+                throw BusinessException.notFound("标签不存在");
             }
             name = "标签: " + tag.getName();
         } else if ("saved_query".equals(dto.getSourceType())) {
             SavedQuery query = savedQueryMapper.selectById(sourceId);
             if (query == null) {
-                throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "保存搜索不存在");
+                throw BusinessException.notFound("保存搜索不存在");
             }
             name = "搜索: " + query.getName();
         } else if ("project".equals(dto.getSourceType())) {
             Project project = projectMapper.selectById(sourceId);
             if (project == null) {
-                throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "项目不存在");
+                throw BusinessException.notFound("项目不存在");
             }
             name = "项目: " + project.getName();
         } else {
@@ -201,7 +201,7 @@ public class NotificationSubscriptionService {
         public NotificationSubscriptionVO updateEvents(Long userId, Long subscriptionId, UpdateSubscriptionEventsDTO dto) {
         NotificationSubscription sub = subscriptionMapper.selectById(subscriptionId);
         if (sub == null || !sub.getUserId().equals(userId)) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "订阅不存在");
+            throw BusinessException.notFound("订阅不存在");
         }
 
         if (dto.getEvents() != null) {
@@ -220,7 +220,7 @@ public class NotificationSubscriptionService {
         public void delete(Long userId, Long subscriptionId) {
         NotificationSubscription sub = subscriptionMapper.selectById(subscriptionId);
         if (sub == null || !sub.getUserId().equals(userId)) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "订阅不存在");
+            throw BusinessException.notFound("订阅不存在");
         }
         if (Boolean.TRUE.equals(sub.getIsDefault())) {
             throw new BusinessException(ErrorCode.ACCESS_DENIED, "默认订阅不可删除，只能修改事件配置");

@@ -64,6 +64,7 @@
 import { ref, reactive, onMounted, computed, h } from 'vue'
 import { useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
+import { handleApiError } from '@/utils/errorHandler'
 import { useConfirmDelete } from '@/composables/useConfirmDelete'
 import { organizationApi } from '@/api'
 import type { OrgVO, OrgProjectVO } from '@/api/organization'
@@ -176,8 +177,8 @@ async function submitOrg(done?: (closed: boolean) => void) {
     Message.success(editing.value ? '组织已更新' : '组织已创建')
     if (done) done(true)
     loadOrgs()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '操作失败')
+  } catch (e) {
+    handleApiError(e, '操作失败')
     if (done) done(false)
   }
 }
@@ -192,8 +193,8 @@ async function deleteOrg(org: OrgVO) {
         await organizationApi.delete(org.id)
         Message.success('组织已删除')
         loadOrgs()
-      } catch (e: any) {
-        Message.error(e.response?.data?.message || '删除失败')
+      } catch (e) {
+        handleApiError(e, '删除失败')
       }
     }
   })

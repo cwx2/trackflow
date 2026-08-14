@@ -179,7 +179,7 @@ public class TimeEntryService {
         projectService.assertProjectMember(forUserId, projectId);
         // 校验目标用户存在
         if (sysUserMapper.selectById(forUserId) == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "目标用户不存在");
+            throw BusinessException.notFound("目标用户不存在");
         }
         return forUserId;
     }
@@ -195,7 +195,7 @@ public class TimeEntryService {
     public TimeEntry update(Long id, Long userId, UpdateTimeEntryDTO dto) {
         TimeEntry entry = timeEntryMapper.selectById(id);
         if (entry == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "工时记录不存在");
+            throw BusinessException.notFound("工时记录不存在");
         }
 
         // 不允许通过标准更新 API 修改正在计时的记录，请使用停止计时器 API
@@ -319,7 +319,7 @@ public class TimeEntryService {
     public void delete(Long id, Long userId) {
         TimeEntry entry = timeEntryMapper.selectById(id);
         if (entry == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "工时记录不存在");
+            throw BusinessException.notFound("工时记录不存在");
         }
 
         // 使用 time_entry 自身的 project_id 做权限判断（解耦 issue 存在性）
@@ -931,7 +931,7 @@ public class TimeEntryService {
     public TimeEntry stopTimer(Long currentUserId, Long timeEntryId, StopTimerDTO dto) {
         TimeEntry entry = timeEntryMapper.selectById(timeEntryId);
         if (entry == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "工时记录不存在");
+            throw BusinessException.notFound("工时记录不存在");
         }
 
         // 校验是自己的计时器
@@ -1354,7 +1354,7 @@ public class TimeEntryService {
             if (raw != null && raw.getDeletedAt() != null) {
                 throw new BusinessException(ErrorCode.VALIDATION_ERROR, "工单已删除，无法操作工时");
             }
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "工单不存在");
+            throw BusinessException.notFound("工单不存在");
         }
         return issue;
     }

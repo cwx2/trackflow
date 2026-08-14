@@ -115,6 +115,7 @@
 import { ref, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
+import { handleApiError } from '@/utils/errorHandler'
 import { reportApi } from '@/api/report'
 import { EmptyState } from '@/components/base'
 import type { ReportDefinitionVO } from '@/api/report'
@@ -232,8 +233,8 @@ async function handleToggleFavorite(report: ReportDefinitionVO) {
     report.favorited = favorited
     emit('favorite-changed', report, favorited)
     Message.success(favorited ? '已收藏' : '已取消收藏')
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '操作失败')
+  } catch (e) {
+    handleApiError(e, '操作失败')
   }
 }
 </script>

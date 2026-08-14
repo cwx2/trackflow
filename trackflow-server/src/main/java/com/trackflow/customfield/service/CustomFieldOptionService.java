@@ -63,7 +63,7 @@ public class CustomFieldOptionService {
     public OptionSetStatusVO getOptionSetStatus(Long projectId, Long fieldId) {
         CustomFieldDefinition field = definitionMapper.selectById(fieldId);
         if (field == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "字段不存在");
+            throw BusinessException.notFound("字段不存在");
         }
         if (!isEnumLikeFormat(field.getFieldFormat())) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "仅列表类型字段支持选项集");
@@ -107,7 +107,7 @@ public class CustomFieldOptionService {
     public List<CustomFieldOption> makeIndependentCopy(Long projectId, Long fieldId, boolean emptyOptions) {
         CustomFieldDefinition field = definitionMapper.selectById(fieldId);
         if (field == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "字段不存在");
+            throw BusinessException.notFound("字段不存在");
         }
         if (!isEnumLikeFormat(field.getFieldFormat())) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "仅列表类型字段支持独立选项集");
@@ -307,7 +307,7 @@ public class CustomFieldOptionService {
     public void reorderOptions(Long fieldId, List<Long> optionIds, Long projectId) {
         CustomFieldDefinition field = definitionMapper.selectById(fieldId);
         if (field == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "字段不存在");
+            throw BusinessException.notFound("字段不存在");
         }
         if (!isEnumLikeFormat(field.getFieldFormat())) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "仅列表类型字段支持选项排序");
@@ -352,7 +352,7 @@ public class CustomFieldOptionService {
     public void setOptionArchived(Long fieldId, Long optionId, boolean archived, Long projectId) {
         CustomFieldDefinition field = definitionMapper.selectById(fieldId);
         if (field == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "字段不存在");
+            throw BusinessException.notFound("字段不存在");
         }
         if (!isEnumLikeFormat(field.getFieldFormat())) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "仅列表类型字段支持选项归档");
@@ -370,7 +370,7 @@ public class CustomFieldOptionService {
 
         CustomFieldOption option = optionMapper.selectOne(wrapper);
         if (option == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "选项不存在");
+            throw BusinessException.notFound("选项不存在");
         }
 
         option.setIsArchived(archived);
@@ -399,7 +399,7 @@ public class CustomFieldOptionService {
     public List<OptionUsageItemVO> getOptionUsage(Long id) {
         CustomFieldDefinition def = definitionMapper.selectById(id);
         if (def == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "自定义字段不存在");
+            throw BusinessException.notFound("自定义字段不存在");
         }
         if (!isEnumLikeFormat(def.getFieldFormat())) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "仅枚举(list)类型字段支持逐选项统计");
@@ -443,7 +443,7 @@ public class CustomFieldOptionService {
     public CustomFieldOption addOptionInline(Long projectId, Long fieldId, String value, String color, Long ownerUserId, java.time.LocalDate releaseDate, Boolean isReleased, java.time.LocalDate assembleDate) {
         CustomFieldDefinition field = definitionMapper.selectById(fieldId);
         if (field == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "字段不存在");
+            throw BusinessException.notFound("字段不存在");
         }
         if (!isEnumLikeFormat(field.getFieldFormat())) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "只有枚举类型字段支持添加选项值");
@@ -1086,7 +1086,7 @@ public class CustomFieldOptionService {
     public void setSortMode(Long fieldId, String sortMode) {
         CustomFieldDefinition field = definitionMapper.selectById(fieldId);
         if (field == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "字段不存在");
+            throw BusinessException.notFound("字段不存在");
         }
         if (!isEnumLikeFormat(field.getFieldFormat())) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "仅列表类型字段支持排序模式");
@@ -1256,10 +1256,10 @@ public class CustomFieldOptionService {
         CustomFieldDefinition targetField = definitionMapper.selectById(targetFieldId);
         CustomFieldDefinition sourceField = definitionMapper.selectById(sourceFieldId);
         if (targetField == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "目标字段不存在: " + targetFieldId);
+            throw BusinessException.notFound("目标字段", targetFieldId);
         }
         if (sourceField == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "源字段不存在: " + sourceFieldId);
+            throw BusinessException.notFound("源字段", sourceFieldId);
         }
         if (!isEnumLikeFormat(targetField.getFieldFormat())) {
             throw new BusinessException(ErrorCode.INVALID_PARAMETER, "目标字段不是枚举类型，无法合并选项");

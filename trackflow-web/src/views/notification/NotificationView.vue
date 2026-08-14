@@ -164,6 +164,7 @@ import { useNotificationShared } from '@/composables/useNotificationShared'
 import { projectApi, issueApi } from '@/api'
 import type { NotificationVO, NotificationCategory } from '@/api/notification'
 import { Message } from '@arco-design/web-vue'
+import { handleApiError } from '@/utils/errorHandler'
 import NotificationItem from '@/views/layout/components/NotificationItem.vue'
 import NotificationListContent from './NotificationListContent.vue'
 
@@ -241,8 +242,8 @@ async function submitReply(item: NotificationVO) {
       replyingItemId.value = null
       replyContent.value = ''
     }
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '回复失败')
+  } catch (e) {
+    handleApiError(e, '回复失败')
   } finally {
     replySubmitting.value = false
   }

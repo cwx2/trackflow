@@ -406,6 +406,7 @@
 import { formatDateTime } from '@/utils/date'
 import { ref, reactive, onMounted, watch, computed } from 'vue'
 import { Message } from '@arco-design/web-vue'
+import { handleApiError } from '@/utils/errorHandler'
 import { notificationAdminApi } from '@/api/notificationAdmin'
 import type { NotificationSettingsVO, NotificationStatsVO, NotificationOutboxVO, OutboxStats } from '@/api/notificationAdmin'
 import DataContainer from '@/components/base/DataContainer.vue'
@@ -576,8 +577,8 @@ async function saveSettings() {
       originalSettings = { ...res.data }
       Message.success('通知设置已保存')
     }
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '保存失败')
+  } catch (e) {
+    handleApiError(e, '保存失败')
   } finally {
     saving.value = false
   }
@@ -616,8 +617,8 @@ async function saveEmailConfig() {
       emailConfig.passwordConfigured = res.data.password === '******'
       Message.success('邮件服务器配置已保存')
     }
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '保存邮件配置失败')
+  } catch (e) {
+    handleApiError(e, '保存邮件配置失败')
   } finally {
     savingEmail.value = false
   }
@@ -684,8 +685,8 @@ async function retryOutboxItem(id: string) {
     } else {
       Message.error(res.message || '重试失败')
     }
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '重试失败')
+  } catch (e) {
+    handleApiError(e, '重试失败')
   }
 }
 

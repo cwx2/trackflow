@@ -329,6 +329,7 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue'
 import { Message } from '@arco-design/web-vue'
+import { handleApiError } from '@/utils/errorHandler'
 import { boardApi, queryApi, projectApi } from '@/api'
 import type { BoardColumnVO, BoardColumnItem, ProjectVO } from '@/api/types'
 import { getPriorityColor } from '@/composables/usePriorityOptions'
@@ -510,8 +511,8 @@ watch(() => visible.value, async (newVisible) => {
           issueCount: c.issueCount ?? 0,
           inWorkflow: c.inWorkflow ?? false
         }))
-      } catch (e: any) {
-        Message.error(e.response?.data?.message || '加载看板列配置失败')
+      } catch (e) {
+        handleApiError(e, '加载看板列配置失败')
       } finally {
         initializing.value = false
       }
@@ -529,8 +530,8 @@ watch(() => visible.value, async (newVisible) => {
           inWorkflow: c.inWorkflow ?? false
         }))
         emit('saved')
-      } catch (e: any) {
-        Message.error(e.response?.data?.message || '初始化看板列配置失败')
+      } catch (e) {
+        handleApiError(e, '初始化看板列配置失败')
       } finally {
         initializing.value = false
       }

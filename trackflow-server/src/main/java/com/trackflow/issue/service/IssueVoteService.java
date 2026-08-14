@@ -56,7 +56,7 @@ public class IssueVoteService {
         // 校验工单存在
         Issue issue = issueMapper.selectById(issueId);
         if (issue == null || issue.getDeletedAt() != null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "工单不存在: " + issueId);
+            throw BusinessException.notFound("工单", issueId);
         }
 
         // 校验：不能投票给自己创建的工单

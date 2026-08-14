@@ -45,7 +45,7 @@ public class IssueTemplateService {
     public IssueTemplateVO getById(Long id) {
         IssueTemplate template = templateMapper.selectById(id);
         if (template == null || template.getDeleted()) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "模板不存在");
+            throw BusinessException.notFound("模板不存在");
         }
         return converter.toVO(template);
     }
@@ -83,7 +83,7 @@ public class IssueTemplateService {
     public IssueTemplateVO update(Long id, SaveIssueTemplateDTO dto) {
         IssueTemplate entity = templateMapper.selectById(id);
         if (entity == null || entity.getDeleted()) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "模板不存在");
+            throw BusinessException.notFound("模板不存在");
         }
         if (entity.getIsSystem()) {
             throw new BusinessException(ErrorCode.ACCESS_DENIED, "系统预置模板不允许修改名称和类型");
@@ -104,7 +104,7 @@ public class IssueTemplateService {
     public void delete(Long id) {
         IssueTemplate entity = templateMapper.selectById(id);
         if (entity == null || entity.getDeleted()) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "模板不存在");
+            throw BusinessException.notFound("模板不存在");
         }
         if (entity.getIsSystem()) {
             throw new BusinessException(ErrorCode.ACCESS_DENIED, "系统预置模板不允许删除");

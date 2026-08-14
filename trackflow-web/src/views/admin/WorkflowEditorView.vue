@@ -503,6 +503,7 @@
 import { ref, reactive, computed, onMounted, onBeforeUnmount, h } from 'vue'
 import { onBeforeRouteLeave, useRoute } from 'vue-router'
 import { Message, Modal } from '@arco-design/web-vue'
+import { handleApiError } from '@/utils/errorHandler'
 import { IconInfoCircle, IconHistory, IconSearch, IconRefresh, IconLeft } from '@arco-design/web-vue/es/icon'
 import { issueApi, projectApi, workflowApi, transitionActionApi } from '@/api'
 import type { IssueStatusVO, ProjectVO, RoleVO } from '@/api/types'
@@ -858,7 +859,7 @@ async function doSaveMatrixAndOpenGuard() {
         }
       })
     } else {
-      Message.error(e.response?.data?.message || '保存失败，请检查权限或重试')
+      handleApiError(e, '保存失败，请检查权限或重试')
     }
     // 清除待打开的守卫面板信息
     pendingGuardPanel.fromStatus = null
@@ -1327,7 +1328,7 @@ async function saveMatrix() {
             }
           })
         } else {
-          Message.error(e.response?.data?.message || '保存失败，请检查权限或重试')
+          handleApiError(e, '保存失败，请检查权限或重试')
         }
       } finally {
         saving.value = false

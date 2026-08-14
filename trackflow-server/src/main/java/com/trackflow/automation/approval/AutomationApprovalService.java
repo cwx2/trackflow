@@ -44,7 +44,7 @@ public class AutomationApprovalService {
     public AutomationApproval decide(Long id, boolean approved, String comment) {
         AutomationApproval approval = approvalMapper.selectById(id);
         if (approval == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "审批请求不存在: " + id);
+            throw BusinessException.notFound("审批请求", id);
         }
         if (!"pending".equals(approval.getStatus())) {
             throw new BusinessException(ErrorCode.INVALID_STATE, "审批请求已处理");

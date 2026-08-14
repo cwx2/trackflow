@@ -120,7 +120,7 @@ public class WorkflowDefinitionService {
     public WorkflowDefinitionVO getDefinition(Long id) {
         WorkflowDefinition def = definitionMapper.selectById(id);
         if (def == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "工作流定义不存在");
+            throw BusinessException.notFound("工作流定义不存在");
         }
 
         // 复用 list 逻辑（单元素）
@@ -128,7 +128,7 @@ public class WorkflowDefinitionService {
         return list.stream()
                 .filter(vo -> vo.getId().equals(String.valueOf(id)))
                 .findFirst()
-                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "工作流定义不存在"));
+                .orElseThrow(() -> BusinessException.notFound("工作流定义"));
     }
 
     /**
@@ -170,7 +170,7 @@ public class WorkflowDefinitionService {
     public void updateDefinition(Long id, UpdateWorkflowDefinitionDTO dto) {
         WorkflowDefinition existing = definitionMapper.selectById(id);
         if (existing == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "工作流定义不存在");
+            throw BusinessException.notFound("工作流定义不存在");
         }
 
         if (dto.getName() != null) {
@@ -212,7 +212,7 @@ public class WorkflowDefinitionService {
     public void deleteDefinition(Long id) {
         WorkflowDefinition existing = definitionMapper.selectById(id);
         if (existing == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "工作流定义不存在");
+            throw BusinessException.notFound("工作流定义不存在");
         }
 
         if (Boolean.TRUE.equals(existing.getIsDefault())) {
@@ -248,7 +248,7 @@ public class WorkflowDefinitionService {
     public WorkflowDefinition cloneDefinition(Long sourceId, String newName) {
         WorkflowDefinition source = definitionMapper.selectById(sourceId);
         if (source == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "源工作流定义不存在");
+            throw BusinessException.notFound("源工作流定义不存在");
         }
 
         // 名称唯一性校验
@@ -305,13 +305,13 @@ public class WorkflowDefinitionService {
         // 验证工作流定义存在
         WorkflowDefinition def = definitionMapper.selectById(definitionId);
         if (def == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "工作流定义不存在");
+            throw BusinessException.notFound("工作流定义不存在");
         }
 
         // 验证项目存在
         Project project = projectMapper.selectById(projectId);
         if (project == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "项目不存在");
+            throw BusinessException.notFound("项目不存在");
         }
 
         // 检查是否已绑定
@@ -372,7 +372,7 @@ public class WorkflowDefinitionService {
                         .eq(ProjectWorkflow::getWorkflowDefinitionId, definitionId));
 
         if (deleted == 0) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "项目未绑定该工作流");
+            throw BusinessException.notFound("项目未绑定该工作流");
         }
 
         // 2. 删除 workflow_transition 中该项目和该定义关联的所有项目级规则，使其立即停止生效

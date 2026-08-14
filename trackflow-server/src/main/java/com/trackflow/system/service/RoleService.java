@@ -119,7 +119,7 @@ public class RoleService {
     public SysRole getById(Long id) {
         SysRole role = roleMapper.selectById(id);
         if (role == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Role not found");
+            throw BusinessException.notFound("Role not found");
         }
         return role;
     }

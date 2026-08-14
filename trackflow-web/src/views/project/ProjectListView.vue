@@ -562,6 +562,7 @@
 import { ref, reactive, computed, onMounted, onActivated, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { Message, Modal } from '@arco-design/web-vue'
+import { handleApiError } from '@/utils/errorHandler'
 import { useConfirmDelete } from '@/composables/useConfirmDelete'
 import {
   IconPlus,
@@ -732,9 +733,9 @@ async function loadProjects() {
     }
     const total = res.data?.pagination?.total || list.length
     hasMore.value = projects.value.length < total
-  } catch (e: any) {
+  } catch (e) {
     if (e.response?.status !== 401) {
-      Message.error(e.response?.data?.message || '加载项目列表失败')
+      handleApiError(e, '加载项目列表失败')
     }
     projects.value = []
   } finally {
@@ -757,10 +758,10 @@ async function toggleFavorite(project: any) {
     if (res.code === 0 && res.data) {
       project.favorited = res.data.favorited
     }
-  } catch (e: any) {
+  } catch (e) {
     // 回滚
     project.favorited = previousState
-    Message.error(e.response?.data?.message || '操作失败')
+    handleApiError(e, '操作失败')
   }
 }
 
@@ -821,8 +822,8 @@ function archiveProject(project: any) {
         if (showArchived.value) {
           loadArchivedProjects()
         }
-      } catch (e: any) {
-        Message.error(e.response?.data?.message || '归档失败')
+      } catch (e) {
+        handleApiError(e, '归档失败')
       }
     }
   })
@@ -878,8 +879,8 @@ async function restoreProject(project: any) {
     // 刷新活跃项目列表
     page.value = 1
     loadProjects()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '恢复失败')
+  } catch (e) {
+    handleApiError(e, '恢复失败')
   } finally {
     restoringId.value = null
   }
@@ -894,8 +895,8 @@ async function confirmDeleteProject(project: any) {
       deleteConfirmKey.value = ''
       showDeleteDialog.value = true
     }
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '无法获取项目信息')
+  } catch (e) {
+    handleApiError(e, '无法获取项目信息')
   }
 }
 
@@ -909,8 +910,8 @@ async function handleDeleteBeforeOk(done: (closed: boolean) => void) {
     Message.success('项目已永久删除')
     deleteTarget.value = null
     done(true)
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '删除失败')
+  } catch (e) {
+    handleApiError(e, '删除失败')
     done(false)
   } finally {
     deleting.value = false
@@ -1044,8 +1045,8 @@ async function addMember() {
     addMemberForm.roleIds = []
     showAddMember.value = false
     loadProjectMembers(currentProject.value.key)
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '添加失败')
+  } catch (e) {
+    handleApiError(e, '添加失败')
   }
 }
 
@@ -1095,8 +1096,8 @@ async function removeMember(userId: string) {
       Message.success('成员已移除')
     }
     loadProjectMembers(currentProject.value.key)
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '移除失败')
+  } catch (e) {
+    handleApiError(e, '移除失败')
   }
 }
 
@@ -1111,8 +1112,8 @@ async function changeMemberRole(userId: string, roleIds: string[]) {
       Message.success('角色已更新')
     }
     loadProjectMembers(currentProject.value.key)
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '更新失败')
+  } catch (e) {
+    handleApiError(e, '更新失败')
     // 刷新列表恢复正确状态
     loadProjectMembers(currentProject.value.key)
   }

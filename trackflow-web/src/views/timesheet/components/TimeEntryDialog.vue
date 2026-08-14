@@ -153,6 +153,7 @@
  */
 import { ref, watch } from 'vue'
 import { Message, Modal } from '@arco-design/web-vue'
+import { handleApiError } from '@/utils/errorHandler'
 import { timeEntryApi, issueApi } from '@/api'
 import { workItemAttributeApi } from '@/api/timeEntry'
 import type { TimeEntryVO, WorkItemAttributeVO } from '@/api/timeEntry'
@@ -423,8 +424,8 @@ async function handleSave() {
     }
     close()
     emit('saved')
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '操作失败')
+  } catch (e) {
+    handleApiError(e, '操作失败')
   } finally {
     saving.value = false
   }
@@ -446,8 +447,8 @@ async function handleDelete() {
         Message.success('工时已删除')
         close()
         emit('deleted')
-      } catch (e: any) {
-        Message.error(e.response?.data?.message || '删除失败')
+      } catch (e) {
+        handleApiError(e, '删除失败')
       } finally {
         deleting.value = false
       }

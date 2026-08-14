@@ -495,6 +495,7 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { IconSearch, IconRight, IconPlus, IconLeft, IconDelete, IconInfoCircle } from '@arco-design/web-vue/es/icon'
 import { Message, Modal } from '@arco-design/web-vue'
+import { handleApiError } from '@/utils/errorHandler'
 import { customFieldApi } from '@/api'
 import type { ProjectFieldsVO, FieldSummaryVO, CustomFieldDefinitionVO } from '@/api/types'
 import DataContainer from '@/components/base/DataContainer.vue'
@@ -633,8 +634,8 @@ async function saveOverride(projectId: string, fieldId: string) {
     Message.success('项目级覆盖已保存')
     closeFieldEditor()
     loadData()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '保存失败')
+  } catch (e) {
+    handleApiError(e, '保存失败')
   } finally {
     saving.value = false
   }
@@ -651,8 +652,8 @@ async function clearOverride(projectId: string, fieldId: string) {
     Message.success('已清除项目级覆盖，恢复全局设置')
     closeFieldEditor()
     loadData()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '清除失败')
+  } catch (e) {
+    handleApiError(e, '清除失败')
   } finally {
     saving.value = false
   }
@@ -795,8 +796,8 @@ async function handleAttach() {
     Message.success('添加成功')
     attachDialogVisible.value = false
     loadData()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '添加失败')
+  } catch (e) {
+    handleApiError(e, '添加失败')
   } finally {
     attaching.value = false
   }
@@ -844,8 +845,8 @@ async function handleCreateAndAttach() {
     resetCreateForm()
     loadData()
     emit('field-created')
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '创建失败')
+  } catch (e) {
+    handleApiError(e, '创建失败')
   } finally {
     creatingField.value = false
   }
@@ -863,8 +864,8 @@ function handleDetach(projectId: string, fieldId: string, fieldName: string, pro
         await customFieldApi.detachFromProject(projectId, fieldId)
         Message.success('已移除')
         loadData()
-      } catch (e: any) {
-        Message.error(e.response?.data?.message || '移除失败')
+      } catch (e) {
+        handleApiError(e, '移除失败')
       }
     }
   })

@@ -22,6 +22,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/v1/admin/link-types")
 @RequiredArgsConstructor
+@PreAuthorize("@perm.checkGlobal('system:manage_settings')")
 public class IssueLinkTypeController {
 
     private final IssueLinkTypeService linkTypeService;
@@ -30,7 +31,6 @@ public class IssueLinkTypeController {
      * 获取所有链接类型
      */
     @GetMapping
-    @PreAuthorize("@perm.checkGlobal('system:manage_settings')")
     public R<List<IssueLinkTypeVO>> list() {
         return R.ok(linkTypeService.listAllVO());
     }
@@ -39,7 +39,6 @@ public class IssueLinkTypeController {
      * 获取指定关联类型的使用数量（用于删除前影响预检）
      */
     @GetMapping("/{id}/usage-count")
-    @PreAuthorize("@perm.checkGlobal('system:manage_settings')")
     public R<Long> getUsageCount(@PathVariable("id") Long id) {
         return R.ok(linkTypeService.countUsageByTypeId(id));
     }
@@ -48,7 +47,6 @@ public class IssueLinkTypeController {
      * 创建链接类型
      */
     @PostMapping
-    @PreAuthorize("@perm.checkGlobal('system:manage_settings')")
     public R<IssueLinkTypeVO> create(@Valid @RequestBody CreateLinkTypeDTO dto) {
         IssueLinkTypeVO vo = linkTypeService.createLinkType(
                 dto.getName(), dto.getOutwardName(), dto.getInwardName(), dto.getDirection());
@@ -59,7 +57,6 @@ public class IssueLinkTypeController {
      * 更新链接类型
      */
     @PutMapping("/{id}")
-    @PreAuthorize("@perm.checkGlobal('system:manage_settings')")
     public R<IssueLinkTypeVO> update(@PathVariable("id") Long id, @Valid @RequestBody UpdateLinkTypeDTO dto) {
         IssueLinkTypeVO vo = linkTypeService.updateLinkType(
                 id, dto.getOutwardName(), dto.getInwardName(), dto.getDirection());
@@ -70,7 +67,6 @@ public class IssueLinkTypeController {
      * 删除链接类型（级联删除使用该类型的 issue_link 记录）
      */
     @DeleteMapping("/{id}")
-    @PreAuthorize("@perm.checkGlobal('system:manage_settings')")
     public R<Void> delete(@PathVariable("id") Long id) {
         linkTypeService.deleteLinkType(id);
         return R.ok();

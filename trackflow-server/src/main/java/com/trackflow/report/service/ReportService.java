@@ -235,7 +235,7 @@ public class ReportService {
     public ReportDefinition getWithAccessCheck(Long id, Long userId) {
         ReportDefinition report = reportMapper.selectById(id);
         if (report == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "报表不存在: " + id);
+            throw BusinessException.notFound("报表", id);
         }
         if (report.getProjectId() != null) {
             projectService.assertProjectAccessible(userId, report.getProjectId());
@@ -283,7 +283,7 @@ public class ReportService {
         // 确认报表存在
         ReportDefinition report = reportMapper.selectById(reportId);
         if (report == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "报表不存在");
+            throw BusinessException.notFound("报表不存在");
         }
 
         // 权限校验：需要对报表有查看权限
@@ -351,7 +351,7 @@ public class ReportService {
     public ReportDefinition clone(Long id, Long userId) {
         ReportDefinition source = reportMapper.selectById(id);
         if (source == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "报表不存在");
+            throw BusinessException.notFound("报表不存在");
         }
 
         // 项目可访问性检查
@@ -400,7 +400,7 @@ public class ReportService {
     public ReportDefinition updateWithAccessCheck(Long id, UpdateReportDTO dto, Long userId) {
         ReportDefinition report = reportMapper.selectById(id);
         if (report == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "报表不存在");
+            throw BusinessException.notFound("报表不存在");
         }
 
         // 系统预置报表只有系统管理员可以修改
@@ -557,7 +557,7 @@ public class ReportService {
     @Transactional(rollbackFor = Exception.class)
     public void deleteWithAccessCheck(Long id, Long userId) {
         ReportDefinition report = reportMapper.selectById(id);
-        if (report == null) throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Report not found");
+        if (report == null) throw BusinessException.notFound("Report not found");
 
         if (Boolean.TRUE.equals(report.getIsSystem())) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "系统预置报表不允许删除");
@@ -591,7 +591,7 @@ public class ReportService {
     public List<ReportShareVO> setShares(Long reportId, ShareReportDTO dto, Long userId) {
         ReportDefinition report = reportMapper.selectById(reportId);
         if (report == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "报表不存在");
+            throw BusinessException.notFound("报表不存在");
         }
         // 只有报表创建者或系统管理员可以管理共享
         if (!report.getCreatedBy().equals(userId) && !permissionService.isSystemAdmin(userId)) {
@@ -628,7 +628,7 @@ public class ReportService {
     public List<ReportShareVO> getShares(Long reportId, Long userId) {
         ReportDefinition report = reportMapper.selectById(reportId);
         if (report == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "报表不存在");
+            throw BusinessException.notFound("报表不存在");
         }
         // 只有创建者或系统管理员可以查看完整共享列表
         if (!report.getCreatedBy().equals(userId) && !permissionService.isSystemAdmin(userId)) {
@@ -690,7 +690,7 @@ public class ReportService {
     public void removeShare(Long reportId, Long shareId, Long userId) {
         ReportDefinition report = reportMapper.selectById(reportId);
         if (report == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "报表不存在");
+            throw BusinessException.notFound("报表不存在");
         }
         if (!report.getCreatedBy().equals(userId) && !permissionService.isSystemAdmin(userId)) {
             throw new BusinessException(ErrorCode.ACCESS_DENIED, "只有报表创建者可以管理共享");
@@ -698,7 +698,7 @@ public class ReportService {
 
         ReportShare share = reportShareMapper.selectById(shareId);
         if (share == null || !share.getReportId().equals(reportId)) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "共享记录不存在");
+            throw BusinessException.notFound("共享记录不存在");
         }
         reportShareMapper.deleteById(shareId);
         log.info("Report share removed: reportId={}, shareId={}", reportId, shareId);
@@ -759,7 +759,7 @@ public class ReportService {
      */
     public ReportExecuteResultVO executeWithAccessCheck(Long id, Long userId, boolean force) {
         ReportDefinition report = reportMapper.selectById(id);
-        if (report == null) throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Report not found");
+        if (report == null) throw BusinessException.notFound("Report not found");
 
         if (report.getProjectId() != null) {
             projectService.assertProjectAccessible(userId, report.getProjectId());
@@ -792,7 +792,7 @@ public class ReportService {
      */
     public ReportExecuteResultVO execute(Long id) {
         ReportDefinition report = reportMapper.selectById(id);
-        if (report == null) throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Report not found");
+        if (report == null) throw BusinessException.notFound("Report not found");
         return reportExecutionService.executeNoAuth(report);
     }
 

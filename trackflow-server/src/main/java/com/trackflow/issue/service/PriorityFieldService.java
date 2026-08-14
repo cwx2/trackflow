@@ -58,8 +58,7 @@ public class PriorityFieldService {
     public CustomFieldDefinition getPriorityFieldDefinition() {
         CustomFieldDefinition field = definitionMapper.selectById(PRIORITY_FIELD_ID);
         if (field == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND,
-                    "优先级自定义字段定义不存在，请确认 V249 迁移脚本已执行");
+            throw BusinessException.notFound("优先级自定义字段定义不存在，请确认 V249 迁移脚本已执行");
         }
         return field;
     }

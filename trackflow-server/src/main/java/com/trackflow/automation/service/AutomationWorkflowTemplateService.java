@@ -63,7 +63,7 @@ public class AutomationWorkflowTemplateService {
         // 验证工作流存在
         AutomationWorkflow workflow = workflowMapper.selectById(dto.getWorkflowId());
         if (workflow == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "工作流不存在: " + dto.getWorkflowId());
+            throw BusinessException.notFound("工作流", dto.getWorkflowId());
         }
 
         // 验证权限：工作流所有者才能保存为模板
@@ -107,7 +107,7 @@ public class AutomationWorkflowTemplateService {
     public AutomationWorkflow cloneFromTemplate(Long templateId) {
         AutomationWorkflowTemplate template = templateMapper.selectById(templateId);
         if (template == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "模板不存在: " + templateId);
+            throw BusinessException.notFound("模板", templateId);
         }
         Long currentUserId = SecurityUtils.getCurrentUserId();
         if (currentUserId == null) {
@@ -161,7 +161,7 @@ public class AutomationWorkflowTemplateService {
     public void deleteTemplate(Long templateId) {
         AutomationWorkflowTemplate template = templateMapper.selectById(templateId);
         if (template == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "模板不存在: " + templateId);
+            throw BusinessException.notFound("模板", templateId);
         }
         if (Boolean.TRUE.equals(template.getIsBuiltin())) {
             throw new BusinessException(ErrorCode.ACCESS_DENIED, "内置模板不允许删除");

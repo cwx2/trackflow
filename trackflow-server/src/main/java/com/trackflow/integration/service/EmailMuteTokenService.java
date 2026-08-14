@@ -76,7 +76,7 @@ public class EmailMuteTokenService {
 
         if (muteToken == null) {
             log.warn("[EmailMuteToken] token 不存在: {}", token);
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "链接无效或已失效");
+            throw BusinessException.notFound("链接无效或已失效");
         }
 
         if (muteToken.getExpiresAt().isBefore(LocalDateTime.now())) {

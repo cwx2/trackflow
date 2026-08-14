@@ -78,7 +78,7 @@ public class WorkflowRuleService {
     public WorkflowRule getRule(Long id) {
         WorkflowRule rule = ruleMapper.selectById(id);
         if (rule == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "规则不存在");
+            throw BusinessException.notFound("规则不存在");
         }
         checkRuleViewPermission(rule);
         return rule;
@@ -133,7 +133,7 @@ public class WorkflowRuleService {
     public WorkflowRule updateRule(Long id, WorkflowRuleDTO dto) {
         WorkflowRule rule = ruleMapper.selectById(id);
         if (rule == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "规则不存在");
+            throw BusinessException.notFound("规则不存在");
         }
         checkRuleManagePermission(rule);
 
@@ -178,7 +178,7 @@ public class WorkflowRuleService {
     public void deleteRule(Long id) {
         WorkflowRule rule = ruleMapper.selectById(id);
         if (rule == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "规则不存在");
+            throw BusinessException.notFound("规则不存在");
         }
         checkRuleManagePermission(rule);
         ruleMapper.deleteById(id);
@@ -192,7 +192,7 @@ public class WorkflowRuleService {
     public WorkflowRule toggleRule(Long id) {
         WorkflowRule rule = ruleMapper.selectById(id);
         if (rule == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "规则不存在");
+            throw BusinessException.notFound("规则不存在");
         }
         checkRuleManagePermission(rule);
 
@@ -409,7 +409,7 @@ public class WorkflowRuleService {
     public void executeActionRule(Long issueId, String command) {
         com.trackflow.issue.entity.Issue issue = issueMapper.selectById(issueId);
         if (issue == null || issue.getDeletedAt() != null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "工单不存在");
+            throw BusinessException.notFound("工单不存在");
         }
         Long userId = SecurityUtils.getCurrentUserId();
         boolean executed = ruleEngine.fireActionRule(issueId, issue.getProjectId(), command, userId);
@@ -450,7 +450,7 @@ public class WorkflowRuleService {
     public WorkflowRuleValidationVO validateRule(Long ruleId) {
         WorkflowRule rule = ruleMapper.selectById(ruleId);
         if (rule == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "规则不存在");
+            throw BusinessException.notFound("规则不存在");
         }
         checkRuleViewPermission(rule);
         return doValidateRule(rule);
@@ -669,7 +669,7 @@ public class WorkflowRuleService {
     public WorkflowRuleExportDTO exportRule(Long ruleId) {
         WorkflowRule rule = ruleMapper.selectById(ruleId);
         if (rule == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "规则不存在: " + ruleId);
+            throw BusinessException.notFound("规则", ruleId);
         }
         checkRuleViewPermission(rule);
 

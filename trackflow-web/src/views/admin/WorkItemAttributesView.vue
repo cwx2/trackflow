@@ -232,6 +232,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { Message, Modal } from '@arco-design/web-vue'
+import { handleApiError } from '@/utils/errorHandler'
 import { useConfirmDelete } from '@/composables/useConfirmDelete'
 import { workItemAttributeApi } from '@/api/timeEntry'
 import type { WorkItemAttributeVO } from '@/api/timeEntry'
@@ -364,8 +365,8 @@ async function executeTransfer() {
       showTransferDialog.value = false
       transferSource.value = null
     }
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '转移失败')
+  } catch (e) {
+    handleApiError(e, '转移失败')
   } finally {
     transferring.value = false
   }
@@ -430,8 +431,8 @@ async function createAttribute() {
       resetCreateForm()
       await loadAttributes()
     }
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '创建失败')
+  } catch (e) {
+    handleApiError(e, '创建失败')
   } finally {
     creating.value = false
   }
@@ -451,8 +452,8 @@ async function renameAttribute() {
       Message.success('已重命名')
       await loadAttributes()
     }
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '重命名失败')
+  } catch (e) {
+    handleApiError(e, '重命名失败')
   } finally {
     saving.value = false
   }
@@ -472,8 +473,8 @@ async function saveValues() {
       Message.success('值列表已更新')
       await loadAttributes()
     }
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '更新失败')
+  } catch (e) {
+    handleApiError(e, '更新失败')
   } finally {
     savingValues.value = false
   }
@@ -493,8 +494,8 @@ async function saveProjects() {
       showProjectDialog.value = false
       await loadAttributes()
     }
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '更新失败')
+  } catch (e) {
+    handleApiError(e, '更新失败')
   } finally {
     savingProjects.value = false
   }
@@ -524,8 +525,8 @@ function confirmDelete() {
           selectedId.value = ''
           await loadAttributes()
         }
-      } catch (e: any) {
-        Message.error(e.response?.data?.message || '删除失败')
+      } catch (e) {
+        handleApiError(e, '删除失败')
       }
     }
   })

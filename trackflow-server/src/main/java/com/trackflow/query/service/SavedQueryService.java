@@ -173,7 +173,7 @@ public class SavedQueryService {
         // 验证查询存在且是共享的
         SavedQuery query = queryMapper.selectById(queryId);
         if (query == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "查询不存在");
+            throw BusinessException.notFound("查询不存在");
         }
         if (!Boolean.TRUE.equals(query.getShared()) && !query.getUserId().equals(userId)) {
             throw new BusinessException(ErrorCode.ACCESS_DENIED, "无法收藏非共享查询");
@@ -329,7 +329,7 @@ public class SavedQueryService {
     public Page<Issue> executeById(Long id, int page, int pageSize) {
         SavedQuery query = queryMapper.selectById(id);
         if (query == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Query not found");
+            throw BusinessException.notFound("Query not found");
         }
 
         List<Map<String, Object>> filters = parseFilters(query.getFilters());
@@ -353,7 +353,7 @@ public class SavedQueryService {
     public Page<Issue> executeByIdWithAccessCheck(Long id, int page, int pageSize, Long userId, boolean hideResolved, String sortOverride) {
         SavedQuery query = queryMapper.selectById(id);
         if (query == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Query not found");
+            throw BusinessException.notFound("Query not found");
         }
         if (!userId.equals(query.getUserId()) && !Boolean.TRUE.equals(query.getShared())) {
             throw new BusinessException(ErrorCode.ACCESS_DENIED, "无权执行此保存筛选");
@@ -445,7 +445,7 @@ public class SavedQueryService {
     private SavedQuery getByIdAndUser(Long id, Long userId) {
         SavedQuery query = queryMapper.selectById(id);
         if (query == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Query not found");
+            throw BusinessException.notFound("Query not found");
         }
         // 只有创建者可以修改/删除
         if (!query.getUserId().equals(userId)) {

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import { Message } from '@arco-design/web-vue'
+import { handleApiError } from '@/utils/errorHandler'
 import { customDashboardApi } from '@/api'
 import { ShareTargetsModal } from '@/components/base'
 import type { ShareTargetItem } from '@/components/base'
@@ -58,8 +59,8 @@ async function handleSave(targets: ShareTargetItem[]) {
     Message.success('共享设置已保存')
     emit('update:visible', false)
     emit('saved')
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '保存失败')
+  } catch (e) {
+    handleApiError(e, '保存失败')
   } finally {
     saving.value = false
   }

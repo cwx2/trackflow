@@ -135,7 +135,7 @@ public class IssueLinkService {
         // 验证目标 Issue 存在
         Issue targetIssue = issueMapper.selectById(targetIssueId);
         if (targetIssue == null || targetIssue.getDeletedAt() != null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "目标 Issue 不存在");
+            throw BusinessException.notFound("目标 Issue 不存在");
         }
 
         // 检查是否已存在相同关联（同方向同类型）
@@ -192,7 +192,7 @@ public class IssueLinkService {
     public void deleteIssueLink(Long linkId) {
         IssueLink link = linkMapper.selectById(linkId);
         if (link == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "关联不存在");
+            throw BusinessException.notFound("关联不存在");
         }
         // 归档项目不允许删除关联
         Issue sourceIssue = issueMapper.selectById(link.getSourceIssueId());

@@ -221,6 +221,7 @@ import { formatDateTime } from '@/utils/date'
 import { ref, reactive, computed, onMounted, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
+import { handleApiError } from '@/utils/errorHandler'
 import { useConfirmDelete } from '@/composables/useConfirmDelete'
 import type { TableColumnData } from '@arco-design/web-vue'
 import { organizationApi, userApi, roleApi } from '@/api'
@@ -355,8 +356,8 @@ async function saveEditName() {
     await organizationApi.update(orgId.value, { name: newName })
     org.value!.name = newName
     Message.success('名称已更新')
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '更新失败')
+  } catch (e) {
+    handleApiError(e, '更新失败')
   }
   editingName.value = false
 }
@@ -377,8 +378,8 @@ async function saveEditDesc() {
     await organizationApi.update(orgId.value, { description: newDesc })
     org.value!.description = newDesc
     Message.success('描述已更新')
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '更新失败')
+  } catch (e) {
+    handleApiError(e, '更新失败')
   }
   editingDesc.value = false
 }
@@ -398,8 +399,8 @@ async function submitAddProjects(done?: (closed: boolean) => void) {
     loadProjects()
     // Update project count
     if (org.value) org.value.projectCount = (org.value.projectCount || 0) + selectedProjectIds.value.length
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '添加失败')
+  } catch (e) {
+    handleApiError(e, '添加失败')
     if (done) done(false)
   }
 }
@@ -415,8 +416,8 @@ function removeProject(project: OrgProjectVO) {
         Message.success('项目已移除')
         loadProjects()
         if (org.value && org.value.projectCount) org.value.projectCount--
-      } catch (e: any) {
-        Message.error(e.response?.data?.message || '移除失败')
+      } catch (e) {
+        handleApiError(e, '移除失败')
       }
     }
   })
@@ -439,8 +440,8 @@ async function submitGrantAccess(done?: (closed: boolean) => void) {
     Message.success('权限已授予')
     if (done) done(true)
     loadAccessList()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '授权失败')
+  } catch (e) {
+    handleApiError(e, '授权失败')
     if (done) done(false)
   }
 }
@@ -455,8 +456,8 @@ function revokeAccess(access: OrgAccessVO) {
         await organizationApi.revokeAccess(orgId.value, access.id)
         Message.success('授权已撤销')
         loadAccessList()
-      } catch (e: any) {
-        Message.error(e.response?.data?.message || '撤销失败')
+      } catch (e) {
+        handleApiError(e, '撤销失败')
       }
     }
   })

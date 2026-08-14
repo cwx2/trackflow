@@ -62,8 +62,7 @@ public class IssueTypeFieldService {
     public CustomFieldDefinition getIssueTypeFieldDefinition() {
         CustomFieldDefinition field = definitionMapper.selectById(ISSUE_TYPE_FIELD_ID);
         if (field == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND,
-                    "工单类型自定义字段定义不存在，请确认 V251 迁移脚本已执行");
+            throw BusinessException.notFound("工单类型自定义字段定义不存在，请确认 V251 迁移脚本已执行");
         }
         return field;
     }

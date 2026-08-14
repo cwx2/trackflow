@@ -147,6 +147,7 @@ import { formatDate } from '@/utils/date'
 import { ref, reactive, onMounted } from 'vue'
 import { IconLock } from '@arco-design/web-vue/es/icon'
 import { Message } from '@arco-design/web-vue'
+import { handleApiError } from '@/utils/errorHandler'
 import { useConfirmDelete } from '@/composables/useConfirmDelete'
 import { projectApi, userApi, workflowApi } from '@/api'
 import type { ProjectDetailVO, ProjectMemberVO, ProjectActivityVO } from '@/api/types'
@@ -345,8 +346,8 @@ async function addMember() {
     addForm.roleIds = []
     usersLoaded.value = false // refresh available users
     await loadMembers()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '添加成员失败')
+  } catch (e) {
+    handleApiError(e, '添加成员失败')
   } finally {
     adding.value = false
   }
@@ -367,8 +368,8 @@ async function changeMemberRole(userId: string, roleIds: string[]) {
       Message.success('角色已更新')
     }
     await loadMembers()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '更新角色失败')
+  } catch (e) {
+    handleApiError(e, '更新角色失败')
   }
 }
 
@@ -391,8 +392,8 @@ async function confirmRemoveMember(member: ProjectMemberVO) {
             Message.success('成员已移除')
             usersLoaded.value = false
             await loadMembers()
-          } catch (e: any) {
-            Message.error(e.response?.data?.message || '移除成员失败')
+          } catch (e) {
+            handleApiError(e, '移除成员失败')
           }
         }
       })
@@ -407,8 +408,8 @@ async function confirmRemoveMember(member: ProjectMemberVO) {
             Message.success('成员已移除')
             usersLoaded.value = false
             await loadMembers()
-          } catch (e: any) {
-            Message.error(e.response?.data?.message || '移除成员失败')
+          } catch (e) {
+            handleApiError(e, '移除成员失败')
           }
         }
       })
@@ -425,8 +426,8 @@ async function confirmRemoveMember(member: ProjectMemberVO) {
           Message.success('成员已移除')
           usersLoaded.value = false
           await loadMembers()
-        } catch (err: any) {
-          Message.error(err.response?.data?.message || '移除成员失败')
+        } catch (err) {
+          handleApiError(err, '移除成员失败')
         }
       }
     })

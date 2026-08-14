@@ -103,6 +103,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { Message } from '@arco-design/web-vue'
+import { handleApiError } from '@/utils/errorHandler'
 import { IconExclamationCircle, IconCheckCircle, IconCalendar } from '@arco-design/web-vue/es/icon'
 import { sprintApi } from '@/api'
 import { IssueStatusTag, IssuePriorityBadge } from '@/components/base'
@@ -166,8 +167,8 @@ watch(() => props.visible, async (val) => {
       if (res.data.openIssues.length > 0 && res.data.targetSprints.length > 0) {
         targetSprintId.value = res.data.targetSprints[0].id
       }
-    } catch (e: any) {
-      Message.error(e.response?.data?.message || '获取预览信息失败')
+    } catch (e) {
+      handleApiError(e, '获取预览信息失败')
       localVisible.value = false
     }
   }
@@ -207,8 +208,8 @@ async function confirmComplete() {
     Message.success(toastMessage)
     localVisible.value = false
     emit('completed')
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '操作失败')
+  } catch (e) {
+    handleApiError(e, '操作失败')
   } finally {
     completing.value = false
   }

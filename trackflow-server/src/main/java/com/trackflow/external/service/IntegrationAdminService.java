@@ -180,7 +180,7 @@ public class IntegrationAdminService {
     public IntegrationLogVO retryEvent(Long logId) {
         ExternalEventLog logEntry = eventLogMapper.selectById(logId);
         if (logEntry == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "日志记录不存在");
+            throw BusinessException.notFound("日志记录不存在");
         }
         if (!"failed".equals(logEntry.getStatus())) {
             throw new BusinessException(ErrorCode.VALIDATION_ERROR, "只有失败状态的事件可以重试");
@@ -245,8 +245,7 @@ public class IntegrationAdminService {
     private ExternalAdapter assertAdapterExists(String adapterType) {
         ExternalAdapter adapter = findAdapter(adapterType);
         if (adapter == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND,
-                    "适配器不存在: " + adapterType);
+            throw BusinessException.notFound("适配器", adapterType);
         }
         return adapter;
     }

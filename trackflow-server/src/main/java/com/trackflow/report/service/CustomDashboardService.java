@@ -445,7 +445,7 @@ public class CustomDashboardService {
 
         DashboardShare share = shareMapper.selectById(shareId);
         if (share == null || !share.getDashboardId().equals(dashboardId)) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "共享记录不存在");
+            throw BusinessException.notFound("共享记录不存在");
         }
 
         shareMapper.deleteById(shareId);
@@ -679,7 +679,7 @@ public class CustomDashboardService {
 
         DashboardWidget widget = widgetMapper.selectById(widgetId);
         if (widget == null || !widget.getDashboardId().equals(dashboardId)) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "微件不存在");
+            throw BusinessException.notFound("微件不存在");
         }
 
         if (dto.getTitle() != null) widget.setTitle(dto.getTitle());
@@ -707,7 +707,7 @@ public class CustomDashboardService {
 
         DashboardWidget widget = widgetMapper.selectById(widgetId);
         if (widget == null || !widget.getDashboardId().equals(dashboardId)) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "微件不存在");
+            throw BusinessException.notFound("微件不存在");
         }
 
         widgetMapper.deleteById(widgetId);
@@ -730,7 +730,7 @@ public class CustomDashboardService {
 
         DashboardWidget widget = widgetMapper.selectById(widgetId);
         if (widget == null || !widget.getDashboardId().equals(sourceDashboardId)) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "微件不存在");
+            throw BusinessException.notFound("微件不存在");
         }
 
         // 计算目标仪表盘中的新位置

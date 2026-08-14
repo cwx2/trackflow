@@ -73,7 +73,7 @@ public class AutomationWorkflowService {
     public AutomationWorkflow getById(Long id) {
         AutomationWorkflow workflow = workflowMapper.selectById(id);
         if (workflow == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "工作流不存在: " + id);
+            throw BusinessException.notFound("工作流", id);
         }
         return workflow;
     }

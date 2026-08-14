@@ -112,7 +112,7 @@ public class WebhookController {
     private Webhook getWebhookWithPermissionCheck(Long webhookId, Long userId) {
         Webhook webhook = webhookService.getById(webhookId);
         if (webhook == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Webhook不存在");
+            throw BusinessException.notFound("Webhook不存在");
         }
         projectService.assertProjectMember(userId, webhook.getProjectId());
         if (!permissionService.hasPermission(userId, webhook.getProjectId(), "webhook:manage")) {

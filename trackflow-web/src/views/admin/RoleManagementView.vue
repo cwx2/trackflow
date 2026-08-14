@@ -241,6 +241,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed, h } from 'vue'
 import { Message } from '@arco-design/web-vue'
+import { handleApiError } from '@/utils/errorHandler'
 import { useConfirmDelete } from '@/composables/useConfirmDelete'
 import { roleApi } from '@/api'
 import type { RoleVO, RoleUsersVO } from '@/api/types'
@@ -462,8 +463,8 @@ async function deleteRole(role: RoleVO) {
         await roleApi.delete(role.id)
         Message.success('角色已删除')
         loadRoles()
-      } catch (e: any) {
-        Message.error(e.response?.data?.message || '删除失败')
+      } catch (e) {
+        handleApiError(e, '删除失败')
       }
     }
   })
@@ -490,8 +491,8 @@ async function submitClone() {
     showCloneDialog.value = false
     Message.success('角色克隆成功')
     loadRoles()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '克隆失败')
+  } catch (e) {
+    handleApiError(e, '克隆失败')
   } finally {
     cloneLoading.value = false
   }
@@ -529,8 +530,8 @@ async function toggleEnabled(role: RoleVO) {
       role.enabled = newEnabled
       Message.success(newEnabled ? '角色已启用' : '角色已禁用')
     }
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '操作失败')
+  } catch (e) {
+    handleApiError(e, '操作失败')
   }
 }
 
@@ -541,8 +542,8 @@ async function openUsersDialog(role: RoleVO) {
   try {
     const res = await roleApi.getUsers(role.id)
     usersData.value = res.data || null
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '获取用户列表失败')
+  } catch (e) {
+    handleApiError(e, '获取用户列表失败')
   } finally {
     usersLoading.value = false
   }

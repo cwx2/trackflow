@@ -827,6 +827,7 @@
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { IconPlus, IconDelete, IconCheck, IconEye, IconEyeInvisible, IconClose, IconSortAscending, IconSortDescending, IconApps, IconFolder, IconLock, IconUnlock, IconInfoCircle, IconExclamationCircleFill } from '@arco-design/web-vue/es/icon'
 import { Message, Modal } from '@arco-design/web-vue'
+import { handleApiError } from '@/utils/errorHandler'
 import { useConfirmDelete } from '@/composables/useConfirmDelete'
 import { customFieldApi, projectApi, workflowApi, userApi, systemSettingApi } from '@/api'
 import type { CustomFieldDefinitionVO, CustomFieldUsageVO, UserVO, AvailableConversionsVO, ConversionOptionVO } from '@/api/types'
@@ -1179,8 +1180,8 @@ async function handleMergeFrom() {
       Message.info(`所有选项均已存在，跳过 ${result.skippedCount} 个重复项`)
     }
     mergeFromFieldId.value = null
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '合并操作失败')
+  } catch (e) {
+    handleApiError(e, '合并操作失败')
   } finally {
     merging.value = false
   }
@@ -1275,8 +1276,8 @@ async function handleArchiveOption(opt: { id?: string; value: string; isDefault:
     Message.success(`选项"${opt.value}"已归档`)
     // 刷新列表中的数据
     loadList()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '归档失败')
+  } catch (e) {
+    handleApiError(e, '归档失败')
   }
 }
 
@@ -1288,8 +1289,8 @@ async function handleUnarchiveOption(opt: { id?: string; value: string; isDefaul
     Message.success(`选项"${opt.value}"已恢复`)
     // 刷新列表中的数据
     loadList()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '恢复失败')
+  } catch (e) {
+    handleApiError(e, '恢复失败')
   }
 }
 
@@ -1433,8 +1434,8 @@ async function openConvertTypeModal() {
     const res = await customFieldApi.getAvailableConversions(editingId.value)
     conversionData.value = res.data || null
     convertModalVisible.value = true
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '获取可用转换选项失败')
+  } catch (e) {
+    handleApiError(e, '获取可用转换选项失败')
   } finally {
     loadingConversions.value = false
   }
@@ -1492,8 +1493,8 @@ async function handleConvertType() {
     if (selectedField.value && selectedField.value.id === editingId.value) {
       selectedField.value = null
     }
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '类型转换失败')
+  } catch (e) {
+    handleApiError(e, '类型转换失败')
   } finally {
     converting.value = false
   }
@@ -1556,8 +1557,8 @@ async function handleSave() {
     }
     drawerVisible.value = false
     loadList()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '操作失败')
+  } catch (e) {
+    handleApiError(e, '操作失败')
   } finally {
     saving.value = false
   }
@@ -1603,8 +1604,8 @@ async function confirmDelete(record: CustomFieldDefinitionVO) {
         onConfirm: () => handleDelete(record.id)
       })
     }
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '获取使用情况失败')
+  } catch (e) {
+    handleApiError(e, '获取使用情况失败')
   }
 }
 
@@ -1613,8 +1614,8 @@ async function handleDelete(id: string) {
     await customFieldApi.delete(id, true)
     Message.success('删除成功')
     loadList()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '删除失败')
+  } catch (e) {
+    handleApiError(e, '删除失败')
   }
 }
 
@@ -1631,8 +1632,8 @@ async function batchToggleAutoAttach(enabled: boolean) {
     Message.success(`已${enabled ? '启用' : '禁用'} ${selectedKeys.value.length} 个字段的 Auto-attach`)
     selectedKeys.value = []
     loadList()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '批量操作失败')
+  } catch (e) {
+    handleApiError(e, '批量操作失败')
   }
 }
 
@@ -1647,8 +1648,8 @@ async function batchToggleHidden(hidden: boolean) {
     Message.success(`已${hidden ? '隐藏' : '显示'} ${selectedKeys.value.length} 个字段`)
     selectedKeys.value = []
     loadList()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '批量操作失败')
+  } catch (e) {
+    handleApiError(e, '批量操作失败')
   }
 }
 
@@ -1663,8 +1664,8 @@ async function batchTogglePrivate(isPrivate: boolean) {
     Message.success(`已将 ${selectedKeys.value.length} 个字段${isPrivate ? '设为私有' : '取消私有'}`)
     selectedKeys.value = []
     loadList()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '批量操作失败')
+  } catch (e) {
+    handleApiError(e, '批量操作失败')
   }
 }
 
@@ -1685,8 +1686,8 @@ async function handleBatchDelete() {
     Message.success(`已删除 ${selectedKeys.value.length} 个字段`)
     selectedKeys.value = []
     loadList()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '批量删除失败')
+  } catch (e) {
+    handleApiError(e, '批量删除失败')
   }
 }
 

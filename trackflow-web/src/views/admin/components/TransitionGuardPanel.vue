@@ -150,6 +150,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import { Message } from '@arco-design/web-vue'
+import { handleApiError } from '@/utils/errorHandler'
 import { IconPlus, IconDelete } from '@arco-design/web-vue/es/icon'
 import { workflowApi } from '@/api'
 import type { TransitionConditionItem } from '@/api/workflow'
@@ -318,8 +319,8 @@ async function handleSave() {
     Message.success('守卫条件已保存')
     emit('saved')
     emit('update:visible', false)
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '保存失败')
+  } catch (e) {
+    handleApiError(e, '保存失败')
   } finally {
     saving.value = false
   }

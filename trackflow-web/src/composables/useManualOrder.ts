@@ -2,6 +2,7 @@ import { ref } from 'vue'
 import { issueApi } from '@/api'
 import type { IssueVO, ManualOrderVO } from '@/api/types'
 import { Message } from '@arco-design/web-vue'
+import { handleApiError } from '@/utils/errorHandler'
 
 export interface ManualOrderContext {
   type: 'project' | 'query'
@@ -82,8 +83,8 @@ export function useManualOrder() {
       manualOrderData.value = res.data || null
       isManualSorted.value = true
       isOwnerOrder.value = res.data?.ownerOrder || false
-    } catch (e: any) {
-      Message.error(e.response?.data?.message || '保存排序失败')
+    } catch (e) {
+      handleApiError(e, '保存排序失败')
     } finally {
       loading.value = false
     }
@@ -102,8 +103,8 @@ export function useManualOrder() {
       isManualSorted.value = false
       isOwnerOrder.value = false
       Message.success('已恢复默认排序')
-    } catch (e: any) {
-      Message.error(e.response?.data?.message || '操作失败')
+    } catch (e) {
+      handleApiError(e, '操作失败')
     } finally {
       loading.value = false
     }

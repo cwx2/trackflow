@@ -294,7 +294,7 @@ public class UserService {
     public SysUser getById(Long id) {
         SysUser user = userMapper.selectById(id);
         if (user == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "用户不存在");
+            throw BusinessException.notFound("用户不存在");
         }
         return user;
     }
@@ -546,7 +546,7 @@ public class UserService {
         // 校验用户存在
         SysUser user = userMapper.selectById(userId);
         if (user == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "用户不存在: " + userId);
+            throw BusinessException.notFound("用户", userId);
         }
 
         // 去重并过滤 null
@@ -697,7 +697,7 @@ public class UserService {
     UserPublicProfileVO assembleUserPublicProfile(Long targetUserId, Long requesterId) {
         SysUser targetUser = userMapper.selectById(targetUserId);
         if (targetUser == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "用户不存在: " + targetUserId);
+            throw BusinessException.notFound("用户", targetUserId);
         }
 
         boolean isAdmin = permissionService.isSystemAdmin(requesterId);
@@ -1074,7 +1074,7 @@ public class UserService {
     UserDataExportVO assembleExportUserData(Long userId) {
         SysUser user = userMapper.selectById(userId);
         if (user == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "用户不存在: " + userId);
+            throw BusinessException.notFound("用户", userId);
         }
 
         UserDataExportVO export = new UserDataExportVO();

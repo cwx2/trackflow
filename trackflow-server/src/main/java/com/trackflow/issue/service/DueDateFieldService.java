@@ -104,8 +104,7 @@ public class DueDateFieldService {
     public CustomFieldDefinition getDueDateFieldDefinition() {
         CustomFieldDefinition field = definitionMapper.selectById(DUE_DATE_FIELD_ID);
         if (field == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND,
-                    "Due Date 自定义字段定义不存在，请确认 V252 迁移脚本已执行");
+            throw BusinessException.notFound("Due Date 自定义字段定义不存在，请确认 V252 迁移脚本已执行");
         }
         return field;
     }

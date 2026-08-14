@@ -101,7 +101,7 @@ public class IssueAttachmentService {
     public IssueAttachment requireReadableAttachment(Long attachmentId) {
         IssueAttachment attachment = attachmentMapper.selectById(attachmentId);
         if (attachment == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "附件不存在: " + attachmentId);
+            throw BusinessException.notFound("附件", attachmentId);
         }
         if (!canAccessAttachment(attachmentId)) {
             throw new BusinessException(ErrorCode.ACCESS_DENIED, "没有读取该附件的权限");
@@ -172,7 +172,7 @@ public class IssueAttachmentService {
 
         IssueAttachment attachment = attachmentMapper.selectById(attachmentId);
         if (attachment == null || !attachment.getIssueId().equals(issueId)) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "附件不存在");
+            throw BusinessException.notFound("附件不存在");
         }
 
         Long currentUserId = SecurityUtils.getCurrentUserId();
@@ -199,7 +199,7 @@ public class IssueAttachmentService {
 
         IssueAttachment attachment = attachmentMapper.selectById(attachmentId);
         if (attachment == null || !attachment.getIssueId().equals(issueId)) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "附件不存在");
+            throw BusinessException.notFound("附件不存在");
         }
 
         Long currentUserId = SecurityUtils.getCurrentUserId();

@@ -95,6 +95,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, h } from 'vue'
 import { Message } from '@arco-design/web-vue'
+import { handleApiError } from '@/utils/errorHandler'
 import { linkTypeApi } from '@/api'
 import type { IssueLinkTypeVO } from '@/api/types'
 import { useRequest } from '@/composables/useRequest'
@@ -220,8 +221,8 @@ async function submitForm() {
         await loadLinkTypes()
       }
     }
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '操作失败')
+  } catch (e) {
+    handleApiError(e, '操作失败')
   } finally {
     saving.value = false
   }
@@ -265,8 +266,8 @@ async function executeDelete() {
       deleteUsageCount.value = null
       await loadLinkTypes()
     }
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '删除失败')
+  } catch (e) {
+    handleApiError(e, '删除失败')
   } finally {
     deleting.value = false
   }

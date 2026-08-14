@@ -709,6 +709,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { Message } from '@arco-design/web-vue'
+import { handleApiError } from '@/utils/errorHandler'
 import { workflowRuleApi, issueApi, sprintApi, projectApi } from '@/api'
 import type { WorkflowRuleVO, WorkflowRuleDTO, WorkflowRuleExecutionLogVO, WorkflowRuleExportDTO, WorkflowRuleExportItem } from '@/api/workflowRule'
 import type { IssueStatusVO, SprintVO } from '@/api/types'
@@ -1023,8 +1024,8 @@ async function handleSubmit() {
     }
     modalVisible.value = false
     await loadRules()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '操作失败')
+  } catch (e) {
+    handleApiError(e, '操作失败')
   } finally {
     submitting.value = false
   }
@@ -1136,8 +1137,8 @@ async function handleValidateRule(rule: WorkflowRuleVO) {
         ruleValidationErrors.value.set(rule.id, messages)
       }
     }
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '校验请求失败')
+  } catch (e) {
+    handleApiError(e, '校验请求失败')
   } finally {
     validatingRuleId.value = null
   }
@@ -1148,8 +1149,8 @@ async function handleDelete(rule: WorkflowRuleVO) {
     await workflowRuleApi.delete(rule.id)
     Message.success('规则已删除')
     await loadRules()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '删除失败')
+  } catch (e) {
+    handleApiError(e, '删除失败')
   }
 }
 
@@ -1212,8 +1213,8 @@ async function clearLogs() {
     await workflowRuleApi.clearExecutionLogs(logsRuleId.value)
     executionLogs.value = []
     Message.success('执行日志已清空')
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '清空失败')
+  } catch (e) {
+    handleApiError(e, '清空失败')
   }
 }
 
@@ -1433,8 +1434,8 @@ async function handleConfirmImport() {
       importModalVisible.value = false
       await loadRules()
     }
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '导入失败')
+  } catch (e) {
+    handleApiError(e, '导入失败')
   } finally {
     importing.value = false
   }
@@ -1446,8 +1447,8 @@ async function handleExportSingle(rule: WorkflowRuleVO) {
     if (res.code === 0) {
       downloadJson(res.data, `rule-${rule.name}.json`)
     }
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '导出失败')
+  } catch (e) {
+    handleApiError(e, '导出失败')
   }
 }
 
@@ -1458,8 +1459,8 @@ async function handleExportAll() {
       downloadJson(res.data, `workflow-rules-export.json`)
       Message.success(`已导出 ${res.data.rules.length} 条规则`)
     }
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '导出失败')
+  } catch (e) {
+    handleApiError(e, '导出失败')
   }
 }
 

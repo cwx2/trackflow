@@ -120,8 +120,7 @@ public class AutomationExecutionService {
     public AutomationExecution requireExecution(Long executionId) {
         AutomationExecution execution = executionMapper.selectById(executionId);
         if (execution == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND,
-                    "执行记录不存在: " + executionId);
+            throw BusinessException.notFound("执行记录", executionId);
         }
         return execution;
     }

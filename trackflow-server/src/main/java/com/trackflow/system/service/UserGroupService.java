@@ -114,7 +114,7 @@ public class UserGroupService {
     public UserGroupDetailVO getDetail(Long groupId) {
         UserGroup group = groupMapper.selectById(groupId);
         if (group == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "用户组不存在");
+            throw BusinessException.notFound("用户组不存在");
         }
 
         UserGroupDetailVO detail = new UserGroupDetailVO();
@@ -165,7 +165,7 @@ public class UserGroupService {
     public UserGroup update(Long groupId, UpdateGroupDTO dto) {
         UserGroup group = groupMapper.selectById(groupId);
         if (group == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "用户组不存在");
+            throw BusinessException.notFound("用户组不存在");
         }
 
         // 名称唯一性校验（排除自身）
@@ -196,7 +196,7 @@ public class UserGroupService {
     public void delete(Long groupId) {
         UserGroup group = groupMapper.selectById(groupId);
         if (group == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "用户组不存在");
+            throw BusinessException.notFound("用户组不存在");
         }
 
         // 删除前先失效所有组成员的权限缓存
@@ -222,7 +222,7 @@ public class UserGroupService {
     public void addMembers(Long groupId, List<Long> userIds) {
         UserGroup group = groupMapper.selectById(groupId);
         if (group == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "用户组不存在");
+            throw BusinessException.notFound("用户组不存在");
         }
 
         // 查出已存在的成员
@@ -237,7 +237,7 @@ public class UserGroupService {
             // 校验用户存在
             SysUser user = userMapper.selectById(userId);
             if (user == null) {
-                throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "用户不存在: ID=" + userId);
+                throw BusinessException.notFound("用户", userId);
             }
 
             UserGroupMember member = new UserGroupMember();
@@ -268,7 +268,7 @@ public class UserGroupService {
     public void removeMembers(Long groupId, List<Long> userIds) {
         UserGroup group = groupMapper.selectById(groupId);
         if (group == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "用户组不存在");
+            throw BusinessException.notFound("用户组不存在");
         }
 
         memberMapper.delete(
@@ -295,13 +295,13 @@ public class UserGroupService {
     public void assignRole(Long groupId, GroupRoleDTO dto) {
         UserGroup group = groupMapper.selectById(groupId);
         if (group == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "用户组不存在");
+            throw BusinessException.notFound("用户组不存在");
         }
 
         // 校验角色存在
         SysRole role = roleMapper.selectById(dto.getRoleId());
         if (role == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "角色不存在");
+            throw BusinessException.notFound("角色不存在");
         }
 
         // 规范化参数：兼容旧接口的 projectId 字段
@@ -323,7 +323,7 @@ public class UserGroupService {
                 for (Long projectId : projectIds) {
                     Project project = projectMapper.selectById(projectId);
                     if (project == null) {
-                        throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "项目不存在: ID=" + projectId);
+                        throw BusinessException.notFound("项目", projectId);
                     }
                     insertGroupRoleIfNotExists(groupId, dto.getRoleId(), projectId);
                 }
@@ -396,12 +396,12 @@ public class UserGroupService {
     public void removeRole(Long groupId, Long groupRoleId) {
         UserGroup group = groupMapper.selectById(groupId);
         if (group == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "用户组不存在");
+            throw BusinessException.notFound("用户组不存在");
         }
 
         UserGroupRole groupRole = groupRoleMapper.selectById(groupRoleId);
         if (groupRole == null || !groupRole.getGroupId().equals(groupId)) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "角色分配记录不存在");
+            throw BusinessException.notFound("角色分配记录不存在");
         }
 
         groupRoleMapper.deleteById(groupRoleId);

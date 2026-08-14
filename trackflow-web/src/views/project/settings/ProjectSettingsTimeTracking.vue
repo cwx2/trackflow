@@ -129,6 +129,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { Message } from '@arco-design/web-vue'
+import { handleApiError } from '@/utils/errorHandler'
 import { IconLock, IconInfoCircle, IconCheckCircle, IconExclamationCircleFill, IconSync } from '@arco-design/web-vue/es/icon'
 import { projectApi } from '@/api'
 import type { ProjectDetailVO } from '@/api/types'
@@ -218,8 +219,8 @@ async function doToggle(newEnabled: boolean) {
       enabled.value = res.data.enabled
       Message.success(newEnabled ? '时间追踪已启用' : '时间追踪已禁用')
     }
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '操作失败')
+  } catch (e) {
+    handleApiError(e, '操作失败')
   }
 }
 </script>

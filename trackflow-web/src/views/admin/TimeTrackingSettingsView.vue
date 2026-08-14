@@ -197,6 +197,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, nextTick } from 'vue'
 import { Message } from '@arco-design/web-vue'
+import { handleApiError } from '@/utils/errorHandler'
 import { systemSettingApi } from '@/api/systemSetting'
 import type { TimeTrackingSettingsVO, UpdateTimeTrackingSettingsDTO } from '@/api/systemSetting'
 import DataContainer from '@/components/base/DataContainer.vue'
@@ -345,8 +346,8 @@ async function doSave(strategy?: 'PRESERVE_MINUTES' | 'PRESERVE_DAYS') {
         Message.success('时间追踪设置已保存')
       }
     }
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '保存失败')
+  } catch (e) {
+    handleApiError(e, '保存失败')
   } finally {
     saving.value = false
   }

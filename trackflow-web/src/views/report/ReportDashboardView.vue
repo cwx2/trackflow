@@ -357,6 +357,7 @@ import { formatDate } from '@/utils/date'
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
+import { handleApiError } from '@/utils/errorHandler'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
 import { PieChart, BarChart, LineChart } from 'echarts/charts'
@@ -1188,8 +1189,8 @@ async function loadDashboard() {
     dashboardData.value = res.data
     // Reset group details on dashboard reload
     resolutionTimeGroupDetails.value = res.data?.resolutionTime?.groupDetails || []
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '加载报表数据失败')
+  } catch (e) {
+    handleApiError(e, '加载报表数据失败')
   } finally {
     loading.value = false
   }

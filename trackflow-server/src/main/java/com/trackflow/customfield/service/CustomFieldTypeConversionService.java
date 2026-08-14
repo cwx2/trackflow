@@ -88,7 +88,7 @@ public class CustomFieldTypeConversionService {
     public AvailableConversionsVO getAvailableConversions(Long fieldId) {
         CustomFieldDefinition field = definitionMapper.selectById(fieldId);
         if (field == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "自定义字段不存在");
+            throw BusinessException.notFound("自定义字段不存在");
         }
 
         AvailableConversionsVO vo = new AvailableConversionsVO();
@@ -166,7 +166,7 @@ public class CustomFieldTypeConversionService {
     public ConversionResultVO convertFieldType(Long fieldId, String targetFormat, String periodUnit) {
         CustomFieldDefinition field = definitionMapper.selectById(fieldId);
         if (field == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "自定义字段不存在");
+            throw BusinessException.notFound("自定义字段不存在");
         }
 
         // 内置字段不允许类型转换

@@ -83,6 +83,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { Message } from '@arco-design/web-vue'
+import { handleApiError } from '@/utils/errorHandler'
 import { IconExclamationCircle, IconCloseCircle, IconUnorderedList } from '@arco-design/web-vue/es/icon'
 import { sprintApi } from '@/api'
 import { IssueStatusTag } from '@/components/base'
@@ -122,8 +123,8 @@ watch(() => props.visible, async (val) => {
       if (res.data.totalIssues > 0 && res.data.targetSprints.length > 0) {
         deleteTargetSprintId.value = res.data.targetSprints[0].id
       }
-    } catch (e: any) {
-      Message.error(e.response?.data?.message || '获取预览信息失败')
+    } catch (e) {
+      handleApiError(e, '获取预览信息失败')
       localVisible.value = false
     }
   }
@@ -147,8 +148,8 @@ async function confirmDelete() {
     Message.success('迭代已删除')
     localVisible.value = false
     emit('deleted')
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '删除失败')
+  } catch (e) {
+    handleApiError(e, '删除失败')
   } finally {
     deleting.value = false
   }

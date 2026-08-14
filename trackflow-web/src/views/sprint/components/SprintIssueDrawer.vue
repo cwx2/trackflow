@@ -119,6 +119,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { Message } from '@arco-design/web-vue'
+import { handleApiError } from '@/utils/errorHandler'
 import { IconSearch, IconLoading, IconCheck } from '@arco-design/web-vue/es/icon'
 import { issueApi, projectApi } from '@/api'
 import type { IssueVO, ProjectMemberVO } from '@/api/types'
@@ -266,7 +267,7 @@ async function selectAssignee(issue: IssueVO, member: ProjectMemberVO | null) {
     if (idx !== -1) {
       issues.value[idx] = { ...issues.value[idx], assigneeId: oldAssigneeId, assigneeName: oldAssigneeName }
     }
-    Message.error(e.response?.data?.message || '分配失败')
+    handleApiError(e, '分配失败')
   } finally {
     savingIssueIds.value.delete(issue.id)
   }

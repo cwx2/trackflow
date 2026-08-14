@@ -245,6 +245,7 @@ import { formatDate } from '@/utils/date'
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
+import { handleApiError } from '@/utils/errorHandler'
 import { useConfirmDelete } from '@/composables/useConfirmDelete'
 import { workflowDefinitionApi } from '@/api/workflowDefinition'
 import type { WorkflowDefinitionVO, BoundProject } from '@/api/workflowDefinition'
@@ -366,8 +367,8 @@ async function handleCreateOrUpdate() {
     showCreateModal.value = false
     resetForm()
     await loadDefinitions()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '操作失败')
+  } catch (e) {
+    handleApiError(e, '操作失败')
   } finally {
     saving.value = false
   }
@@ -396,8 +397,8 @@ async function handleCloneConfirm() {
     Message.success('克隆成功')
     showCloneModal.value = false
     await loadDefinitions()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '克隆失败')
+  } catch (e) {
+    handleApiError(e, '克隆失败')
   } finally {
     saving.value = false
   }
@@ -421,8 +422,8 @@ async function handleAttachConfirm() {
     Message.success('绑定成功')
     showAttachModal.value = false
     await loadDefinitions()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '绑定失败')
+  } catch (e) {
+    handleApiError(e, '绑定失败')
   } finally {
     saving.value = false
   }
@@ -438,8 +439,8 @@ async function handleDetach(def: WorkflowDefinitionVO, proj: BoundProject) {
         await workflowDefinitionApi.detachFromProject(proj.id, def.id)
         Message.success('解绑成功')
         await loadDefinitions()
-      } catch (e: any) {
-        Message.error(e.response?.data?.message || '解绑失败')
+      } catch (e) {
+        handleApiError(e, '解绑失败')
       }
     }
   })
@@ -459,8 +460,8 @@ function handleDelete(def: WorkflowDefinitionVO) {
           selectedDef.value = null
         }
         await loadDefinitions()
-      } catch (e: any) {
-        Message.error(e.response?.data?.message || '删除失败')
+      } catch (e) {
+        handleApiError(e, '删除失败')
       }
     }
   })
@@ -471,8 +472,8 @@ async function handleToggleDefault(def: WorkflowDefinitionVO) {
     await workflowDefinitionApi.update(def.id, { isDefault: !def.isDefault })
     Message.success(def.isDefault ? '已取消默认' : '已设为默认')
     await loadDefinitions()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '操作失败')
+  } catch (e) {
+    handleApiError(e, '操作失败')
   }
 }
 

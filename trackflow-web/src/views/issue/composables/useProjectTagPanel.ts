@@ -1,5 +1,6 @@
 import { ref, computed, type Ref } from 'vue'
 import { Message } from '@arco-design/web-vue'
+import { handleApiError } from '@/utils/errorHandler'
 import { projectApi, tagApi } from '@/api'
 import type { TagPanelItemVO, AvailableTagVO } from '@/api/tag'
 import axios from 'axios'
@@ -64,8 +65,8 @@ export function useProjectTagPanel(options: ProjectTagPanelOptions) {
       if (inList) {
         inList.favorited = newFavorited
       }
-    } catch (e: any) {
-      Message.error(e.response?.data?.message || '操作失败')
+    } catch (e) {
+      handleApiError(e, '操作失败')
     }
   }
 
@@ -105,8 +106,8 @@ export function useProjectTagPanel(options: ProjectTagPanelOptions) {
         tag.favorited = true
       }
       await loadTags()
-    } catch (e: any) {
-      Message.error(e.response?.data?.message || '操作失败')
+    } catch (e) {
+      handleApiError(e, '操作失败')
     }
   }
 

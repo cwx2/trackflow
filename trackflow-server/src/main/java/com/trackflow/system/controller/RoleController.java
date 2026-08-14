@@ -34,6 +34,7 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/v1/roles")
 @RequiredArgsConstructor
+@PreAuthorize("@perm.checkGlobal('system:manage_roles')")
 public class RoleController {
 
     private final RoleService roleService;

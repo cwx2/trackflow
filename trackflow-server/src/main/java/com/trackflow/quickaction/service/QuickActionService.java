@@ -65,7 +65,7 @@ public class QuickActionService {
 
     public List<QuickActionDefinitionVO> getAvailableActions(Long issueId) {
         Issue issue = issueService.getById(issueId);
-        if (issue == null) throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "工单不存在");
+        if (issue == null) throw BusinessException.notFound("工单不存在");
         Long currentUserId = SecurityUtils.getCurrentUserId();
         Set<String> userRoles = getUserProjectRoles(currentUserId, issue.getProjectId());
         IssueStatus currentStatus = issueStatusMapper.selectById(issue.getStatusId());
@@ -79,10 +79,10 @@ public class QuickActionService {
     @SuppressWarnings("unchecked")
     public QuickActionExecutionResultVO execute(Long issueId, String actionKey, ExecuteQuickActionDTO dto) {
         Issue issue = issueService.getById(issueId);
-        if (issue == null) throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "工单不存在");
+        if (issue == null) throw BusinessException.notFound("工单不存在");
         Long uid = SecurityUtils.getCurrentUserId();
         QuickActionDefinition def = findDefinition(issue.getProjectId(), actionKey);
-        if (def == null) throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "快捷动作不存在");
+        if (def == null) throw BusinessException.notFound("快捷动作不存在");
         Set<String> roles = getUserProjectRoles(uid, issue.getProjectId());
         IssueStatus curSt = issueStatusMapper.selectById(issue.getStatusId());
         if (!isVisible(def, roles, curSt != null ? curSt.getName() : ""))
@@ -121,10 +121,10 @@ public class QuickActionService {
     @Transactional
     public QuickActionExecutionResultVO executeRule(Long issueId, String actionKey) {
         Issue issue = issueService.getById(issueId);
-        if (issue == null) throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "工单不存在");
+        if (issue == null) throw BusinessException.notFound("工单不存在");
         Long uid = SecurityUtils.getCurrentUserId();
         QuickActionDefinition def = findDefinition(issue.getProjectId(), actionKey);
-        if (def == null) throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "快捷动作不存在");
+        if (def == null) throw BusinessException.notFound("快捷动作不存在");
         if (!"rule".equals(def.getActionType())) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "此动作需要填写表单，请使用标准执行接口");
         }
@@ -195,7 +195,7 @@ public class QuickActionService {
     @Transactional
     public QuickActionDefinitionVO updateDefinition(Long id, SaveQuickActionDefinitionDTO dto) {
         QuickActionDefinition e = definitionMapper.selectById(id);
-        if (e == null) throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "动作定义不存在");
+        if (e == null) throw BusinessException.notFound("动作定义不存在");
         e.setLabel(dto.getLabel()); e.setIcon(dto.getIcon());
         e.setSortOrder(dto.getSortOrder() != null ? dto.getSortOrder() : e.getSortOrder());
         e.setFormSchema(dto.getFormSchema()); e.setActions(dto.getActions()); e.setVisibility(dto.getVisibility());
@@ -234,7 +234,7 @@ public class QuickActionService {
     @Transactional
     public MailTemplateVO updateMailTemplate(Long id, SaveMailTemplateDTO dto) {
         MailTemplate e = mailTemplateMapper.selectById(id);
-        if (e == null) throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "邮件模板不存在");
+        if (e == null) throw BusinessException.notFound("邮件模板不存在");
         e.setName(dto.getName()); e.setSubjectTemplate(dto.getSubjectTemplate());
         e.setBodyTemplate(dto.getBodyTemplate()); e.setRecipientsRule(dto.getRecipientsRule());
         e.setSortOrder(dto.getSortOrder() != null ? dto.getSortOrder() : e.getSortOrder());
@@ -325,7 +325,7 @@ public class QuickActionService {
     private void doSendMail(Issue issue, QuickActionDefinition def, ExecuteQuickActionDTO dto, Long uid) {
         if (!emailSendService.isEmailAvailable()) return;
         MailTemplate tpl = mailTemplateMapper.selectById(dto.getMailTemplateId());
-        if (tpl == null) throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "邮件模板不存在");
+        if (tpl == null) throw BusinessException.notFound("邮件模板不存在");
         Map<String, String> vars = buildVars(issue, dto, uid);
         String subj = replaceVars(tpl.getSubjectTemplate(), vars);
         String body = replaceVars(tpl.getBodyTemplate(), vars);

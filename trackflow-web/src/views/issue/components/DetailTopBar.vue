@@ -117,6 +117,7 @@ import type { IssueVoteStatusVO } from '@/api/issueVote'
 import type { IssueWatcherStatusVO } from '@/api/issueWatcher'
 import type { QuickActionDefinitionVO } from '@/api/quickAction'
 import { Message } from '@arco-design/web-vue'
+import { handleApiError } from '@/utils/errorHandler'
 import QuickActionDialog from './QuickActionDialog.vue'
 
 const router = useRouter()
@@ -203,8 +204,8 @@ async function executeRuleAction(action: QuickActionDefinitionVO) {
     emit('quick-action-executed')
     // 重新加载可用动作（状态可能已变化）
     loadQuickActions()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '执行失败')
+  } catch (e) {
+    handleApiError(e, '执行失败')
   } finally {
     executingKey.value = ''
   }
@@ -242,8 +243,8 @@ async function handleToggleVote() {
     if (res.code === 0 && res.data) {
       voteStatus.value = res.data
     }
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '操作失败')
+  } catch (e) {
+    handleApiError(e, '操作失败')
   } finally {
     voteLoading.value = false
   }
@@ -275,8 +276,8 @@ async function handleToggleWatch() {
     if (res.code === 0 && res.data) {
       watcherStatus.value = res.data
     }
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '操作失败')
+  } catch (e) {
+    handleApiError(e, '操作失败')
   } finally {
     watchLoading.value = false
   }

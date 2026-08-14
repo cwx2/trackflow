@@ -211,6 +211,7 @@ import {
   IconExclamationCircleFill
 } from '@arco-design/web-vue/es/icon'
 import { Message, Modal } from '@arco-design/web-vue'
+import { handleApiError } from '@/utils/errorHandler'
 import { projectApi } from '@/api'
 import { organizationApi } from '@/api'
 import type { OrgVO } from '@/api/organization'
@@ -364,8 +365,8 @@ async function saveBasicInfo() {
     // Reload project detail to get updated data
     const detailRes = await projectApi.getDetail(props.project.key)
     emit('updated', detailRes.data)
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '保存失败')
+  } catch (e) {
+    handleApiError(e, '保存失败')
   } finally {
     saving.value = false
   }
@@ -402,8 +403,8 @@ async function doVisibilityUpdate(value: string) {
     // Reload project
     const detailRes = await projectApi.getDetail(props.project.key)
     emit('updated', detailRes.data)
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '更新可见性失败')
+  } catch (e) {
+    handleApiError(e, '更新可见性失败')
   }
 }
 
@@ -420,8 +421,8 @@ async function handleArchive() {
         Message.success('项目已归档')
         const detailRes = await projectApi.getDetail(props.project.id)
         emit('updated', detailRes.data)
-      } catch (e: any) {
-        Message.error(e.response?.data?.message || '归档失败')
+      } catch (e) {
+        handleApiError(e, '归档失败')
       }
     }
   })
@@ -439,8 +440,8 @@ async function handleRestore() {
         Message.success('项目已恢复为活跃状态')
         const detailRes = await projectApi.getDetail(props.project.id)
         emit('updated', detailRes.data)
-      } catch (e: any) {
-        Message.error(e.response?.data?.message || '恢复失败')
+      } catch (e) {
+        handleApiError(e, '恢复失败')
       }
     }
   })
@@ -455,8 +456,8 @@ async function confirmDelete() {
       deleteConfirmKey.value = ''
       showDeleteDialog.value = true
     }
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '无法获取项目信息')
+  } catch (e) {
+    handleApiError(e, '无法获取项目信息')
   }
 }
 
@@ -468,8 +469,8 @@ async function submitDelete() {
     showDeleteDialog.value = false
     Message.success('项目已永久删除')
     router.push('/projects')
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '删除失败')
+  } catch (e) {
+    handleApiError(e, '删除失败')
   } finally {
     deleting.value = false
   }

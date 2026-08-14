@@ -59,6 +59,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { Message } from '@arco-design/web-vue'
+import { handleApiError } from '@/utils/errorHandler'
 import {
   IconLock,
   IconFile,
@@ -170,8 +171,8 @@ async function saveChanges() {
       enabledModules.value = new Set(res.data.enabledModules)
       Message.success('模块配置已保存')
     }
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '保存失败')
+  } catch (e) {
+    handleApiError(e, '保存失败')
   } finally {
     saving.value = false
   }

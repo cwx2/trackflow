@@ -81,7 +81,7 @@ public class ProjectCopyService {
         // 1. 验证源项目存在
         Project source = projectMapper.selectById(dto.getSourceProjectId());
         if (source == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "源项目不存在");
+            throw BusinessException.notFound("源项目不存在");
         }
 
         // 2. 验证 Key 唯一性

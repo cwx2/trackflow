@@ -140,6 +140,7 @@ import { useAuthStore } from '@/stores/auth'
 import { loadProjectPermissions } from '@/composables/usePermission'
 import type { ProjectDetailVO, ProjectStatisticsVO } from '@/api/types'
 import { Message, Modal } from '@arco-design/web-vue'
+import { handleApiError } from '@/utils/errorHandler'
 import { DataContainer } from '@/components/base'
 import ProjectWidgetPanel from './components/ProjectWidgetPanel.vue'
 import ProjectActivityFeed from './components/ProjectActivityFeed.vue'
@@ -279,8 +280,8 @@ async function handleRestore() {
         await projectApi.restore(project.value!.key)
         Message.success('项目已恢复为活跃状态')
         await loadProject()
-      } catch (e: any) {
-        Message.error(e.response?.data?.message || '恢复项目失败')
+      } catch (e) {
+        handleApiError(e, '恢复项目失败')
       }
     }
   })

@@ -230,7 +230,7 @@ public class RuleService {
     public void deleteLog(Long id) {
         RuleExecutionLog existing = logMapper.selectById(id);
         if (existing == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "执行记录不存在");
+            throw BusinessException.notFound("执行记录不存在");
         }
         logMapper.deleteById(id);
     }
@@ -347,7 +347,7 @@ public class RuleService {
     private RuleDefinition getRuleOrThrow(Long id) {
         RuleDefinition rule = ruleMapper.selectById(id);
         if (rule == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "规则不存在");
+            throw BusinessException.notFound("规则不存在");
         }
         return rule;
     }

@@ -251,6 +251,7 @@ import { copyToClipboard } from '@/utils/clipboard'
 import { formatDateTime } from '@/utils/date'
 import { ref, computed, onMounted } from 'vue'
 import { Message } from '@arco-design/web-vue'
+import { handleApiError } from '@/utils/errorHandler'
 import { apiKeyApi } from '@/api'
 import { EmptyState } from '@/components/base'
 import { KEYCLOAK_CONFIG } from '@/utils/keycloak'
@@ -316,8 +317,8 @@ async function handleCreate() {
     } else {
       Message.error(res.message || '创建失败')
     }
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '创建令牌失败')
+  } catch (e) {
+    handleApiError(e, '创建令牌失败')
   } finally {
     creating.value = false
   }
@@ -374,8 +375,8 @@ async function confirmRevoke() {
     } else {
       Message.error(res.message || '撤销失败')
     }
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '撤销令牌失败')
+  } catch (e) {
+    handleApiError(e, '撤销令牌失败')
   } finally {
     revoking.value = false
   }

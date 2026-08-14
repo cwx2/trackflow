@@ -1,0 +1,5 @@
+﻿src/views/issue/IssueListViewImpl.vue(537,23): error TS6133: 'IconCheckCircle' is declared but its value is never read.
+src/views/issue/IssueListViewImpl.vue(698,10): error TS6133: 'toggleHideResolved' is declared but its value is never read.
+src/views/issue/IssueListViewImpl.vue(1106,7): error TS6133: 'activeProjectName' is declared but its value is never read.
+src/views/issue/IssueListViewImpl.vue(1108,7): error TS6133: 'activeQueryProjectName' is declared but its value is never read.
+src/views/issue/IssueListViewImpl.vue(1120,10): error TS6133: 'navigateToQueryProject' is declared but its value is never read.

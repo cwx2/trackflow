@@ -455,6 +455,7 @@ import { formatDate, formatDueDate, getDueDateStatus } from '@/utils/date'
 import { ref, computed, watch, reactive, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
+import { handleApiError } from '@/utils/errorHandler'
 import { IconSearch, IconPlus, IconList, IconFilter, IconDown, IconUp, IconClockCircle, IconTrophy, IconExclamationCircle } from '@arco-design/web-vue/es/icon'
 import { issueApi, sprintApi, projectApi } from '@/api'
 import { useProjectStore } from '@/stores/project'
@@ -894,8 +895,8 @@ async function moveIssuesToSprint(issueIds: string[], targetSprintId: string) {
     clearSelection()
     // Refresh data
     await Promise.all([loadBacklog(), loadAllSprintIssues()])
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '移动失败')
+  } catch (e) {
+    handleApiError(e, '移动失败')
   }
 }
 
@@ -910,8 +911,8 @@ async function moveIssuesToBacklog(issueIds: string[]) {
     Message.success(`已将 ${issueIds.length} 个工单移回 Backlog`)
     clearSelection()
     await Promise.all([loadBacklog(), loadAllSprintIssues()])
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '移动失败')
+  } catch (e) {
+    handleApiError(e, '移动失败')
   }
 }
 
@@ -985,8 +986,8 @@ async function performBatchAssign(issueIds: string[], userId: string | null) {
     // Optimistically update assignee on cards
     updateAssigneeOnCards(issueIds, userId, assigneeName)
     clearSelection()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '分配失败')
+  } catch (e) {
+    handleApiError(e, '分配失败')
   }
 }
 
@@ -1181,8 +1182,8 @@ async function saveGoal(sprintId: string) {
     if (idx >= 0) {
       sprints.value[idx] = { ...sprints.value[idx], goal: newGoal || undefined }
     }
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '保存目标失败')
+  } catch (e) {
+    handleApiError(e, '保存目标失败')
     // Restore edit mode on failure
     const s = sprints.value.find(s => s.id === sprintId)
     if (s) startGoalEdit(s)

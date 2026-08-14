@@ -146,7 +146,7 @@ public class IssueLinkTypeService {
     public IssueLinkTypeVO updateLinkType(Long id, String outwardName, String inwardName, String direction) {
         IssueLinkType entity = linkTypeMapper.selectById(id);
         if (entity == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "关联类型不存在: " + id);
+            throw BusinessException.notFound("关联类型", id);
         }
         if (entity.getIsSystem() && !entity.getDirection().equals(direction)) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "系统内置类型不可修改方向");
@@ -172,7 +172,7 @@ public class IssueLinkTypeService {
     public long countUsageByTypeId(Long id) {
         IssueLinkType entity = linkTypeMapper.selectById(id);
         if (entity == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "关联类型不存在: " + id);
+            throw BusinessException.notFound("关联类型", id);
         }
         return issueLinkMapper.countByLinkType(entity.getName());
     }
@@ -187,7 +187,7 @@ public class IssueLinkTypeService {
     public void deleteLinkType(Long id) {
         IssueLinkType entity = linkTypeMapper.selectById(id);
         if (entity == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "关联类型不存在: " + id);
+            throw BusinessException.notFound("关联类型", id);
         }
         if (entity.getIsSystem()) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "系统内置类型不可删除");

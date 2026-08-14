@@ -258,6 +258,7 @@ import { formatDateTime } from '@/utils/date'
 import { ref, computed, onMounted, h } from 'vue'
 import { useRoute } from 'vue-router'
 import { Modal, Message } from '@arco-design/web-vue'
+import { handleApiError } from '@/utils/errorHandler'
 import { useConfirmDelete } from '@/composables/useConfirmDelete'
 import { userApi, projectApi, roleApi } from '@/api'
 import type { UserProfileVO, UserProfileProjectRoleInfo } from '@/api/user'
@@ -329,8 +330,8 @@ async function toggleRole(roleId: number) {
     }
     // 重新加载档案以刷新角色列表
     await loadProfile()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '操作失败')
+  } catch (e) {
+    handleApiError(e, '操作失败')
   }
 }
 
@@ -381,8 +382,8 @@ async function handleDisable() {
         })
         Message.success('用户已禁用')
         await loadProfile()
-      } catch (e: any) {
-        Message.error(e.response?.data?.message || '禁用失败')
+      } catch (e) {
+        handleApiError(e, '禁用失败')
       }
     }
   })
@@ -401,8 +402,8 @@ async function handleEnable() {
         await userApi.enable(userId.value)
         Message.success('用户已启用')
         await loadProfile()
-      } catch (e: any) {
-        Message.error(e.response?.data?.message || '启用失败')
+      } catch (e) {
+        handleApiError(e, '启用失败')
       }
     }
   })
@@ -425,8 +426,8 @@ async function handleExportUserData() {
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
     Message.success('用户数据导出成功')
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '导出失败')
+  } catch (e) {
+    handleApiError(e, '导出失败')
   } finally {
     exporting.value = false
   }
@@ -549,8 +550,8 @@ async function confirmAssignProjectRole() {
     Message.success('角色赋予成功')
     closeAssignDialog()
     await loadProfile()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '赋予角色失败')
+  } catch (e) {
+    handleApiError(e, '赋予角色失败')
   } finally {
     assignLoading.value = false
   }
@@ -576,8 +577,8 @@ function revokeProjectRole(pr: UserProfileProjectRoleInfo) {
           await projectApi.removeMember(pr.projectId, userId.value)
           Message.success('角色已撤销')
           await loadProfile()
-        } catch (e: any) {
-          Message.error(e.response?.data?.message || '撤销失败')
+        } catch (e) {
+          handleApiError(e, '撤销失败')
         }
       }
     })
@@ -601,8 +602,8 @@ function revokeProjectRole(pr: UserProfileProjectRoleInfo) {
             Message.success('角色已撤销')
           }
           await loadProfile()
-        } catch (e: any) {
-          Message.error(e.response?.data?.message || '撤销失败')
+        } catch (e) {
+          handleApiError(e, '撤销失败')
         }
       }
     })

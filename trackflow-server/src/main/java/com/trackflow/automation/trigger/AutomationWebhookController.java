@@ -29,7 +29,7 @@ public class AutomationWebhookController {
         if (!"published".equals(workflow.getStatus())
                 || !Boolean.TRUE.equals(workflow.getRuntimeEnabled())
                 || !"webhook".equals(workflow.getTriggerType())) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Webhook 工作流不存在、未发布或未启动");
+            throw BusinessException.notFound("Webhook 工作流不存在、未发布或未启动");
         }
         webhookTokenVerifier.verifyToken(workflow, token);
         triggerService.enqueueWebhook(workflow, "webhook:" + idempotencyKey,

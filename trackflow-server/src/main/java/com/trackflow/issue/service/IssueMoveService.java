@@ -90,7 +90,7 @@ public class IssueMoveService {
         var sourceProject = projectService.getById(sourceProjectId);
         var targetProject = projectService.getById(targetProjectId);
         if (targetProject == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "目标项目不存在");
+            throw BusinessException.notFound("目标项目不存在");
         }
 
         // 生成新的 issue_key
@@ -223,7 +223,7 @@ public class IssueMoveService {
         var sourceProject = projectService.getById(sourceProjectId);
         var targetProject = projectService.getById(targetProjectId);
         if (targetProject == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "目标项目不存在: " + targetProjectId);
+            throw BusinessException.notFound("目标项目", targetProjectId);
         }
 
         String oldIssueKey = issue.getIssueKey();

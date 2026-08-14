@@ -114,6 +114,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, watch } from 'vue'
 import { Message, Modal } from '@arco-design/web-vue'
+import { handleApiError } from '@/utils/errorHandler'
 import { IconExclamationCircle } from '@arco-design/web-vue/es/icon'
 import { sprintApi } from '@/api'
 import { ERROR_CODES } from '@/api/error-codes'
@@ -240,7 +241,7 @@ async function doCreate(confirmOverlap: boolean) {
       overlapContext.value = 'create'
       showOverlapConfirm.value = true
     } else {
-      Message.error(e.response?.data?.message || '创建失败')
+      handleApiError(e, '创建失败')
     }
   } finally {
     creating.value = false
@@ -286,7 +287,7 @@ async function doUpdate(confirmOverlap: boolean) {
       overlapContext.value = 'edit'
       showOverlapConfirm.value = true
     } else {
-      Message.error(e.response?.data?.message || '更新失败')
+      handleApiError(e, '更新失败')
     }
   } finally {
     updating.value = false

@@ -507,6 +507,7 @@ import { formatDateTime } from '@/utils/date'
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
+import { handleApiError } from '@/utils/errorHandler'
 import { IconLock, IconSettings, IconPlus, IconThunderbolt, IconInfoCircle, IconDelete, IconPlayArrow, IconMinus, IconBranch } from '@arco-design/web-vue/es/icon'
 import { workflowApi, workflowRuleApi, projectApi } from '@/api'
 import { EmptyState, DataContainer } from '@/components/base'
@@ -713,8 +714,8 @@ async function handleAttachWorkflow() {
     Message.success('工作流已附加到项目')
     attachWorkflowModalVisible.value = false
     await loadAttachedWorkflows()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '附加失败')
+  } catch (e) {
+    handleApiError(e, '附加失败')
   } finally {
     attaching.value = false
   }
@@ -725,8 +726,8 @@ async function handleDetachWorkflow(workflowDefinitionId: string) {
     await workflowDefinitionApi.detachFromProject(props.project.id, workflowDefinitionId)
     Message.success('工作流已从项目中分离')
     await loadAttachedWorkflows()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '分离失败')
+  } catch (e) {
+    handleApiError(e, '分离失败')
   }
 }
 
@@ -816,8 +817,8 @@ async function handleSubmitRule() {
     }
     ruleModalVisible.value = false
     await loadRules()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '操作失败')
+  } catch (e) {
+    handleApiError(e, '操作失败')
   } finally {
     submitting.value = false
   }
@@ -827,8 +828,8 @@ async function handleToggleRule(rule: WorkflowRuleVO) {
   try {
     await workflowRuleApi.toggle(rule.id)
     await loadRules()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '操作失败')
+  } catch (e) {
+    handleApiError(e, '操作失败')
   }
 }
 
@@ -837,8 +838,8 @@ async function handleDeleteRule(rule: WorkflowRuleVO) {
     await workflowRuleApi.delete(rule.id)
     Message.success('规则已删除')
     await loadRules()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '删除失败')
+  } catch (e) {
+    handleApiError(e, '删除失败')
   }
 }
 
@@ -850,8 +851,8 @@ async function handleExecuteRule(rule: WorkflowRuleVO) {
       Message.success(`执行完成：匹配 ${log.matchedCount} 个工单，成功 ${log.successCount}，失败 ${log.failureCount}`)
       await loadRules()
     }
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '执行失败')
+  } catch (e) {
+    handleApiError(e, '执行失败')
   }
 }
 

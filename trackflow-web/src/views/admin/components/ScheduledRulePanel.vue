@@ -322,6 +322,7 @@
 import { formatDateTime } from '@/utils/date'
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { Message } from '@arco-design/web-vue'
+import { handleApiError } from '@/utils/errorHandler'
 import cronstrue from 'cronstrue/i18n'
 import { CronExpressionParser } from 'cron-parser'
 import { workflowRuleApi, projectApi } from '@/api'
@@ -580,8 +581,8 @@ async function handleSubmit() {
     }
     modalVisible.value = false
     await loadRules()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '操作失败')
+  } catch (e) {
+    handleApiError(e, '操作失败')
   } finally {
     submitting.value = false
   }
@@ -592,8 +593,8 @@ async function handleToggle(rule: WorkflowRuleVO) {
   try {
     await workflowRuleApi.toggle(rule.id)
     await loadRules()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '操作失败')
+  } catch (e) {
+    handleApiError(e, '操作失败')
   }
 }
 
@@ -602,8 +603,8 @@ async function handleDelete(rule: WorkflowRuleVO) {
     await workflowRuleApi.delete(rule.id)
     Message.success('规则已删除')
     await loadRules()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '删除失败')
+  } catch (e) {
+    handleApiError(e, '删除失败')
   }
 }
 
@@ -615,8 +616,8 @@ async function handleExecute(rule: WorkflowRuleVO) {
       Message.success(`执行完成：匹配 ${log.matchedCount} 个工单，成功 ${log.successCount}，失败 ${log.failureCount}`)
       await loadRules()
     }
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '执行失败')
+  } catch (e) {
+    handleApiError(e, '执行失败')
   }
 }
 

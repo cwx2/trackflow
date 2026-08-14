@@ -213,6 +213,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, watch } from 'vue'
 import { Message } from '@arco-design/web-vue'
+import { handleApiError } from '@/utils/errorHandler'
 import type { FormInstance } from '@arco-design/web-vue'
 import { transitionActionApi, projectApi, workflowApi, customFieldApi } from '@/api'
 import type { TransitionActionVO } from '@/api/transitionAction'
@@ -525,8 +526,8 @@ async function handleSubmit() {
     }
     emit('saved')
     handleClose()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '操作失败')
+  } catch (e) {
+    handleApiError(e, '操作失败')
   } finally {
     submitting.value = false
   }

@@ -111,7 +111,7 @@ public class OrganizationService {
     public Organization getById(Long id) {
         Organization org = organizationMapper.selectById(id);
         if (org == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Organization not found");
+            throw BusinessException.notFound("Organization not found");
         }
         return org;
     }
@@ -223,7 +223,7 @@ public class OrganizationService {
         getById(orgId); // 确认组织存在
         Project project = projectMapper.selectById(projectId);
         if (project == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "项目不存在");
+            throw BusinessException.notFound("项目不存在");
         }
         if (!orgId.equals(project.getOrgId())) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "该项目不属于此组织");
@@ -304,12 +304,12 @@ public class OrganizationService {
         // 确认用户存在
         SysUser user = sysUserMapper.selectById(dto.getUserId());
         if (user == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "用户不存在");
+            throw BusinessException.notFound("用户不存在");
         }
         // 确认角色存在
         SysRole role = sysRoleMapper.selectById(dto.getRoleId());
         if (role == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "角色不存在");
+            throw BusinessException.notFound("角色不存在");
         }
 
         // 检查是否已有相同的授权
@@ -351,7 +351,7 @@ public class OrganizationService {
     public void revokeOrgAccess(Long orgId, Long accessId) {
         OrgAccess access = orgAccessMapper.selectById(accessId);
         if (access == null || !access.getOrgId().equals(orgId)) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "授权记录不存在");
+            throw BusinessException.notFound("授权记录不存在");
         }
         orgAccessMapper.deleteById(accessId);
     }
@@ -362,7 +362,7 @@ public class OrganizationService {
         for (Long projectId : projectIds) {
             Project project = projectMapper.selectById(projectId);
             if (project == null) {
-                throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "项目不存在: " + projectId);
+                throw BusinessException.notFound("项目", projectId);
             }
             if (project.getOrgId() != null && !project.getOrgId().equals(orgId)) {
                 throw new BusinessException(ErrorCode.BAD_REQUEST,

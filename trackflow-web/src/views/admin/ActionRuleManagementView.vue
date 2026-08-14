@@ -194,6 +194,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, h } from 'vue'
 import { Message } from '@arco-design/web-vue'
+import { handleApiError } from '@/utils/errorHandler'
 import { IconPlus, IconDelete } from '@arco-design/web-vue/es/icon'
 import { quickActionApi } from '@/api'
 import type { QuickActionDefinitionVO } from '@/api/quickAction'
@@ -420,8 +421,8 @@ async function handleSubmit() {
     }
     formVisible.value = false
     await loadDefinitions()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '操作失败')
+  } catch (e) {
+    handleApiError(e, '操作失败')
   } finally {
     submitting.value = false
   }
@@ -434,8 +435,8 @@ async function handleToggle(def: QuickActionDefinitionVO) {
       enabled: !def.enabled
     })
     await loadDefinitions()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '操作失败')
+  } catch (e) {
+    handleApiError(e, '操作失败')
   }
 }
 
@@ -444,8 +445,8 @@ async function handleDelete(def: QuickActionDefinitionVO) {
     await quickActionApi.deleteDefinition(def.id)
     Message.success('动作已删除')
     await loadDefinitions()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '删除失败')
+  } catch (e) {
+    handleApiError(e, '删除失败')
   }
 }
 

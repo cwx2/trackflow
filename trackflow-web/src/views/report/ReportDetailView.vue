@@ -217,6 +217,7 @@
 import { ref, computed, onMounted, reactive, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
+import { handleApiError } from '@/utils/errorHandler'
 import { useConfirmDelete } from '@/composables/useConfirmDelete'
 import { reportApi } from '@/api/report'
 import { EmptyState, DataContainer } from '@/components/base'
@@ -312,8 +313,8 @@ async function loadReportData(force: boolean) {
   try {
     const res = await reportApi.execute(reportId.value, force)
     reportData.value = res.data
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '获取报表数据失败')
+  } catch (e) {
+    handleApiError(e, '获取报表数据失败')
   } finally {
     chartLoading.value = false
   }
@@ -375,8 +376,8 @@ async function handleSaveEdit() {
     Message.success('报表设置已保存')
     // 重新计算
     await loadReportData(true)
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '保存失败')
+  } catch (e) {
+    handleApiError(e, '保存失败')
   } finally {
     saving.value = false
   }
@@ -396,8 +397,8 @@ async function handleExport(format: 'csv' | 'xlsx') {
     document.body.removeChild(link)
     window.URL.revokeObjectURL(url)
     Message.success(format === 'xlsx' ? 'Excel 已导出' : '报表已导出')
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '导出失败')
+  } catch (e) {
+    handleApiError(e, '导出失败')
   }
 }
 
@@ -417,8 +418,8 @@ async function handleClone() {
     if (res.data?.id) {
       router.push({ name: 'ReportDetail', params: { id: res.data.id } })
     }
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '克隆失败')
+  } catch (e) {
+    handleApiError(e, '克隆失败')
   }
 }
 
@@ -442,8 +443,8 @@ function handleDelete() {
         await reportApi.delete(reportId.value)
         Message.success('报表已删除')
         router.push({ name: 'ReportList' })
-      } catch (e: any) {
-        Message.error(e.response?.data?.message || '删除失败')
+      } catch (e) {
+        handleApiError(e, '删除失败')
       }
     }
   })
@@ -456,8 +457,8 @@ async function toggleFavorite() {
     report.value.favorited = res.data
     Message.success(res.data ? '已收藏' : '已取消收藏')
     loadFavoriteReports()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '操作失败')
+  } catch (e) {
+    handleApiError(e, '操作失败')
   }
 }
 

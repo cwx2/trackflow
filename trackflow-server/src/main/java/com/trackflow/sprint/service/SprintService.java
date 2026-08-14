@@ -216,7 +216,7 @@ public class SprintService {
 
     public Sprint getById(Long id) {
         Sprint sprint = sprintMapper.selectById(id);
-        if (sprint == null) throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Sprint not found");
+        if (sprint == null) throw BusinessException.notFound("Sprint not found");
         return sprint;
     }
 
@@ -228,7 +228,7 @@ public class SprintService {
     @Transactional(readOnly = true)
     public SprintStatsRow getByIdWithStats(Long id) {
         SprintStatsRow row = sprintMapper.selectSprintWithStats(id);
-        if (row == null) throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Sprint not found");
+        if (row == null) throw BusinessException.notFound("Sprint not found");
         computeStatusHint(row, LocalDate.now());
         populateStatusBreakdown(List.of(row));
         return row;

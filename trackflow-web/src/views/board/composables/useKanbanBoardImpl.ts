@@ -1197,7 +1197,7 @@ async function handleRestoreArchivedSprint() {
       const res = await sprintApi.listByProject(selectedProject.value)
       sprints.value = res.data?.list || []
     }
-  } catch (e: any) {
+  } catch (e) {
     handleApiError(e, '恢复失败')
   } finally {
     restoringArchivedSprint.value = false
@@ -1218,7 +1218,7 @@ async function handleDeleteArchivedSprint() {
     if (res.data.totalIssues > 0 && res.data.targetSprints && res.data.targetSprints.length > 0) {
       deleteArchivedSprintTargetId.value = res.data.targetSprints[0].id
     }
-  } catch (e: any) {
+  } catch (e) {
     handleApiError(e, '获取预览信息失败')
     showDeleteArchivedSprintModal.value = false
   }
@@ -1249,7 +1249,7 @@ async function confirmDeleteArchivedSprint() {
       const res = await sprintApi.listByProject(selectedProject.value)
       sprints.value = res.data?.list || []
     }
-  } catch (e: any) {
+  } catch (e) {
     handleApiError(e, '删除失败')
   } finally {
     deletingArchivedSprint.value = false
@@ -1345,7 +1345,7 @@ async function activatePlannedSprint(sprint: SprintVO) {
       await loadIssuesWithLoading()
       guidanceDismissed.value = true
     }
-  } catch (e: any) {
+  } catch (e) {
     handleApiError(e, '激活迭代失败')
   } finally {
     activatingSprintId.value = null
@@ -2276,7 +2276,7 @@ async function onDrop(event: DragEvent, targetStatusId: string) {
             flushIssues()
             Message.error(res.message || '状态变更失败')
           }
-        } catch (e: any) {
+        } catch (e) {
           issue.statusId = oldStatusId
           flushIssues()
           handleApiError(e, '状态变更失败')
@@ -2331,10 +2331,10 @@ async function onDrop(event: DragEvent, targetStatusId: string) {
               flushIssues()
               Message.error(forceRes.message || '状态变更失败')
             }
-          } catch (e2: any) {
+          } catch (e2) {
             issue.statusId = oldStatusId
             flushIssues()
-            Message.error(e2.response?.data?.message || '状态变更失败')
+            handleApiError(e2, '状态变更失败')
           } finally {
             transitioningIssueIds.value.delete(issue.id)
           }
@@ -2375,10 +2375,10 @@ async function onDrop(event: DragEvent, targetStatusId: string) {
               flushIssues()
               Message.error(forceRes.message || '状态变更失败')
             }
-          } catch (e2: any) {
+          } catch (e2) {
             issue.statusId = oldStatusId
             flushIssues()
-            Message.error(e2.response?.data?.message || '状态变更失败')
+            handleApiError(e2, '状态变更失败')
           } finally {
             transitioningIssueIds.value.delete(issue.id)
           }
@@ -3253,7 +3253,7 @@ async function submitNewSprintModal() {
       Message.success(`Sprint「${res.data.name}」创建成功`)
       newSprintModalVisible.value = false
     }
-  } catch (e: any) {
+  } catch (e) {
     handleApiError(e, '创建 Sprint 失败')
   } finally {
     newSprintSubmitting.value = false

@@ -146,10 +146,10 @@ public class IssueCommentService {
 
         IssueComment comment = commentMapper.selectById(commentId);
         if (comment == null || comment.getDeletedAt() != null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "评论不存在");
+            throw BusinessException.notFound("评论不存在");
         }
         if (!comment.getIssueId().equals(issueId)) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "评论不属于该工单");
+            throw BusinessException.notFound("评论不属于该工单");
         }
 
         // 权限校验：作者本人 OR 拥有 issue:manage_comments 权限
@@ -185,10 +185,10 @@ public class IssueCommentService {
 
         IssueComment comment = commentMapper.selectById(commentId);
         if (comment == null || comment.getDeletedAt() != null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "评论不存在");
+            throw BusinessException.notFound("评论不存在");
         }
         if (!comment.getIssueId().equals(issueId)) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "评论不属于该工单");
+            throw BusinessException.notFound("评论不属于该工单");
         }
 
         Long currentUserId = SecurityUtils.getCurrentUserId();
@@ -214,13 +214,13 @@ public class IssueCommentService {
 
         IssueComment comment = commentMapper.selectByIdIgnoreDeleted(commentId);
         if (comment == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "评论不存在");
+            throw BusinessException.notFound("评论不存在");
         }
         if (comment.getDeletedAt() == null) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "评论未被删除，无需还原");
         }
         if (!comment.getIssueId().equals(issueId)) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "评论不属于该工单");
+            throw BusinessException.notFound("评论不属于该工单");
         }
 
         Long currentUserId = SecurityUtils.getCurrentUserId();
@@ -245,10 +245,10 @@ public class IssueCommentService {
 
         IssueComment comment = commentMapper.selectByIdIgnoreDeleted(commentId);
         if (comment == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "评论不存在");
+            throw BusinessException.notFound("评论不存在");
         }
         if (!comment.getIssueId().equals(issueId)) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "评论不属于该工单");
+            throw BusinessException.notFound("评论不属于该工单");
         }
 
         Long currentUserId = SecurityUtils.getCurrentUserId();

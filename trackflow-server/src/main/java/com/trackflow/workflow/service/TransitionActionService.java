@@ -147,7 +147,7 @@ public class TransitionActionService {
     public TransitionAction update(Long id, UpdateTransitionActionDTO dto) {
         TransitionAction action = transitionActionMapper.selectById(id);
         if (action == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "转换动作不存在");
+            throw BusinessException.notFound("转换动作不存在");
         }
 
         // 如果提供了 actionConfig，需要重新校验
@@ -197,7 +197,7 @@ public class TransitionActionService {
     public void delete(Long id) {
         TransitionAction action = transitionActionMapper.selectById(id);
         if (action == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "转换动作不存在");
+            throw BusinessException.notFound("转换动作不存在");
         }
         transitionActionMapper.deleteById(id);
     }
@@ -208,7 +208,7 @@ public class TransitionActionService {
     public void toggleEnabled(Long id) {
         TransitionAction action = transitionActionMapper.selectById(id);
         if (action == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "转换动作不存在");
+            throw BusinessException.notFound("转换动作不存在");
         }
         action.setEnabled(!action.getEnabled());
         action.setUpdatedAt(LocalDateTime.now());
@@ -224,7 +224,7 @@ public class TransitionActionService {
     public Long getProjectId(Long actionId) {
         TransitionAction action = transitionActionMapper.selectById(actionId);
         if (action == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "转换动作不存在");
+            throw BusinessException.notFound("转换动作不存在");
         }
         return WorkflowScope.toApi(action.getProjectId());
     }

@@ -88,6 +88,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { Message } from '@arco-design/web-vue'
+import { handleApiError } from '@/utils/errorHandler'
 import { quickActionApi } from '@/api'
 import type {
   QuickActionDefinitionVO,
@@ -215,8 +216,8 @@ async function executeAction(actionKey: string) {
 
     close()
     emit('executed')
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '执行失败')
+  } catch (e) {
+    handleApiError(e, '执行失败')
   } finally {
     executing.value = false
     executingAction.value = ''

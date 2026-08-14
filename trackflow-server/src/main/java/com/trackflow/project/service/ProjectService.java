@@ -348,7 +348,7 @@ public class ProjectService {
     public Project getById(Long id) {
         Project project = projectMapper.selectById(id);
         if (project == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "项目不存在");
+            throw BusinessException.notFound("项目不存在");
         }
         return project;
     }
@@ -397,7 +397,7 @@ public class ProjectService {
         }
 
         // 两者都未命中
-        throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "项目不存在: " + identifier);
+        throw BusinessException.notFound("项目", identifier);
     }
 
     /**
@@ -1362,7 +1362,7 @@ public class ProjectService {
                         .eq(ProjectMember::getUserId, userId)
         );
         if (existingMembers.isEmpty()) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "该用户不是项目成员");
+            throw BusinessException.notFound("该用户不是项目成员");
         }
 
         List<Long> oldRoleIds = existingMembers.stream().map(ProjectMember::getRoleId).toList();
@@ -1633,7 +1633,7 @@ public class ProjectService {
         if (permissionService.isSystemAdmin(userId)) {
             Project project = projectMapper.selectById(projectId);
             if (project == null) {
-                throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "项目不存在");
+                throw BusinessException.notFound("项目不存在");
             }
             return;
         }
@@ -1647,7 +1647,7 @@ public class ProjectService {
             // 区分"项目不存在"和"无权限"：提供更准确的错误信息
             Project project = projectMapper.selectById(projectId);
             if (project == null) {
-                throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "项目不存在");
+                throw BusinessException.notFound("项目不存在");
             }
             throw new BusinessException(ErrorCode.PROJECT_ACCESS_DENIED, "无权访问该项目");
         }
@@ -1675,7 +1675,7 @@ public class ProjectService {
         if (permissionService.isSystemAdmin(userId)) {
             Project project = projectMapper.selectById(projectId);
             if (project == null) {
-                throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "项目不存在");
+                throw BusinessException.notFound("项目不存在");
             }
             return;
         }
@@ -1691,7 +1691,7 @@ public class ProjectService {
         // 非成员：检查项目可见性
         Project project = projectMapper.selectById(projectId);
         if (project == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "项目不存在");
+            throw BusinessException.notFound("项目不存在");
         }
         ProjectVisibility visibility = project.getVisibility();
         if (visibility == ProjectVisibility.INTERNAL || visibility == ProjectVisibility.PUBLIC) {
@@ -1823,7 +1823,7 @@ public class ProjectService {
                         .last("FOR UPDATE")
         );
         if (project == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "项目不存在");
+            throw BusinessException.notFound("项目不存在");
         }
 
         int currentSeq = project.getIssueSequence();
@@ -2296,7 +2296,7 @@ public class ProjectService {
         // 确保项目存在
         Project project = projectMapper.selectById(projectId);
         if (project == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "项目不存在");
+            throw BusinessException.notFound("项目不存在");
         }
 
         int existing = favoriteMapper.countByUserAndProject(userId, projectId);

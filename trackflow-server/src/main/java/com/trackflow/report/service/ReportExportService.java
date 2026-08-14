@@ -76,7 +76,7 @@ public class ReportExportService {
     public ExcelExportResult exportExcel(Long id, Long userId) {
         ReportDefinition report = reportMapper.selectById(id);
         if (report == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "报表不存在");
+            throw BusinessException.notFound("报表不存在");
         }
         assertExportAccess(report, id, userId);
 
@@ -107,7 +107,7 @@ public class ReportExportService {
     private void writeCsvResponse(Long id, Long userId, HttpServletResponse response) throws IOException {
         ReportDefinition report = reportMapper.selectById(id);
         if (report == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "报表不存在");
+            throw BusinessException.notFound("报表不存在");
         }
         String reportName = report.getName() != null ? report.getName() : "report-" + id;
         String csvContent = exportCsv(id, userId);
@@ -130,7 +130,7 @@ public class ReportExportService {
     private ReportExecuteResultVO executeForExport(Long id, Long userId) {
         ReportDefinition report = reportMapper.selectById(id);
         if (report == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "报表不存在");
+            throw BusinessException.notFound("报表不存在");
         }
         assertExportAccess(report, id, userId);
         return reportExecutionService.executeByOwnerScope(report);

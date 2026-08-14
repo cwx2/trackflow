@@ -145,6 +145,7 @@
 import { formatDateTime } from '@/utils/date'
 import { ref, computed, onMounted, h } from 'vue'
 import { Message } from '@arco-design/web-vue'
+import { handleApiError } from '@/utils/errorHandler'
 import { projectApi, webhookApi } from '@/api'
 import type { WebhookVO, WebhookLogVO } from '@/api/webhook'
 import AdminPageLayout from '@/components/admin/AdminPageLayout.vue'
@@ -279,8 +280,8 @@ async function loadWebhooks() {
     if (res.code === 0) {
       webhooks.value = res.data || []
     }
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '加载 Webhook 列表失败')
+  } catch (e) {
+    handleApiError(e, '加载 Webhook 列表失败')
   } finally {
     loading.value = false
   }
@@ -335,8 +336,8 @@ async function submitForm(done: (closed: boolean) => void) {
     }
     done(true)
     await loadWebhooks()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '操作失败')
+  } catch (e) {
+    handleApiError(e, '操作失败')
     done(false)
   } finally {
     submitting.value = false
@@ -359,8 +360,8 @@ async function doDelete(done: (closed: boolean) => void) {
     Message.success('Webhook 已删除')
     done(true)
     await loadWebhooks()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '删除失败')
+  } catch (e) {
+    handleApiError(e, '删除失败')
     done(false)
   } finally {
     deleting.value = false
@@ -378,8 +379,8 @@ async function testWebhook(wh: WebhookVO) {
         Message.warning(`测试失败：HTTP ${res.data.responseStatus || '连接失败'}`)
       }
     }
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '测试请求失败')
+  } catch (e) {
+    handleApiError(e, '测试请求失败')
   } finally {
     testingId.value = null
   }

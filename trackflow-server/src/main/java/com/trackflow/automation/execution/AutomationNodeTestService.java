@@ -96,7 +96,7 @@ public class AutomationNodeTestService {
         try {
             WorkflowDefinitionModel definition = objectMapper.readValue(workflow.getDefinition(), WorkflowDefinitionModel.class);
             return definition.nodes().stream().filter(node -> node.id().equals(nodeId)).findFirst()
-                    .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "工作流中不存在该节点"));
+                    .orElseThrow(() -> BusinessException.notFound("工作流中不存在该节点"));
         } catch (BusinessException exception) {
             throw exception;
         } catch (Exception exception) {

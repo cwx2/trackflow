@@ -125,7 +125,7 @@ public class NotificationAdminController {
     public R<Void> retryOutboxItem(@PathVariable("id") Long id) {
         boolean success = outboxService.manualRetry(id);
         if (!success) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "记录不存在或状态不是 failed");
+            throw BusinessException.notFound("记录不存在或状态不是 failed");
         }
         return R.ok();
     }

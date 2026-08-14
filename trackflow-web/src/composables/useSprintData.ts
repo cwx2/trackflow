@@ -1,5 +1,6 @@
 import { ref, computed, type ComputedRef } from 'vue'
 import { Message, Modal } from '@arco-design/web-vue'
+import { handleApiError } from '@/utils/errorHandler'
 import { sprintApi } from '@/api'
 import { preloadPermissions } from '@/composables/usePermission'
 import type { SprintVO } from '@/api/types'
@@ -60,8 +61,8 @@ export function useSprintData(selectedProject: ComputedRef<string | null | undef
       await sprintApi.activate(id)
       Message.success('迭代已开始')
       loadSprints()
-    } catch (e: any) {
-      Message.error(e.response?.data?.message || '操作失败')
+    } catch (e) {
+      handleApiError(e, '操作失败')
     }
   }
 
@@ -76,8 +77,8 @@ export function useSprintData(selectedProject: ComputedRef<string | null | undef
           await sprintApi.revertToPlanned(sprint.id)
           Message.success('迭代已回退为计划中')
           loadSprints()
-        } catch (e: any) {
-          Message.error(e.response?.data?.message || '操作失败')
+        } catch (e) {
+          handleApiError(e, '操作失败')
         }
       }
     })
@@ -88,8 +89,8 @@ export function useSprintData(selectedProject: ComputedRef<string | null | undef
       await sprintApi.archive(sprint.id)
       Message.success('迭代已归档')
       loadSprints()
-    } catch (e: any) {
-      Message.error(e.response?.data?.message || '归档失败')
+    } catch (e) {
+      handleApiError(e, '归档失败')
     }
   }
 
@@ -112,8 +113,8 @@ export function useSprintData(selectedProject: ComputedRef<string | null | undef
       await sprintApi.restore(sprint.id)
       Message.success('迭代已恢复')
       loadSprints()
-    } catch (e: any) {
-      Message.error(e.response?.data?.message || '恢复失败')
+    } catch (e) {
+      handleApiError(e, '恢复失败')
     }
   }
 
@@ -123,8 +124,8 @@ export function useSprintData(selectedProject: ComputedRef<string | null | undef
       const idx = sprints.value.findIndex(s => s.id === sprintId)
       if (idx !== -1) sprints.value[idx] = { ...sprints.value[idx], name: newName }
       Message.success('迭代名称已更新')
-    } catch (e: any) {
-      Message.error(e.response?.data?.message || '更新失败')
+    } catch (e) {
+      handleApiError(e, '更新失败')
     }
   }
 

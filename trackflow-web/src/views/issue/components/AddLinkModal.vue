@@ -130,6 +130,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { Message } from '@arco-design/web-vue'
+import { handleApiError } from '@/utils/errorHandler'
 import { IconSearch } from '@arco-design/web-vue/es/icon'
 import { issueApi, projectApi } from '@/api'
 import type { ProjectVO } from '@/api/types'
@@ -349,8 +350,8 @@ async function handleConfirm() {
     Message.success('关联添加成功')
     visible.value = false
     emit('linked')
-  } catch (e: any) {
-    Message.error(e?.response?.data?.message || '添加关联失败')
+  } catch (e) {
+    handleApiError(e, '添加关联失败')
   } finally {
     submitting.value = false
   }
@@ -404,8 +405,8 @@ async function handleCreateAndLink() {
     Message.success(`工单 ${createRes.data?.issueKey} 已创建并关联`)
     visible.value = false
     emit('linked')
-  } catch (e: any) {
-    Message.error(e?.response?.data?.message || '创建工单失败')
+  } catch (e) {
+    handleApiError(e, '创建工单失败')
   } finally {
     submitting.value = false
   }

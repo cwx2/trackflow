@@ -280,6 +280,7 @@
 import { ref, reactive, computed, onMounted, h } from 'vue'
 import { useRouter } from 'vue-router'
 import { Modal, Message } from '@arco-design/web-vue'
+import { handleApiError } from '@/utils/errorHandler'
 import { useConfirmDelete } from '@/composables/useConfirmDelete'
 import { userApi, projectApi, globalMemberApi, roleApi } from '@/api'
 import type { UserProfileProjectRoleInfo } from '@/api/user'
@@ -461,8 +462,8 @@ async function disableUser(user: any) {
         })
         Message.success('用户已禁用')
         loadUsers()
-      } catch (e: any) {
-        Message.error(e.response?.data?.message || '禁用失败')
+      } catch (e) {
+        handleApiError(e, '禁用失败')
       }
     }
   })
@@ -479,8 +480,8 @@ async function enableUser(user: any) {
         await userApi.enable(user.id)
         Message.success('用户已启用')
         loadUsers()
-      } catch (e: any) {
-        Message.error(e.response?.data?.message || '启用失败')
+      } catch (e) {
+        handleApiError(e, '启用失败')
       }
     }
   })
@@ -610,8 +611,8 @@ async function saveRoles() {
     syncUserListGlobalRoles(userId)
     
     Message.success('系统角色已保存')
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '保存失败')
+  } catch (e) {
+    handleApiError(e, '保存失败')
   } finally {
     savingRoles.value = false
   }
@@ -646,8 +647,8 @@ async function changeProjectRole(pr: UserProfileProjectRoleInfo, newRoleCode: st
     } else {
       Message.success(`角色已更新：${userName} 在 ${pr.projectName} 的角色已变更为「${newRole.name}」`)
     }
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '角色更新失败')
+  } catch (e) {
+    handleApiError(e, '角色更新失败')
     // 重新加载以回滚UI
     await refreshProjectRoles()
   }
@@ -668,8 +669,8 @@ async function removeFromProject(pr: UserProfileProjectRoleInfo) {
           r => !(r.projectId === pr.projectId && r.roleCode === pr.roleCode)
         )
         Message.success('已从项目中移除')
-      } catch (e: any) {
-        Message.error(e.response?.data?.message || '移除失败')
+      } catch (e) {
+        handleApiError(e, '移除失败')
       }
     }
   })
@@ -690,8 +691,8 @@ async function addToProject() {
     // 刷新项目角色
     await refreshProjectRoles()
     cancelAddProject()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '添加到项目失败')
+  } catch (e) {
+    handleApiError(e, '添加到项目失败')
   }
 }
 
@@ -715,8 +716,8 @@ async function assignGlobalMember() {
     addGlobalRoleId.value = ''
     // 同时刷新项目角色（因为已同步到所有项目）
     await refreshProjectRoles()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '分配失败')
+  } catch (e) {
+    handleApiError(e, '分配失败')
   }
 }
 
@@ -735,8 +736,8 @@ async function revokeGlobalMember(gm: GlobalMemberVO) {
         userGlobalMembers.value = userGlobalMembers.value.filter(m => m.id !== gm.id)
         // 同时刷新项目角色
         await refreshProjectRoles()
-      } catch (e: any) {
-        Message.error(e.response?.data?.message || '撤销失败')
+      } catch (e) {
+        handleApiError(e, '撤销失败')
       }
     }
   })

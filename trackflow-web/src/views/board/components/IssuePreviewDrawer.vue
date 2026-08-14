@@ -267,6 +267,7 @@ import { useRouter } from 'vue-router'
 import { issueApi, projectApi } from '@/api'
 import type { IssueDetailVO, IssueCommentVO, IssueStatusVO } from '@/api/types'
 import { Message, Modal } from '@arco-design/web-vue'
+import { handleApiError } from '@/utils/errorHandler'
 import TimeProgressIndicator from '@/components/base/TimeProgressIndicator.vue'
 import { renderMarkdown, renderHtmlWithMarkdown } from '@/utils/markdown'
 import { getDueDateInfo } from '@/utils/dueDate'
@@ -451,11 +452,11 @@ async function doTransitStatus(target: IssueStatusVO, comment: string | undefine
     } else {
       Message.error(res.message || '状态变更失败')
     }
-  } catch (e: any) {
+  } catch (e) {
     // Rollback
     detail.value.statusId = oldStatusId
     detail.value.status = oldStatus
-    Message.error(e.response?.data?.message || '状态变更失败')
+    handleApiError(e, '状态变更失败')
   }
 }
 
@@ -473,9 +474,9 @@ async function selectPriority(priority: string) {
     await issueApi.update(props.issueId, { priority })
     Message.success(`优先级已变更为「${priority}」`)
     emit('issue-updated', props.issueId, { priority })
-  } catch (e: any) {
+  } catch (e) {
     detail.value.priority = oldPriority
-    Message.error(e.response?.data?.message || '优先级变更失败')
+    handleApiError(e, '优先级变更失败')
   }
 }
 
@@ -520,10 +521,10 @@ async function selectAssignee(userId: string | null, displayName: string | null)
     await issueApi.assign(props.issueId, userId || '0')
     Message.success(userId ? `已分配给「${displayName}」` : '已取消分配')
     emit('issue-updated', props.issueId, { assigneeId: userId, assigneeName: displayName })
-  } catch (e: any) {
+  } catch (e) {
     detail.value.assigneeId = oldAssigneeId
     detail.value.assigneeName = oldAssigneeName
-    Message.error(e.response?.data?.message || '分配失败')
+    handleApiError(e, '分配失败')
   }
 }
 

@@ -145,7 +145,7 @@ public class IssueTagService {
         // 检查标签是否存在
         IssueTag tag = tagMapper.selectById(tagId);
         if (tag == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "标签不存在");
+            throw BusinessException.notFound("标签不存在");
         }
 
         // 检查是否已关联
@@ -192,7 +192,7 @@ public class IssueTagService {
             // 找出不存在的 ID
             var foundIds = tags.stream().map(IssueTag::getId).collect(java.util.stream.Collectors.toSet());
             var missingIds = tagIds.stream().filter(id -> !foundIds.contains(id)).toList();
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "标签不存在: " + missingIds);
+            throw BusinessException.notFound("标签", missingIds);
         }
 
         // 查已有关联（避免重复插入）
@@ -302,7 +302,7 @@ public class IssueTagService {
         // 检查标签是否存在
         IssueTag tag = tagMapper.selectById(tagId);
         if (tag == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "标签不存在: " + tagId);
+            throw BusinessException.notFound("标签", tagId);
         }
 
         // 幂等：已存在则忽略

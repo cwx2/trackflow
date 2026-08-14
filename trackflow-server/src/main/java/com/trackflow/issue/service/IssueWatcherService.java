@@ -49,7 +49,7 @@ public class IssueWatcherService {
         // 校验工单存在
         Issue issue = issueMapper.selectById(issueId);
         if (issue == null || issue.getDeletedAt() != null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "工单不存在");
+            throw BusinessException.notFound("工单不存在");
         }
 
         // 校验用户是项目成员

@@ -341,6 +341,7 @@
 import { formatDateTime } from '@/utils/date'
 import { ref, reactive, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { Message } from '@arco-design/web-vue'
+import { handleApiError } from '@/utils/errorHandler'
 import { useConfirmDelete } from '@/composables/useConfirmDelete'
 import { reportApi } from '@/api/report'
 import { EmptyState } from '@/components/base'
@@ -620,8 +621,8 @@ async function executeReport(report: ReportDefinitionVO) {
     reportData.value[report.id] = res.data
     // 设置自动刷新定时器
     setupAutoRefresh(report.id, res.data?.refreshInterval)
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '执行报表失败')
+  } catch (e) {
+    handleApiError(e, '执行报表失败')
   } finally {
     executingId.value = null
   }
@@ -635,8 +636,8 @@ async function refreshReport(report: ReportDefinitionVO) {
     reportData.value[report.id] = res.data
     // 重置自动刷新定时器
     setupAutoRefresh(report.id, res.data?.refreshInterval)
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '刷新报表失败')
+  } catch (e) {
+    handleApiError(e, '刷新报表失败')
   } finally {
     refreshingId.value = null
   }
@@ -797,7 +798,7 @@ async function handleSubmit() {
     showFormModal.value = false
     resetForm()
   } catch (e: any) {
-    Message.error(e.response?.data?.message || (editingReport.value ? '更新报表失败' : '创建报表失败'))
+    handleApiError(e, editingReport.value ? '更新报表失败' : '创建报表失败')
   } finally {
     submitting.value = false
   }
@@ -851,8 +852,8 @@ function confirmDelete(report: ReportDefinitionVO) {
         Message.success('报表已删除')
         reports.value = reports.value.filter(r => r.id !== report.id)
         delete reportData.value[report.id]
-      } catch (e: any) {
-        Message.error(e.response?.data?.message || '删除失败')
+      } catch (e) {
+        handleApiError(e, '删除失败')
       }
     }
   })
@@ -863,8 +864,8 @@ async function cloneReport(report: ReportDefinitionVO) {
     const res = await reportApi.clone(report.id)
     Message.success(`已克隆为「${res.data?.name || report.name + ' (副本)'}」`)
     await loadReports()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '克隆失败')
+  } catch (e) {
+    handleApiError(e, '克隆失败')
   }
 }
 
@@ -880,8 +881,8 @@ async function toggleFavorite(report: ReportDefinitionVO) {
       return (a.name || '').localeCompare(b.name || '')
     })
     Message.success(res.data ? '已收藏' : '已取消收藏')
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '操作失败')
+  } catch (e) {
+    handleApiError(e, '操作失败')
   }
 }
 
@@ -900,8 +901,8 @@ async function exportReport(report: ReportDefinitionVO, format: 'csv' | 'xlsx' =
     document.body.removeChild(link)
     window.URL.revokeObjectURL(url)
     Message.success(format === 'xlsx' ? 'Excel 已导出' : '报表已导出')
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '导出失败')
+  } catch (e) {
+    handleApiError(e, '导出失败')
   }
 }
 
