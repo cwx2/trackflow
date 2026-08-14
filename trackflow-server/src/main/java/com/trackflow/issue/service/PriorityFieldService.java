@@ -1,7 +1,5 @@
 package com.trackflow.issue.service;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.trackflow.common.constant.IssuePriority;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.customfield.entity.CustomFieldDefinition;
@@ -12,13 +10,17 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 优先级字段服务 - 将优先级作为自定义字段系统中的枚举字段管理
  * <p>
  * 优先级字段使用固定 ID = 1000000000000000001（由 V249 迁移脚本种子化）。
  * 本服务对外提供简化接口，屏蔽自定义字段系统的复杂性。
+ * <p>
+ * <b>所有需要优先级值列表、颜色映射的代码必须通过本服务获取，禁止使用硬编码。</b>
  */
 @Slf4j
 @Service
@@ -60,6 +62,40 @@ public class PriorityFieldService {
                     "优先级自定义字段定义不存在，请确认 V249 迁移脚本已执行");
         }
         return field;
+    }
+
+    /**
+     * 获取指定项目的优先级值列表（有序，按 position 排序）。
+     * <p>
+     * 替代原 {@code IssuePriority.ALL_VALUES} 的使用场景。
+     *
+     * @param projectId 项目 ID（传 null 获取全局选项）
+     * @return 有序的优先级值列表
+     */
+    public List<String> getPriorityValues(Long projectId) {
+        List<CustomFieldOption> options = projectId != null
+                ? getPriorityOptions(projectId)
+                : getGlobalPriorityOptions();
+        return options.stream().map(CustomFieldOption::getValue).toList();
+    }
+
+    /**
+     * 获取指定项目的优先级颜色映射（value → color）。
+     * <p>
+     * 替代原 {@code IssuePriority.COLOR_MAP} 的使用场景。
+     *
+     * @param projectId 项目 ID（传 null 获取全局选项）
+     * @return 优先级值 → 颜色映射（保持 position 顺序）
+     */
+    public Map<String, String> getPriorityColors(Long projectId) {
+        List<CustomFieldOption> options = projectId != null
+                ? getPriorityOptions(projectId)
+                : getGlobalPriorityOptions();
+        Map<String, String> colorMap = new LinkedHashMap<>();
+        for (CustomFieldOption opt : options) {
+            colorMap.put(opt.getValue(), opt.getColor() != null ? opt.getColor() : "#6b7280");
+        }
+        return colorMap;
     }
 
     /**
@@ -112,7 +148,7 @@ public class PriorityFieldService {
     public String normalizePriority(String priority) {
         if (priority == null) return null;
         if ("medium".equalsIgnoreCase(priority)) {
-            return IssuePriority.NORMAL.getValue();
+            return "普通"; // 已知映射，不依赖枚举
         }
         return priority;
     }
@@ -121,14 +157,22 @@ public class PriorityFieldService {
      * 获取项目的默认优先级值。
      *
      * @param projectId 项目 ID
-     * @return 默认优先级值，如果没有配置默认值则返回 "Normal"
+     * @return 默认优先级值，如果没有配置默认值则返回列表中第一个选项的值
      */
     public String getDefaultPriority(Long projectId) {
-        List<CustomFieldOption> options = getPriorityOptions(projectId);
+        List<CustomFieldOption> options = projectId != null
+                ? getPriorityOptions(projectId)
+                : getGlobalPriorityOptions();
+        // 优先找标记为 isDefault 的选项
         return options.stream()
                 .filter(opt -> Boolean.TRUE.equals(opt.getIsDefault()))
                 .map(CustomFieldOption::getValue)
                 .findFirst()
-                .orElse(IssuePriority.DEFAULT.getValue());
+                // 没有标记 default 的，取列表中间位置的选项（通常是"普通"）
+                .orElseGet(() -> {
+                    if (options.isEmpty()) return "普通";
+                    int mid = options.size() / 2;
+                    return options.get(mid).getValue();
+                });
     }
 }

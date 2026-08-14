@@ -1,6 +1,5 @@
 package com.trackflow.report.service;
 
-import com.trackflow.common.constant.IssuePriority;
 import com.trackflow.common.constant.IssueStatusCategory;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
@@ -50,6 +49,7 @@ public class ReportStatisticsService {
     private final ObjectMapper objectMapper;
     private final QueryExecutor queryExecutor;
     private final com.trackflow.issue.service.PriorityFieldService priorityFieldService;
+    private final com.trackflow.issue.service.IssueTypeFieldService issueTypeFieldService;
 
     private static final String CACHE_PREFIX = "report:dashboard:";
     private static final long CACHE_TTL_SECONDS = 90;
@@ -632,13 +632,11 @@ public class ReportStatisticsService {
                 colors.add(opt.getColor() != null ? opt.getColor() : "#6b7280");
             }
         } else {
-            // fallback to enum (safety net)
-            List<String> priorityOrder = IssuePriority.ALL_VALUES;
-            Map<String, String> priorityColors = IssuePriority.COLOR_MAP;
-            for (String priority : priorityOrder) {
-                labels.add(priority);
-                data.add(grouped.getOrDefault(priority, 0L));
-                colors.add(priorityColors.getOrDefault(priority, "#6b7280"));
+            // fallback: 如果数据库无选项，使用 grouped 结果的 key（不依赖枚举）
+            for (Map.Entry<String, Long> entry : grouped.entrySet()) {
+                labels.add(entry.getKey());
+                data.add(entry.getValue());
+                colors.add("#6b7280");
             }
         }
 
@@ -653,13 +651,15 @@ public class ReportStatisticsService {
     private TypeDistributionVO buildTypeDistribution(List<Long> projectIds, Long sprintId, List<Long> issueIds) {
         List<TypeDistributionRow> rows = reportStatisticsMapper.selectTypeDistribution(projectIds, sprintId, issueIds);
 
-        Map<String, String> typeColors = Map.of(
-                "Bug", "#f85149",
-                "Task", "#58a6ff",
-                "Feature", "#3fb950",
-                "Story", "#a371f7",
-                "Improvement", "#d29922"
-        );
+        // 从数据库动态加载工单类型颜色
+        List<com.trackflow.customfield.entity.CustomFieldOption> typeOptions =
+                issueTypeFieldService.getGlobalIssueTypeOptions();
+        Map<String, String> typeColors = new HashMap<>();
+        for (com.trackflow.customfield.entity.CustomFieldOption opt : typeOptions) {
+            if (opt.getColor() != null) {
+                typeColors.put(opt.getValue(), opt.getColor());
+            }
+        }
 
         List<TypeDistributionVO.TypeItem> items = new ArrayList<>();
         long total = 0;

@@ -34,21 +34,22 @@ const FALLBACK_LABELS: Record<string, string> = {
 /** 默认优先级颜色回退值（仅在缓存中无颜色且确实需要显示时使用） */
 export const DEFAULT_PRIORITY_COLOR = DEFAULT_BADGE_COLOR
 
-/** 默认优先级选项（API 不可用时的回退，颜色为 null 表示未从 API 加载） */
+/** 默认优先级选项（仅在 API 请求进行中作为 loading 占位，不作为最终展示值） */
 export const DEFAULT_PRIORITY_OPTIONS: PriorityOption[] = [
-  { value: '阻塞', label: '阻塞', color: null, description: '阻塞性问题，必须立即解决', isDefault: false },
-  { value: '紧急', label: '紧急', color: null, description: '严重问题，影响核心功能', isDefault: false },
-  { value: '高', label: '高', color: null, description: '高优先级，需要尽快处理', isDefault: false },
-  { value: '普通', label: '普通', color: null, description: '普通优先级，按计划处理', isDefault: true },
-  { value: '低', label: '低', color: null, description: '低优先级，有空再处理', isDefault: false },
+  { value: '阻塞', label: '阻塞', color: null, description: null, isDefault: false },
+  { value: '紧急', label: '紧急', color: null, description: null, isDefault: false },
+  { value: '高', label: '高', color: null, description: null, isDefault: false },
+  { value: '普通', label: '普通', color: null, description: null, isDefault: true },
+  { value: '低', label: '低', color: null, description: null, isDefault: false },
 ]
 
 /**
- * 加载指定项目的优先级选项
+ * 加载指定项目的优先级选项（projectId 为空时加载全局选项）
  */
-export async function loadPriorityOptions(projectId: string): Promise<PriorityOption[]> {
+export async function loadPriorityOptions(projectId?: string): Promise<PriorityOption[]> {
+  const cacheKey = projectId || '__global__'
   // 检查缓存
-  const cached = cache.get(projectId)
+  const cached = cache.get(cacheKey)
   if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
     return cached.options
   }
@@ -63,7 +64,7 @@ export async function loadPriorityOptions(projectId: string): Promise<PriorityOp
         description: opt.description,
         isDefault: opt.isDefault,
       }))
-      cache.set(projectId, { options, timestamp: Date.now() })
+      cache.set(cacheKey, { options, timestamp: Date.now() })
       return options
     }
   } catch (e) {
@@ -120,13 +121,10 @@ export function usePriorityOptions(projectIdRef: { value: string | null | undefi
 
   async function refresh() {
     const projectId = projectIdRef.value
-    if (!projectId) {
-      options.value = DEFAULT_PRIORITY_OPTIONS
-      return
-    }
     loading.value = true
     try {
-      options.value = await loadPriorityOptions(projectId)
+      // projectId 为空时加载全局选项（而非使用硬编码静态列表）
+      options.value = await loadPriorityOptions(projectId || undefined)
     } finally {
       loading.value = false
     }

@@ -345,8 +345,8 @@ export const issueApi = {
 
   // ========== 优先级选项 ==========
 
-  /** 获取项目的优先级选项列表（从自定义字段系统动态获取，含颜色和描述） */
-  getPriorityOptions(projectId: string) {
+  /** 获取项目的优先级选项列表（从自定义字段系统动态获取，含颜色和描述）。projectId 为空时返回全局选项。 */
+  getPriorityOptions(projectId?: string) {
     return request.get<any, R<Array<{
       id: string
       customFieldId: string
@@ -357,13 +357,13 @@ export const issueApi = {
       isArchived: boolean
       color: string | null
       description: string | null
-    }>>>('/issues/priority-options', { params: { projectId } })
+    }>>>('/issues/priority-options', { params: projectId ? { projectId } : {} })
   },
 
   // ========== 工单类型选项 ==========
 
-  /** 获取项目的工单类型选项列表（从自定义字段系统动态获取，含颜色和描述） */
-  getIssueTypeOptions(projectId: string) {
+  /** 获取项目的工单类型选项列表（从自定义字段系统动态获取，含颜色和描述）。projectId 为空时返回全局选项。 */
+  getIssueTypeOptions(projectId?: string) {
     return request.get<any, R<Array<{
       id: string
       customFieldId: string
@@ -374,7 +374,7 @@ export const issueApi = {
       isArchived: boolean
       color: string | null
       description: string | null
-    }>>>('/issues/issue-type-options', { params: { projectId } })
+    }>>>('/issues/issue-type-options', { params: projectId ? { projectId } : {} })
   },
 
   // ========== 手动排序 ==========

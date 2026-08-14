@@ -1,17 +1,14 @@
 package com.trackflow.issue.util;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
-import com.trackflow.common.constant.IssuePriority;
 import com.trackflow.issue.entity.Issue;
 
 /**
  * Issue 优先级排序工具 — 提供全局唯一的优先级语义排序表达式。
  *
- * <p>priority 是 VARCHAR 字段，按字母排序不符合业务语义。此工具将优先级值映射为
- * 数值权重：Critical=1, High=2, Normal=3, Low=4, 其他=5。</p>
- *
- * <p>所有需要按 priority 排序的代码都必须使用本类提供的常量或方法，
- * 确保排序逻辑唯一定义、一致行为。</p>
+ * <p>排序完全依赖数据库 {@code custom_field_option.position} 字段：
+ * 通过 issue.priority_option_id 关联 custom_field_option 表取得 position。
+ * 当 priority_option_id 为 NULL（历史数据未回填）时，使用 position=99 排末尾。</p>
  *
  * @author TrackFlow
  * @since 1.0
@@ -23,14 +20,19 @@ public final class IssuePriorityHelper {
     }
 
     /**
+     * 未知优先级的默认排序位置（排在所有已知优先级之后）。
+     */
+    public static final int UNKNOWN_PRIORITY_POSITION = 99;
+
+    /**
      * 优先级语义排序 CASE 表达式（SQL 片段）。
      *
      * <p>使用 priority_option_id 列关联 custom_field_option.position 排序。
-     * 当 priority_option_id 为 null 时（历史数据未迁移），回退到旧 CASE 表达式排序。</p>
+     * 当 priority_option_id 为 null 时（历史数据未迁移），回退到 99（排末尾）。</p>
      */
     public static final String PRIORITY_ORDER_EXPR =
             "COALESCE((SELECT position FROM custom_field_option WHERE id = priority_option_id), "
-            + IssuePriority.sortCaseExpression() + ")";
+            + UNKNOWN_PRIORITY_POSITION + ")";
 
     /**
      * 对 QueryWrapper 应用优先级排序（作为唯一排序条件，附带 updated_at 作为次级排序）。
@@ -45,7 +47,7 @@ public final class IssuePriorityHelper {
     public static void applyPrioritySortWithLimit(QueryWrapper<Issue> wrapper, boolean descPriority, int limit) {
         StringBuilder sb = new StringBuilder("ORDER BY ");
         sb.append(PRIORITY_ORDER_EXPR);
-        // descPriority=true 意味着高优先级在前 → 数值 ASC（1=Critical 排在前面）
+        // descPriority=true 意味着高优先级在前 → 数值 ASC（position 0=最高优先级 排在前面）
         sb.append(descPriority ? " ASC" : " DESC");
         sb.append(", updated_at DESC");
         if (limit > 0) {
@@ -77,10 +79,10 @@ public final class IssuePriorityHelper {
      */
     public static void applyPriorityOrderBy(QueryWrapper<Issue> wrapper, boolean descPriority) {
         if (descPriority) {
-            // 高优先级在前 → 数值 ASC（Critical=1 排前面）
+            // 高优先级在前 → 数值 ASC（position 0 排前面）
             wrapper.orderByAsc(PRIORITY_ORDER_EXPR);
         } else {
-            // 低优先级在前 → 数值 DESC（Low=4 排前面）
+            // 低优先级在前 → 数值 DESC（position 高的排前面）
             wrapper.orderByDesc(PRIORITY_ORDER_EXPR);
         }
     }

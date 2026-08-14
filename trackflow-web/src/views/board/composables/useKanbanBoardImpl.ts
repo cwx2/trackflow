@@ -730,7 +730,7 @@ function onSwimlaneRowDrop(event: DragEvent, targetKey: string) {
 // Swimlane 数据结构
 // (SwimlaneRow interface exported at top level)
 
-// 类型映射（使用共享工具）
+// 类型映射（使用共享工具，作为 fallback 标签）
 const TYPE_LABELS = { Task: '任务', Bug: '缺陷', Feature: '需求', Epic: '史诗', Story: '故事' } as Record<string, string>
 
 const swimlanes = computed<SwimlaneRow[]>(() => {
@@ -836,53 +836,29 @@ function groupByAssignee(allIssues: BoardIssue[]): SwimlaneRow[] {
 }
 
 function groupByPriority(allIssues: BoardIssue[]): SwimlaneRow[] {
-  const priorities = ['紧急', '高', '普通', '低']
+  // Group by actual priority values from issue data (not hardcoded list)
   const groups = new Map<string, BoardIssue[]>()
-  for (const p of priorities) groups.set(p, [])
-
   for (const issue of allIssues) {
-    const p = issue.priority || 'Normal'
+    const p = issue.priority || '普通'
     if (!groups.has(p)) groups.set(p, [])
     groups.get(p)!.push(issue)
   }
-
-  return priorities
-    .filter(p => (groups.get(p)?.length ?? 0) > 0)
-    .map(p => ({
-      key: p,
-      label: p,
-      issues: groups.get(p)!
-    }))
+  return [...groups.entries()]
+    .sort((a, b) => b[1].length - a[1].length)
+    .map(([p, issues]) => ({ key: p, label: p, issues }))
 }
 
 function groupByType(allIssues: BoardIssue[]): SwimlaneRow[] {
-  const types = ['Bug', 'Task', 'Feature', 'Story']
+  // Group by actual issue type values from issue data (not hardcoded list)
   const groups = new Map<string, BoardIssue[]>()
-  const other: BoardIssue[] = []
-
   for (const issue of allIssues) {
-    const t = issue.issueType
-    if (types.includes(t)) {
-      if (!groups.has(t)) groups.set(t, [])
-      groups.get(t)!.push(issue)
-    } else {
-      other.push(issue)
-    }
+    const t = issue.issueType || '未知'
+    if (!groups.has(t)) groups.set(t, [])
+    groups.get(t)!.push(issue)
   }
-
-  const rows: SwimlaneRow[] = types
-    .filter(t => (groups.get(t)?.length ?? 0) > 0)
-    .map(t => ({
-      key: t,
-      label: TYPE_LABELS[t] || t,
-      issues: groups.get(t)!
-    }))
-
-  if (other.length > 0) {
-    rows.push({ key: '__other__', label: '其他', issues: other })
-  }
-
-  return rows
+  return [...groups.entries()]
+    .sort((a, b) => b[1].length - a[1].length)
+    .map(([t, issues]) => ({ key: t, label: TYPE_LABELS[t] || t, issues }))
 }
 
 function groupBySprint(allIssues: BoardIssue[]): SwimlaneRow[] {

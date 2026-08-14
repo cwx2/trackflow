@@ -7,7 +7,7 @@ import com.trackflow.board.vo.BoardColumnVO;
 import com.trackflow.board.vo.BoardDataVO;
 import com.trackflow.board.vo.BoardGeneralConfigVO;
 import com.trackflow.board.vo.BoardCardConfigVO;
-import com.trackflow.common.constant.IssuePriority;
+import com.trackflow.issue.service.PriorityFieldService;
 import com.trackflow.customfield.service.CustomFieldService;
 import com.trackflow.customfield.vo.CustomFieldValueVO;
 import com.trackflow.issue.entity.IssueTag;
@@ -73,6 +73,7 @@ public class BoardDataService {
     private final QueryExecutor queryExecutor;
     private final ObjectMapper objectMapper;
     private final IssueManualOrderMapper issueManualOrderMapper;
+    private final PriorityFieldService priorityFieldService;
 
     /**
      * 聚合看板数据：单次查询 + 内存分组，返回按列分组的工单。
@@ -535,8 +536,9 @@ public class BoardDataService {
      */
     private Map<String, List<BoardCardVO>> groupCardsByColumn(List<BoardCardVO> cards, String columnField) {
         if ("priority".equals(columnField)) {
+            String defaultPriority = priorityFieldService.getDefaultPriority(null);
             return cards.stream().collect(Collectors.groupingBy(
-                    card -> card.getPriority() != null ? card.getPriority() : IssuePriority.DEFAULT.getValue()
+                    card -> card.getPriority() != null ? card.getPriority() : defaultPriority
             ));
         }
         return cards.stream().collect(Collectors.groupingBy(

@@ -2,13 +2,13 @@ package com.trackflow.workflow.service.action;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.trackflow.common.constant.IssuePriority;
 import com.trackflow.common.event.WorkflowRuleEvent;
 import com.trackflow.integration.mapper.NotificationMapper;
 import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.entity.IssueStatus;
 import com.trackflow.issue.mapper.IssueActivityMapper;
 import com.trackflow.issue.mapper.IssueStatusMapper;
+import com.trackflow.issue.service.PriorityFieldService;
 import com.trackflow.project.mapper.ProjectMemberMapper;
 import com.trackflow.project.service.ProjectService;
 import com.trackflow.sprint.entity.Sprint;
@@ -21,6 +21,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
@@ -36,8 +37,7 @@ import java.util.Set;
 @Component
 public class SetFieldActionExecutor extends WorkflowActionSupport {
 
-    private static final Set<String> VALID_PRIORITIES = Set.copyOf(IssuePriority.ALL_VALUES);
-
+    private final PriorityFieldService priorityFieldService;
     private final IssueStatusMapper statusMapper;
     private final SprintMapper sprintMapper;
     private final ProjectMemberMapper projectMemberMapper;
@@ -47,11 +47,13 @@ public class SetFieldActionExecutor extends WorkflowActionSupport {
                                   SysUserMapper sysUserMapper,
                                   NotificationMapper notificationMapper,
                                   ProjectService projectService,
+                                  PriorityFieldService priorityFieldService,
                                   IssueStatusMapper statusMapper,
                                   SprintMapper sprintMapper,
                                   ProjectMemberMapper projectMemberMapper,
                                   ApplicationEventPublisher eventPublisher) {
         super(activityMapper, sysUserMapper, notificationMapper, projectService);
+        this.priorityFieldService = priorityFieldService;
         this.statusMapper = statusMapper;
         this.sprintMapper = sprintMapper;
         this.projectMemberMapper = projectMemberMapper;
@@ -137,9 +139,11 @@ public class SetFieldActionExecutor extends WorkflowActionSupport {
 
     private boolean validatePriority(String value, WorkflowRule rule) {
         if (value == null || value.isBlank()) return true;
-        if (!VALID_PRIORITIES.contains(value)) {
+        // Validate against database options for the issue's project (global fallback)
+        if (!priorityFieldService.isValidPriority(value, null)) {
+            List<String> validValues = priorityFieldService.getPriorityValues(null);
             log.warn("[RuleEngine] set_field priority: invalid value '{}' in rule '{}' (id={}). Valid values: {}",
-                    value, rule.getName(), rule.getId(), VALID_PRIORITIES);
+                    value, rule.getName(), rule.getId(), validValues);
             return false;
         }
         return true;

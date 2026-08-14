@@ -34,21 +34,22 @@ const FALLBACK_LABELS: Record<string, string> = {
 /** 默认工单类型颜色回退值 */
 export const DEFAULT_ISSUE_TYPE_COLOR = DEFAULT_BADGE_COLOR
 
-/** 默认工单类型选项（API 不可用时的回退，value 使用中文，与数据库存储一致） */
+/** 默认工单类型选项（仅在 API 请求进行中作为 loading 占位，不作为最终展示值） */
 export const DEFAULT_ISSUE_TYPE_OPTIONS: IssueTypeOption[] = [
-  { value: '缺陷', label: '缺陷', color: null, description: '软件缺陷，需要修复', isDefault: false },
-  { value: '任务', label: '任务', color: null, description: '常规任务', isDefault: true },
-  { value: '需求', label: '需求', color: null, description: '新功能需求', isDefault: false },
-  { value: '史诗', label: '史诗', color: null, description: '大型功能集合', isDefault: false },
-  { value: '故事', label: '故事', color: null, description: '用户故事', isDefault: false },
+  { value: '缺陷', label: '缺陷', color: null, description: null, isDefault: false },
+  { value: '任务', label: '任务', color: null, description: null, isDefault: true },
+  { value: '需求', label: '需求', color: null, description: null, isDefault: false },
+  { value: '史诗', label: '史诗', color: null, description: null, isDefault: false },
+  { value: '故事', label: '故事', color: null, description: null, isDefault: false },
 ]
 
 /**
- * 加载指定项目的工单类型选项
+ * 加载指定项目的工单类型选项（projectId 为空时加载全局选项）
  */
-export async function loadIssueTypeOptions(projectId: string): Promise<IssueTypeOption[]> {
+export async function loadIssueTypeOptions(projectId?: string): Promise<IssueTypeOption[]> {
+  const cacheKey = projectId || '__global__'
   // 检查缓存
-  const cached = cache.get(projectId)
+  const cached = cache.get(cacheKey)
   if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
     return cached.options
   }
@@ -63,7 +64,7 @@ export async function loadIssueTypeOptions(projectId: string): Promise<IssueType
         description: opt.description,
         isDefault: opt.isDefault,
       }))
-      cache.set(projectId, { options, timestamp: Date.now() })
+      cache.set(cacheKey, { options, timestamp: Date.now() })
       return options
     }
   } catch (e) {
@@ -143,13 +144,10 @@ export function useIssueTypeOptions(projectId: MaybeRefOrGetter<string | null | 
 
   async function refresh() {
     const id = toValue(projectId)
-    if (!id) {
-      options.value = DEFAULT_ISSUE_TYPE_OPTIONS
-      return
-    }
     loading.value = true
     try {
-      options.value = await loadIssueTypeOptions(id)
+      // id 为空时加载全局选项（而非使用硬编码静态列表）
+      options.value = await loadIssueTypeOptions(id || undefined)
     } finally {
       loading.value = false
     }

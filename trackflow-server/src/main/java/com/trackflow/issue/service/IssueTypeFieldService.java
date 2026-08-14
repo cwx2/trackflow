@@ -201,7 +201,7 @@ public class IssueTypeFieldService {
      * 获取项目的默认工单类型值。
      *
      * @param projectId 项目 ID
-     * @return 默认工单类型值，如果没有配置默认值则返回 "Task"
+     * @return 默认工单类型值，如果没有配置默认值则返回列表中第一个选项的值
      */
     public String getDefaultIssueType(Long projectId) {
         List<CustomFieldOption> options = getIssueTypeOptions(projectId);
@@ -209,7 +209,7 @@ public class IssueTypeFieldService {
                 .filter(opt -> Boolean.TRUE.equals(opt.getIsDefault()))
                 .map(CustomFieldOption::getValue)
                 .findFirst()
-                .orElse("任务");
+                .orElseGet(() -> options.isEmpty() ? "任务" : options.get(0).getValue());
     }
 
     /**
@@ -223,6 +223,6 @@ public class IssueTypeFieldService {
                 .filter(opt -> Boolean.TRUE.equals(opt.getIsDefault()))
                 .map(CustomFieldOption::getValue)
                 .findFirst()
-                .orElse("任务");
+                .orElseGet(() -> options.isEmpty() ? "任务" : options.get(0).getValue());
     }
 }

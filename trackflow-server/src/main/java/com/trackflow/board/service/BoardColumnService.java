@@ -9,9 +9,9 @@ import com.trackflow.board.dto.UpdateBoardColumnsDTO;
 import com.trackflow.board.entity.BoardColumnConfig;
 import com.trackflow.board.mapper.BoardColumnConfigMapper;
 import com.trackflow.board.vo.BoardColumnVO;
-import com.trackflow.common.constant.IssuePriority;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
+import com.trackflow.issue.service.PriorityFieldService;
 import com.trackflow.issue.entity.IssueStatus;
 import com.trackflow.issue.mapper.IssueMapper;
 import com.trackflow.issue.mapper.IssueStatusMapper;
@@ -51,6 +51,7 @@ public class BoardColumnService {
     private final WorkflowTransitionMapper workflowTransitionMapper;
     private final StringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
+    private final PriorityFieldService priorityFieldService;
 
     /**
      * 获取项目的看板列配置（纯读取，不执行任何写操作）。
@@ -483,13 +484,12 @@ public class BoardColumnService {
     /**
      * 获取按 Priority 字段分列的列配置（用于 columnField='priority' 模式）。
      * <p>
-     * Priority 列固定为 4 个：Critical、High、Normal、Low。
+     * Priority 列数量和顺序来自数据库 custom_field_option 表（按 position 排序）。
      * 每列的工单计数从 Issue 表动态统计。
      */
     public List<BoardColumnVO> getPriorityColumns(Long projectId) {
-        // Priority 固定值集合
-        String[] priorities = IssuePriority.ALL_VALUES.toArray(new String[0]);
-        String[] priorityColors = {"#ef4444", "#f59e0b", "#3b82f6", "#9ca3af"};
+        // 从数据库动态获取该项目的优先级选项（按 position 排序）
+        var priorityOptions = priorityFieldService.getPriorityOptions(projectId);
 
         // 查询项目中各 priority 的工单数量
         List<PriorityCountRow> rows = issueMapper.selectIssueCountByPriority(projectId);
@@ -513,21 +513,22 @@ public class BoardColumnService {
         }
 
         List<BoardColumnVO> result = new ArrayList<>();
-        for (int i = 0; i < priorities.length; i++) {
+        for (int i = 0; i < priorityOptions.size(); i++) {
+            var opt = priorityOptions.get(i);
             BoardColumnVO vo = new BoardColumnVO();
             vo.setStatusId(null); // priority 模式不使用 statusId
-            vo.setFieldValue(priorities[i]);
-            vo.setStatusName(priorities[i]);
-            vo.setStatusCode(priorities[i].toLowerCase());
-            vo.setStatusColor(priorityColors[i]);
+            vo.setFieldValue(opt.getValue());
+            vo.setStatusName(opt.getValue());
+            vo.setStatusCode(opt.getValue().toLowerCase());
+            vo.setStatusColor(opt.getColor() != null ? opt.getColor() : "#6b7280");
             vo.setStatusCategory(null);
             vo.setVisible(true);
             vo.setSortOrder(i);
             vo.setCollapsed(false);
             vo.setHasHiddenIssues(false);
-            vo.setIssueCount(countMap.getOrDefault(priorities[i], 0));
+            vo.setIssueCount(countMap.getOrDefault(opt.getValue(), 0));
             // 加载 WIP 配置
-            BoardColumnConfig wipCfg = wipConfigMap.get(priorities[i]);
+            BoardColumnConfig wipCfg = wipConfigMap.get(opt.getValue());
             if (wipCfg != null) {
                 vo.setWipMin(wipCfg.getWipMin());
                 vo.setWipMax(wipCfg.getWipMax());

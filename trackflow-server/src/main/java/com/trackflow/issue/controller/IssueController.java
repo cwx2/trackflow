@@ -535,11 +535,14 @@ public class IssueController {
     /**
      * 获取项目的优先级选项列表。
      * 优先级已纳入自定义字段体系（V249），本接口返回项目有效的优先级值列表（含颜色）。
+     * 当 projectId 为空时返回全局选项集。
      */
     @GetMapping("/priority-options")
     public R<List<com.trackflow.customfield.vo.CustomFieldOptionVO>> getPriorityOptions(
-            @RequestParam("projectId") Long projectId) {
-        var options = priorityFieldService.getPriorityOptions(projectId);
+            @RequestParam(value = "projectId", required = false) Long projectId) {
+        var options = projectId != null
+                ? priorityFieldService.getPriorityOptions(projectId)
+                : priorityFieldService.getGlobalPriorityOptions();
         return R.ok(customFieldConverter.toOptionVOList(options));
     }
 
@@ -548,11 +551,14 @@ public class IssueController {
     /**
      * 获取项目的工单类型选项列表。
      * 工单类型已纳入自定义字段体系（V251），本接口返回项目有效的工单类型值列表（含颜色）。
+     * 当 projectId 为空时返回全局选项集。
      */
     @GetMapping("/issue-type-options")
     public R<List<com.trackflow.customfield.vo.CustomFieldOptionVO>> getIssueTypeOptions(
-            @RequestParam("projectId") Long projectId) {
-        var options = issueTypeFieldService.getIssueTypeOptions(projectId);
+            @RequestParam(value = "projectId", required = false) Long projectId) {
+        var options = projectId != null
+                ? issueTypeFieldService.getIssueTypeOptions(projectId)
+                : issueTypeFieldService.getGlobalIssueTypeOptions();
         return R.ok(customFieldConverter.toOptionVOList(options));
     }
 

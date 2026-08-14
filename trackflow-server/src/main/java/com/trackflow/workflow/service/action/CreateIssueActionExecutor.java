@@ -2,7 +2,6 @@ package com.trackflow.workflow.service.action;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.trackflow.common.constant.IssuePriority;
 import com.trackflow.common.event.WorkflowRuleEvent;
 import com.trackflow.integration.mapper.NotificationMapper;
 import com.trackflow.issue.entity.Issue;
@@ -10,6 +9,7 @@ import com.trackflow.issue.entity.IssueStatus;
 import com.trackflow.issue.mapper.IssueActivityMapper;
 import com.trackflow.issue.mapper.IssueMapper;
 import com.trackflow.issue.mapper.IssueStatusMapper;
+import com.trackflow.issue.service.PriorityFieldService;
 import com.trackflow.project.service.ProjectService;
 import com.trackflow.system.mapper.SysUserMapper;
 import com.trackflow.workflow.entity.WorkflowInitialStatus;
@@ -35,6 +35,7 @@ public class CreateIssueActionExecutor extends WorkflowActionSupport {
     private final IssueStatusMapper statusMapper;
     private final WorkflowInitialStatusMapper initialStatusMapper;
     private final ApplicationEventPublisher eventPublisher;
+    private final PriorityFieldService priorityFieldService;
 
     public CreateIssueActionExecutor(IssueActivityMapper activityMapper,
                                      SysUserMapper sysUserMapper,
@@ -43,12 +44,14 @@ public class CreateIssueActionExecutor extends WorkflowActionSupport {
                                      IssueMapper issueMapper,
                                      IssueStatusMapper statusMapper,
                                      WorkflowInitialStatusMapper initialStatusMapper,
-                                     ApplicationEventPublisher eventPublisher) {
+                                     ApplicationEventPublisher eventPublisher,
+                                     PriorityFieldService priorityFieldService) {
         super(activityMapper, sysUserMapper, notificationMapper, projectService);
         this.issueMapper = issueMapper;
         this.statusMapper = statusMapper;
         this.initialStatusMapper = initialStatusMapper;
         this.eventPublisher = eventPublisher;
+        this.priorityFieldService = priorityFieldService;
     }
 
     @Override
@@ -73,8 +76,6 @@ public class CreateIssueActionExecutor extends WorkflowActionSupport {
 
         String issueType = textOf(actionConfig, "issueType");
         if (issueType == null || issueType.isBlank()) issueType = "Task";
-        String priority = textOf(actionConfig, "priority");
-        if (priority == null || priority.isBlank()) priority = IssuePriority.DEFAULT.getValue();
 
         Long projectId = issue.getProjectId();
         String projectIdStr = textOf(actionConfig, "projectId");
@@ -85,6 +86,9 @@ public class CreateIssueActionExecutor extends WorkflowActionSupport {
                 log.warn("[RuleEngine] create_issue: invalid projectId '{}' in rule '{}'", projectIdStr, rule.getName());
             }
         }
+
+        String priority = textOf(actionConfig, "priority");
+        if (priority == null || priority.isBlank()) priority = priorityFieldService.getDefaultPriority(projectId);
 
         com.trackflow.project.entity.Project project = projectService.getById(projectId);
         if (project == null) {

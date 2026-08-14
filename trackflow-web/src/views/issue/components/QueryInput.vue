@@ -35,6 +35,7 @@ import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { projectApi, customFieldApi } from '@/api'
 import type { IssueStatusVO, ProjectVO } from '@/api/types'
 import { loadIssueTypeOptions } from '../composables/useIssueTypeOptions'
+import { loadPriorityOptions } from '@/composables/usePriorityOptions'
 
 // ==================== Types ====================
 
@@ -79,6 +80,7 @@ const showDropdown = ref(false)
 const activeIndex = ref(0)
 const suggestions = ref<Suggestion[]>([])
 const userCache = ref<Array<{ id: string; label: string }>>([])
+const priorityCache = ref<Array<{ id: string; label: string }>>([])
 const issueTypeCache = ref<Array<{ id: string; label: string }>>([])
 const customFields = ref<FieldDef[]>([])
 let blurTimeout: ReturnType<typeof setTimeout> | null = null
@@ -97,13 +99,18 @@ function getBuiltinFields(): FieldDef[] {
     },
     {
       key: 'priority', label: '优先级', queryKey: '优先级', valueType: 'enum',
-      getValues: () => [
-        { id: '阻塞', label: '阻塞' },
-        { id: '紧急', label: '紧急' },
-        { id: '高', label: '高' },
-        { id: '普通', label: '普通' },
-        { id: '低', label: '低' },
-      ]
+      getValues: () => {
+        // Use dynamically loaded priority options (from priorityCache); fallback to empty
+        return priorityCache.value.length > 0
+          ? priorityCache.value
+          : [
+            { id: '阻塞', label: '阻塞' },
+            { id: '紧急', label: '紧急' },
+            { id: '高', label: '高' },
+            { id: '普通', label: '普通' },
+            { id: '低', label: '低' },
+          ]
+      }
     },
     {
       key: 'assignee', label: '负责人', queryKey: '负责人', valueType: 'user',
@@ -116,10 +123,9 @@ function getBuiltinFields(): FieldDef[] {
     {
       key: 'type', label: '类型', queryKey: '类型', valueType: 'enum',
       getValues: () => {
-        const DEFAULT_TYPES = ['缺陷', '任务', '需求', '史诗', '故事']
         return issueTypeCache.value.length > 0
           ? issueTypeCache.value
-          : DEFAULT_TYPES.map(label => ({ id: label, label }))
+          : []
       }
     },
     {
@@ -541,11 +547,22 @@ async function loadIssueTypes() {
   }
 }
 
+async function loadPriorities() {
+  try {
+    const pid = props.projectId
+    const opts = await loadPriorityOptions(pid || undefined)
+    priorityCache.value = opts.map(o => ({ id: o.value, label: o.label }))
+  } catch (e) {
+    console.error('[QueryInput] 加载优先级选项失败:', e)
+  }
+}
+
 // Watch projectId changes to reload custom fields and users
 watch(() => props.projectId, () => {
   loadCustomFields()
   loadUsers()
   loadIssueTypes()
+  loadPriorities()
 })
 
 onMounted(() => {

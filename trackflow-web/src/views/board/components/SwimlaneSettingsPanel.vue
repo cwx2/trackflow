@@ -305,7 +305,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import type { BoardColumnVO } from '@/api/types'
-import { projectApi, sprintApi, tagApi } from '@/api'
+import { projectApi, sprintApi, tagApi, issueApi } from '@/api'
 
 interface MergeGroupLocal {
   mergeGroupId: string
@@ -342,10 +342,8 @@ interface ValueOption {
 const availableValues = ref<ValueOption[]>([])
 const loadingValues = ref(false)
 
-// 预定义的优先级和类型列表
-const PRIORITIES = ['紧急', '高', '普通', '低']
+// 预定义的优先级和类型列表（从 API 动态加载）
 const PRIORITY_LABELS: Record<string, string> = { '紧急': '紧急', '高': '高', '普通': '普通', '低': '低' }
-const TYPES = ['缺陷', '任务', '需求', '故事', '史诗']
 const TYPE_LABELS: Record<string, string> = { '任务': '任务', '缺陷': '缺陷', '需求': '需求', '史诗': '史诗', '故事': '故事' }
 
 /** Issues 模式下可作为泳道行的 Issue 类型（层级较高的类型） */
@@ -378,17 +376,31 @@ async function loadAvailableValues() {
         break
       }
       case 'priority': {
-        availableValues.value = PRIORITIES.map(p => ({
-          key: p,
-          label: PRIORITY_LABELS[p] || p
-        }))
+        try {
+          const res = await issueApi.getPriorityOptions(props.projectId)
+          if (res.code === 0 && res.data) {
+            availableValues.value = res.data.map((opt: any) => ({
+              key: opt.value,
+              label: PRIORITY_LABELS[opt.value] || opt.value
+            }))
+          }
+        } catch {
+          availableValues.value = []
+        }
         break
       }
       case 'type': {
-        availableValues.value = TYPES.map(t => ({
-          key: t,
-          label: TYPE_LABELS[t] || t
-        }))
+        try {
+          const res = await issueApi.getIssueTypeOptions(props.projectId)
+          if (res.code === 0 && res.data) {
+            availableValues.value = res.data.map((opt: any) => ({
+              key: opt.value,
+              label: TYPE_LABELS[opt.value] || opt.value
+            }))
+          }
+        } catch {
+          availableValues.value = []
+        }
         break
       }
       case 'sprint': {
