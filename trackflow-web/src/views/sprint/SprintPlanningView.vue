@@ -453,7 +453,7 @@
 <script setup lang="ts">
 import { formatDate, formatDueDate, getDueDateStatus } from '@/utils/date'
 import { ref, computed, watch, reactive, nextTick } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
 import { handleApiError } from '@/utils/errorHandler'
 import { IconSearch, IconPlus, IconList, IconFilter, IconDown, IconUp, IconClockCircle, IconTrophy, IconExclamationCircle } from '@arco-design/web-vue/es/icon'
@@ -471,6 +471,7 @@ import type { IssueVO, SprintVO, ProjectMemberVO, SprintVelocityVO } from '@/api
 import SprintFormModal from './components/SprintFormModal.vue'
 
 const router = useRouter()
+const route = useRoute()
 const projectStore = useProjectStore()
 const { saveDraft: saveIssueDraft } = useDrafts()
 
@@ -1194,17 +1195,52 @@ async function saveGoal(sprintId: string) {
 
 
 watch(selectedProject, (val) => {
-  if (val) onProjectChange()
+  if (val) {
+    onProjectChange()
+    syncUrlProjectParam()
+  } else {
+    // Clear URL project param when deselecting
+    const query = { ...route.query }
+    delete query.project
+    router.replace({ query })
+  }
 }, { immediate: false })
 
-// On mount, load projects and auto-select if available
+// On mount, load projects and auto-select from URL query if available
 import { onMounted } from 'vue'
 onMounted(async () => {
   await loadProjects()
+
+  // 1. From URL query, restore project selection (highest priority)
+  const queryProject = route.query.project as string | undefined
+  if (queryProject && projects.value.length > 0) {
+    const matchedByKey = projects.value.find(p => p.key === queryProject)
+    if (matchedByKey) {
+      projectStore.selectProject(matchedByKey.id)
+    } else {
+      // Invalid project key in URL — show friendly message
+      Message.warning(`项目 "${queryProject}" 不存在或无权访问`)
+    }
+  }
+
   if (selectedProject.value) {
     onProjectChange()
+    syncUrlProjectParam()
   }
 })
+
+/**
+ * Sync selected project key to URL query parameter
+ */
+function syncUrlProjectParam() {
+  const currentProject = projects.value.find(p => p.id === selectedProject.value)
+  if (currentProject) {
+    const currentQueryProject = route.query.project
+    if (currentQueryProject !== currentProject.key) {
+      router.replace({ query: { ...route.query, project: currentProject.key } })
+    }
+  }
+}
 </script>
 
 <style scoped>
