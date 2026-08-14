@@ -492,8 +492,6 @@ import { EmptyState } from '@/components/base'
 // ===== Props =====
 // 父组件传入的共享状态，面板只读取、不持有这些数据
 const props = defineProps<{
-  /** 当前总工单数（显示在面板顶部） */
-  totalIssues: number
   /** 当前用户是否有创建工单权限 */
   canCreateIssue: boolean
   /** 当前激活的项目 ID（null 表示所有项目） */
@@ -658,10 +656,6 @@ defineExpose({
   flex-direction: column;
   transition: width 0.2s ease;
 }
-.panel-top { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px 8px; }
-.panel-top-title { display: flex; align-items: center; gap: 8px; }
-.panel-label { font-size: 14px; font-weight: 500; color: var(--tf-text-primary); }
-.panel-total { font-size: 11px; color: var(--tf-text-tertiary); background: var(--tf-bg-elevated); padding: 2px 6px; border-radius: 8px; }
 .panel-search { padding: 4px 10px 8px; }
 .query-group { padding: 0 6px; margin-bottom: 2px; }
 .group-header { display: flex; align-items: center; gap: 4px; height: 32px; padding: 0 8px; cursor: pointer; border-radius: 4px; transition: background 0.15s; }

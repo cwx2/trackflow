@@ -3,7 +3,6 @@
     <!-- Left query panel (YouTrack style) -->
     <QueryPanel
       ref="queryPanelRef"
-      :total-issues="totalIssues"
       :can-create-issue="canCreateIssueGlobal"
       :active-project-id="activeProjectId"
       :active-query-id="activeQueryId"
