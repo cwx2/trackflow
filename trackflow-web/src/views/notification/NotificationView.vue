@@ -44,145 +44,125 @@
       </div>
     </div>
 
-    <!-- 分类标签页 -->
-    <a-tabs
-      v-model:active-key="activeCategory"
-      class="page-tabs"
-      @change="(key) => handleCategoryChange(key as NotificationCategory)"
+    <!-- 分类标签页 + 骨架屏 + 空状态（公共组件） -->
+    <NotificationListContent
+      :active-category="activeCategory"
+      :visible-tabs="visibleTabs"
+      :get-category-count="getCategoryCount"
+      :loading="loading"
+      :is-empty="notifications.length === 0"
+      :get-empty-icon="getEmptyIcon"
+      :get-empty-title="getEmptyTitle"
+      :get-empty-desc="getEmptyDesc"
+      tabs-class="page-tabs"
+      @category-change="handleCategoryChange"
     >
-      <a-tab-pane v-for="tab in visibleTabs" :key="tab.key">
-        <template #title>
-          {{ tab.label }}
-          <span v-if="getCategoryCount(tab.key) > 0" class="tab-badge">{{ getCategoryCount(tab.key) }}</span>
-        </template>
-      </a-tab-pane>
-    </a-tabs>
-
-    <!-- 内容区 -->
-    <div class="page-body">
-      <!-- 加载状态 -->
-      <div v-if="loading && notifications.length === 0" class="page-loading">
-        <div v-for="i in 8" :key="i" class="loading-skeleton">
-          <div class="skeleton-indicator"></div>
-          <div class="skeleton-icon"></div>
-          <div class="skeleton-content">
-            <div class="skeleton-line short"></div>
-            <div class="skeleton-line long"></div>
-            <div class="skeleton-line medium"></div>
-          </div>
-        </div>
-      </div>
-
-      <!-- 空状态 -->
-      <EmptyState
-        v-else-if="notifications.length === 0"
-        :icon-emoji="getEmptyIcon()"
-        :title="getEmptyTitle()"
-        :description="getEmptyDesc()"
-      />
-
-      <!-- 通知列表 -->
-      <div v-else class="notification-list">
-        <div
-          v-for="item in notifications"
-          :key="item.id"
-          class="notification-item-wrapper"
-        >
-          <NotificationItem
-            :item="item"
-            @click="handleItemClick(item)"
-            @mark-read="handleMarkRead"
-            @mark-unread="handleMarkUnread"
+      <!-- 内容区 -->
+      <div class="page-body">
+        <!-- 通知列表 -->
+        <div class="notification-list">
+          <div
+            v-for="item in notifications"
+            :key="item.id"
+            class="notification-item-wrapper"
           >
-            <template #actions>
-              <button
-                v-if="!item.isRead"
-                class="item-action-btn"
-                title="标记已读"
-                @click.stop="handleMarkRead(item.id)"
-              >
-                <icon-check :size="14" />
-              </button>
-              <button
-                v-else
-                class="item-action-btn"
-                title="标记未读"
-                @click.stop="handleMarkUnread(item.id)"
-              >
-                <icon-record :size="14" />
-              </button>
-              <button
-                v-if="canReply(item)"
-                class="item-action-btn item-reply-btn"
-                title="回复"
-                @click.stop="toggleReply(item.id)"
-              >
-                <icon-reply :size="14" />
-              </button>
-              <button
-                class="item-action-btn item-delete-btn"
-                title="删除通知"
-                @click.stop="handleDelete(item.id)"
-              >
-                <icon-close :size="14" />
-              </button>
-            </template>
-          </NotificationItem>
-        <!-- 内联回复编辑器 -->
-        <div v-if="replyingItemId === item.id" class="reply-editor" @click.stop>
-          <textarea
-            v-model="replyContent"
-            class="reply-textarea"
-            placeholder="输入回复内容..."
-            rows="3"
-            :disabled="replySubmitting"
-            @keydown.meta.enter="submitReply(item)"
-            @keydown.ctrl.enter="submitReply(item)"
-          ></textarea>
-          <div class="reply-actions">
-            <span class="reply-hint">Ctrl+Enter 发送</span>
-            <div class="reply-btns">
-              <button class="reply-cancel-btn" :disabled="replySubmitting" @click="cancelReply">取消</button>
-              <button
-                class="reply-submit-btn"
-                :disabled="!replyContent.trim() || replySubmitting"
-                @click="submitReply(item)"
-              >
-                {{ replySubmitting ? '发送中...' : '发送回复' }}
-              </button>
+            <NotificationItem
+              :item="item"
+              @click="handleItemClick(item)"
+              @mark-read="handleMarkRead"
+              @mark-unread="handleMarkUnread"
+            >
+              <template #actions>
+                <button
+                  v-if="!item.isRead"
+                  class="item-action-btn"
+                  title="标记已读"
+                  @click.stop="handleMarkRead(item.id)"
+                >
+                  <icon-check :size="14" />
+                </button>
+                <button
+                  v-else
+                  class="item-action-btn"
+                  title="标记未读"
+                  @click.stop="handleMarkUnread(item.id)"
+                >
+                  <icon-record :size="14" />
+                </button>
+                <button
+                  v-if="canReply(item)"
+                  class="item-action-btn item-reply-btn"
+                  title="回复"
+                  @click.stop="toggleReply(item.id)"
+                >
+                  <icon-reply :size="14" />
+                </button>
+                <button
+                  class="item-action-btn item-delete-btn"
+                  title="删除通知"
+                  @click.stop="handleDelete(item.id)"
+                >
+                  <icon-close :size="14" />
+                </button>
+              </template>
+            </NotificationItem>
+          <!-- 内联回复编辑器 -->
+          <div v-if="replyingItemId === item.id" class="reply-editor" @click.stop>
+            <textarea
+              v-model="replyContent"
+              class="reply-textarea"
+              placeholder="输入回复内容..."
+              rows="3"
+              :disabled="replySubmitting"
+              @keydown.meta.enter="submitReply(item)"
+              @keydown.ctrl.enter="submitReply(item)"
+            ></textarea>
+            <div class="reply-actions">
+              <span class="reply-hint">Ctrl+Enter 发送</span>
+              <div class="reply-btns">
+                <button class="reply-cancel-btn" :disabled="replySubmitting" @click="cancelReply">取消</button>
+                <button
+                  class="reply-submit-btn"
+                  :disabled="!replyContent.trim() || replySubmitting"
+                  @click="submitReply(item)"
+                >
+                  {{ replySubmitting ? '发送中...' : '发送回复' }}
+                </button>
+              </div>
             </div>
           </div>
+          </div>
         </div>
-        </div>
-      </div>
 
-      <!-- 分页 -->
-      <div v-if="totalCount > 0" class="page-pagination">
-        <a-pagination
-          :total="totalCount"
-          :current="currentPage"
-          :page-size="pageSize"
-          size="small"
-          show-total
-          show-page-size
-          :page-size-options="[20, 50, 100, 200]"
-          @change="changePage"
-          @page-size-change="changePageSize"
-        />
+        <!-- 分页 -->
+        <div v-if="totalCount > 0" class="page-pagination">
+          <a-pagination
+            :total="totalCount"
+            :current="currentPage"
+            :page-size="pageSize"
+            size="small"
+            show-total
+            show-page-size
+            :page-size-options="[20, 50, 100, 200]"
+            @change="changePage"
+            @page-size-change="changePageSize"
+          />
+        </div>
       </div>
-    </div>
+    </NotificationListContent>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useNotification } from '@/composables/useNotification'
+import { useNotificationShared } from '@/composables/useNotificationShared'
 import { projectApi, issueApi } from '@/api'
 import type { NotificationVO, NotificationCategory } from '@/api/notification'
 import { Message } from '@arco-design/web-vue'
-import { EmptyState } from '@/components/base'
 import NotificationItem from '@/views/layout/components/NotificationItem.vue'
+import NotificationListContent from './NotificationListContent.vue'
 
 const router = useRouter()
 const {
@@ -208,6 +188,15 @@ const {
   fetchCategoryUnreadCounts,
   panelVisible
 } = useNotification()
+
+const {
+  visibleTabs,
+  getCategoryCount,
+  getEmptyIcon,
+  getEmptyTitle,
+  getEmptyDesc,
+  buildSourceHash,
+} = useNotificationShared(isSystemAdmin, activeCategory, unreadOnly, categoryUnreadCounts)
 
 const pageSize = ref(50)
 const currentPage = ref(1)
@@ -284,81 +273,14 @@ function handleProjectClear() {
   setProjectFilter(null)
 }
 
-/** 标签页配置 */
-interface TabConfig {
-  key: NotificationCategory
-  label: string
-  adminOnly?: boolean
-}
-
-const allTabs: TabConfig[] = [
-  { key: 'all', label: '全部' },
-  { key: 'mention', label: '@提及' },
-  { key: 'subscription', label: '订阅更新' },
-  { key: 'system', label: '系统', adminOnly: true }
-]
-
-const visibleTabs = computed(() => {
-  return allTabs.filter(tab => !tab.adminOnly || isSystemAdmin.value)
-})
-
-function getCategoryCount(category: NotificationCategory): number {
-  return categoryUnreadCounts.value[category] || 0
-}
-
-function getEmptyIcon(): string {
-  switch (activeCategory.value) {
-    case 'mention': return '📢'
-    case 'subscription': return '🔔'
-    case 'system': return '⚙️'
-    default: return '🔔'
-  }
-}
-
-function getEmptyTitle(): string {
-  if (unreadOnly.value) return '没有未读通知'
-  switch (activeCategory.value) {
-    case 'mention': return '暂无@提及'
-    case 'subscription': return '暂无订阅更新'
-    case 'system': return '暂无系统通知'
-    default: return '暂无新通知'
-  }
-}
-
-function getEmptyDesc(): string {
-  if (unreadOnly.value) return '所有通知都已阅读'
-  switch (activeCategory.value) {
-    case 'mention': return '当其他人在评论中@你时，通知会出现在这里'
-    case 'subscription': return '当你关注的工单有状态变更、评论或分配时，通知会出现在这里'
-    case 'system': return '项目成员变更、归档等系统级事件会出现在这里'
-    default: return '当有新的工单分配、评论或状态变更时，通知会出现在这里'
-  }
-}
-
-
-
-function handleCategoryChange(category: NotificationCategory) {
-  currentPage.value = 1
-  setCategory(category)
-}
-
 function handleToggleUnread() {
   currentPage.value = 1
   toggleUnreadOnly()
 }
 
-/**
- * 根据通知类型构建 sourceId 对应的 hash 锚点（不含 # 前缀）。
- * - 评论类通知（issue_commented, mention）→ "c_{sourceId}"（评论 ID）
- * - 其他活动类通知 → "a_{sourceId}"（活动记录 ID）
- */
-function buildSourceHash(item: NotificationVO): string {
-  if (!item.sourceId) return ''
-  const commentTypes = ['issue_commented', 'mention']
-  if (commentTypes.includes(item.type || '')) {
-    return `c_${item.sourceId}`
-  }
-  return `a_${item.sourceId}`
+function handleCategoryChange(category: NotificationCategory) {
+  currentPage.value = 1
+  setCategory(category)
 }
 
 function handleItemClick(item: NotificationVO) {
@@ -532,37 +454,7 @@ onMounted(() => {
   background: var(--tf-danger-bg);
 }
 
-/* Category Tabs */
-.page-tabs {
-  display: flex;
-  align-items: center;
-  gap: 0;
-  border-bottom: 1px solid var(--tf-border-light);
-  margin-bottom: 0;
-  flex-shrink: 0;
-}
-
-.tab-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 1;
-  color: var(--tf-text-on-accent, #fff);
-  background: var(--tf-accent);
-  border-radius: 9px;
-  margin-left: 4px;
-}
-/* 非激活 tab 的 badge 颜色降级 */
-:deep(.arco-tabs-tab:not(.arco-tabs-tab-active)) .tab-badge {
-  background: var(--tf-text-quaternary, var(--tf-text-tertiary));
-  opacity: 0.7;
-}
-
+/* page-tabs 样式由 NotificationListContent 组件渲染，此处仅保留布局作用域覆盖 */
 /* page-tabs：去掉 a-tabs 默认内容区内边距，只保留 nav bar */
 .page-tabs :deep(.arco-tabs-content) { display: none; }
 .page-tabs :deep(.arco-tabs-nav) { padding: 0; margin: 0; }
@@ -572,61 +464,6 @@ onMounted(() => {
   flex: 1;
   overflow-y: auto;
   min-height: 0;
-}
-
-/* Loading Skeleton */
-.page-loading {
-  padding: 16px 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.loading-skeleton {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 12px 16px;
-}
-
-.skeleton-indicator {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--tf-bg-hover);
-  margin-top: 8px;
-  animation: skeleton-pulse 1.5s ease-in-out infinite;
-}
-
-.skeleton-icon {
-  width: 32px;
-  height: 32px;
-  border-radius: 6px;
-  background: var(--tf-bg-hover);
-  flex-shrink: 0;
-  animation: skeleton-pulse 1.5s ease-in-out infinite;
-}
-
-.skeleton-content {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.skeleton-line {
-  height: 12px;
-  border-radius: 3px;
-  background: var(--tf-bg-hover);
-  animation: skeleton-pulse 1.5s ease-in-out infinite;
-}
-.skeleton-line.short { width: 35%; }
-.skeleton-line.medium { width: 60%; }
-.skeleton-line.long { width: 85%; }
-
-@keyframes skeleton-pulse {
-  0%, 100% { opacity: 0.4; }
-  50% { opacity: 0.8; }
 }
 
 /* Empty State */

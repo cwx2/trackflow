@@ -55,64 +55,45 @@
             </div>
           </div>
 
-          <!-- 分类标签页 -->
-          <a-tabs
-            v-model:active-key="activeCategory"
-            class="panel-tabs"
-            @change="(key) => setCategory(key as NotificationCategory)"
+          <!-- 分类标签页 + 骨架屏 + 空状态（公共组件） -->
+          <NotificationListContent
+            :active-category="activeCategory"
+            :visible-tabs="visibleTabs"
+            :get-category-count="getCategoryCount"
+            :loading="loading"
+            :is-empty="notifications.length === 0"
+            :get-empty-icon="getEmptyIcon"
+            :get-empty-title="getEmptyTitle"
+            :get-empty-desc="getEmptyDesc"
+            tabs-class="panel-tabs"
+            :compact-skeleton="true"
+            :compact-empty="true"
+            @category-change="setCategory"
           >
-            <a-tab-pane v-for="tab in visibleTabs" :key="tab.key">
-              <template #title>
-                {{ tab.label }}
-                <span v-if="getCategoryCount(tab.key) > 0" class="tab-badge">{{ getCategoryCount(tab.key) }}</span>
-              </template>
-            </a-tab-pane>
-          </a-tabs>
-
-          <!-- 面板内容 -->
-          <div ref="panelBodyRef" class="panel-body">
-            <!-- 加载状态 -->
-            <div v-if="loading && notifications.length === 0" class="panel-loading">
-              <div class="loading-skeleton" v-for="i in 4" :key="i">
-                <div class="skeleton-icon"></div>
-                <div class="skeleton-content">
-                  <div class="skeleton-line short"></div>
-                  <div class="skeleton-line long"></div>
-                </div>
-              </div>
-            </div>
-
-            <!-- 空状态 -->
-            <EmptyState
-              v-else-if="notifications.length === 0"
-              :icon-emoji="getEmptyIcon()"
-              :title="getEmptyTitle()"
-              :description="getEmptyDesc()"
-              :compact="true"
-            />
-
-            <!-- 通知列表（按工单分组） -->
-            <div v-else class="notification-list">
-              <div
-                v-for="group in groupedNotifications"
-                :key="`${group.resourceType}:${group.resourceId}`"
-                class="notification-group"
-                :class="{ 'has-multiple': group.items.length > 1 }"
-              >
-                <!-- 分组头部（多条通知时显示） -->
-                <div v-if="group.items.length > 1 && group.resourceType" class="group-header">
-                  <span class="group-title" :title="group.resourceTitle">{{ group.resourceTitle }}</span>
-                  <span class="group-count">{{ group.items.length }} 条通知</span>
-                  <button
-                    v-if="group.resourceType === 'issue'"
-                    class="group-mute-btn"
-                    :class="{ muted: group.resourceMuted }"
-                    :title="group.resourceMuted ? '取消静音' : '静音此工单'"
-                    @click.stop="handleMuteToggle(group)"
-                  >
-                    {{ group.resourceMuted ? '🔇' : '🔔' }}
-                  </button>
-                </div>
+            <!-- 面板内容 -->
+            <div ref="panelBodyRef" class="panel-body">
+              <!-- 通知列表（按工单分组） -->
+              <div class="notification-list">
+                <div
+                  v-for="group in groupedNotifications"
+                  :key="`${group.resourceType}:${group.resourceId}`"
+                  class="notification-group"
+                  :class="{ 'has-multiple': group.items.length > 1 }"
+                >
+                  <!-- 分组头部（多条通知时显示） -->
+                  <div v-if="group.items.length > 1 && group.resourceType" class="group-header">
+                    <span class="group-title" :title="group.resourceTitle">{{ group.resourceTitle }}</span>
+                    <span class="group-count">{{ group.items.length }} 条通知</span>
+                    <button
+                      v-if="group.resourceType === 'issue'"
+                      class="group-mute-btn"
+                      :class="{ muted: group.resourceMuted }"
+                      :title="group.resourceMuted ? '取消静音' : '静音此工单'"
+                      @click.stop="handleMuteToggle(group)"
+                    >
+                      {{ group.resourceMuted ? '🔇' : '🔔' }}
+                    </button>
+                  </div>
 
                 <!-- 通知项 -->
                 <NotificationItem
@@ -171,6 +152,7 @@
               </div>
             </div>
           </div>
+          </NotificationListContent>
 
           <!-- 面板底部 -->
           <div v-if="notifications.length > 0" class="panel-footer">
@@ -187,9 +169,10 @@
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useNotification } from '@/composables/useNotification'
-import type { NotificationVO, NotificationCategory } from '@/api/notification'
-import { EmptyState } from '@/components/base'
+import { useNotificationShared } from '@/composables/useNotificationShared'
+import type { NotificationVO } from '@/api/notification'
 import NotificationItem from './NotificationItem.vue'
+import NotificationListContent from '@/views/notification/NotificationListContent.vue'
 
 const router = useRouter()
 const {
@@ -213,35 +196,20 @@ const {
   unmuteThread
 } = useNotification()
 
+const {
+  visibleTabs,
+  getCategoryCount,
+  getEmptyIcon,
+  getEmptyTitle,
+  getEmptyDesc,
+  buildSourceHash,
+} = useNotificationShared(isSystemAdmin, activeCategory, unreadOnly, categoryUnreadCounts)
+
 /** 面板列表容器 ref */
 const panelBodyRef = ref<HTMLElement | null>(null)
 
 /** 当前高亮的通知 ID（短暂闪烁后自动清除） */
 const highlightedId = ref<string | null>(null)
-
-/** 标签页配置 */
-interface TabConfig {
-  key: NotificationCategory
-  label: string
-  adminOnly?: boolean
-}
-
-const allTabs: TabConfig[] = [
-  { key: 'all', label: '全部' },
-  { key: 'mention', label: '@提及' },
-  { key: 'subscription', label: '订阅更新' },
-  { key: 'system', label: '系统', adminOnly: true }
-]
-
-/** 当前用户可见的标签页 */
-const visibleTabs = computed(() => {
-  return allTabs.filter(tab => !tab.adminOnly || isSystemAdmin.value)
-})
-
-/** 获取指定分类的未读计数 */
-function getCategoryCount(category: NotificationCategory): number {
-  return categoryUnreadCounts.value[category] || 0
-}
 
 /** 当前 Tab 的未读通知数（用于控制「跳转到未读」按钮可见性） */
 const currentTabUnreadCount = computed(() => {
@@ -387,50 +355,6 @@ function handleMuteToggle(group: NotificationGroup) {
   }
 }
 
-/** 分类相关的空状态 */
-function getEmptyIcon(): string {
-  switch (activeCategory.value) {
-    case 'mention': return '📢'
-    case 'subscription': return '🔔'
-    case 'system': return '⚙️'
-    default: return '🔔'
-  }
-}
-
-function getEmptyTitle(): string {
-  if (unreadOnly.value) return '没有未读通知'
-  switch (activeCategory.value) {
-    case 'mention': return '暂无@提及'
-    case 'subscription': return '暂无订阅更新'
-    case 'system': return '暂无系统通知'
-    default: return '暂无新通知'
-  }
-}
-
-function getEmptyDesc(): string {
-  if (unreadOnly.value) return '所有通知都已阅读'
-  switch (activeCategory.value) {
-    case 'mention': return '当其他人在评论中@你时，通知会出现在这里'
-    case 'subscription': return '当你关注的工单有状态变更、评论或分配时，通知会出现在这里'
-    case 'system': return '项目成员变更、归档等系统级事件会出现在这里'
-    default: return '当有新的工单分配、评论或状态变更时，通知会出现在这里'
-  }
-}
-
-/**
- * 根据通知类型构建 sourceId 对应的 hash 锚点（不含 # 前缀）。
- * - 评论类通知（issue_commented, mention）→ "c_{sourceId}"（评论 ID）
- * - 其他活动类通知 → "a_{sourceId}"（活动记录 ID）
- */
-function buildSourceHash(item: NotificationVO): string {
-  if (!item.sourceId) return ''
-  const commentTypes = ['issue_commented', 'mention']
-  if (commentTypes.includes(item.type || '')) {
-    return `c_${item.sourceId}`
-  }
-  return `a_${item.sourceId}`
-}
-
 function handleItemClick(item: NotificationVO) {
   // 标记已读
   if (!item.isRead) {
@@ -569,75 +493,16 @@ function handleDeleteAllRead() {
 .panel-tabs :deep(.arco-tabs-nav) { padding: 0; border-bottom: none; }
 .panel-tabs :deep(.arco-tabs-content) { display: none; }
 
-.tab-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 16px;
-  height: 16px;
-  padding: 0 4px;
-  font-size: 10px;
-  font-weight: 600;
-  line-height: 1;
-  color: var(--tf-text-on-accent, #fff);
-  background: var(--tf-accent);
-  border-radius: 8px;
-  margin-left: 2px;
-}
-:deep(.arco-tabs-tab:not(.arco-tabs-tab-active)) .tab-badge {
-  background: var(--tf-bg-active, #3a3d42);
-  color: var(--tf-text-secondary);
-}
+/* panel-tabs 样式由 NotificationListContent 组件内部渲染，此处只保留作用域覆盖 */
+/* Category Tabs — 去掉 a-tabs 默认内容区，只保留 nav bar */
+.panel-tabs :deep(.arco-tabs-nav) { padding: 0; border-bottom: none; }
+.panel-tabs :deep(.arco-tabs-content) { display: none; }
 
 /* Panel Body */
 .panel-body {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-}
-
-/* Loading Skeleton */
-.panel-loading {
-  padding: 12px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.loading-skeleton {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-}
-
-.skeleton-icon {
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
-  background: var(--tf-bg-hover);
-  flex-shrink: 0;
-  animation: skeleton-pulse 1.5s ease-in-out infinite;
-}
-
-.skeleton-content {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.skeleton-line {
-  height: 12px;
-  border-radius: 3px;
-  background: var(--tf-bg-hover);
-  animation: skeleton-pulse 1.5s ease-in-out infinite;
-}
-.skeleton-line.short { width: 40%; }
-.skeleton-line.long { width: 80%; }
-
-@keyframes skeleton-pulse {
-  0%, 100% { opacity: 0.4; }
-  50% { opacity: 0.8; }
 }
 
 /* Empty State */
