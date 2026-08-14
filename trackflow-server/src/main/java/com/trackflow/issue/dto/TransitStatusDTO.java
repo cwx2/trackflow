@@ -3,6 +3,8 @@ package com.trackflow.issue.dto;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
+import java.util.Map;
+
 @Data
 public class TransitStatusDTO {
     @NotNull(message = "目标状态ID不能为空")
@@ -44,4 +46,11 @@ public class TransitStatusDTO {
      * 乐观锁版本号（前端传入，用于并发控制）。
      */
     private Integer version;
+
+    /**
+     * 状态转换时同步提交的自定义字段值（key=fieldId 字符串, value=字段值）。
+     * 用于在确认弹窗中一次性填写目标状态的必填字段，实现原子化操作。
+     * 为 null 或空时不做字段更新。
+     */
+    private Map<String, String> customFieldValues;
 }

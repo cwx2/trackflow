@@ -595,6 +595,17 @@ public class IssueService {
             throw new BusinessException(ErrorCode.DESCRIPTION_EMPTY_WARNING, preCheck.descEmptyWarning());
         }
 
+        // 在状态转换前，先保存弹窗中提交的自定义字段值（原子操作：字段填写 + 状态变更一步完成）
+        if (dto.getCustomFieldValues() != null && !dto.getCustomFieldValues().isEmpty()) {
+            for (Map.Entry<String, String> entry : dto.getCustomFieldValues().entrySet()) {
+                Long fieldId = Long.parseLong(entry.getKey());
+                String value = entry.getValue();
+                customFieldService.saveSingleValue(id, fieldId, value, issue.getIssueType(), issue.getProjectId());
+            }
+            // 重新加载 issue 使 custom_fields JSONB 字段反映最新值（供 validatePreTransition 校验）
+            issue = getById(id);
+        }
+
         // 执行状态变更（skipWorkflowCheck=true，因为此方法已完成工作流校验）
         ActionExecutionResult actionResult = transitStatus(id, dto.getStatusId(), dto.getComment(),
                 dto.getAssigneeId(), Boolean.TRUE.equals(dto.getAssigneeExplicit()),

@@ -188,6 +188,8 @@
     :require-comment="transitionRequireComment"
     :show-assignee="true"
     :members="members"
+    :required-field-ids="transitionTarget?.requiredFieldIds"
+    :custom-field-defs="customFieldDefs"
     @confirm="onTransitionConfirm"
     @cancel="showTransitionModal = false"
   />

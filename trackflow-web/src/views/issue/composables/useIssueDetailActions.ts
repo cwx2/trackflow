@@ -392,10 +392,10 @@ export function useIssueDetailActions(deps: ActionDeps) {
     }
   }
 
-  async function onTransitionConfirm(comment: string, assigneeId: string | undefined, assigneeExplicit: boolean) {
+  async function onTransitionConfirm(comment: string, assigneeId: string | undefined, assigneeExplicit: boolean, customFieldValues?: Record<string, string>) {
     showTransitionModal.value = false
     if (transitionTarget.value) {
-      await executeTransition(transitionTarget.value, comment || undefined, undefined, assigneeId, assigneeExplicit)
+      await executeTransition(transitionTarget.value, comment || undefined, undefined, assigneeId, assigneeExplicit, customFieldValues)
     }
   }
 
@@ -404,14 +404,15 @@ export function useIssueDetailActions(deps: ActionDeps) {
     comment: string | undefined,
     forceFlags?: { force?: boolean; forceWip?: boolean; forceDescEmpty?: boolean },
     assigneeId?: string,
-    assigneeExplicit?: boolean
+    assigneeExplicit?: boolean,
+    customFieldValues?: Record<string, string>
   ) {
     const { refresh: refreshNavBadge } = useNavBadge()
     try {
       const res = await issueApi.transitStatus(
         deps.issue.value!.id, target.id, comment, deps.issue.value!.version,
         forceFlags?.force, forceFlags?.forceWip, forceFlags?.forceDescEmpty,
-        assigneeId, assigneeExplicit
+        assigneeId, assigneeExplicit, customFieldValues
       )
       if (res.code === 0) {
         const actionResult = res.data?.actionResult
