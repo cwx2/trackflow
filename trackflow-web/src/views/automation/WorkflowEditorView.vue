@@ -289,6 +289,7 @@ import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { pauseTracking, resetTracking } from '@vue/reactivity'
 import { useRoute, useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
+import { handleApiError } from '@/utils/errorHandler'
 import LogicFlow from '@logicflow/core'
 import { Control, MiniMap, Snapshot } from '@logicflow/extension'
 import { automationApi, type WorkflowDefinition, type GlobalVariable, type ExecutionDetailVO, type AutomationNodeDefinitionVO } from '@/api'
@@ -1081,8 +1082,8 @@ async function initLogicFlow() {
       Message.error(`节点契约未同步：${drift[0]}`)
       return
     }
-  } catch (error: any) {
-    Message.error(error.response?.data?.message || '无法校验后端节点执行目录')
+  } catch (error) {
+    handleApiError(error, '无法校验后端节点执行目录')
     return
   }
   
@@ -1306,8 +1307,8 @@ async function loadWorkflow() {
     } else {
       Message.error(res.message || '加载失败')
     }
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '加载失败')
+  } catch (e) {
+    handleApiError(e, '加载失败')
   }
 }
 
@@ -1341,8 +1342,8 @@ async function handleSave() {
       Message.error(res.message || '保存失败')
       return false
     }
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '保存失败')
+  } catch (e) {
+    handleApiError(e, '保存失败')
     return false
   } finally {
     saving.value = false
@@ -1397,8 +1398,8 @@ async function handleSaveAsTemplate() {
     } else {
       Message.error(res.message || '保存失败')
     }
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '保存为模板失败')
+  } catch (e) {
+    handleApiError(e, '保存为模板失败')
   } finally {
     saveAsTemplateLoading.value = false
   }
@@ -1424,8 +1425,8 @@ async function handlePublish() {
       workflowRuntimeEnabled.value = false
       Message.success('工作流已发布，请确认配置后点击“启动”')
     } else Message.error(res.message || '发布失败')
-  } catch (error: any) {
-    Message.error(error.response?.data?.message || '发布失败')
+  } catch (error) {
+    handleApiError(error, '发布失败')
   } finally {
     publishing.value = false
   }
@@ -1440,8 +1441,8 @@ async function handleStartRuntime() {
       workflowVersion.value = res.data.version || workflowVersion.value + 1
       Message.success('自动化已启动，将按当前触发配置运行')
     }
-  } catch (error: any) {
-    Message.error(error.response?.data?.message || '启动失败')
+  } catch (error) {
+    handleApiError(error, '启动失败')
   } finally {
     runtimeChanging.value = false
   }
@@ -1456,8 +1457,8 @@ async function handleStopRuntime() {
       workflowVersion.value = res.data.version || workflowVersion.value + 1
       Message.success('自动化已停止接收新触发，已有任务将继续完成')
     }
-  } catch (error: any) {
-    Message.error(error.response?.data?.message || '停止失败')
+  } catch (error) {
+    handleApiError(error, '停止失败')
   } finally {
     runtimeChanging.value = false
   }
@@ -1684,8 +1685,8 @@ async function confirmRun() {
       activeEvtSource = null
     }
     startExecutionPolling(res.data.executionId)
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '执行失败')
+  } catch (e) {
+    handleApiError(e, '执行失败')
     isRunning.value = false
   }
 }
@@ -1750,8 +1751,8 @@ async function handleCancelRun() {
   try {
     await automationApi.cancelExecution(currentExecutionId.value)
     Message.info('正在取消工作流执行...')
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '取消执行失败')
+  } catch (e) {
+    handleApiError(e, '取消执行失败')
   }
 }
 

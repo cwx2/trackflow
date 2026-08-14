@@ -185,6 +185,7 @@ import { formatDateTime } from '@/utils/date'
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { Message, Modal } from '@arco-design/web-vue'
+import { handleApiError } from '@/utils/errorHandler'
 import { useConfirmDelete } from '@/composables/useConfirmDelete'
 import { automationApi, type WorkflowVO, type CreateWorkflowDTO, type WorkflowTemplateVO } from '@/api'
 import { EmptyState } from '@/components/base'
@@ -227,8 +228,8 @@ async function toggleRuntime(workflow: WorkflowVO) {
       Message.success(workflow.runtimeEnabled ? '自动化已停止' : '自动化已启动')
       await loadWorkflows()
     }
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || (workflow.runtimeEnabled ? '停止失败' : '启动失败'))
+  } catch (e) {
+    handleApiError(e, workflow.runtimeEnabled ? '停止失败' : '启动失败')
   }
 }
 
@@ -252,8 +253,8 @@ async function loadTemplates() {
       return
     }
     templates.value = res.data || []
-  } catch (error: any) {
-    Message.error(error.response?.data?.message || '加载模板失败')
+  } catch (error) {
+    handleApiError(error, '加载模板失败')
   } finally {
     templateLoading.value = false
   }
@@ -271,7 +272,7 @@ async function handleCloneTemplate(tpl: WorkflowTemplateVO) {
     showTemplateModal.value = false
     router.push(`/automation/${workflowId}`)
   } catch (e: any) {
-    Message.error(e.response?.data?.message || '操作失败')
+    handleApiError(e, '操作失败')
   } finally {
     cloneLoadingId.value = null
   }
@@ -296,7 +297,7 @@ function handleDeleteTemplate(tpl: WorkflowTemplateVO) {
           Message.error(res.message || '删除失败')
         }
       } catch (e: any) {
-        Message.error(e.response?.data?.message || '删除失败')
+        handleApiError(e, '删除失败')
       }
     }
   })
@@ -334,7 +335,7 @@ async function loadWorkflows() {
       Message.error(res.message || '加载失败')
     }
   } catch (e: any) {
-    Message.error(e.response?.data?.message || '加载失败')
+    handleApiError(e, '加载失败')
   } finally {
     loading.value = false
   }
@@ -359,7 +360,7 @@ async function handleCreate() {
       Message.error(res.message || '创建失败')
     }
   } catch (e: any) {
-    Message.error(e.response?.data?.message || '创建失败')
+    handleApiError(e, '创建失败')
   } finally {
     createLoading.value = false
   }
@@ -395,7 +396,7 @@ function confirmDelete(workflow: WorkflowVO) {
           Message.error(res.message || '删除失败')
         }
       } catch (e: any) {
-        Message.error(e.response?.data?.message || '删除失败')
+        handleApiError(e, '删除失败')
       }
     }
   })

@@ -365,6 +365,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
+import { handleApiError } from '@/utils/errorHandler'
 import { useConfirmDelete } from '@/composables/useConfirmDelete'
 import { GridLayout, GridItem } from 'grid-layout-plus'
 import {
@@ -551,7 +552,7 @@ async function saveLayout(layout: Array<{ i: string; x: number; y: number; w: nu
     await customDashboardApi.updateLayout(currentDashboard.value.id, items, version)
     // 乐观更新本地版本号
     currentDashboard.value.layoutVersion = version + 1
-  } catch (e: any) {
+  } catch (e) {
     if (e.response?.status === 409) {
       Message.warning('布局已被其他操作修改，正在刷新...')
       // 重新加载仪表盘详情以获取最新版本
@@ -593,7 +594,7 @@ async function loadDashboards() {
       await selectDashboard(targetId)
     }
   } catch (e: any) {
-    Message.error(e.response?.data?.message || '加载仪表盘列表失败')
+    handleApiError(e, '加载仪表盘列表失败')
   } finally {
     loadingList.value = false
   }
@@ -609,7 +610,7 @@ async function selectDashboard(id: string) {
       buildGridLayout(currentDashboard.value.widgets)
     }
   } catch (e: any) {
-    Message.error(e.response?.data?.message || '加载仪表盘详情失败')
+    handleApiError(e, '加载仪表盘详情失败')
     currentDashboard.value = null
   } finally {
     loadingDetail.value = false
@@ -638,7 +639,7 @@ async function handleCreate() {
       await selectDashboard(res.data.id)
     }
   } catch (e: any) {
-    Message.error(e.response?.data?.message || '创建失败')
+    handleApiError(e, '创建失败')
   } finally {
     creating.value = false
   }
@@ -660,7 +661,7 @@ async function restoreSystemDefault() {
       Message.warning('系统默认仪表盘尚未配置，请联系管理员')
     }
   } catch (e: any) {
-    Message.error(e.response?.data?.message || '恢复默认仪表盘失败')
+    handleApiError(e, '恢复默认仪表盘失败')
   } finally {
     restoringDefault.value = false
   }
@@ -683,7 +684,7 @@ async function handleUpdate() {
     await loadDashboards()
     await selectDashboard(currentDashboard.value.id)
   } catch (e: any) {
-    Message.error(e.response?.data?.message || '更新失败')
+    handleApiError(e, '更新失败')
   } finally {
     updating.value = false
   }
@@ -699,7 +700,7 @@ async function toggleShared() {
     await loadDashboards()
     await selectDashboard(currentDashboard.value.id)
   } catch (e: any) {
-    Message.error(e.response?.data?.message || '操作失败')
+    handleApiError(e, '操作失败')
   }
 }
 
@@ -726,7 +727,7 @@ async function handleToggleFavorite(d: DashboardListVO) {
     // 刷新列表以获取正确排序
     await loadDashboards()
   } catch (e: any) {
-    Message.error(e.response?.data?.message || '操作失败')
+    handleApiError(e, '操作失败')
   }
 }
 
@@ -744,7 +745,7 @@ async function handleSetDefault() {
     }
     await loadDashboards()
   } catch (e: any) {
-    Message.error(e.response?.data?.message || '操作失败')
+    handleApiError(e, '操作失败')
   }
 }
 
@@ -763,7 +764,7 @@ function confirmDelete() {
         currentDashboard.value = null
         await loadDashboards()
       } catch (e: any) {
-        Message.error(e.response?.data?.message || '删除失败')
+        handleApiError(e, '删除失败')
       }
     }
   })
@@ -808,7 +809,7 @@ async function addWidget(widgetType: string, defaultTitle: string) {
     if (status === 403) {
       Message.error('只有仪表盘创建者可以添加微件')
     } else {
-      Message.error(e.response?.data?.message || '添加失败')
+      handleApiError(e, '添加失败')
     }
   }
 }
@@ -952,7 +953,7 @@ async function handleWidgetConfigSave() {
     // Reload dashboard detail to get updated widgets
     await selectDashboard(currentDashboard.value.id)
   } catch (e: any) {
-    Message.error(e.response?.data?.message || '保存失败')
+    handleApiError(e, '保存失败')
   } finally {
     savingWidgetConfig.value = false
   }
@@ -970,7 +971,7 @@ async function deleteWidget(widget: DashboardWidgetVO) {
         await selectDashboard(currentDashboard.value!.id)
         await loadDashboards()
       } catch (e: any) {
-        Message.error(e.response?.data?.message || '删除失败')
+        handleApiError(e, '删除失败')
       }
     }
   })
@@ -1000,7 +1001,7 @@ async function handleMoveWidget() {
     await selectDashboard(currentDashboard.value.id)
     await loadDashboards()
   } catch (e: any) {
-    Message.error(e.response?.data?.message || '移动失败')
+    handleApiError(e, '移动失败')
   } finally {
     movingWidget.value = false
   }
