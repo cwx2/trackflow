@@ -212,6 +212,10 @@
             <div class="panel-header-right">
               <span class="sprint-total-hours" v-if="getSprintTotalHours(sprint.id) > 0"><icon-clock-circle class="hours-icon" /> {{ formatHours(getSprintTotalHours(sprint.id)) }}</span>
               <span v-if="sprint.startDate" class="sprint-dates">{{ formatDate(sprint.startDate) }} — {{ formatDate(sprint.endDate) }}</span>
+              <span v-else class="sprint-no-date-warning">
+                <icon-exclamation-circle class="no-date-icon" />
+                未设置日期
+              </span>
               <a-tooltip content="在工单列表中查看此 Sprint 的工单">
                 <button class="panel-view-issues-btn" @click="viewSprintIssues(sprint)">
                   <icon-list />
@@ -451,7 +455,7 @@ import { formatDate, formatDueDate, getDueDateStatus } from '@/utils/date'
 import { ref, computed, watch, reactive, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
-import { IconSearch, IconPlus, IconList, IconFilter, IconDown, IconUp, IconClockCircle, IconTrophy } from '@arco-design/web-vue/es/icon'
+import { IconSearch, IconPlus, IconList, IconFilter, IconDown, IconUp, IconClockCircle, IconTrophy, IconExclamationCircle } from '@arco-design/web-vue/es/icon'
 import { issueApi, sprintApi, projectApi } from '@/api'
 import { useProjectStore } from '@/stores/project'
 import { useProjectList } from '@/composables/useProjectList'
@@ -526,9 +530,22 @@ const showSprintCreate = ref(false)
 let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null
 
 // ===== Computed =====
-const targetSprints = computed(() =>
-  sprints.value.filter(s => s.status === 'active' || s.status === 'planned')
-)
+const targetSprints = computed(() => {
+  const filtered = sprints.value.filter(s => s.status === 'active' || s.status === 'planned')
+  // Sort: active first, then planned by startDate ascending, null dates last
+  return filtered.sort((a, b) => {
+    // Active always comes first
+    if (a.status === 'active' && b.status !== 'active') return -1
+    if (b.status === 'active' && a.status !== 'active') return 1
+    // Both same status — sort by startDate ascending, null last
+    const dateA = a.startDate || ''
+    const dateB = b.startDate || ''
+    if (!dateA && !dateB) return 0
+    if (!dateA) return 1  // no date goes last
+    if (!dateB) return -1
+    return dateA.localeCompare(dateB)
+  })
+})
 
 const selectedCount = computed(() => selectedIds.value.size)
 
@@ -1377,6 +1394,21 @@ onMounted(async () => {
 .sprint-dates {
   font-size: 11px;
   color: var(--color-text-3);
+}
+
+.sprint-no-date-warning {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--tf-warning, #d29922);
+  background: var(--tf-warning-bg, rgba(210, 153, 34, 0.1));
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+.no-date-icon {
+  font-size: 11px;
 }
 
 .panel-body {
