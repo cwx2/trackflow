@@ -73,10 +73,7 @@
           <a-select v-model="filterProject" placeholder="所有项目" size="small" style="width: 120px" allow-clear @change="onFilterChange">
             <a-option v-for="p in projectList" :key="p.id" :value="p.id">{{ p.key }}</a-option>
           </a-select>
-          <a-button v-if="canCreateIssueGlobal" size="small" @click="toggleInlineCreate">
-            {{ showInlineCreate ? '取消' : '快速创建' }}
-          </a-button>
-          <a-button v-if="canCreateIssueGlobal" type="primary" size="small" @click="showCreatePanel = true">创建工单</a-button>
+          <a-button v-if="canCreateIssueGlobal" size="small" @click="openCreatePanel">创建工单</a-button>
           <a-dropdown trigger="click" position="br" @select="handleExport">
             <a-tooltip content="导出数据" position="bottom" mini>
               <a-button size="small" type="text" :loading="exportLoading">
@@ -132,33 +129,6 @@
 
       <!-- Recent Issues Panel (YouTrack style) -->
       <RecentIssuesPanel />
-
-      <!-- Inline quick create -->
-      <div v-if="showInlineCreate && selectedCount === 0" class="inline-create">
-        <div class="inline-create-row">
-          <a-select v-model="quickForm.projectId" placeholder="项目" size="small" style="width: 140px" allow-search>
-            <a-option v-for="p in projectList" :key="p.id" :value="p.id">{{ p.key }} - {{ p.name }}</a-option>
-          </a-select>
-          <a-input
-            v-model="quickForm.title"
-            placeholder="输入工单标题后按 Enter 快速创建..."
-            size="small"
-            class="inline-title-input"
-            @keyup.enter="quickCreate"
-          />
-          <a-select v-model="quickForm.issueType" size="small" style="width: 80px">
-            <a-option v-for="t in issueTypeOptions" :key="t.value" :value="t.value">{{ t.label }}</a-option>
-          </a-select>
-          <a-select v-model="quickForm.priority" size="small" style="width: 80px">
-            <a-option v-for="p in priorityOptions" :key="p.value" :value="p.value">
-              <IssuePriorityBadge :priority="p.value" :color="p.color ?? undefined" mode="dot" :show-label="true" />
-            </a-option>
-          </a-select>
-          <a-button type="primary" size="small" :loading="quickCreating" :disabled="!quickForm.projectId || !quickForm.title" @click="quickCreate">
-            创建
-          </a-button>
-        </div>
-      </div>
 
       <!-- Issue table (Table layout mode) -->
       <!-- Real-time update notification -->
@@ -404,7 +374,7 @@
             description="尝试调整筛选条件或创建新的工单"
           >
             <template #action>
-              <a-button v-if="canCreateIssueGlobal" type="primary" size="small" @click="toggleInlineCreate">创建工单</a-button>
+              <a-button v-if="canCreateIssueGlobal" type="primary" size="small" @click="openCreatePanel">创建工单</a-button>
             </template>
           </EmptyState>
         </template>
@@ -451,7 +421,7 @@
     </section>
 
     <!-- Create issue panel -->
-    <IssueCreatePanel ref="createPanelRef" v-model:visible="showCreatePanel" :project-id="activeProjectId || undefined" :draft-id="activeDraftId" @created="onCreatePanelCreated" @cancel-with-data="onCreatePanelCancel" @expand-to-fullscreen="onCreatePanelExpand" />
+    <IssueCreatePanel ref="createPanelRef" v-model:visible="showCreatePanel" :project-id="activeProjectId || undefined" :draft-id="activeDraftId" :initial-values="createInitialValues" @created="onCreatePanelCreated" @cancel-with-data="onCreatePanelCancel" @expand-to-fullscreen="onCreatePanelExpand" />
 
     <!-- Sidebar preview drawer -->
     <IssuePreviewDrawer
@@ -1032,28 +1002,47 @@ function getCustomFieldDetail(record: any, dataIndex: string): CustomFieldValueV
 }
 function formatTime(dt: string) { if (!dt) return ''; const d = new Date(dt); const now = new Date(); const diff = now.getTime() - d.getTime(); const mins = Math.floor(diff / 60000); if (mins < 60) return `${mins}分钟前`; const hours = Math.floor(mins / 60); if (hours < 24) return `${hours}小时前`; const days = Math.floor(hours / 24); if (days < 30) return `${days}天前`; return d.toLocaleDateString('zh-CN') }
 
-// ===== Quick Create =====
-const showInlineCreate = ref(false)
-const quickCreating = ref(false)
-const quickForm = reactive({ projectId: undefined as string | undefined, title: '', issueType: '任务', priority: '普通' })
-const QUICK_CREATE_PROJECT_KEY = 'trackflow:quick-create-project'
+// ===== Create Panel =====
+const createInitialValues = ref<{
+  assigneeId?: string | null
+  sprintId?: string | null
+  priority?: string | null
+  issueType?: string | null
+} | undefined>(undefined)
 
-function resolveQuickCreateProject(): string | undefined {
-  if (activeProjectId.value) return activeProjectId.value
-  if (filterProject.value) return filterProject.value
-  const lastUsed = localStorage.getItem(QUICK_CREATE_PROJECT_KEY)
-  if (lastUsed && projectList.value.some(p => p.id === lastUsed)) return lastUsed
-  if (projectList.value.length === 1) return projectList.value[0].id
-  return undefined
+/** 从当前筛选条件中提取可注入的上下文预填值 */
+function buildCreateInitialValues() {
+  const fp = globalFilterParams.value
+  const values: typeof createInitialValues.value = {}
+
+  // 负责人：筛选条件是"我"时，注入当前用户
+  if (fp.assigneeId && fp.assigneeId !== 'none') {
+    values.assigneeId = fp.assigneeId === 'me'
+      ? (authStore.user?.userId ?? null)
+      : fp.assigneeId
+  }
+
+  // Sprint：筛选条件有指定单个 Sprint 时注入
+  if (fp.sprintId && fp.sprintId !== 'none' && !String(fp.sprintId).includes(',')) {
+    values.sprintId = fp.sprintId
+  }
+
+  // 优先级：筛选条件有指定单个优先级时注入
+  if (fp.priority && !String(fp.priority).includes(',')) {
+    values.priority = fp.priority
+  }
+
+  // 工单类型：筛选条件有指定单个类型时注入
+  if (fp.issueType && !String(fp.issueType).includes(',')) {
+    values.issueType = fp.issueType
+  }
+
+  return Object.keys(values).length > 0 ? values : undefined
 }
-function toggleInlineCreate() { showInlineCreate.value = !showInlineCreate.value; if (showInlineCreate.value) quickForm.projectId = resolveQuickCreateProject() }
-async function quickCreate() {
-  if (!quickForm.projectId) { Message.warning('请先选择项目'); return }
-  if (!quickForm.title.trim()) { Message.warning('请输入工单标题'); return }
-  quickCreating.value = true
-  try { await issueApi.create({ projectId: quickForm.projectId, title: quickForm.title.trim(), issueType: quickForm.issueType, priority: quickForm.priority }); Message.success('工单创建成功'); localStorage.setItem(QUICK_CREATE_PROJECT_KEY, quickForm.projectId); quickForm.title = ''; refreshList() }
-  catch (e: any) { Message.error(e.response?.data?.message || '创建失败') }
-  finally { quickCreating.value = false }
+
+function openCreatePanel() {
+  createInitialValues.value = buildCreateInitialValues()
+  showCreatePanel.value = true
 }
 
 
@@ -1563,10 +1552,7 @@ onBeforeRouteLeave((_to, _from, next) => {
 .hide-resolved-toggle .toggle-label { font-size: 12px; }
 .filter-right { display: flex; gap: 8px; align-items: center; flex-shrink: 0; padding: 0 16px 0 8px; }
 
-/* Inline create */
-.inline-create { padding: 8px 16px; background: var(--tf-bg-surface); border-bottom: 1px solid var(--tf-border); flex-shrink: 0; }
-.inline-create-row { display: flex; align-items: center; gap: 8px; }
-.inline-title-input { flex: 1; }
+
 
 /* Table */
 .issue-table { flex: 1; min-height: 0; overflow: hidden; }

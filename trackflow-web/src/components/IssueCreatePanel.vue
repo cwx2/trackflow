@@ -739,6 +739,16 @@ const props = defineProps<{
   draftId?: string | null
   /** 是否以全屏页面模式运行（true 时隐藏全屏按钮） */
   isFullPage?: boolean
+  /**
+   * 上下文预填值（由调用方注入当前筛选/场景上下文）。
+   * 仅在非 clone、非 draft、非 parentId 时生效，用于「创建工单」按钮的智能预填。
+   */
+  initialValues?: {
+    assigneeId?: string | null
+    sprintId?: string | null
+    priority?: string | null
+    issueType?: string | null
+  }
 }>()
 
 const emit = defineEmits<{
@@ -1527,6 +1537,13 @@ watch(() => visible.value, (val) => {
     }
     // When opened with pre-set projectId (e.g. from sprint planning), load project data
     else if (props.projectId && form.projectId) {
+      // 应用调用方注入的上下文预填值
+      if (props.initialValues) {
+        if (props.initialValues.sprintId != null) form.sprintId = props.initialValues.sprintId
+        if (props.initialValues.assigneeId != null) form.assigneeId = props.initialValues.assigneeId
+        if (props.initialValues.priority) form.priority = props.initialValues.priority
+        if (props.initialValues.issueType) form.issueType = props.initialValues.issueType
+      }
       onProjectChange(form.projectId)
     }
   } else {
