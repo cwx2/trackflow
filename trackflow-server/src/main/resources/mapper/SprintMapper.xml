@@ -412,7 +412,7 @@
         SELECT
             CAST(i.sprint_id AS VARCHAR) AS sprint_id,
             CAST(ist.id AS VARCHAR) AS status_id,
-            ist.name AS status_name,
+            COALESCE(ist.display_name, ist.name) AS status_name,
             ist.color AS status_color,
             ist.category AS category,
             ist.sort_order AS sort_order,
@@ -424,7 +424,7 @@
             <foreach item="sid" collection="sprintIds" open="(" separator="," close=")">
                 #{sid}
             </foreach>
-        GROUP BY i.sprint_id, ist.id, ist.name, ist.color, ist.category, ist.sort_order
+        GROUP BY i.sprint_id, ist.id, ist.name, ist.display_name, ist.color, ist.category, ist.sort_order
         ORDER BY ist.sort_order ASC
     </select>
 
