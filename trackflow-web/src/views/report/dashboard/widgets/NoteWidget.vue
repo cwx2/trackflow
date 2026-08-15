@@ -9,6 +9,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import DOMPurify from 'dompurify'
 
 const props = defineProps<{
   config: Record<string, any>
@@ -16,7 +17,8 @@ const props = defineProps<{
   dashboardProjectId?: string
 }>()
 
-const content = computed(() => props.config.content || '')
+// DOMPurify 净化用户输入的 HTML 内容，防止 XSS 攻击
+const content = computed(() => DOMPurify.sanitize(props.config.content || ''))
 </script>
 
 <style scoped>

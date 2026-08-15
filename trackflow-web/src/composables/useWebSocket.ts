@@ -66,7 +66,10 @@ export function useWebSocket() {
       return null
     }
 
-    const wsUrl = `ws://${window.location.hostname}:8090/ws`
+    // 通过相同 origin 的 /ws 路径连接，开发环境由 vite proxy 转发到后端，生产环境由 nginx 代理
+    // 避免硬编码后端端口，支持 nginx 反向代理和 HTTPS/WSS 场景
+    const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const wsUrl = `${wsProto}//${window.location.host}/ws`
 
     globalClient = new Client({
       brokerURL: wsUrl,
