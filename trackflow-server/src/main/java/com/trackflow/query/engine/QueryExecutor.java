@@ -83,7 +83,12 @@ public class QueryExecutor {
     );
 
     /**
-     * 执行筛选查询
+     * 执行筛选查询（无项目权限过滤）。
+     * <p>
+     * ⚠️ <b>安全警告</b>：此方法不过滤项目权限，调用方必须确保 filters 中已包含
+     * 有效的 project 约束，或调用者已通过其他方式完成权限校验。
+     * <p>
+     * 推荐优先使用 {@link #executeWithProjectFilter}，其内置了 accessibleProjectIds 过滤。
      */
     public Page<Issue> execute(List<Map<String, Object>> filters, int page, int pageSize, List<Map<String, String>> sortCriteria) {
         Page<Issue> pageObj = new Page<>(page, pageSize);
@@ -562,9 +567,11 @@ public class QueryExecutor {
                             "EXISTS (SELECT 1 FROM issue_comment ic WHERE ic.issue_id = issue.id AND ic.user_id = {0} AND ic.deleted_at IS NULL)",
                             userIds.get(0));
                 } else {
+                    // 所有值已通过 Long.parseLong 转换，使用 inSql 避免字符串拼接
+                    String idList = userIds.stream().map(String::valueOf).collect(Collectors.joining(","));
                     wrapper.apply(
                             "EXISTS (SELECT 1 FROM issue_comment ic WHERE ic.issue_id = issue.id AND ic.user_id IN ("
-                                    + userIds.stream().map(String::valueOf).collect(Collectors.joining(",")) + ") AND ic.deleted_at IS NULL)");
+                                    + idList + ") AND ic.deleted_at IS NULL)");
                 }
             }
             case "neq" -> {

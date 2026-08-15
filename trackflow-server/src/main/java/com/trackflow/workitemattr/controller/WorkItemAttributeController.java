@@ -84,9 +84,10 @@ public class WorkItemAttributeController {
 
     /**
      * 获取指定项目可用的工作项属性（前端工时弹窗用）
+     * 仅项目成员可查询，防止项目配置信息泄露
      */
     @GetMapping("/by-project/{projectId}")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("@perm.check(#projectId, 'project:view')")
     public R<List<WorkItemAttributeVO>> listByProject(@PathVariable("projectId") Long projectId) {
         return R.ok(attributeService.listByProject(projectId));
     }
