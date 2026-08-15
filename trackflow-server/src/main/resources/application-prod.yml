@@ -43,3 +43,8 @@ trackflow:
     # 生产环境必须通过 TRACKFLOW_CORS_ORIGINS 环境变量配置前端域名
     # 多个域名用逗号分隔，如: https://trackflow.company.com,https://admin.company.com
     allowed-origins: ${TRACKFLOW_CORS_ORIGINS}
+
+spring:
+  flyway:
+    # 生产环境开启 checksum 校验，防止已执行脚本被静默修改
+    validate-on-migrate: true

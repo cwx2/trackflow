@@ -29,7 +29,8 @@ spring:
     placeholder-replacement: false
     out-of-order: true
     ignore-migration-patterns: "*:missing,*:future"
-    validate-on-migrate: true
+    # 开发环境关闭（脚本会频繁修改）；生产环境通过 application-prod.yml 开启
+    validate-on-migrate: false
 
 mybatis-plus:
   mapper-locations: classpath*:mapper/**/*.xml
