@@ -75,6 +75,7 @@ public class IssueController {
     }
 
     @GetMapping
+    @PreAuthorize("#query.projectId == null or @perm.check(#query.projectId, 'issue:view')")
     public R<PageResult<IssueVO>> list(@Valid IssueQuery query) {
         Page<Issue> page = issueService.listIssuesPage(query);
         List<IssueVO> voList = issueConverter.toVOList(page.getRecords());
@@ -91,6 +92,7 @@ public class IssueController {
      * 与 YouTrack API 行为一致：单个端点自动识别参数格式。
      */
     @GetMapping("/{idOrKey}")
+    @PreAuthorize("@perm.checkIssueByIdOrKey(#idOrKey, 'issue:view')")
     public R<IssueDetailVO> getById(@PathVariable("idOrKey") String idOrKey) {
         IssueDetailRow row = issueService.getDetailRowByIdOrKey(idOrKey);
         return R.ok(assembleDetailFromRow(row));
@@ -100,6 +102,7 @@ public class IssueController {
      * 通过 Issue Key 获取工单详情（保留向后兼容）。
      */
     @GetMapping("/key/{issueKey}")
+    @PreAuthorize("@perm.checkIssueByIdOrKey(#issueKey, 'issue:view')")
     public R<IssueDetailVO> getByKey(@PathVariable("issueKey") String issueKey) {
         IssueDetailRow row = issueService.getDetailRowByIdOrKey(issueKey);
         return R.ok(assembleDetailFromRow(row));
@@ -200,13 +203,25 @@ public class IssueController {
         return R.ok(result);
     }
 
+    /**
+     * 批量操作工单（状态变更、分配、Sprint 移动、优先级、标签、删除、恢复）。
+     * <p>
+     * 权限保障说明：
+     * - DTO 层：{@code @Size(max=50)} 限制批量上限，{@code @Pattern} 限制操作类型白名单
+     * - Service 层（IssueBatchService.doExecuteBatch）：对每条工单逐一调用
+     *   {@code permissionService.hasIssuePermission()} 校验，无权限的工单记入失败结果而非整体拒绝
+     * - delete/restore 操作额外校验 {@code issue:delete} 权限
+     * <p>
+     * 由于批量工单可能跨越多个项目，Controller 层无法使用单一 projectId 的 @PreAuthorize，
+     * 权限校验下沉至 Service 层逐条执行，此设计与 YouTrack 批量操作语义一致。
+     */
     @PostMapping("/batch")
     @PreAuthorize("isAuthenticated()")
     public R<BatchOperationResult> batchOperation(@Valid @RequestBody BatchOperationDTO dto) {
         boolean silent = Boolean.TRUE.equals(dto.getSilent());
 
         // WIP 限制预检查（仅 status 操作）
-        if ("status".equals(dto.getOperation()) && dto.getStatusId() != null
+        if (BatchOperationType.STATUS == dto.getOperation() && dto.getStatusId() != null
                 && !Boolean.TRUE.equals(dto.getForceWip())) {
             String wipWarning = issueService.checkBatchWipLimit(dto.getIssueIds(), dto.getStatusId());
             if (wipWarning != null) {
@@ -215,46 +230,45 @@ public class IssueController {
         }
 
         BatchOperationResult result = switch (dto.getOperation()) {
-            case "status" -> {
+            case STATUS -> {
                 if (dto.getStatusId() == null) {
                     yield null;
                 }
                 yield issueService.batchTransitStatus(dto.getIssueIds(), dto.getStatusId(),
                         dto.getComment(), dto.getVersions(), silent);
             }
-            case "assign" -> {
+            case ASSIGN -> {
                 if (dto.getAssigneeId() == null) {
                     yield null;
                 }
                 yield issueService.batchAssign(dto.getIssueIds(), dto.getAssigneeId(), silent);
             }
-            case "sprint" -> {
+            case SPRINT -> {
                 if (dto.getSprintId() == null) {
                     yield null;
                 }
                 yield issueService.batchUpdateSprint(dto.getIssueIds(), dto.getSprintId(), silent);
             }
-            case "priority" -> {
+            case PRIORITY -> {
                 if (dto.getPriority() == null || dto.getPriority().isBlank()) {
                     yield null;
                 }
                 yield issueService.batchUpdatePriority(dto.getIssueIds(), dto.getPriority(), silent);
             }
-            case "tag_add" -> {
+            case TAG_ADD -> {
                 if (dto.getTagId() == null) {
                     yield null;
                 }
                 yield issueService.batchAddTag(dto.getIssueIds(), dto.getTagId(), silent);
             }
-            case "tag_remove" -> {
+            case TAG_REMOVE -> {
                 if (dto.getTagId() == null) {
                     yield null;
                 }
                 yield issueService.batchRemoveTag(dto.getIssueIds(), dto.getTagId(), silent);
             }
-            case "delete" -> issueService.batchDelete(dto.getIssueIds());
-            case "restore" -> issueService.batchRestore(dto.getIssueIds());
-            default -> null;
+            case DELETE -> issueService.batchDelete(dto.getIssueIds());
+            case RESTORE -> issueService.batchRestore(dto.getIssueIds());
         };
 
         if (result == null) {

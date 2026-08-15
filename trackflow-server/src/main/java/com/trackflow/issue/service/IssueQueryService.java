@@ -45,6 +45,11 @@ public class IssueQueryService {
     /**
      * Issue 列表（接受 IssueQuery，完整筛选支持）。
      * 强制按用户所属项目过滤。
+     * <p>
+     * 注意：主体过滤逻辑使用 {@link QueryWrapper} 字符串列名，而非 LambdaQueryWrapper。
+     * 这是有意为之：{@link #applyFilter} 和 {@link #applyNegativeFilter} 两个辅助方法
+     * 需要接受动态列名参数以支持通用的多值/null/单值分发，Lambda 方法引用无法满足
+     * 此动态需求。排序和子查询（EXISTS/apply）同理。
      */
     @Transactional(readOnly = true)
     public Page<Issue> listByQuery(IssueQuery query) {

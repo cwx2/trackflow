@@ -3,12 +3,12 @@ package com.trackflow.system.controller;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.trackflow.common.model.PageResult;
 import com.trackflow.common.model.R;
-import com.trackflow.common.util.PageHelper;
 import com.trackflow.system.converter.RoleConverter;
 import com.trackflow.system.dto.CloneRoleDTO;
 import com.trackflow.system.dto.CreateRoleDTO;
 import com.trackflow.system.dto.MergeRolesDTO;
 import com.trackflow.system.dto.ReplacePermissionsDTO;
+import com.trackflow.system.dto.RoleQuery;
 import com.trackflow.system.dto.UpdateRoleDTO;
 import com.trackflow.system.entity.SysRole;
 import com.trackflow.system.entity.PermissionImplication;
@@ -73,13 +73,9 @@ public class RoleController {
     }
 
     @GetMapping
-    public R<PageResult<RoleVO>> list(
-            @RequestParam(value = "roleType", required = false) String roleType,
-            @RequestParam(value = "page", required = false) Integer page,
-            @RequestParam(value = "pageSize", required = false) Integer pageSize) {
-
-        Page<SysRole> pageObj = PageHelper.buildPage(page, pageSize);
-        Page<SysRole> result = roleService.list(pageObj, roleType);
+    public R<PageResult<RoleVO>> list(RoleQuery query) {
+        Page<SysRole> pageObj = query.toPage();
+        Page<SysRole> result = roleService.list(pageObj, query.getRoleType());
 
         List<RoleVO> voList = roleConverter.toVOList(result.getRecords());
 

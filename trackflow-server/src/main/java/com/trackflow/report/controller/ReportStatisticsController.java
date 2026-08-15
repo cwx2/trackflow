@@ -3,6 +3,7 @@ package com.trackflow.report.controller;
 import com.trackflow.common.model.R;
 import com.trackflow.common.util.SecurityUtils;
 import com.trackflow.project.service.ProjectService;
+import com.trackflow.report.dto.DashboardQuery;
 import com.trackflow.report.service.ReportStatisticsService;
 import com.trackflow.report.vo.*;
 import lombok.RequiredArgsConstructor;
@@ -31,22 +32,20 @@ public class ReportStatisticsController {
      */
     @GetMapping("/dashboard")
     @PreAuthorize("@perm.canViewReports()")
-    public R<DashboardVO> dashboard(
-            @RequestParam(value = "projectId", required = false) Long projectId,
-            @RequestParam(value = "sprintId", required = false) Long sprintId,
-            @RequestParam(value = "startDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
-            @RequestParam(value = "endDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
-            @RequestParam(value = "filter", required = false) String filter) {
+    public R<DashboardVO> dashboard(DashboardQuery query) {
         Long userId = SecurityUtils.getCurrentUserId();
-        if (projectId != null) {
-            projectService.assertProjectAccessible(userId, projectId);
+        if (query.getProjectId() != null) {
+            projectService.assertProjectAccessible(userId, query.getProjectId());
         }
         // 解析 Issue filter 条件为匹配的工单 ID 列表（委托给 Service）
-        List<Long> accessibleProjectIds = projectId != null
-                ? List.of(projectId)
+        List<Long> accessibleProjectIds = query.getProjectId() != null
+                ? List.of(query.getProjectId())
                 : projectService.getAccessibleProjectIds(userId);
-        List<Long> issueIds = statisticsService.resolveIssueFilter(filter, projectId, userId, accessibleProjectIds);
-        return R.ok(statisticsService.getDashboardData(projectId, sprintId, startDate, endDate, userId, issueIds));
+        List<Long> issueIds = statisticsService.resolveIssueFilter(
+                query.getFilter(), query.getProjectId(), userId, accessibleProjectIds);
+        return R.ok(statisticsService.getDashboardData(
+                query.getProjectId(), query.getSprintId(),
+                query.getStartDate(), query.getEndDate(), userId, issueIds));
     }
 
     /**

@@ -417,4 +417,50 @@ public class TrackFlowPermissionEvaluator implements PermissionEvaluator {
         return permissionService.hasPermissionInAnyProject(userId, "report:view");
     }
 
+    /**
+     * 通过 Issue ID 或 Issue Key 检查工单查看权限。
+     * <p>
+     * 支持两种格式：
+     * - 纯数字字符串 → 按 ID 解析
+     * - 非纯数字（如 "DE4-123"）→ 按 Issue Key 解析
+     * <p>
+     * 用于 @PreAuthorize("@perm.checkIssueByIdOrKey(#idOrKey, 'issue:view')")
+     * <p>
+     * 如果 Issue 不存在，抛 BusinessException(RESOURCE_NOT_FOUND) → 返回 404，
+     * 而非 false → 403（避免泄露 Issue 存在性信息）。
+     *
+     * @param idOrKey    Issue 的数字 ID 或 Key（如 "DE4-123"）
+     * @param permission 要检查的权限码
+     * @return true 如果当前用户有指定权限
+     */
+    public boolean checkIssueByIdOrKey(String idOrKey, String permission) {
+        if (idOrKey == null || idOrKey.isBlank()) return false;
+        Long userId = SecurityUtils.getCurrentUserId();
+        if (userId == null) return false;
+
+        // 按 ID 或 Key 查询 projectId + reporterId + assigneeId（轻量查询）
+        Issue issue;
+        if (idOrKey.matches("\\d+")) {
+            Long issueId = Long.parseLong(idOrKey);
+            issue = issueMapper.selectOne(
+                    new LambdaQueryWrapper<Issue>()
+                            .select(Issue::getProjectId, Issue::getReporterId, Issue::getAssigneeId)
+                            .eq(Issue::getId, issueId)
+                            .isNull(Issue::getDeletedAt)
+            );
+        } else {
+            issue = issueMapper.selectOne(
+                    new LambdaQueryWrapper<Issue>()
+                            .select(Issue::getProjectId, Issue::getReporterId, Issue::getAssigneeId)
+                            .eq(Issue::getIssueKey, idOrKey)
+                            .isNull(Issue::getDeletedAt)
+            );
+        }
+
+        if (issue == null) {
+            throw BusinessException.notFound("Issue not found");
+        }
+        return permissionService.hasIssuePermission(userId, issue, permission);
+    }
+
 }

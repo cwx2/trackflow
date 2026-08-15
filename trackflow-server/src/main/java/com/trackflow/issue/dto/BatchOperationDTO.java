@@ -2,7 +2,6 @@ package com.trackflow.issue.dto;
 
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
@@ -16,11 +15,10 @@ import java.util.Map;
 public class BatchOperationDTO {
 
     /**
-     * 操作类型: status, assign, sprint, priority, delete
+     * 操作类型（枚举，由 Jackson 通过 {@link BatchOperationType#fromValue} 反序列化）
      */
     @NotNull(message = "操作类型不能为空")
-    @Pattern(regexp = "status|assign|sprint|priority|delete|restore|tag_add|tag_remove", message = "操作类型必须为: status, assign, sprint, priority, delete, restore, tag_add, tag_remove")
-    private String operation;
+    private BatchOperationType operation;
 
     /**
      * 要操作的 Issue ID 列表

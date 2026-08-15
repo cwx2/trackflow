@@ -6,13 +6,13 @@ import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.model.PageResult;
 import com.trackflow.common.model.R;
-import com.trackflow.common.util.PageHelper;
 import com.trackflow.common.util.SecurityUtils;
 import com.trackflow.system.converter.UserConverter;
 import com.trackflow.system.dto.AssignRoleDTO;
 import com.trackflow.system.dto.CreateUserDTO;
 import com.trackflow.system.dto.DisableUserDTO;
 import com.trackflow.system.dto.UpdateUserRolesDTO;
+import com.trackflow.system.dto.UserQuery;
 import com.trackflow.system.entity.SysRole;
 import com.trackflow.system.entity.SysUser;
 import com.trackflow.system.service.RoleService;
@@ -31,7 +31,6 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.Set;
 
 /**
  * 用户管理接口
@@ -61,24 +60,11 @@ public class UserController {
 
     @GetMapping
     @PreAuthorize("@perm.checkGlobal('system:manage_users')")
-    public R<PageResult<UserVO>> list(
-            @RequestParam(value = "keyword", required = false) String keyword,
-            @RequestParam(value = "username", required = false) String username,
-            @RequestParam(value = "displayName", required = false) String displayName,
-            @RequestParam(value = "email", required = false) String email,
-            @RequestParam(value = "orgId", required = false) Long orgId,
-            @RequestParam(value = "status", required = false) String status,
-            @RequestParam(value = "banStatus", required = false) String banStatus,
-            @RequestParam(value = "roleId", required = false) Long roleId,
-            @RequestParam(value = "page", required = false) Integer page,
-            @RequestParam(value = "pageSize", required = false) Integer pageSize,
-            @RequestParam(value = "sort", required = false) String sort) {
-
-        Page<SysUser> pageObj = PageHelper.buildPage(page, pageSize, sort,
-                Set.of("id", "username", "display_name", "email", "status",
-                        "org_id", "created_at", "updated_at", "last_login_at"));
+    public R<PageResult<UserVO>> list(UserQuery query) {
+        Page<SysUser> pageObj = query.toPage();
         PageResult<UserVO> result = userVOAssembler.listUsersWithRoles(
-                pageObj, keyword, username, displayName, email, orgId, status, banStatus, roleId);
+                pageObj, query.getKeyword(), query.getUsername(), query.getDisplayName(),
+                query.getEmail(), query.getOrgId(), query.getStatus(), query.getBanStatus(), query.getRoleId());
         return R.ok(result);
     }
 

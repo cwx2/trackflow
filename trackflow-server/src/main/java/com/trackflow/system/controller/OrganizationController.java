@@ -3,11 +3,11 @@ package com.trackflow.system.controller;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.trackflow.common.model.PageResult;
 import com.trackflow.common.model.R;
-import com.trackflow.common.util.PageHelper;
 import com.trackflow.system.converter.OrgConverter;
 import com.trackflow.system.dto.AddProjectsToOrgDTO;
 import com.trackflow.system.dto.CreateOrgDTO;
 import com.trackflow.system.dto.GrantOrgAccessDTO;
+import com.trackflow.system.dto.OrgQuery;
 import com.trackflow.system.dto.UpdateOrgDTO;
 import com.trackflow.system.entity.Organization;
 import com.trackflow.system.service.OrganizationService;
@@ -23,7 +23,6 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -52,15 +51,9 @@ public class OrganizationController {
 
     @GetMapping
     @PreAuthorize("@perm.checkGlobal('system:manage_orgs')")
-    public R<PageResult<OrgVO>> list(
-            @RequestParam(value = "keyword", required = false) String keyword,
-            @RequestParam(value = "page", required = false) Integer page,
-            @RequestParam(value = "pageSize", required = false) Integer pageSize,
-            @RequestParam(value = "sort", required = false) String sort) {
-
-        Page<Organization> pageObj = PageHelper.buildPage(page, pageSize, sort,
-                Set.of("id", "name", "code", "created_at", "updated_at"));
-        Page<Organization> result = organizationService.list(pageObj, keyword);
+    public R<PageResult<OrgVO>> list(OrgQuery query) {
+        Page<Organization> pageObj = query.toPage();
+        Page<Organization> result = organizationService.list(pageObj, query.getKeyword());
 
         List<OrgVO> voList = orgConverter.toVOList(result.getRecords());
 
