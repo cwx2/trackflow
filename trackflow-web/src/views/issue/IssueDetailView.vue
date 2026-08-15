@@ -132,6 +132,7 @@
         @clear-field="onClearField"
         @add-option="onAddOption"
         @spent-time-click="onSpentTimeClick"
+        @field-action="onFieldAction"
       />
 
       <!-- 工时明细浮层 -->
@@ -247,7 +248,7 @@
  */
 import { formatDateTime } from '@/utils/date'
 import { computed, ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
-import { useRoute, onBeforeRouteLeave } from 'vue-router'
+import { useRoute, useRouter, onBeforeRouteLeave } from 'vue-router'
 import { Modal } from '@arco-design/web-vue'
 import { IconLock } from '@arco-design/web-vue/es/icon'
 import { renderMarkdown, renderHtmlWithMarkdown } from '@/utils/markdown'
@@ -273,6 +274,7 @@ import type { SidebarField, StatusInfo, FieldOption } from './components/DetailS
 import { localizeFieldName, localizeFieldValue, localizeLinkType } from '@/utils/fieldLabels'
 
 const route = useRoute()
+const router = useRouter()
 const timerStore = useTimerStore()
 
 // ============ Route query context: Saved Query breadcrumb ============
@@ -338,6 +340,10 @@ const createPanelRef = ref<InstanceType<typeof IssueCreatePanel> | null>(null)
 
 // ============ Spent Time Popover ============
 const spentTimePopoverVisible = ref(false)
+
+function onFieldAction(_fieldKey: string, actionRoute: string) {
+  router.push(actionRoute)
+}
 
 function onSpentTimeClick() {
   spentTimePopoverVisible.value = true
@@ -625,8 +631,9 @@ function buildSprintOptions(allSprints: SprintVO[], projectId: string): FieldOpt
   const options: FieldOption[] = [{ value: '', label: '未排期' }]
 
   if (active.length === 0 && planned.length === 0) {
-    // No active/planned sprints - show a hint
+    // No active/planned sprints - show a hint and a "create sprint" action
     options.push({ value: '__hint_no_active', label: '暂无活跃或计划中的迭代', isGroupLabel: true })
+    options.push({ value: '__action_create_sprint', label: '创建新迭代', isAction: true, actionRoute: '/sprints' })
   }
 
   if (active.length > 0) {

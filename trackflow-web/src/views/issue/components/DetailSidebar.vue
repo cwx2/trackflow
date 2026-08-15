@@ -94,6 +94,15 @@
                 >
                   <!-- Group header -->
                   <div v-if="opt.isGroupLabel" class="dropdown-group-label">{{ opt.label }}</div>
+                  <!-- Action item (e.g. "创建新迭代") -->
+                  <div
+                    v-else-if="opt.isAction"
+                    class="dropdown-item dropdown-action-item"
+                    @click="onOptionClick(field, opt)"
+                  >
+                    <span class="action-icon">+</span>
+                    <span class="item-text">{{ opt.label }}</span>
+                  </div>
                   <!-- Normal option -->
                   <a-tooltip
                     v-else
@@ -266,6 +275,10 @@ export interface FieldOption {
   dimmed?: boolean
   /** 选中此项前需要弹出确认对话框（值为确认文案） */
   confirmMessage?: string
+  /** 标记此项为操作按钮（点击后触发 action 事件而非选中值） */
+  isAction?: boolean
+  /** 操作按钮的路由路径（isAction=true 时使用） */
+  actionRoute?: string
 }
 
 export interface TimeProgress {
@@ -352,6 +365,7 @@ const emit = defineEmits<{
   'add-option': [fieldId: string, value: string]
   'toggle-collapse': []
   'spent-time-click': [fieldKey: string]
+  'field-action': [fieldKey: string, actionRoute: string]
 }>()
 
 // ========== 空值自定义字段折叠控制 ==========
@@ -550,6 +564,11 @@ function getFilteredOptions(field: SidebarField) {
 }
 
 function onOptionClick(field: SidebarField, opt: FieldOption) {
+  if (opt.isAction && opt.actionRoute) {
+    emit('field-action', field.key, opt.actionRoute)
+    editingKey.value = null
+    return
+  }
   if (opt.confirmMessage) {
     Modal.confirm({
       title: '确认操作',
@@ -1102,6 +1121,17 @@ defineExpose({ highlightField })
 .dropdown-group-label:first-child {
   border-top: none;
   margin-top: 0;
+}
+.dropdown-action-item {
+  color: var(--tf-accent) !important;
+  border-top: 1px solid var(--tf-border-light, rgba(128,128,128,0.1));
+  margin-top: 4px;
+}
+.dropdown-action-item .action-icon {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+  flex-shrink: 0;
 }
 .item-text {
   flex: 1;

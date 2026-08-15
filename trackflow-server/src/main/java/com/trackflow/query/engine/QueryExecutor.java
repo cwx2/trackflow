@@ -427,6 +427,20 @@ public class QueryExecutor {
             return plannedSprints.stream().map(Sprint::getId).toList();
         }
 
+        // 第三级回退：当项目无活跃或计划中 Sprint 时，回退到最近完成的 Sprint
+        // 这样 "当前迭代" 查询仍能显示遗留在已完成 Sprint 中的未关闭工单
+        LambdaQueryWrapper<Sprint> completedWrapper = new LambdaQueryWrapper<>();
+        completedWrapper.eq(Sprint::getStatus, SprintStatus.COMPLETED);
+        if (contextProjectIds != null && !contextProjectIds.isEmpty()) {
+            completedWrapper.in(Sprint::getProjectId, contextProjectIds);
+        }
+        completedWrapper.orderByDesc(Sprint::getEndDate);
+        completedWrapper.last("LIMIT 1");
+        List<Sprint> completedSprints = sprintMapper.selectList(completedWrapper);
+        if (!completedSprints.isEmpty()) {
+            return completedSprints.stream().map(Sprint::getId).toList();
+        }
+
         return List.of();
     }
 
