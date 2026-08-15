@@ -11,6 +11,7 @@
           size="small"
           allow-search
           :loading="projectLoadState === 'loading'"
+          :fallback-option="projectFallbackOption"
           @change="onProjectChange"
         >
           <a-option v-for="p in projects" :key="p.id" :value="p.id">
@@ -481,6 +482,14 @@ const selectedProject = computed({
 })
 
 const { projects, projectLoadState, loadProjects } = useProjectList({ requiredPermission: 'sprint:view' })
+
+/**
+ * 当选中的项目 ID 不在 options 列表中时，提供 fallback 选项避免显示原始数字 ID。
+ */
+function projectFallbackOption(value: string | number | boolean | Record<string, unknown>) {
+  return { value, label: '加载中…' }
+}
+
 const { canCreateSprint, canEditSprint } = usePermission(() => selectedProject.value)
 
 // ===== Data =====

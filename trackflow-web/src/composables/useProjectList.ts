@@ -64,9 +64,9 @@ export function useProjectList(options?: UseProjectListOptions) {
 
       return projects.value
     } catch {
-      projects.value = []
+      // 保留上一次成功加载的列表，避免 select 组件因 options 清空而回退显示原始 ID
       projectLoadState.value = 'error'
-      return []
+      return projects.value
     }
   }
 

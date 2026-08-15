@@ -11,6 +11,7 @@
           allow-search
           allow-clear
           :loading="projectLoadState === 'loading'"
+          :fallback-option="projectFallbackOption"
           @change="handleProjectChange"
         >
           <template v-if="projectLoadState === 'error'" #empty>
@@ -281,6 +282,15 @@ function canDeleteSprintItem(sprint: SprintVO): boolean {
 }
 
 const { projects, projectLoadState, loadProjects } = useProjectList({ requiredPermission: 'sprint:view' })
+
+/**
+ * 当选中的项目 ID 不在 options 列表中时（如首次加载失败、列表尚未返回），
+ * 提供一个 fallback 选项，避免 select 组件直接显示原始数字 ID。
+ */
+function projectFallbackOption(value: string | number | boolean | Record<string, unknown>) {
+  return { value, label: '加载中…' }
+}
+
 const { viewSprintIssues, viewSprintOnBoard, viewIssuesByCategory, viewIssuesByStatus, viewOverdueIssues } = useSprintNavigation(selectedProject, projects)
 const {
   sprints, loadingState, activeSprints, plannedSprints, completedSprints, archivedSprints,

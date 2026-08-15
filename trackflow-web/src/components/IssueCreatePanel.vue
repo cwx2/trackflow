@@ -218,7 +218,7 @@
         <div class="props-panel">
           <div class="prop-row">
             <span class="prop-label">项目</span>
-            <a-select v-model="form.projectId" placeholder="选择项目" allow-search size="small" :loading="projectLoadState === 'loading'" :disabled="lockSprint" @change="onProjectChange">
+            <a-select v-model="form.projectId" placeholder="选择项目" allow-search size="small" :loading="projectLoadState === 'loading'" :disabled="lockSprint" :fallback-option="projectFallbackOption" @change="onProjectChange">
               <template v-if="projectLoadState === 'error'" #empty>
                 <div class="select-error-state">
                   <span>加载失败</span>
@@ -1004,6 +1004,14 @@ function openSimilarIssue(issue: SimilarIssue) {
 }
 
 const { projects, projectLoadState, loadProjects } = useProjectList()
+
+/**
+ * 当选中的项目 ID 不在 options 列表中时，提供 fallback 选项避免显示原始数字 ID。
+ */
+function projectFallbackOption(value: string | number | boolean | Record<string, unknown>) {
+  return { value, label: '加载中…' }
+}
+
 const members = ref<any[]>([])
 const allProjectMembers = ref<any[]>([])
 const allUserGroups = ref<Array<{ id: string; name: string }>>([])
