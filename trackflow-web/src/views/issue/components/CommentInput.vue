@@ -55,13 +55,16 @@
           <template #footer="{ isEmpty: editorEmpty }">
             <div class="editor-footer">
               <div class="footer-actions">
-                <button class="btn-cancel" @click="collapse">取消</button>
+                <button class="btn-cancel" :disabled="submitting" @click="collapse">取消</button>
                 <button v-if="showAddTime" class="btn-add-time" @click="emit('addTime')" title="添加花费的时间">⏱ 记录工时</button>
                 <button v-if="showAddTime && !timerRunning" class="btn-start-timer" @click="emit('startTimer')" title="开始计时">▶ 开始计时</button>
                 <button v-if="showAddTime && timerRunning && timerIssueMatch" class="btn-stop-timer" @click="emit('stopTimer')" title="停止计时">⏹ 停止计时 ({{ timerElapsed }})</button>
                 <span v-if="showAddTime && timerRunning && !timerIssueMatch" class="timer-elsewhere-hint" title="计时器正在其他工单运行">⏱ 计时中...</span>
               </div>
-              <button class="btn-submit" :disabled="editorEmpty || (tiptapRef?.isComposing ?? false)" @click="submit">发布评论</button>
+              <button class="btn-submit" :disabled="editorEmpty || submitting || (tiptapRef?.isComposing ?? false)" @click="submit">
+                <span v-if="submitting" class="submit-loading">发布中...</span>
+                <span v-else>发布评论</span>
+              </button>
             </div>
           </template>
         </TiptapEditor>
@@ -86,20 +89,23 @@ const props = withDefaults(defineProps<{
   timerIssueMatch?: boolean
   timerElapsed?: string
   canSetVisibility?: boolean
+  /** Async callback for submitting comment. Must throw on failure so the editor retains content. */
+  onSubmit?: (content: string, visibleToGroupIds?: string[]) => Promise<void>
 }>(), {
   showAddTime: true,
   timerRunning: false,
   timerIssueMatch: false,
   timerElapsed: '0:00',
-  canSetVisibility: false
+  canSetVisibility: false,
+  onSubmit: undefined
 })
 
 const emit = defineEmits<{
-  submit: [content: string, visibleToGroupIds?: string[]]
   addTime: []
   startTimer: []
   stopTimer: []
 }>()
+
 
 const authStore = useAuthStore()
 const currentUserName = computed(() => authStore.user?.displayName || authStore.user?.username || '?')
@@ -110,6 +116,7 @@ const groups = ref<GroupSimpleVO[]>([])
 const selectedGroupIds = ref<string[]>([])
 const showVisibilityDropdown = ref(false)
 const isExpanded = ref(false)
+const submitting = ref(false)
 
 // Mention suggestion config
 const { suggestion } = useMentionSuggestion(() => props.projectId)
@@ -190,17 +197,36 @@ onUnmounted(() => {
   document.removeEventListener('mousedown', handleDocumentClick, true)
 })
 
-function submit() {
+async function submit() {
   const editorInstance = tiptapRef.value
   if (!editorInstance || editorInstance.isEmpty) return
   if (editorInstance.isComposing) return
+  if (submitting.value) return
+
   const html = editorInstance.getHTML()
   const visibleTo = selectedGroupIds.value.length > 0 ? [...selectedGroupIds.value] : undefined
-  emit('submit', html, visibleTo)
-  editorInstance.clearContent()
-  selectedGroupIds.value = []
-  // Collapse after successful submit
-  isExpanded.value = false
+
+  if (props.onSubmit) {
+    // Async mode: wait for API response before clearing
+    submitting.value = true
+    try {
+      await props.onSubmit(html, visibleTo)
+      // Success: clear content and collapse
+      editorInstance.clearContent()
+      selectedGroupIds.value = []
+      isExpanded.value = false
+    } catch (_e) {
+      // Failure: keep editor expanded with content intact
+      // Error toast is already shown by handleApiError in the parent
+    } finally {
+      submitting.value = false
+    }
+  } else {
+    // Fallback: fire-and-forget (legacy, should not happen in normal use)
+    editorInstance.clearContent()
+    selectedGroupIds.value = []
+    isExpanded.value = false
+  }
 }
 
 /**
@@ -389,6 +415,7 @@ defineExpose({ insertReplyQuote })
 }
 .btn-submit:disabled { opacity: 0.35; cursor: default; }
 .btn-submit:hover:not(:disabled) { background: var(--tf-accent-hover); }
+.submit-loading { opacity: 0.8; }
 </style>
 
 <style>

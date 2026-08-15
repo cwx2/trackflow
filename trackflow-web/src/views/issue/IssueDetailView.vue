@@ -113,7 +113,7 @@
           :timer-running="timerStore.isRunning"
           :timer-issue-match="timerStore.issueId === issue?.id"
           :timer-elapsed="timerStore.elapsedDisplay"
-          @submit="handleAddComment"
+          :on-submit="handleAddComment"
           @add-time="openTimeDialog"
           @start-timer="handleStartTimer"
           @stop-timer="handleStopTimerFromDetail"
