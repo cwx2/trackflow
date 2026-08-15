@@ -457,6 +457,7 @@ public class SavedQueryService {
     private long countForQuery(SavedQuery query) {
         try {
             List<Map<String, Object>> filters = parseFilters(query.getFilters());
+            injectProjectContext(filters, query.getProjectId());
             return queryExecutor.count(filters);
         } catch (Exception e) {
             log.warn("Failed to count for query {}: {}", query.getId(), e.getMessage());
@@ -471,6 +472,7 @@ public class SavedQueryService {
     private long countForQueryWithProjectFilter(SavedQuery query, List<Long> accessibleProjectIds, boolean hideResolved) {
         try {
             List<Map<String, Object>> filters = parseFilters(query.getFilters());
+            injectProjectContext(filters, query.getProjectId());
             return queryExecutor.countWithProjectFilter(filters, accessibleProjectIds, hideResolved);
         } catch (Exception e) {
             log.warn("Failed to count for query {}: {}", query.getId(), e.getMessage());
