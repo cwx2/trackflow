@@ -532,14 +532,30 @@ public class TimeEntryService {
     }
 
     /**
-     * 查询某 Issue 的工时记录列表（按工作日期降序）
-     * ongoing 记录仅对其所有者（currentUserId）可见
+     * 查询某 Issue 的工时记录列表（按工作日期降序）。
+     * ongoing 记录仅对其所有者（currentUserId）可见。
+     * <p>
+     * 本方法内部完成项目成员校验，Controller 无需额外注入 IssueService。
      *
      * @param issueId       工单 ID
-     * @param currentUserId 当前登录用户 ID（用于 ongoing 可见性控制）
+     * @param currentUserId 当前登录用户 ID（用于成员校验和 ongoing 可见性控制）
      */
     @Transactional(readOnly = true)
     public List<TimeEntryVO> listByIssue(Long issueId, Long currentUserId) {
+        // 轻量查询 projectId，同时验证工单未被删除
+        Issue issue = issueMapper.selectOne(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Issue>()
+                        .select(Issue::getProjectId)
+                        .eq(Issue::getId, issueId)
+                        .isNull(Issue::getDeletedAt)
+        );
+        if (issue == null) {
+            throw new com.trackflow.common.exception.BusinessException(
+                    com.trackflow.common.exception.ErrorCode.RESOURCE_NOT_FOUND, "Issue not found");
+        }
+        // 校验当前用户是否为项目成员
+        projectService.assertProjectAccessible(currentUserId, issue.getProjectId());
+
         QueryWrapper<TimeEntry> wrapper = new QueryWrapper<TimeEntry>()
                 .eq("issue_id", issueId)
                 .and(w -> w.eq("ongoing", false).or().eq("user_id", currentUserId))

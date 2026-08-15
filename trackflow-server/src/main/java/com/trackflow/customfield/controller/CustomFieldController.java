@@ -213,6 +213,7 @@ public class CustomFieldController {
     // ========== 项目级读取端点 ==========
 
     @GetMapping("/projects/{projectId}/custom-fields")
+    @PreAuthorize("@perm.check(#projectId, 'project:view')")
     public R<List<CustomFieldDefinitionVO>> listByProject(
             @PathVariable("projectId") Long projectId,
             @RequestParam(value = "issueType", required = false) String issueType) {
@@ -220,6 +221,7 @@ public class CustomFieldController {
     }
 
     @GetMapping("/projects/{projectId}/available-columns")
+    @PreAuthorize("@perm.check(#projectId, 'project:view')")
     public R<List<AvailableColumnVO>> availableColumnsByProject(@PathVariable("projectId") Long projectId) {
         return R.ok(customFieldService.getAvailableColumns(projectId));
     }
@@ -344,6 +346,7 @@ public class CustomFieldController {
      * 获取项目中字段的有效选项列表（支持独立/共享回退）
      */
     @GetMapping("/projects/{projectId}/custom-fields/{fieldId}/options")
+    @PreAuthorize("@perm.check(#projectId, 'project:view')")
     public R<List<CustomFieldOptionVO>> getProjectFieldOptions(
             @PathVariable("projectId") Long projectId,
             @PathVariable("fieldId") Long fieldId) {

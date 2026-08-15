@@ -3,8 +3,8 @@ package com.trackflow.integration.controller;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.trackflow.common.model.PageResult;
 import com.trackflow.common.model.R;
-import com.trackflow.common.util.PageHelper;
 import com.trackflow.common.util.SecurityUtils;
+import com.trackflow.integration.dto.NotificationQuery;
 import com.trackflow.integration.entity.Notification;
 import com.trackflow.integration.entity.NotificationCategory;
 import com.trackflow.integration.service.NotificationService;
@@ -31,16 +31,12 @@ public class NotificationController {
     private final MutedThreadService mutedThreadService;
 
     @GetMapping
-    public R<PageResult<NotificationVO>> list(
-            @RequestParam(value = "unreadOnly", required = false, defaultValue = "false") Boolean unreadOnly,
-            @RequestParam(value = "category", required = false) NotificationCategory category,
-            @RequestParam(value = "projectId", required = false) Long projectId,
-            @RequestParam(value = "reason", required = false) String reason,
-            @RequestParam(value = "page", required = false) Integer page,
-            @RequestParam(value = "pageSize", required = false) Integer pageSize) {
+    public R<PageResult<NotificationVO>> list(NotificationQuery query) {
         Long userId = SecurityUtils.getCurrentUserId();
-        Page<Notification> pageObj = PageHelper.buildPage(page, pageSize);
-        PageResult<NotificationVO> pageResult = notificationService.listWithActor(userId, unreadOnly, category, projectId, reason, pageObj);
+        Page<Notification> pageObj = query.toPage();
+        PageResult<NotificationVO> pageResult = notificationService.listWithActor(
+                userId, query.getUnreadOnly(), query.getCategory(),
+                query.getProjectId(), query.getReason(), pageObj);
         return R.ok(pageResult);
     }
 

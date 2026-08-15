@@ -2,10 +2,10 @@ package com.trackflow.timeentry.controller;
 
 import com.trackflow.common.model.R;
 import com.trackflow.common.util.SecurityUtils;
-import com.trackflow.issue.service.IssueService;
 import com.trackflow.timeentry.dto.CreateTimeEntryDTO;
 import com.trackflow.timeentry.dto.StartTimerDTO;
 import com.trackflow.timeentry.dto.StopTimerDTO;
+import com.trackflow.timeentry.dto.TimeEntryQuery;
 import com.trackflow.timeentry.dto.UpdateTimeEntryDTO;
 import com.trackflow.timeentry.entity.TimeEntry;
 import com.trackflow.timeentry.service.TimeEntryService;
@@ -34,7 +34,6 @@ import java.util.List;
 public class TimeEntryController {
 
     private final TimeEntryService timeEntryService;
-    private final IssueService issueService;
 
     // ========== 计时器 API ==========
 
@@ -113,33 +112,25 @@ public class TimeEntryController {
      * 查询用户在日期范围内的工时记录
      * 管理员（拥有 time:view_others 权限）可查看他人工时
      * 支持按项目和工作类型（activityId）筛选
-     *
-     * @param activityId 工作类型属性值 ID（对应 work_item_attribute_value.id）
-     * @param workType   已废弃参数，为向下兼容保留但不再使用（前端应迁移到 activityId）
      */
     @GetMapping
     @PreAuthorize("isAuthenticated()")
-    public R<List<TimeEntryVO>> list(
-            @RequestParam(value = "userId", required = false) Long userId,
-            @RequestParam("startDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
-            @RequestParam("endDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
-            @RequestParam(value = "projectId", required = false) Long projectId,
-            @RequestParam(value = "activityId", required = false) Long activityId,
-            @RequestParam(value = "workType", required = false) String workType) {
+    public R<List<TimeEntryVO>> list(@Valid TimeEntryQuery query) {
         Long currentUserId = SecurityUtils.getCurrentUserId();
-        Long targetUserId = (userId != null) ? userId : currentUserId;
-        Long resolvedActivityId = timeEntryService.resolveActivityId(activityId, workType);
-        return R.ok(timeEntryService.listByUserAndDateRange(targetUserId, currentUserId, startDate, endDate, projectId, resolvedActivityId));
+        Long targetUserId = (query.getUserId() != null) ? query.getUserId() : currentUserId;
+        Long resolvedActivityId = timeEntryService.resolveActivityId(query.getActivityId(), query.getWorkType());
+        return R.ok(timeEntryService.listByUserAndDateRange(
+                targetUserId, currentUserId, query.getStartDate(), query.getEndDate(),
+                query.getProjectId(), resolvedActivityId));
     }
 
     /**
-     * 查询某 Issue 的工时记录（校验项目成员权限）
+     * 查询某 Issue 的工时记录（项目成员权限校验已在 Service 层完成）
      * ongoing 记录仅对其所有者可见
      */
     @GetMapping("/issue/{issueId}")
     @PreAuthorize("isAuthenticated()")
     public R<List<TimeEntryVO>> listByIssue(@PathVariable("issueId") Long issueId) {
-        issueService.getByIdWithAccessCheck(issueId);
         Long currentUserId = SecurityUtils.getCurrentUserId();
         return R.ok(timeEntryService.listByIssue(issueId, currentUserId));
     }

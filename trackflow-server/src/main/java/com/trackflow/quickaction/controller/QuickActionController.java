@@ -31,7 +31,7 @@ public class QuickActionController {
      * 获取当前 Issue 可用的快捷动作列表（返回当前用户可执行的动作，无权限时返回空数组）
      */
     @GetMapping("/issues/{issueId}/quick-actions")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("@perm.checkIssue(#issueId, 'issue:view')")
     public R<List<QuickActionDefinitionVO>> getAvailableActions(@PathVariable("issueId") Long issueId) {
         List<QuickActionDefinitionVO> actions = quickActionService.getAvailableActions(issueId);
         return R.ok(actions);
@@ -41,7 +41,7 @@ public class QuickActionController {
      * 执行快捷动作（form 类型：需要用户填表）
      */
     @PostMapping("/issues/{issueId}/quick-actions/{actionKey}/execute")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("@perm.checkIssue(#issueId, 'issue:view')")
     public R<QuickActionExecutionResultVO> execute(
             @PathVariable("issueId") Long issueId,
             @PathVariable("actionKey") String actionKey,
@@ -54,7 +54,7 @@ public class QuickActionController {
      * 执行 rule 类型快捷动作（点击即执行，无需填表）
      */
     @PostMapping("/issues/{issueId}/quick-actions/{actionKey}/execute-rule")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("@perm.checkIssue(#issueId, 'issue:view')")
     public R<QuickActionExecutionResultVO> executeRule(
             @PathVariable("issueId") Long issueId,
             @PathVariable("actionKey") String actionKey) {
