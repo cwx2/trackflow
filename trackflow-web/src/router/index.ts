@@ -71,7 +71,8 @@ const routes = [
         path: 'projects/:projectKey/settings',
         name: 'ProjectSettings',
         component: () => import('@/views/project/settings/ProjectSettingsView.vue'),
-        meta: { requiresProjectEdit: true, title: '项目设置' }
+        // 项目级权限（project:edit）在页面内部异步检查，路由层不做全局守卫
+        meta: { title: '项目设置' }
       },
       {
         path: 'projects/:projectKey/issues',
@@ -192,7 +193,8 @@ const routes = [
         path: 'admin/workflow',
         name: 'WorkflowEditor',
         component: () => import('@/views/admin/WorkflowEditorView.vue'),
-        meta: { requiresAdmin: true, requiredPermission: 'system:manage_roles', title: '工作流编辑' }
+        // 工作流引擎编辑器只有超管才能使用（system:admin），不是普通角色管理员
+        meta: { requiresAdmin: true, requiredPermission: 'system:admin', title: '工作流编辑' }
       },
       {
         path: 'admin/workflow-definitions',

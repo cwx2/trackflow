@@ -10,8 +10,6 @@ declare module 'vue-router' {
     requiresWorkflow?: boolean
     /** 是否需要报表查看权限 */
     requiresReport?: boolean
-    /** 是否需要项目编辑权限 */
-    requiresProjectEdit?: boolean
     /** 是否需要 Sprint 管理权限 */
     requiresSprintManage?: boolean
     /** 是否需要创建工单权限 */
