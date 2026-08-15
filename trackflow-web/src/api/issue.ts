@@ -295,7 +295,7 @@ export const issueApi = {
 
   /** 批量操作 */
   batch(data: {
-    operation: string
+    operation: 'status' | 'assign' | 'sprint' | 'priority' | 'delete' | 'restore' | 'tag_add' | 'tag_remove'
     issueIds: string[]
     statusId?: string
     assigneeId?: string

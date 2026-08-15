@@ -404,7 +404,9 @@ router.beforeEach(async (to, _from, next) => {
   }
 
   // 工作流路由权限检查：system:admin 或在任意项目中有 project:manage_workflow
-  if (to.meta.requiresWorkflow && permissionCheckAvailable) {
+  // 权限未加载时拒绝（deny-by-default，与 requiresAdmin 策略一致）
+  if (to.meta.requiresWorkflow) {
+    if (!permissionCheckAvailable) { next({ name: 'Forbidden' }); return }
     const canAccess = authStore.hasGlobalPermission('system:admin') || authStore.hasGlobalPermission('nav:workflow')
     if (!canAccess) {
       next({ name: 'Forbidden' })
@@ -413,7 +415,8 @@ router.beforeEach(async (to, _from, next) => {
   }
 
   // 创建工单路由权限检查：统一使用 authStore.canCreateIssue
-  if (to.meta.requiresCreateIssue && permissionCheckAvailable) {
+  if (to.meta.requiresCreateIssue) {
+    if (!permissionCheckAvailable) { next({ name: 'Forbidden' }); return }
     if (!authStore.canCreateIssue) {
       next({ name: 'Forbidden' })
       return
@@ -421,7 +424,9 @@ router.beforeEach(async (to, _from, next) => {
   }
 
   // 报表路由权限检查：system:admin 或在任意项目中有 report:view
-  if (to.meta.requiresReport && permissionCheckAvailable) {
+  // 权限未加载时拒绝（deny-by-default）
+  if (to.meta.requiresReport) {
+    if (!permissionCheckAvailable) { next({ name: 'Forbidden' }); return }
     const canAccess = authStore.hasGlobalPermission('system:admin') || authStore.hasGlobalPermission('nav:report')
     if (!canAccess) {
       next({ name: 'Forbidden' })
@@ -430,7 +435,9 @@ router.beforeEach(async (to, _from, next) => {
   }
 
   // Sprint 规划路由权限检查：system:admin 或在任意项目中有 sprint:create/sprint:edit
-  if (to.meta.requiresSprintManage && permissionCheckAvailable) {
+  // 权限未加载时拒绝（deny-by-default）
+  if (to.meta.requiresSprintManage) {
+    if (!permissionCheckAvailable) { next({ name: 'Forbidden' }); return }
     const canAccess = authStore.hasGlobalPermission('system:admin') || authStore.hasGlobalPermission('nav:sprint_manage')
     if (!canAccess) {
       next({ name: 'Forbidden' })
@@ -439,7 +446,9 @@ router.beforeEach(async (to, _from, next) => {
   }
 
   // 时间表路由权限检查：system:admin 或在任意项目中有 time:log/time:view_others
-  if (to.meta.requiresTimesheet && permissionCheckAvailable) {
+  // 权限未加载时拒绝（deny-by-default）
+  if (to.meta.requiresTimesheet) {
+    if (!permissionCheckAvailable) { next({ name: 'Forbidden' }); return }
     const canAccess = authStore.hasGlobalPermission('system:admin') || authStore.hasGlobalPermission('nav:timesheet')
     if (!canAccess) {
       next({ name: 'Forbidden' })
