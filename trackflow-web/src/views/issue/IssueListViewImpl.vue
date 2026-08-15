@@ -248,7 +248,7 @@
                     <div v-for="st in availableTransitions[record.id]" :key="st.id" class="dropdown-item" @click="selectStatus(record, st)">
                       <span class="status-dot" :style="{ background: st.color }"></span><span>{{ st.transitionName || st.displayName || st.name }}</span>
                     </div>
-                    <div v-if="(availableTransitions[record.id] || []).length === 0" class="dropdown-empty">无可用转换</div>
+                    <div v-if="(availableTransitions[record.id] || []).length === 0" class="dropdown-empty">当前状态无可用转换规则</div>
                   </template>
                 </div>
               </template>

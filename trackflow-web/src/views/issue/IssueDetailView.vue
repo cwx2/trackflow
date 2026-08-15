@@ -758,7 +758,7 @@ const sidebarFields = computed<SidebarField[]>(() => {
   return [
     { key: 'project', label: '项目', value: projectName.value, readonly: true, readonlyReason: '工单创建后不可变更项目' },
     { key: 'priority', label: '优先级', value: i.priority, dot: priorityDot(i.priority), editType: 'select' as const, rawValue: i.priority, readonly: !canEdit, options: dynamicPriorityOptions.value.map(o => ({ value: o.value, label: o.label })) },
-    { key: 'state', label: '状态', value: currentStatus.value.name, dot: currentStatus.value.color, editType: 'select' as const, rawValue: currentStatus.value.id, readonly: !canTransition || availableTransitions.value.length === 0, options: statusOptions },
+    { key: 'state', label: '状态', value: currentStatus.value.name, dot: currentStatus.value.color, editType: 'select' as const, rawValue: currentStatus.value.id, readonly: !canTransition || availableTransitions.value.length === 0, readonlyReason: canTransition && availableTransitions.value.length === 0 ? '当前状态下无可用的工作流转换规则，请联系项目管理员配置工作流' : undefined, options: statusOptions },
     { key: 'issueType', label: '类型', value: getDetailIssueTypeLabel(i.issueType), dot: getDetailIssueTypeColor(i.issueType), editType: 'select' as const, rawValue: i.issueType, readonly: !canEdit, options: dynamicIssueTypeOptions.value.map(o => ({ value: o.value, label: o.label })) },
     { key: 'assignee', label: '负责人', value: i.assigneeName || '未分配', editType: 'user-select' as const, rawValue: i.assigneeId || '', readonly: !canAssign, options: userOptions },
     { key: 'reporter', label: '报告人', value: reporterName.value, readonly: true, readonlyReason: '报告人为工单创建者，不可修改', userId: i.reporterId || undefined },
