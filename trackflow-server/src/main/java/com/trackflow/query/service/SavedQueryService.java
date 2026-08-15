@@ -324,9 +324,12 @@ public class SavedQueryService {
     }
 
     /**
-     * 执行保存查询（返回匹配的 Issue 列表）
+     * 执行保存查询（返回匹配的 Issue 列表）。
+     * <p>
+     * ⚠️ 内部使用：不含项目权限过滤，调用方须自行保证权限。
+     * 外部调用请使用 {@link #executeByIdWithAccessCheck}。
      */
-    public Page<Issue> executeById(Long id, int page, int pageSize) {
+    Page<Issue> executeById(Long id, int page, int pageSize) {
         SavedQuery query = queryMapper.selectById(id);
         if (query == null) {
             throw BusinessException.notFound("Query not found");
@@ -338,9 +341,12 @@ public class SavedQueryService {
     }
 
     /**
-     * 即时执行查询（不保存）
+     * 即时执行查询（不保存）。
+     * <p>
+     * ⚠️ 内部使用：不含项目权限过滤，调用方须自行保证权限。
+     * 外部调用请使用 {@link #executeAdhocWithAccessCheck}。
      */
-    public Page<Issue> executeAdhoc(ExecuteQueryDTO dto) {
+    Page<Issue> executeAdhoc(ExecuteQueryDTO dto) {
         int page = dto.getPage() != null ? dto.getPage() : 1;
         int pageSize = dto.getPageSize() != null ? dto.getPageSize() : 20;
         return queryExecutor.execute(dto.getFilters(), page, pageSize, dto.getSortCriteria());

@@ -29,7 +29,7 @@ spring:
     placeholder-replacement: false
     out-of-order: true
     ignore-migration-patterns: "*:missing,*:future"
-    validate-on-migrate: false
+    validate-on-migrate: true
 
 mybatis-plus:
   mapper-locations: classpath*:mapper/**/*.xml
@@ -82,7 +82,7 @@ trackflow:
   base-url: http://localhost:3000  # 前端基础 URL，用于邮件中的资源直链
   server-url: http://localhost:8090  # 后端 API 基础 URL，用于邮件中的 token 回调链接
   encryption:
-    key: dHJhY2tmbG93LWFlczI1Ni1lbmNyeXB0LWtleTAxMjM=  # Base64 encoded 32-byte key (override in production!)
+    key: ${TRACKFLOW_ENCRYPTION_KEY:dHJhY2tmbG93LWFlczI1Ni1lbmNyeXB0LWtleTAxMjM=}  # 生产环境通过环境变量 TRACKFLOW_ENCRYPTION_KEY 注入
   monitor:
     enabled: true           # 是否启用慢操作监控切面
     slow-threshold: 500     # 全局慢操作阈值（毫秒），超过此值打 WARN
