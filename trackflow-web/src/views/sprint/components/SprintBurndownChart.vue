@@ -19,7 +19,7 @@
       <div class="burndown-meta" v-if="burndownData">
         <span class="meta-item" v-if="burndownData.velocity > 0">
           <span class="meta-label">日均速率</span>
-          <span class="meta-value">{{ burndownData.velocity }} {{ modeUnit }}/天</span>
+          <span class="meta-value">{{ burndownData.velocity }} {{ modeUnit }}/天<span v-if="isAllWorkDone" class="history-tag">（历史）</span></span>
         </span>
         <span class="meta-item" v-if="hasScopeChange">
           <span class="meta-label">起始/当前</span>
@@ -29,6 +29,10 @@
         <span class="meta-item forecast" v-if="burndownData.forecastDate && !isCompleted">
           <span class="meta-label">预计完成</span>
           <span class="meta-value" :class="{ overdue: isForecastLate }">{{ formatForecastDate(burndownData.forecastDate) }}</span>
+        </span>
+        <span class="meta-item forecast completed-hint" v-else-if="isAllWorkDone && !isCompleted">
+          <span class="meta-label">进度</span>
+          <span class="meta-value all-done">已全部完成</span>
         </span>
       </div>
     </div>
@@ -87,6 +91,12 @@ const modeUnit = computed(() => {
 const isForecastLate = computed(() => {
   if (!burndownData.value?.forecastDate || !props.sprintEndDate) return false
   return burndownData.value.forecastDate > props.sprintEndDate
+})
+
+const isAllWorkDone = computed(() => {
+  if (!burndownData.value || burndownData.value.actualLine.length === 0) return false
+  const lastActual = burndownData.value.actualLine[burndownData.value.actualLine.length - 1]
+  return lastActual <= 0
 })
 
 const hasScopeChange = computed(() => {
@@ -340,6 +350,17 @@ onMounted(() => {
 
 .meta-value.overdue {
   color: rgb(var(--danger-6));
+}
+
+.meta-value.all-done {
+  color: rgb(var(--success-6));
+}
+
+.history-tag {
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--color-text-3);
+  margin-left: 2px;
 }
 
 .meta-value.scope-change {

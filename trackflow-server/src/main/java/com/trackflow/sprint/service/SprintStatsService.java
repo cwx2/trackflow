@@ -534,9 +534,8 @@ public class SprintStatsService {
         if (velocity > 0 && remaining > 0) {
             long daysNeeded = (long) Math.ceil(remaining / velocity);
             vo.setForecastDate(today.plusDays(daysNeeded).toString());
-        } else if (remaining <= 0) {
-            vo.setForecastDate(today.toString());
         } else {
+            // remaining <= 0: 所有工单已完成，无需预测；velocity == 0 且 remaining > 0: 无法预测
             vo.setForecastDate(null);
         }
     }
@@ -621,9 +620,8 @@ public class SprintStatsService {
         if (hoursVelocity > 0 && remainingHours > 0) {
             long daysNeeded = (long) Math.ceil(remainingHours / hoursVelocity);
             vo.setForecastDate(today.plusDays(daysNeeded).toString());
-        } else if (remainingHours <= 0) {
-            vo.setForecastDate(today.toString());
         } else {
+            // remainingHours <= 0: 所有工时已完成，无需预测；velocity == 0 且 remaining > 0: 无法预测
             vo.setForecastDate(null);
         }
     }
@@ -820,9 +818,8 @@ public class SprintStatsService {
         if (minuteVelocity > 0 && remainingMinutes > 0) {
             long daysNeeded = (long) Math.ceil(remainingMinutes / minuteVelocity);
             vo.setForecastDate(today.plusDays(daysNeeded).toString());
-        } else if (remainingMinutes <= 0) {
-            vo.setForecastDate(today.toString());
         } else {
+            // remainingMinutes <= 0: 所有工时已完成，无需预测；velocity == 0 且 remaining > 0: 无法预测
             vo.setForecastDate(null);
         }
     }
