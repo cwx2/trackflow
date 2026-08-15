@@ -118,7 +118,7 @@ public class TimeEntryController {
     public R<List<TimeEntryVO>> list(@Valid TimeEntryQuery query) {
         Long currentUserId = SecurityUtils.getCurrentUserId();
         Long targetUserId = (query.getUserId() != null) ? query.getUserId() : currentUserId;
-        Long resolvedActivityId = timeEntryService.resolveActivityId(query.getActivityId(), query.getWorkType());
+        Long resolvedActivityId = timeEntryService.resolveActivityId(query.getActivityId());
         return R.ok(timeEntryService.listByUserAndDateRange(
                 targetUserId, currentUserId, query.getStartDate(), query.getEndDate(),
                 query.getProjectId(), resolvedActivityId));

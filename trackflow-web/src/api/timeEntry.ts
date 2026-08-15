@@ -105,10 +105,9 @@ export interface AttributeProjectVO {
 export const timeEntryApi = {
   /**
    * 查询用户在日期范围内的工时
-   * @param activityId 工作类型属性值 ID（优先使用）
-   * @param workType 工作类型名称（向下兼容，后端按名称匹配转为 activityId）
+   * @param activityId 工作类型属性值 ID
    */
-  list(params: { userId?: string; startDate: string; endDate: string; projectId?: string; activityId?: string; workType?: string }) {
+  list(params: { userId?: string; startDate: string; endDate: string; projectId?: string; activityId?: string }) {
     return request.get<any, R<TimeEntryVO[]>>('/time-entries', { params })
   },
 

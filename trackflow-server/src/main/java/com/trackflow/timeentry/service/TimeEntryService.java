@@ -372,12 +372,8 @@ public class TimeEntryService {
      * @param workType   工作类型名称（已废弃，向下兼容）
      * @return 解析后的 activityId，或 null
      */
-    public Long resolveActivityId(Long activityId, String workType) {
-        if (activityId != null) return activityId;
-        if (workType != null && !workType.isBlank()) {
-            return workItemAttributeService.findWorkTypeValueIdByName(workType);
-        }
-        return null;
+    public Long resolveActivityId(Long activityId) {
+        return activityId;
     }
 
     /**

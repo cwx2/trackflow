@@ -38,13 +38,6 @@ public class TimeEntryQuery extends PageQuery {
     /** 工作类型属性值 ID（对应 work_item_attribute_value.id，可选） */
     private Long activityId;
 
-    /**
-     * 已废弃：工作类型（向下兼容保留，前端应迁移到 activityId）。
-     * @deprecated 使用 {@link #activityId} 替代
-     */
-    @Deprecated
-    private String workType;
-
     @Override
     protected Set<String> allowedSortFields() {
         return Set.of("id", "work_date", "created_at", "duration_minutes");
