@@ -104,32 +104,23 @@ public class NotificationService {
             }
         }
 
-        // 查找聚合窗口内的同类未读通知
-        Notification existing = findRecentUnread(userId, typeValue, resourceType, resourceId);
-
+        // 聚合逻辑：对于 resourceId 非空的通知，使用原子 upsert 消除并发竞态（TOCTOU）
+        // upsert 依赖 V304 创建的部分唯一索引，数据库层面保证原子性
+        // resourceId 为 null 的系统通知（无聚合需求）仍走原有 INSERT 路径
         boolean isNew = false;
-        if (existing != null) {
-            // 聚合：更新已有通知
-            existing.setTitle(title);
-            existing.setContent(content);
-            existing.setActorId(actorId);
-            existing.setIsRead(false);
-            existing.setUpdatedAt(LocalDateTime.now());
-            existing.setAggregationCount(
-                    (existing.getAggregationCount() != null ? existing.getAggregationCount() : 1) + 1);
-            // 聚合时重置 mailSent=false，让定时任务在聚合窗口结束后重新评估是否需要发邮件
-            existing.setMailSent(false);
-            existing.setMailSentAt(null);
-            // 聚合时不覆盖 reason（保留第一次的 reason）
-            // 聚合时更新 sourceId 为最新的来源（最近的 @mention 评论）
-            if (sourceId != null) {
-                existing.setSourceId(sourceId);
-            }
-            notificationMapper.updateById(existing);
-            log.debug("[Notification] 聚合通知: id={}, userId={}, type={}, resourceId={}, count={}",
-                    existing.getId(), userId, typeValue, resourceId, existing.getAggregationCount());
+        if (resourceId != null) {
+            // 使用 snowflake ID 生成器，为 INSERT 分配新 ID
+            // ON CONFLICT 时数据库丢弃此 ID，使用已有记录的 ID
+            long newId = com.baomidou.mybatisplus.core.toolkit.IdWorker.getId();
+            int affected = notificationMapper.upsertForAggregation(
+                    newId, userId, actorId, projectId, title, content, typeValue,
+                    resourceType, resourceId, sourceId, reason != null ? reason.name() : null
+            );
+            // affected=1 表示新插入，affected=2 表示已聚合更新（PostgreSQL ON CONFLICT DO UPDATE 的行为）
+            isNew = (affected == 1);
+            log.debug("[Notification] upsert: userId={}, type={}, resourceId={}, isNew={}", userId, typeValue, resourceId, isNew);
         } else {
-            // 新建通知
+            // resourceId 为 null 的系统通知，直接 INSERT（无聚合，不可能冲突）
             Notification n = new Notification();
             n.setUserId(userId);
             n.setActorId(actorId);
@@ -139,9 +130,9 @@ public class NotificationService {
             n.setType(typeValue);
             n.setReason(reason != null ? reason.name() : null);
             n.setResourceType(resourceType);
-            n.setResourceId(resourceId);
+            n.setResourceId(null);
             n.setSourceId(sourceId);
-            n.setResourceUrl(urlBuilder.buildPath(resourceType, resourceId, projectId, sourceId));
+            n.setResourceUrl(null);
             n.setIsRead(false);
             n.setMailSent(false);
             n.setCreatedAt(LocalDateTime.now());

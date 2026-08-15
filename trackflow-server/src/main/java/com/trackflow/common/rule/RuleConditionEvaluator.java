@@ -134,11 +134,22 @@ public class RuleConditionEvaluator {
 
     // ==================== 递归求值核心 ====================
 
+    /** 最大递归嵌套深度，防止恶意/意外的超深嵌套导致栈溢出 */
+    private static final int MAX_CONDITION_DEPTH = 20;
+
     /**
      * 递归求值条件节点。
      * 支持逻辑节点（type=and/or/not）和叶子节点（type=condition 或无 type 的旧格式）。
      */
     private boolean evalConditionNode(JsonNode node, Issue issue, EvaluationContext context) {
+        return evalConditionNode(node, issue, context, 0);
+    }
+
+    private boolean evalConditionNode(JsonNode node, Issue issue, EvaluationContext context, int depth) {
+        if (depth > MAX_CONDITION_DEPTH) {
+            log.warn("[RuleCondition] 条件嵌套深度超过上限 {}，终止求值（可能是恶意输入或配置错误）", MAX_CONDITION_DEPTH);
+            return false; // 深度超限时悲观返回 false，不执行规则动作
+        }
         String type = textOf(node, "type");
         if (type == null) {
             // 旧格式叶子节点（无 type 字段，直接含 field/operator/value）
@@ -149,7 +160,7 @@ public class RuleConditionEvaluator {
                 JsonNode conditions = node.get("conditions");
                 if (conditions == null || !conditions.isArray() || conditions.isEmpty()) yield true;
                 for (JsonNode child : conditions) {
-                    if (!evalConditionNode(child, issue, context)) yield false;
+                    if (!evalConditionNode(child, issue, context, depth + 1)) yield false;
                 }
                 yield true;
             }
@@ -164,7 +175,7 @@ public class RuleConditionEvaluator {
             case "not" -> {
                 JsonNode condition = node.get("condition");
                 if (condition == null) yield true;
-                yield !evalConditionNode(condition, issue, context);
+                yield !evalConditionNode(condition, issue, context, depth + 1);
             }
             case "condition" -> evalLeafCondition(node, issue, context);
             default -> evalLeafCondition(node, issue, context);
