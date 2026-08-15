@@ -322,7 +322,7 @@ public class SprintService {
         }
     }
 
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public Sprint create(Long projectId, CreateSprintDTO dto) {
         // 归档项目不允许创建 Sprint
         projectService.assertProjectActive(projectId);
@@ -540,7 +540,7 @@ public class SprintService {
         return null;
     }
 
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public Sprint update(Long id, UpdateSprintDTO dto) {
         Sprint sprint = getById(id);
         projectService.assertProjectActive(sprint.getProjectId());
@@ -663,7 +663,7 @@ public class SprintService {
         return change;
     }
 
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public Sprint activate(Long id) {
         Sprint sprint = getById(id);
         // 归档项目不允许操作 Sprint
@@ -740,7 +740,7 @@ public class SprintService {
         return sprint;
     }
 
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public SprintCompleteResultVO complete(Long id, CompleteSprintDTO dto) {
         Sprint sprint = getById(id);
         // 归档项目不允许操作 Sprint
@@ -1084,7 +1084,7 @@ public class SprintService {
         return vo;
     }
 
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void delete(Long id, DeleteSprintDTO dto) {
         Sprint sprint = getById(id);
         // 归档项目不允许删除 Sprint

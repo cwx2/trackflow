@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
@@ -198,6 +199,21 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * 乐观锁并发冲突（Spring Data 抽象层抛出）
+     * <p>
+     * 触发场景：多个请求并发修改同一实体，版本号不匹配时 Spring 抛出此异常。
+     * MyBatis-Plus OptimisticLockerInnerInterceptor 在批量更新场景下也可能触发。
+     * 返回 409 Conflict 而非 500 Internal Server Error。
+     */
+    @ExceptionHandler(OptimisticLockingFailureException.class)
+    public ResponseEntity<R<Void>> handleOptimisticLockingFailureException(
+            OptimisticLockingFailureException ex, HttpServletRequest request) {
+        log.warn("Optimistic lock conflict on {} {}: {}", request.getMethod(), request.getRequestURI(), ex.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(R.fail(ErrorCode.CONCURRENT_OPERATION, "操作冲突，该资源已被其他人修改，请刷新后重试"));
+    }
+
+    /**
      * 数据库唯一约束违规（并发竞态导致的重复插入）
      * <p>
      * 按约束名映射为对应的业务错误码，返回 409 Conflict 而非 500。
@@ -233,18 +249,21 @@ public class GlobalExceptionHandler {
 
     /**
      * 约束名 → ErrorCode 映射表
+     * <p>
+     * 使用 {@link Map#ofEntries} 而非 {@link Map#of}，后者最多支持 10 个键值对。
+     * 新增约束映射时直接追加 {@code Map.entry(...)} 条目即可，无数量限制。
      */
-    private static final Map<String, ErrorCode> CONSTRAINT_ERROR_MAP = Map.of(
-            "project_key_key", ErrorCode.PROJECT_KEY_DUPLICATE,
-            "idx_project_name_unique", ErrorCode.PROJECT_NAME_DUPLICATE,
-            "organization_code_key", ErrorCode.ORG_CODE_DUPLICATE,
-            "sys_role_code_key", ErrorCode.ROLE_CODE_DUPLICATE,
-            "issue_tag_project_id_name_key", ErrorCode.DUPLICATE_RESOURCE,
-            "issue_link_source_issue_id_target_issue_id_link_type_key", ErrorCode.DUPLICATE_RESOURCE,
-            "issue_tag_relation_issue_id_tag_id_key", ErrorCode.DUPLICATE_RESOURCE,
-            "project_member_project_user_role_key", ErrorCode.DUPLICATE_RESOURCE,
-            "sys_user_username_key", ErrorCode.DUPLICATE_RESOURCE,
-            "issue_status_code_key", ErrorCode.DUPLICATE_RESOURCE
+    private static final Map<String, ErrorCode> CONSTRAINT_ERROR_MAP = Map.ofEntries(
+            Map.entry("project_key_key", ErrorCode.PROJECT_KEY_DUPLICATE),
+            Map.entry("idx_project_name_unique", ErrorCode.PROJECT_NAME_DUPLICATE),
+            Map.entry("organization_code_key", ErrorCode.ORG_CODE_DUPLICATE),
+            Map.entry("sys_role_code_key", ErrorCode.ROLE_CODE_DUPLICATE),
+            Map.entry("issue_tag_project_id_name_key", ErrorCode.DUPLICATE_RESOURCE),
+            Map.entry("issue_link_source_issue_id_target_issue_id_link_type_key", ErrorCode.DUPLICATE_RESOURCE),
+            Map.entry("issue_tag_relation_issue_id_tag_id_key", ErrorCode.DUPLICATE_RESOURCE),
+            Map.entry("project_member_project_user_role_key", ErrorCode.DUPLICATE_RESOURCE),
+            Map.entry("sys_user_username_key", ErrorCode.DUPLICATE_RESOURCE),
+            Map.entry("issue_status_code_key", ErrorCode.DUPLICATE_RESOURCE)
     );
 
     private ErrorCode resolveErrorCodeFromConstraint(String exceptionMessage) {
