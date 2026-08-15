@@ -256,6 +256,10 @@ function initialFiltersToConditions(filters: InitialFilter[]): FilterCondition[]
     }
     const cond: FilterCondition = { field, operator }
     if (values.length > 0) cond.value = values
+    // 保留人类可读的值标签，供 chip 展示用
+    if (f.valueLabels && f.valueLabels.length > 0) {
+      cond.valueLabels = f.valueLabels
+    }
     return cond
   })
 }

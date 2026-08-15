@@ -166,7 +166,7 @@
  */
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { IconPlus } from '@arco-design/web-vue/es/icon'
-import { customFieldApi, projectApi, sprintApi, tagApi } from '@/api'
+import { customFieldApi, issueApi, projectApi, sprintApi, tagApi } from '@/api'
 import type { CustomFieldDefinitionVO, CustomFieldOptionVO, AvailableColumnVO, IssueStatusVO, ProjectVO, SprintVO } from '@/api/types'
 
 // ===== 类型定义 =====
@@ -176,6 +176,8 @@ export interface FilterCondition {
   field: string
   operator: string
   value?: string[]
+  /** 可选的人类可读值标签，用于 chip 展示（避免只显示 ID） */
+  valueLabels?: string[]
 }
 
 /** 操作符定义 */
@@ -324,6 +326,7 @@ const DATE_RELATIVE_OPTIONS: ValueOption[] = [
 // ===== 系统固定字段定义 =====
 
 const SYSTEM_FIELDS: FieldDef[] = [
+  { key: 'status', label: '状态', valueType: 'state', operators: OPERATORS_STATE, isSystem: true },
   { key: 'project', label: '项目', valueType: 'enum', operators: OPERATORS_ENUM, isSystem: true },
   { key: 'assignee', label: '负责人', valueType: 'user', operators: OPERATORS_USER, isSystem: true },
   { key: 'reporter', label: '报告人', valueType: 'user', operators: OPERATORS_USER, isSystem: true },
@@ -491,7 +494,7 @@ function columnToFieldDef(col: AvailableColumnVO): FieldDef {
     case 'bool':
       valueType = 'bool'; operators = OPERATORS_BOOL; break
   }
-  return { key: col.key, label: col.label, valueType, operators }
+  return { key: col.key, label: col.label, valueType, operators, isSystem: false }
 }
 
 /** 将 CustomFieldDefinitionVO 转换为 FieldDef */
@@ -560,9 +563,18 @@ function rebuildChips(conditions: FilterCondition[]) {
       operator: cond.operator,
       operatorLabel: op?.label || cond.operator,
       values: cond.value || [],
-      valueLabel: buildValueLabel(cond.field, cond.operator, cond.value || [])
+      valueLabel: cond.valueLabels && cond.valueLabels.length > 0
+        ? buildValueLabelFromArray(cond.valueLabels)
+        : buildValueLabel(cond.field, cond.operator, cond.value || [])
     }
   })
+}
+
+/** 从已有的标签数组构造展示文本 */
+function buildValueLabelFromArray(labels: string[]): string {
+  if (labels.length === 0) return ''
+  if (labels.length <= 2) return labels.join(', ')
+  return `${labels[0]}, ${labels[1]} 等${labels.length}项`
 }
 
 function buildValueLabel(_fieldKey: string, operator: string, values: string[]): string {
@@ -783,6 +795,30 @@ async function loadSystemFieldOptions(fieldKey: string) {
   const meOption: ValueOption = { id: '${currentUser}', label: '我（当前用户）', isSpecial: true }
 
   switch (fieldKey) {
+    case 'status': {
+      // 使用 props.statusList 如果有传入，否则从 API 加载
+      if (props.statusList && props.statusList.length > 0) {
+        valueOptions.value = props.statusList.map(s => ({
+          id: s.id,
+          label: s.displayName || s.name,
+          color: s.color || undefined
+        }))
+      } else {
+        try {
+          const res = await issueApi.listStatuses({ _silent403: true })
+          const statuses = res.data || []
+          valueOptions.value = statuses.map((s: any) => ({
+            id: s.id,
+            label: s.displayName || s.name,
+            color: s.color || undefined
+          }))
+        } catch {
+          valueOptions.value = []
+        }
+      }
+      break
+    }
+
     case 'project':
       valueOptions.value = props.projectList.map(p => ({ id: String(p.id), label: `${p.key} - ${p.name}` }))
       break
@@ -808,8 +844,6 @@ async function loadSystemFieldOptions(fieldKey: string) {
       break
     }
 
-    // status 和 priority/type 现在走自定义字段体系
-    // 但如果在 SYSTEM_FIELDS 中仍然需要兜底
     default:
       valueOptions.value = []
   }
