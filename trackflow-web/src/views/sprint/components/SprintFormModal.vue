@@ -16,13 +16,19 @@
       </a-form-item>
 
       <div class="create-options-section" v-if="creationPreview">
-        <div class="create-option-item" v-if="creationPreview.activeSprintId && creationPreview.unresolvedIssueCount > 0">
+        <div class="create-option-item" v-if="creationPreview.sourceSprintId && creationPreview.unresolvedIssueCount > 0">
           <a-checkbox v-model="createForm.moveUnresolvedIssues">
             <span class="option-label">添加当前 Sprint 未完成工单</span>
           </a-checkbox>
           <span class="option-desc">
-            将 <strong>{{ creationPreview.activeSprintName }}</strong> 中的
-            {{ creationPreview.unresolvedIssueCount }} 个未完成工单移入新迭代
+            <template v-if="creationPreview.sourceSprintStatus === 'active'">
+              将 <strong>{{ creationPreview.sourceSprintName }}</strong> 中的
+              {{ creationPreview.unresolvedIssueCount }} 个未完成工单移入新迭代
+            </template>
+            <template v-else>
+              将最近完成的 <strong>{{ creationPreview.sourceSprintName }}</strong> 中遗留的
+              {{ creationPreview.unresolvedIssueCount }} 个未完成工单移入新迭代
+            </template>
           </span>
         </div>
         <div class="create-option-item">

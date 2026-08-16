@@ -358,7 +358,7 @@ public class SprintService {
         if (sprint.getEndDate() != null) detail.put("end_date", sprint.getEndDate().toString());
         projectActivityService.log(projectId, currentUserId, "create_sprint", null, detail);
 
-        // 选项1：将当前活跃 Sprint 的未完成工单移入新 Sprint
+        // 选项1：将源 Sprint（活跃或最近完成）的未完成工单移入新 Sprint
         if (Boolean.TRUE.equals(dto.getMoveUnresolvedIssues())) {
             moveUnresolvedIssuesToNewSprint(projectId, sprint, currentUserId);
         }
@@ -372,7 +372,7 @@ public class SprintService {
     }
 
     /**
-     * 将项目当前活跃 Sprint 中的未完成工单批量移入新 Sprint，并记录活动日志。
+     * 将源 Sprint（活跃或最近完成）中的未完成工单批量移入新 Sprint，并记录活动日志。
      */
     private void moveUnresolvedIssuesToNewSprint(Long projectId, Sprint newSprint, Long currentUserId) {
         Sprint sourceSprint = findSourceSprintForUnresolved(projectId, newSprint.getId());
@@ -454,12 +454,13 @@ public class SprintService {
     public CreationPreviewVO getCreationPreview(Long projectId) {
         CreationPreviewVO vo = new CreationPreviewVO();
 
-        // 查找含未完成工单的源 Sprint（优先级：活跃 > 最近计划中 > 最近完成）
+        // 查找含未完成工单的源 Sprint（优先级：活跃 > 最近完成）
         Sprint sourceSprint = findSourceSprintForUnresolved(projectId, null);
 
         if (sourceSprint != null) {
-            vo.setActiveSprintId(String.valueOf(sourceSprint.getId()));
-            vo.setActiveSprintName(sourceSprint.getName());
+            vo.setSourceSprintId(String.valueOf(sourceSprint.getId()));
+            vo.setSourceSprintName(sourceSprint.getName());
+            vo.setSourceSprintStatus(sourceSprint.getStatus().name().toLowerCase());
             List<Long> openIssueIds = sprintMapper.selectOpenIssueIds(sourceSprint.getId());
             vo.setUnresolvedIssueCount(openIssueIds.size());
         }
@@ -483,8 +484,10 @@ public class SprintService {
      * <p>
      * 优先级：
      * 1. 活跃（ACTIVE）Sprint — 当前正在进行的迭代
-     * 2. 最近的计划中（PLANNED）Sprint — 按开始日期倒序
-     * 3. 最近已完成（COMPLETED）Sprint — 按结束日期倒序
+     * 2. 最近已完成（COMPLETED）Sprint — 按结束日期倒序，仍有未关闭工单的
+     * <p>
+     * 不选计划中（PLANNED）Sprint：计划中的 Sprint 尚未开始，其包含的工单
+     * 是预先规划分配的，不属于"未完成遗留工单"的概念。
      * <p>
      * 每个级别只返回含未完成工单的 Sprint；若该级别的候选 Sprint 无未完成工单则跳过，
      * 继续检查下一优先级。
@@ -507,22 +510,8 @@ public class SprintService {
             }
         }
 
-        // 2. 最近的计划中 Sprint（按开始日期倒序，开始日期为空的排最后）
-        List<Sprint> plannedList = sprintMapper.selectList(
-                new LambdaQueryWrapper<Sprint>()
-                        .eq(Sprint::getProjectId, projectId)
-                        .eq(Sprint::getStatus, SprintStatus.PLANNED)
-                        .ne(excludeSprintId != null, Sprint::getId, excludeSprintId)
-                        .orderByDesc(Sprint::getStartDate)
-        );
-        for (Sprint planned : plannedList) {
-            List<Long> openIds = sprintMapper.selectOpenIssueIds(planned.getId());
-            if (!openIds.isEmpty()) {
-                return planned;
-            }
-        }
-
-        // 3. 最近已完成 Sprint（按结束日期倒序，结束日期为空的排最后）
+        // 2. 最近已完成 Sprint（按结束日期倒序，结束日期为空的排最后）
+        //    跳过"计划中"Sprint——计划中的 Sprint 尚未开始，不应作为"未完成工单"的迁移源
         List<Sprint> completedList = sprintMapper.selectList(
                 new LambdaQueryWrapper<Sprint>()
                         .eq(Sprint::getProjectId, projectId)

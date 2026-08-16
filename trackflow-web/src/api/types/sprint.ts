@@ -198,11 +198,13 @@ export interface DeletionPreviewTarget {
 
 // ========== Sprint 创建预览 ==========
 export interface CreationPreviewVO {
-  /** 当前活跃 Sprint 的 ID（无活跃 Sprint 时为 null） */
-  activeSprintId?: string
-  /** 当前活跃 Sprint 的名称 */
-  activeSprintName?: string
-  /** 当前活跃 Sprint 中未关闭的工单数量 */
+  /** 源 Sprint 的 ID（即含未完成工单的 Sprint，无匹配时为 null） */
+  sourceSprintId?: string
+  /** 源 Sprint 的名称 */
+  sourceSprintName?: string
+  /** 源 Sprint 的状态（"active" 或 "completed"），前端据此显示不同文案 */
+  sourceSprintStatus?: string
+  /** 源 Sprint 中未关闭的工单数量 */
   unresolvedIssueCount: number
   /** 该项目当前是否已设置默认 Sprint */
   hasDefaultSprint: boolean
