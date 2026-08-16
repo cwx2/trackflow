@@ -188,9 +188,7 @@
       <!-- 用户头像：折叠时 tooltip，展开时直接渲染，内容体只写一份 -->
       <component
         :is="sidebarCollapsed ? 'a-tooltip' : virtualTag"
-        :content="sidebarCollapsed ? userName : undefined"
-        position="right"
-        :mini="true"
+        v-bind="sidebarCollapsed ? { content: userName, position: 'right', mini: true } : {}"
       >
         <div class="sidebar-user" @click="showUserMenu = !showUserMenu">
           <UserAvatar :name="userName" :size="24" />
@@ -255,6 +253,7 @@ import trackflowIconUrl from '@/assets/trackflow-icon.svg'
 // 透明包裹：展开态不需要 tooltip，用此组件代替 a-tooltip 做无 DOM 透传
 const virtualTag = {
   name: 'VirtualWrapper',
+  inheritAttrs: false,
   render() { return (this as any).$slots.default?.() },
 }
 

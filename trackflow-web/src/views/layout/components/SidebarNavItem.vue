@@ -9,9 +9,7 @@
   -->
   <component
     :is="collapsed ? 'a-tooltip' : virtualTag"
-    :content="collapsed ? label : undefined"
-    position="right"
-    :mini="true"
+    v-bind="collapsed ? { content: label, position: 'right', mini: true } : {}"
   >
     <component
       :is="to ? 'router-link' : 'div'"
@@ -60,8 +58,10 @@ import type { Component } from 'vue'
 
 // 透明包裹标签：渲染为 <template>（不生成 DOM），用于展开态不需要 tooltip 包裹时
 // Vue 3 中可以用 defineComponent 定义一个只 render slot 的透明组件
+// inheritAttrs: false 防止 Vue 尝试透传 attrs 到 fragment root 时产生警告
 const virtualTag = {
   name: 'VirtualWrapper',
+  inheritAttrs: false,
   render() {
     return (this as any).$slots.default?.()
   },
