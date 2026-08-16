@@ -35,10 +35,15 @@
         <FilterSelect
           label="角色"
           v-model="filters.roleId"
-          :width="100"
+          :width="120"
           @change="() => { pagination.page = 1; loadUsers() }"
         >
-          <a-option v-for="role in globalRoles" :key="role.id" :value="role.id">{{ role.name }}</a-option>
+          <a-optgroup label="系统角色">
+            <a-option v-for="role in globalRoles" :key="role.id" :value="role.id">{{ role.name }}</a-option>
+          </a-optgroup>
+          <a-optgroup label="项目角色">
+            <a-option v-for="role in filterableProjectRoles" :key="role.id" :value="role.id">{{ role.name }}</a-option>
+          </a-optgroup>
         </FilterSelect>
         <FilterSelect
           label="状态"
@@ -379,6 +384,9 @@ const userProjectRoles = ref<UserProfileProjectRoleInfo[]>([])
 const globalRoles = ref<any[]>([])
 const projectRoles = ref<any[]>([])
 const allProjects = ref<any[]>([])
+
+/** 可用于筛选器的项目角色（排除 non_member/anonymous，与 projectRoles 一致） */
+const filterableProjectRoles = computed(() => projectRoles.value)
 
 // 角色操作 loading 状态（存储正在处理的角色 ID）
 const roleToggleLoading = ref<Set<string>>(new Set())
@@ -812,19 +820,34 @@ const tableColumns = computed<ColumnDef[]>(() => [
   },
   {
     type: 'render',
-    title: '系统角色',
-    width: 160,
+    title: '角色',
+    width: 220,
     render: (record: any) => {
-      if (!record.globalRoles?.length) {
+      const tags: any[] = []
+      // 全局角色标签（蓝色）
+      if (record.globalRoles?.length) {
+        for (const role of record.globalRoles) {
+          tags.push(h('span', {
+            style: 'display:inline-flex;align-items:center;height:20px;padding:0 7px;background:var(--tf-accent-light);color:var(--tf-accent);font-size:11px;font-weight:500;border-radius:3px;white-space:nowrap'
+          }, role.name))
+        }
+      }
+      // 项目角色标签（灰绿色，显示角色名+项目数）
+      if (record.projectRoles?.length) {
+        for (const pr of record.projectRoles) {
+          const label = pr.projectKeys.length <= 2
+            ? `${pr.roleName}(${pr.projectKeys.join(', ')})`
+            : `${pr.roleName}(${pr.projectKeys.slice(0, 2).join(', ')}+${pr.projectKeys.length - 2})`
+          tags.push(h('span', {
+            style: 'display:inline-flex;align-items:center;height:20px;padding:0 7px;background:var(--tf-success-bg, rgba(0,180,42,0.1));color:var(--tf-success, #00b42a);font-size:11px;font-weight:500;border-radius:3px;white-space:nowrap',
+            title: `${pr.roleName}: ${pr.projectKeys.join(', ')}`
+          }, label))
+        }
+      }
+      if (tags.length === 0) {
         return h('span', { style: 'color: var(--tf-text-tertiary); font-size: 13px' }, '—')
       }
-      return h('div', { style: 'display:flex; flex-wrap:wrap; gap:4px' },
-        record.globalRoles.map((role: any) =>
-          h('span', {
-            style: 'display:inline-flex;align-items:center;height:20px;padding:0 7px;background:var(--tf-accent-light);color:var(--tf-accent);font-size:11px;font-weight:500;border-radius:3px;white-space:nowrap'
-          }, role.name)
-        )
-      )
+      return h('div', { style: 'display:flex; flex-wrap:wrap; gap:4px' }, tags)
     },
   },
   {

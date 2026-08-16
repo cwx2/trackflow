@@ -222,9 +222,11 @@ public class UserService {
         if (!result.getRecords().isEmpty()) {
             List<Long> userIds = result.getRecords().stream().map(SysUser::getId).toList();
             Map<Long, List<UserVO.GlobalRoleInfo>> rolesMap = batchGetGlobalRoles(userIds);
+            Map<Long, List<UserVO.ProjectRoleSummary>> projectRolesMap = batchGetProjectRoleSummary(userIds);
             for (int i = 0; i < voList.size(); i++) {
                 Long userId = result.getRecords().get(i).getId();
                 voList.get(i).setGlobalRoles(rolesMap.getOrDefault(userId, List.of()));
+                voList.get(i).setProjectRoles(projectRolesMap.getOrDefault(userId, List.of()));
             }
         }
 
@@ -240,9 +242,22 @@ public class UserService {
         // 如果指定了角色筛选，先查出该角色对应的用户 ID 列表
         List<Long> roleUserIds = null;
         if (roleId != null) {
-            roleUserIds = userRoleMapper.selectList(
-                    new LambdaQueryWrapper<UserRole>().eq(UserRole::getRoleId, roleId)
-            ).stream().map(UserRole::getUserId).toList();
+            // 查询角色类型，决定从哪张表获取用户
+            SysRole role = roleMapper.selectById(roleId);
+            if (role == null) {
+                return page;
+            }
+            if (RoleTypes.PROJECT.equals(role.getRoleType())) {
+                // 项目角色：从 project_member 表查询
+                roleUserIds = projectMemberMapper.selectList(
+                        new LambdaQueryWrapper<ProjectMember>().eq(ProjectMember::getRoleId, roleId)
+                ).stream().map(ProjectMember::getUserId).distinct().toList();
+            } else {
+                // 系统角色：从 user_role 表查询
+                roleUserIds = userRoleMapper.selectList(
+                        new LambdaQueryWrapper<UserRole>().eq(UserRole::getRoleId, roleId)
+                ).stream().map(UserRole::getUserId).toList();
+            }
             if (roleUserIds.isEmpty()) {
                 // 该角色无用户，直接返回空结果
                 return page;
@@ -358,6 +373,80 @@ public class UserService {
                         ));
             }
         }
+        return result;
+    }
+
+    /**
+     * 批量获取多个用户的项目角色摘要
+     * <p>
+     * 将用户在各项目中的角色按角色名分组，返回 "角色名 → [项目Key列表]" 的摘要信息。
+     * 用于用户管理列表页展示项目角色，避免 N+1 查询。
+     *
+     * @param userIds 用户 ID 列表
+     * @return Map: userId → List<ProjectRoleSummary>
+     */
+    public Map<Long, List<UserVO.ProjectRoleSummary>> batchGetProjectRoleSummary(List<Long> userIds) {
+        if (userIds == null || userIds.isEmpty()) {
+            return Map.of();
+        }
+
+        // 1. 批量查询 project_member 表
+        List<ProjectMember> members = projectMemberMapper.selectList(
+                new LambdaQueryWrapper<ProjectMember>().in(ProjectMember::getUserId, userIds)
+        );
+        if (members.isEmpty()) {
+            return Map.of();
+        }
+
+        // 2. 收集所有涉及的 roleId 和 projectId，批量查询
+        List<Long> roleIds = members.stream().map(ProjectMember::getRoleId).distinct().toList();
+        Map<Long, SysRole> roleMap = roleMapper.selectBatchIds(roleIds).stream()
+                .collect(Collectors.toMap(SysRole::getId, r -> r));
+
+        List<Long> projectIds = members.stream().map(ProjectMember::getProjectId).distinct().toList();
+        Map<Long, Project> projectMap = projectMapper.selectBatchIds(projectIds).stream()
+                .collect(Collectors.toMap(Project::getId, p -> p));
+
+        // 3. 按 userId 分组，再按角色聚合项目 key
+        Map<Long, List<UserVO.ProjectRoleSummary>> result = new java.util.HashMap<>();
+        // 中间结构: userId → (roleCode → list of projectKeys)
+        Map<Long, Map<String, List<String>>> intermediate = new java.util.HashMap<>();
+        Map<Long, Map<String, String>> roleNameLookup = new java.util.HashMap<>();
+
+        for (ProjectMember pm : members) {
+            SysRole role = roleMap.get(pm.getRoleId());
+            Project project = projectMap.get(pm.getProjectId());
+            if (role == null || project == null) continue;
+            // Skip non-member and anonymous roles
+            if ("non_member".equals(role.getCode()) || "anonymous".equals(role.getCode())) continue;
+
+            intermediate
+                    .computeIfAbsent(pm.getUserId(), k -> new java.util.LinkedHashMap<>())
+                    .computeIfAbsent(role.getCode(), k -> new ArrayList<>())
+                    .add(project.getKey());
+
+            roleNameLookup
+                    .computeIfAbsent(pm.getUserId(), k -> new java.util.HashMap<>())
+                    .putIfAbsent(role.getCode(), role.getName());
+        }
+
+        // 4. 转换为最终结构
+        for (var entry : intermediate.entrySet()) {
+            Long userId = entry.getKey();
+            List<UserVO.ProjectRoleSummary> summaries = new ArrayList<>();
+            Map<String, String> nameLookup = roleNameLookup.getOrDefault(userId, Map.of());
+            for (var roleEntry : entry.getValue().entrySet()) {
+                String roleCode = roleEntry.getKey();
+                List<String> projectKeys = roleEntry.getValue();
+                summaries.add(new UserVO.ProjectRoleSummary(
+                        nameLookup.getOrDefault(roleCode, roleCode),
+                        roleCode,
+                        projectKeys
+                ));
+            }
+            result.put(userId, summaries);
+        }
+
         return result;
     }
 
