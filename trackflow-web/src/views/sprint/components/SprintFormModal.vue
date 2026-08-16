@@ -1,6 +1,6 @@
 <template>
   <!-- 创建 Sprint 弹窗 -->
-  <a-modal v-model:visible="createVisible" title="新建迭代" :width="480" @ok="handleCreate" :ok-loading="creating" :esc-to-close="false" :on-before-cancel="handleCreateBeforeCancel">
+  <a-modal v-model:visible="createVisible" title="新建迭代" :width="480" @ok="handleCreate" :ok-loading="creating" :esc-to-close="false" :on-before-cancel="handleCreateBeforeCancel" unmount-on-close>
     <a-form :model="createForm" layout="vertical">
       <a-form-item label="名称" required>
         <a-input v-model="createForm.name" placeholder="如：Sprint 25" />
@@ -43,7 +43,7 @@
   </a-modal>
 
   <!-- 编辑 Sprint 弹窗 -->
-  <a-modal v-model:visible="editVisible" title="编辑迭代" :width="480" @ok="handleUpdate" :ok-loading="updating" ok-text="保存修改" :esc-to-close="false" :on-before-cancel="handleEditBeforeCancel">
+  <a-modal v-model:visible="editVisible" title="编辑迭代" :width="480" @ok="handleUpdate" :ok-loading="updating" ok-text="保存修改" :esc-to-close="false" :on-before-cancel="handleEditBeforeCancel" unmount-on-close>
     <a-form :model="editForm" layout="vertical">
       <a-form-item label="名称" required>
         <a-input v-model="editForm.name" placeholder="迭代名称" />
