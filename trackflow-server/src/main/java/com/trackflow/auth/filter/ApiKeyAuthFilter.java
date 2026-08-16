@@ -26,7 +26,6 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * API Key 认证过滤器
@@ -51,15 +50,23 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
 
     /**
      * 缓存最大容量，防止内存泄漏。
-     * 当达到上限时，清除全部缓存（简单策略，因为 API Key 数量通常有限）。
      */
     private static final int LAST_USED_CACHE_MAX_SIZE = 1000;
 
     /**
-     * 缓存：API Key prefix → 上次执行 updateById 的时间戳（epoch millis）。
+     * LRU 缓存：API Key prefix → 上次执行 updateById 的时间戳（epoch millis）。
      * 用于节流 last_used_at 的更新频率，避免高频 API 调用时产生无效写放大。
+     * 使用 LinkedHashMap（accessOrder=true）+ removeEldestEntry 实现 LRU 淘汰，
+     * 避免旧实现的"满了全清"策略导致缓存击穿。
      */
-    private final ConcurrentHashMap<String, Long> lastUsedUpdateCache = new ConcurrentHashMap<>();
+    private final Map<String, Long> lastUsedUpdateCache = Collections.synchronizedMap(
+            new java.util.LinkedHashMap<>(LAST_USED_CACHE_MAX_SIZE, 0.75f, true) {
+                @Override
+                protected boolean removeEldestEntry(Map.Entry<String, Long> eldest) {
+                    return size() > LAST_USED_CACHE_MAX_SIZE;
+                }
+            }
+    );
 
     private final ApiKeyMapper apiKeyMapper;
     private final SysUserMapper sysUserMapper;
@@ -203,11 +210,7 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
             apiKey.setLastUsedAt(LocalDateTime.now());
             apiKeyMapper.updateById(apiKey);
 
-            // 缓存满时清除全部（API Key 数量通常有限，简单策略即可）
-            if (lastUsedUpdateCache.size() >= LAST_USED_CACHE_MAX_SIZE) {
-                lastUsedUpdateCache.clear();
-                log.debug("lastUsedUpdateCache cleared due to reaching max size: {}", LAST_USED_CACHE_MAX_SIZE);
-            }
+            // LRU 缓存自动淘汰最久未使用的条目，无需手动清空
             lastUsedUpdateCache.put(prefix, now);
 
             log.debug("Updated last_used_at for API Key: {}", prefix);
