@@ -197,6 +197,7 @@ import { Message } from '@arco-design/web-vue'
 import { handleApiError } from '@/utils/errorHandler'
 import { IconPlus, IconDelete } from '@arco-design/web-vue/es/icon'
 import { quickActionApi } from '@/api'
+import { localizeStatusName, localizeRoleName } from '@/utils/fieldLabels'
 import type { QuickActionDefinitionVO } from '@/api/quickAction'
 import AdminPageLayout from '@/components/admin/AdminPageLayout.vue'
 import { AdminDataTable } from '@/components/admin'
@@ -295,8 +296,12 @@ function formatVisibility(vis: string) {
   try {
     const obj = JSON.parse(vis)
     const parts: string[] = []
-    if (obj.roles?.length) parts.push(`角色: ${obj.roles.join(', ')}`)
-    if (obj.issueStatuses?.length) parts.push(`状态: ${obj.issueStatuses.join(', ')}`)
+    if (obj.roles?.length) {
+      parts.push(`角色: ${obj.roles.map((r: string) => localizeRoleName(r)).join(', ')}`)
+    }
+    if (obj.issueStatuses?.length) {
+      parts.push(`状态: ${obj.issueStatuses.map((s: string) => localizeStatusName(s)).join(', ')}`)
+    }
     return parts.join(' | ') || '所有人可见'
   } catch {
     return '所有人可见'

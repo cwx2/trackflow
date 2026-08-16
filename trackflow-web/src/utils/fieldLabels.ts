@@ -126,6 +126,11 @@ export const statusLabelMap: Record<string, string> = {
   'Pending Cancel': '待取消',
   'Pending Extension': '待延期',
   'Needs Fix': '待修复',
+  'On Hold': '暂停',
+  'Duplicate': '重复',
+  'Waiting for Response': '等待回复',
+  'Under Review': '审核中',
+  'Blocked': '已阻塞',
 }
 
 /**
@@ -342,6 +347,36 @@ export const linkTypeLabelMap: Record<string, string> = {
 export function localizeLinkType(linkType?: string | null): string {
   if (!linkType) return '未知'
   return linkTypeLabelMap[linkType] || linkType
+}
+
+/**
+ * 角色代码 → 中文显示名映射
+ *
+ * 用途：管理后台中角色代码需要展示为中文的场景
+ * （如自定义动作管理列表的「可见条件」列、工作流规则面板等）
+ */
+export const roleLabelMap: Record<string, string> = {
+  system_admin: '系统管理员',
+  project_admin: '项目管理员',
+  developer: '开发人员',
+  tester: '测试人员',
+  observer: '观察者',
+  product_manager: '产品经理',
+  tech_lead: '技术负责人',
+  non_member: '非成员',
+  anonymous: '匿名用户',
+  user_manager: '用户管理员',
+  project_creator: '项目创建者',
+}
+
+/**
+ * 将角色英文代码转换为中文显示名
+ * @param code 角色代码（如 "developer"、"tech_lead"）
+ * @returns 中文角色名（如 "开发人员"、"技术负责人"），未匹配时返回原值
+ */
+export function localizeRoleName(code?: string | null): string {
+  if (!code) return '未知'
+  return roleLabelMap[code] || code
 }
 
 /**
