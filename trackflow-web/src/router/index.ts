@@ -458,8 +458,32 @@ router.beforeEach(async (to, _from, next) => {
     }
   }
 
-  // 标签管理：打开 Issue 详情时自动创建标签
+  // ===== 标签管理：根据路由自动管理 TabBar =====
   const tabStore = useTabStore()
+
+  // 主导航页面切换时，更新默认标签的标题和路径以反映当前页面上下文
+  // 这些是侧边栏一级导航页面，使用不可关闭的默认标签承载
+  const mainPageTabMap: Record<string, { title: string; path: string }> = {
+    'Issues': { title: '所有工单', path: '/issues' },
+    'Sprints': { title: '迭代管理', path: '/sprints' },
+    'SprintPlanning': { title: 'Sprint 规划', path: '/sprint-planning' },
+    'Boards': { title: '看板', path: '/boards' },
+    'Dashboard': { title: '仪表盘', path: '/dashboard' },
+    'ReportOverview': { title: '报表', path: '/reports' },
+    'ReportList': { title: '报表', path: '/reports/list' },
+    'TimeReport': { title: '报表', path: '/reports/time' },
+    'EstimationReport': { title: '报表', path: '/reports/estimation' },
+    'ReportDetail': { title: '报表', path: to.fullPath },
+    'Projects': { title: '项目列表', path: '/projects' },
+    'Timesheet': { title: '时间表', path: '/timesheet' },
+  }
+
+  const mainPageConfig = to.name ? mainPageTabMap[String(to.name)] : undefined
+  if (mainPageConfig) {
+    tabStore.updateDefaultTab(mainPageConfig.title, mainPageConfig.path)
+  }
+
+  // 打开 Issue 详情时自动创建新标签
   if (to.name === 'IssueDetail' && to.params.id) {
     const paramId = String(to.params.id)
     // 如果参数包含连字符（如 DE4-1473），说明是 issue key，直接用作标题

@@ -83,6 +83,20 @@ export const useTabStore = defineStore('tabs', () => {
     }
   }
 
+  /**
+   * 更新默认标签（不可关闭的首个标签）的标题和路径。
+   * 当导航到主页面（迭代管理、看板、报表等）时，默认标签的标题
+   * 应反映当前页面而非固定显示"所有工单"。
+   */
+  function updateDefaultTab(title: string, path: string) {
+    const defaultTab = tabs.value.find(t => !t.closable)
+    if (defaultTab) {
+      defaultTab.title = title
+      defaultTab.path = path
+      activeTabId.value = defaultTab.id
+    }
+  }
+
   return {
     tabs,
     activeTabId,
@@ -91,7 +105,8 @@ export const useTabStore = defineStore('tabs', () => {
     closeTab,
     closeOthers,
     closeAll,
-    setActive
+    setActive,
+    updateDefaultTab
   }
 })
 
