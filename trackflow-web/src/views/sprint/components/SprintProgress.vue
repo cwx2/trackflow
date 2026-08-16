@@ -4,31 +4,39 @@
     <div class="progress-bar-container">
       <div class="progress-bar">
         <template v-if="hasBreakdown">
-          <div
+          <a-tooltip
             v-for="item in sprint.statusBreakdown"
             :key="item.statusId"
-            class="progress-segment"
-            :style="{ width: getStatusPercent(item.count) + '%', backgroundColor: item.statusColor }"
-            :title="`${item.statusName}: ${item.count}`"
-            @click.stop="$emit('viewStatus', item.statusId, item.statusName)"
-          ></div>
+            :content="`${item.statusName}: ${item.count}`"
+            position="top"
+            mini
+          >
+            <div
+              class="progress-segment"
+              :style="{ width: getStatusPercent(item.count) + '%', backgroundColor: item.statusColor }"
+              @click.stop="$emit('viewStatus', item.statusId, item.statusName)"
+            ></div>
+          </a-tooltip>
         </template>
         <template v-else>
-          <div
-            class="progress-segment done"
-            :style="{ width: getProgressPercent('done') + '%' }"
-            :title="`已完成: ${sprint.doneIssues}`"
-          ></div>
-          <div
-            class="progress-segment in-progress"
-            :style="{ width: getProgressPercent('inProgress') + '%' }"
-            :title="`进行中: ${sprint.inProgressIssues}`"
-          ></div>
-          <div
-            class="progress-segment todo"
-            :style="{ width: getProgressPercent('todo') + '%' }"
-            :title="`待办: ${sprint.todoIssues}`"
-          ></div>
+          <a-tooltip :content="`已完成: ${sprint.doneIssues}`" position="top" mini>
+            <div
+              class="progress-segment done"
+              :style="{ width: getProgressPercent('done') + '%' }"
+            ></div>
+          </a-tooltip>
+          <a-tooltip :content="`进行中: ${sprint.inProgressIssues}`" position="top" mini>
+            <div
+              class="progress-segment in-progress"
+              :style="{ width: getProgressPercent('inProgress') + '%' }"
+            ></div>
+          </a-tooltip>
+          <a-tooltip :content="`待办: ${sprint.todoIssues}`" position="top" mini>
+            <div
+              class="progress-segment todo"
+              :style="{ width: getProgressPercent('todo') + '%' }"
+            ></div>
+          </a-tooltip>
         </template>
       </div>
       <span class="progress-percent">{{ completionPercent }}%</span>
@@ -264,7 +272,7 @@ function formatHours(hours: number): string {
 }
 
 .progress-segment.todo {
-  background: var(--color-fill-3);
+  background: var(--color-text-4);
 }
 
 .progress-percent {
