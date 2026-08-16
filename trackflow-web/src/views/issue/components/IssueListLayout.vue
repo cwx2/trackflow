@@ -48,7 +48,7 @@
       v-else-if="issues.length === 0"
       icon="search"
       title="暂无工单"
-      description="尝试调整筛选条件或创建新的工单"
+      :description="canCreateIssue ? '尝试调整筛选条件或创建新的工单' : '尝试调整筛选条件查看其他工单'"
     />
 
     <div v-else class="list-items" ref="listContainerRef">
@@ -219,6 +219,8 @@ const props = withDefaults(defineProps<{
   canEditIssue?: (issue: IssueWithDesc) => boolean
   /** 数字徽章字段配置（按 projectId 分组） */
   badgeFieldsMap?: Record<string, BadgeFieldConfig[]>
+  /** 当前用户是否有创建工单权限（用于空状态文案动态展示） */
+  canCreateIssue?: boolean
 }>(), {
   showCheckbox: true,
   draggable: false,
@@ -229,7 +231,8 @@ const props = withDefaults(defineProps<{
   sprintOptionsCache: () => ({}),
   sprintLoadingIds: () => new Set(),
   canEditIssue: () => true,
-  badgeFieldsMap: () => ({})
+  badgeFieldsMap: () => ({}),
+  canCreateIssue: true
 })
 
 const emit = defineEmits<{

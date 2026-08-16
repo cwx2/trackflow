@@ -371,7 +371,7 @@
             v-else
             icon="search"
             title="暂无工单"
-            description="尝试调整筛选条件或创建新的工单"
+            :description="canCreateIssueGlobal ? '尝试调整筛选条件或创建新的工单' : '尝试调整筛选条件查看其他工单'"
           >
             <template #action>
               <a-button v-if="canCreateIssueGlobal" type="primary" size="small" @click="openCreatePanel">创建工单</a-button>
@@ -401,6 +401,7 @@
         :sprint-options-cache="sprintOptionsCache"
         :sprint-loading-ids="listSprintLoadingIds"
         :can-edit-issue="canEditIssue"
+        :can-create-issue="canCreateIssueGlobal"
         :badge-fields-map="badgeFieldsMap"
         @item-click="onListItemClick"
         @item-dblclick="onListItemDblClick"
