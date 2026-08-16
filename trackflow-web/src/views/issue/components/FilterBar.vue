@@ -102,6 +102,7 @@ import type { IssueStatusVO, ProjectVO } from '@/api/types'
 import { IssueFilterEditor } from '@/components/base'
 import type { FilterCondition } from '@/components/base'
 import QueryInput from './QueryInput.vue'
+import { parseSearchQuery } from '../utils/parseSearchQuery'
 
 // ===== Types =====
 
@@ -177,7 +178,18 @@ watch(searchKeyword, () => {
 
 function emitSearch() {
   if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
-  emit('search', searchKeyword.value.trim())
+  const raw = searchKeyword.value.trim()
+  // 解析结构化查询：如果包含已知字段名（如"状态: 未关闭"），
+  // 路由到 filter 通道走 QueryExecutor，确保下拉建议与列表结果一致（REQ-808）
+  const parsed = parseSearchQuery(raw)
+  if (parsed.hasStructuredFields) {
+    emit('filter', parsed.filters)
+  } else {
+    // 纯文本关键词：直接走 keyword 搜索
+    // 注意：parseSearchQuery 对纯文本也会返回 [{field:'keyword',...}]，
+    // 但为了兼容性和性能，纯文本仍走原有的 keyword 路径
+    emit('search', raw)
+  }
 }
 
 // ===== Filter Mode =====
