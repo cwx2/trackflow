@@ -103,6 +103,8 @@ import { IssueFilterEditor } from '@/components/base'
 import type { FilterCondition } from '@/components/base'
 import QueryInput from './QueryInput.vue'
 import { parseSearchQuery } from '../utils/parseSearchQuery'
+import type { FieldValueContext } from '../utils/parseSearchQuery'
+import { useAuthStore } from '@/stores/auth'
 
 // ===== Types =====
 
@@ -142,6 +144,7 @@ const searchKeyword = ref('')
 const filterConditions = ref<FilterCondition[]>([])
 let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null
 let suppressEmit = false
+const authStore = useAuthStore()
 
 // ===== Mode change =====
 
@@ -179,9 +182,18 @@ watch(searchKeyword, () => {
 function emitSearch() {
   if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
   const raw = searchKeyword.value.trim()
+  // 构建字段值上下文：将 statusList 等 Props 转为 label→code 映射供解析器使用
+  const fieldContext: FieldValueContext = {
+    statusOptions: props.statusList.map(s => ({
+      label: s.displayName || s.name,
+      code: s.code,
+      displayName: s.displayName,
+    })),
+    currentUserId: authStore.user?.userId || authStore.user?.id || undefined,
+  }
   // 解析结构化查询：如果包含已知字段名（如"状态: 未关闭"），
   // 路由到 filter 通道走 QueryExecutor，确保下拉建议与列表结果一致（REQ-808）
-  const parsed = parseSearchQuery(raw)
+  const parsed = parseSearchQuery(raw, fieldContext)
   if (parsed.hasStructuredFields) {
     emit('filter', parsed.filters)
   } else {

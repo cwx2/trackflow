@@ -6,6 +6,7 @@
  *
  * 解析规则：
  * - 识别已知的"字段名:"模式，提取字段值（支持逗号分隔多值）
+ * - 将用户可见的标签（如"未关闭"、"进行中"）翻译为后端期望的内部代码
  * - 剩余不属于任何字段的自由文本作为关键词搜索条件
  * - 返回 FilterCondition[] 供 QueryExecutor 使用
  *
@@ -45,12 +46,26 @@ export interface ParsedQuery {
 }
 
 /**
+ * 字段值上下文：提供标签→内部值的映射
+ * 由调用方（FilterBar）根据当前 statusList/projectList 等动态构建
+ */
+export interface FieldValueContext {
+  /** 状态选项：label（显示名/英文名）→ code（后端 QueryExecutor 期望的值） */
+  statusOptions?: Array<{ label: string; code: string; displayName?: string }>
+  /** 优先级选项：label → value */
+  priorityOptions?: Array<{ label: string; value: string }>
+  /** 当前用户 ID（用于解析 "我" → userId） */
+  currentUserId?: string
+}
+
+/**
  * 解析搜索查询文本
  *
  * @param text 用户在 QueryInput 中输入的原始文本
+ * @param context 字段值上下文，提供标签到内部值的映射
  * @returns 解析结果，包含 FilterCondition[] 和是否为结构化查询的标志
  */
-export function parseSearchQuery(text: string): ParsedQuery {
+export function parseSearchQuery(text: string, context?: FieldValueContext): ParsedQuery {
   if (!text || !text.trim()) {
     return { filters: [], hasStructuredFields: false }
   }
@@ -58,7 +73,6 @@ export function parseSearchQuery(text: string): ParsedQuery {
   const trimmed = text.trim()
 
   // 构建正则匹配所有已知字段的 "fieldName:" 或 "fieldName：" 模式
-  // 使用贪婪匹配：找到所有字段位置，然后提取各字段的值
   interface FieldMatch {
     queryKey: string
     filterField: string
@@ -106,11 +120,9 @@ export function parseSearchQuery(text: string): ParsedQuery {
       // 解析值：支持逗号分隔的多值
       const values = rawValue.split(',').map(v => v.trim()).filter(v => v.length > 0)
       if (values.length > 0) {
-        filters.push({
-          field: current.filterField,
-          operator: current.filterField === 'keyword' ? 'contains' : 'in',
-          value: values,
-        })
+        // 将用户可见标签翻译为后端期望的内部值
+        const resolved = resolveFieldValues(current.filterField, values, context)
+        filters.push(resolved)
       }
     }
   }
@@ -138,6 +150,106 @@ export function parseSearchQuery(text: string): ParsedQuery {
   }
 
   return { filters, hasStructuredFields: true }
+}
+
+/**
+ * 将用户输入的标签值翻译为后端 QueryExecutor 期望的内部值
+ *
+ * 特殊处理：
+ * - 状态字段："未关闭"→operator:open, "已关闭"→operator:closed, 其他→映射为status code
+ * - 负责人字段："我"→使用 currentUserId
+ */
+function resolveFieldValues(
+  field: string,
+  values: string[],
+  context?: FieldValueContext
+): FilterCondition {
+  switch (field) {
+    case 'status':
+      return resolveStatusValues(values, context)
+    case 'assignee':
+    case 'reporter':
+      return resolveUserValues(field, values, context)
+    default:
+      return { field, operator: field === 'keyword' ? 'contains' : 'in', value: values }
+  }
+}
+
+/**
+ * 解析状态字段值：
+ * - "未关闭" → operator "open"（后端 applyStatusFilter case "open"）
+ * - "已关闭" → operator "closed"（后端 applyStatusFilter case "closed"）
+ * - 具体状态名（如"进行中"、"In Progress"）→ 映射为 status code，使用 operator "in"
+ */
+function resolveStatusValues(values: string[], context?: FieldValueContext): FilterCondition {
+  // 检查是否为特殊虚拟状态（单值时）
+  if (values.length === 1) {
+    const v = values[0]
+    if (v === '未关闭' || v.toLowerCase() === 'open' || v === '__open__') {
+      return { field: 'status', operator: 'open', value: [] }
+    }
+    if (v === '已关闭' || v.toLowerCase() === 'closed' || v === '__closed__') {
+      return { field: 'status', operator: 'closed', value: [] }
+    }
+  }
+
+  // 多值或具体状态名：映射为 status code
+  const codes: string[] = []
+  for (const v of values) {
+    // 先检查特殊值
+    if (v === '未关闭' || v.toLowerCase() === 'open' || v === '__open__') {
+      // 多值中混入了虚拟状态 — 不应发生，但做兼容处理
+      // 返回 open operator（忽略其他值）
+      return { field: 'status', operator: 'open', value: [] }
+    }
+    if (v === '已关闭' || v.toLowerCase() === 'closed' || v === '__closed__') {
+      return { field: 'status', operator: 'closed', value: [] }
+    }
+
+    const code = mapStatusLabelToCode(v, context)
+    if (code) {
+      codes.push(code)
+    } else {
+      // 如果映射不到 code，尝试直接作为 code 使用（用户可能直接输入了 code）
+      codes.push(v)
+    }
+  }
+
+  return { field: 'status', operator: 'in', value: codes }
+}
+
+/**
+ * 将状态显示标签映射到后端 status code
+ * 查找顺序：displayName → name（不区分大小写）→ code（精确）
+ */
+function mapStatusLabelToCode(label: string, context?: FieldValueContext): string | null {
+  if (!context?.statusOptions) return null
+
+  const lower = label.toLowerCase()
+  for (const opt of context.statusOptions) {
+    // 匹配 displayName（中文名）
+    if (opt.displayName && opt.displayName === label) return opt.code
+    if (opt.displayName && opt.displayName.toLowerCase() === lower) return opt.code
+    // 匹配 label（通常是 name 或 displayName）
+    if (opt.label === label) return opt.code
+    if (opt.label.toLowerCase() === lower) return opt.code
+    // 匹配 code 本身（用户直接输入 code 的情况）
+    if (opt.code === label || opt.code === lower) return opt.code
+  }
+  return null
+}
+
+/**
+ * 解析用户字段值："我" → currentUserId
+ */
+function resolveUserValues(field: string, values: string[], context?: FieldValueContext): FilterCondition {
+  const resolved = values.map(v => {
+    if ((v === '我' || v.toLowerCase() === 'me') && context?.currentUserId) {
+      return context.currentUserId
+    }
+    return v
+  })
+  return { field, operator: 'in', value: resolved }
 }
 
 function escapeRegex(str: string): string {
