@@ -473,6 +473,8 @@ const typeLabels: Record<string, string> = {
   issue_assigned: '工单分配',
   issue_auto_assigned: '工单自动分配',
   issue_commented: '工单评论',
+  issue_updated: '工单更新',
+  issue_moved: '工单移动',
   issue_status_changed: '状态变更',
   issue_voted: '工单投票',
   issue_spent_time: '工时记录',
