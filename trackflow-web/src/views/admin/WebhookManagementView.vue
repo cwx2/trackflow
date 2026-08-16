@@ -175,7 +175,7 @@ const tableColumns: ColumnDef[] = [
       return h('div', { style: 'display:flex;flex-wrap:wrap;gap:3px' },
         events.map((ev: string) => h('span', {
           style: 'font-size:10px;padding:1px 6px;background:var(--tf-bg-body);border:1px solid var(--tf-border-light);border-radius:3px;color:var(--tf-text-secondary)'
-        }, ev))
+        }, getEventLabel(ev)))
       )
     },
   },
@@ -252,6 +252,15 @@ function parseEvents(eventsJson: string): string[] {
   } catch {
     return []
   }
+}
+
+/**
+ * 将事件代码转换为中文标签，使列表展示与创建弹窗保持一致。
+ * 未识别的事件代码显示原始值并加 (未翻译) 后缀作为降级方案。
+ */
+function getEventLabel(eventCode: string): string {
+  const found = availableEvents.find(e => e.value === eventCode)
+  return found ? found.label : `${eventCode} (未翻译)`
 }
 
 
