@@ -1222,6 +1222,7 @@ const activeQueryParsedFilters = computed(() => {
     // Build human-readable labels
     const valueLabels = rawValues.map((v: string) => {
       if (v === '${currentUser}') return '我'
+      if (v === '${currentSprint}') return '当前 Sprint'
       if (fieldKey === 'status') {
         const s = statusCache.value.find(st => st.id === v || st.code === v)
         return s ? (s.displayName || s.name) : v
