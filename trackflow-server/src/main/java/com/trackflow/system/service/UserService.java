@@ -284,7 +284,8 @@ public class UserService {
         if (banStatus != null && !banStatus.isBlank()) {
             wrapper.eq(SysUser::getBanStatus, banStatus);
         }
-        wrapper.orderByDesc(SysUser::getCreatedAt);
+        wrapper.orderByDesc(SysUser::getCreatedAt)
+               .orderByAsc(SysUser::getId);
         return userMapper.selectPage(page, wrapper);
     }
 
