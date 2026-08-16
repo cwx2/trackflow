@@ -94,7 +94,7 @@
               </a-table-column>
               <a-table-column title="默认值" :width="120">
                 <template #cell="{ record }">
-                  <span v-if="record.defaultValue" class="default-value-cell">{{ record.defaultValue }}</span>
+                  <span v-if="record.defaultValue" class="default-value-cell">{{ resolveDefaultValueDisplay(record) }}</span>
                   <span v-else class="text-muted">—</span>
                 </template>
               </a-table-column>
@@ -202,7 +202,7 @@
               </div>
               <div v-if="selectedField.defaultValue" class="detail-row">
                 <span class="detail-label">默认值</span>
-                <span class="detail-value">{{ selectedField.defaultValue }}</span>
+                <span class="detail-value">{{ resolveDefaultValueDisplay(selectedField) }}</span>
               </div>
               <div v-if="!selectedField.isForAll" class="detail-row">
                 <span class="detail-label">适用项目</span>
@@ -970,6 +970,35 @@ const fieldTypeOptions = FIELD_TYPE_OPTIONS
 
 function formatTypeLabel(format: string) {
   return formatFieldType(format)
+}
+
+/** 枚举类型字段格式（defaultValue 存储的是选项 ID 而非名称） */
+const ENUM_FIELD_FORMATS = new Set(['list', 'state', 'ownedField', 'version', 'build'])
+
+/**
+ * 将 defaultValue（可能是选项 ID）解析为人类可读的选项名称。
+ * 对于枚举类型字段，从 options 中查找匹配的选项并返回其 value（名称）。
+ * 对于非枚举类型字段，直接返回原始 defaultValue。
+ */
+function resolveDefaultValueDisplay(record: CustomFieldDefinitionVO): string {
+  const raw = record.defaultValue
+  if (!raw) return ''
+
+  // 非枚举类型字段直接返回原始值
+  if (!ENUM_FIELD_FORMATS.has(record.fieldFormat)) {
+    return raw
+  }
+
+  // 枚举类型字段：在 options 中查找 ID 匹配的选项
+  if (record.options && record.options.length > 0) {
+    const matched = record.options.find(opt => opt.id === raw)
+    if (matched) {
+      return matched.value
+    }
+  }
+
+  // 如果未匹配到（极端情况：选项已被删除），返回原始值
+  return raw
 }
 
 /** 根据项目 ID 获取项目名称 */
