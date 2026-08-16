@@ -137,7 +137,7 @@
                   'planning-card--selected': selectedIds.has(issue.id),
                   'planning-card--dragging': draggingIds.has(issue.id)
                 }"
-                draggable="true"
+                :draggable="canEditSprint"
                 @dragstart="onDragStart($event, issue, 'backlog')"
                 @dragend="onDragEnd"
                 @click="onCardClick($event, issue, 'backlog')"
@@ -326,7 +326,7 @@
                   'planning-card--selected': selectedIds.has(issue.id),
                   'planning-card--dragging': draggingIds.has(issue.id)
                 }"
-                draggable="true"
+                :draggable="canEditSprint"
                 @dragstart="onDragStart($event, issue, sprint.id)"
                 @dragend="onDragEnd"
                 @click="onCardClick($event, issue, sprint.id)"
@@ -863,6 +863,12 @@ async function onSprintDrop(event: DragEvent, targetSprintId: string) {
   event.preventDefault()
   dropTargetSprintId.value = null
 
+  // 前端权限前置检查，避免无权限用户拖拽后才看到错误
+  if (!canEditSprint.value) {
+    Message.warning('需要 Sprint 编辑权限才能移动工单')
+    return
+  }
+
   const data = event.dataTransfer?.getData('text/plain')
   if (!data) return
 
@@ -879,6 +885,12 @@ async function onSprintDrop(event: DragEvent, targetSprintId: string) {
 async function onBacklogDrop(event: DragEvent) {
   event.preventDefault()
   backlogDropHighlight.value = false
+
+  // 前端权限前置检查
+  if (!canEditSprint.value) {
+    Message.warning('需要 Sprint 编辑权限才能移动工单')
+    return
+  }
 
   const data = event.dataTransfer?.getData('text/plain')
   if (!data) return
