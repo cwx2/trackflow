@@ -3,6 +3,7 @@ package com.trackflow.issue.service;
 import com.trackflow.common.event.IssueNotificationEvent;
 import com.trackflow.common.event.IssueRealtimeEvent;
 import com.trackflow.issue.entity.Issue;
+import com.trackflow.sprint.mapper.SprintMapper;
 import com.trackflow.system.mapper.SysUserMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -36,6 +37,7 @@ public class IssueRealtimeListener {
 
     private final SimpMessagingTemplate messagingTemplate;
     private final SysUserMapper sysUserMapper;
+    private final SprintMapper sprintMapper;
 
     // ========== 工单生命周期 ==========
 
@@ -125,7 +127,26 @@ public class IssueRealtimeListener {
         Map<String, Object> changes = new HashMap<>();
         for (Map.Entry<String, String[]> entry : event.changes().entrySet()) {
             String[] vals = entry.getValue();
-            changes.put(entry.getKey(), vals.length > 1 ? vals[1] : null);
+            if ("sprint".equals(entry.getKey())) {
+                // Sprint 变更需映射为前端 VO 兼容的字段名：sprintId / sprintName / sprintStatus
+                Long sprintId = issue.getSprintId();
+                changes.put("sprintId", sprintId != null ? sprintId.toString() : null);
+                if (sprintId != null) {
+                    try {
+                        var sprint = sprintMapper.selectById(sprintId);
+                        changes.put("sprintName", sprint != null ? sprint.getName() : null);
+                        changes.put("sprintStatus", sprint != null && sprint.getStatus() != null ? sprint.getStatus().getValue() : null);
+                    } catch (Exception e) {
+                        changes.put("sprintName", vals.length > 1 ? vals[1] : null);
+                        changes.put("sprintStatus", null);
+                    }
+                } else {
+                    changes.put("sprintName", null);
+                    changes.put("sprintStatus", null);
+                }
+            } else {
+                changes.put(entry.getKey(), vals.length > 1 ? vals[1] : null);
+            }
         }
         IssueRealtimeEvent msg = IssueRealtimeEvent.fieldUpdated(
                 issue.getId(), issue.getProjectId(), issue.getIssueKey(),

@@ -184,10 +184,22 @@ export function useIssueDetailData() {
       if (myUserId && String(event.operatorId) === String(myUserId)) return
 
       if (event.action === 'FIELD_UPDATED' && issue.value) {
-        for (const [key, value] of Object.entries(event.changes)) {
-          ;(issue.value as any)[key] = value
+        // 需要完整刷新的字段：这些 event key 无法直接映射到 VO 属性（需重新计算或查询关联数据）
+        const RELOAD_FIELDS = new Set(['sprint', 'durationMinutes'])
+        const needsFullReload = Object.keys(event.changes).some(k => RELOAD_FIELDS.has(k))
+
+        if (needsFullReload) {
+          // 复合字段变更：重新加载完整工单数据以确保所有关联属性同步
+          loadAll()
+        } else {
+          // 直接赋值到 VO 属性（assigneeId/assigneeName、statusId、priority、sprintId/sprintName/sprintStatus 等）
+          for (const [key, value] of Object.entries(event.changes)) {
+            ;(issue.value as any)[key] = value
+          }
+          if ('statusId' in event.changes) { loadTransitions() }
+          // 字段变更后同步刷新活动流，确保面板与活动记录一致
+          loadCommentsAndActivities()
         }
-        if ('statusId' in event.changes) { loadTransitions() }
         showRealtimeNotification(`${event.operatorName || '其他用户'} 更新了此工单`, false)
       } else if (event.action === 'COMMENT_ADDED') {
         loadCommentsAndActivities().then(() => {
