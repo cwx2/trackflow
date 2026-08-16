@@ -81,10 +81,14 @@
                 ELSE NULL
             END ASC NULLS LAST,
             CASE
+                WHEN s.status = 'planned' AND s.start_date IS NULL THEN s.end_date
+                ELSE NULL
+            END ASC NULLS LAST,
+            CASE
                 WHEN s.status != 'planned' THEN s.start_date
                 ELSE NULL
             END DESC NULLS LAST,
-            s.created_at DESC
+            s.created_at ASC
     </select>
 
     <!-- Sprint 总数查询（用于分页） -->
@@ -148,10 +152,14 @@
                 ELSE NULL
             END ASC NULLS LAST,
             CASE
+                WHEN s.status = 'planned' AND s.start_date IS NULL THEN s.end_date
+                ELSE NULL
+            END ASC NULLS LAST,
+            CASE
                 WHEN s.status != 'planned' THEN s.start_date
                 ELSE NULL
             END DESC NULLS LAST,
-            s.created_at DESC
+            s.created_at ASC
         LIMIT #{limit} OFFSET #{offset}
     </select>
 
@@ -400,10 +408,14 @@
                 ELSE NULL
             END ASC NULLS LAST,
             CASE
+                WHEN s.status = 'planned' AND s.start_date IS NULL THEN s.end_date
+                ELSE NULL
+            END ASC NULLS LAST,
+            CASE
                 WHEN s.status != 'planned' THEN s.start_date
                 ELSE NULL
             END DESC NULLS LAST,
-            s.created_at DESC
+            s.created_at ASC
         LIMIT #{limit} OFFSET #{offset}
     </select>
 

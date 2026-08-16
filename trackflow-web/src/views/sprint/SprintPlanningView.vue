@@ -543,18 +543,35 @@ let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null
 // ===== Computed =====
 const targetSprints = computed(() => {
   const filtered = sprints.value.filter(s => s.status === 'active' || s.status === 'planned')
-  // Sort: active first, then planned by startDate ascending, null dates last
+  // Sort: active first, then planned by startDate ascending
+  // Within planned: has startDate > only endDate > no dates at all
+  // Same startDate: tiebreak by createdAt ascending (stable chronological order)
   return filtered.sort((a, b) => {
     // Active always comes first
     if (a.status === 'active' && b.status !== 'active') return -1
     if (b.status === 'active' && a.status !== 'active') return 1
-    // Both same status — sort by startDate ascending, null last
+    // Both planned — sort by startDate ascending, null last
     const dateA = a.startDate || ''
     const dateB = b.startDate || ''
-    if (!dateA && !dateB) return 0
-    if (!dateA) return 1  // no date goes last
-    if (!dateB) return -1
-    return dateA.localeCompare(dateB)
+    if (dateA && dateB) {
+      const cmp = dateA.localeCompare(dateB)
+      if (cmp !== 0) return cmp
+      // Same startDate: tiebreak by createdAt ascending
+      return (a.createdAt || '').localeCompare(b.createdAt || '')
+    }
+    if (dateA && !dateB) return -1  // has startDate before no startDate
+    if (!dateA && dateB) return 1
+    // Neither has startDate: prefer "only endDate" over "no dates at all"
+    const endA = a.endDate || ''
+    const endB = b.endDate || ''
+    if (endA && !endB) return -1
+    if (!endA && endB) return 1
+    if (endA && endB) {
+      const cmp = endA.localeCompare(endB)
+      if (cmp !== 0) return cmp
+    }
+    // Final tiebreak: createdAt ascending
+    return (a.createdAt || '').localeCompare(b.createdAt || '')
   })
 })
 
