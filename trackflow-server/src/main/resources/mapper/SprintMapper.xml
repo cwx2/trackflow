@@ -253,6 +253,47 @@
         ORDER BY i.created_at ASC
     </select>
 
+    <!-- 查询项目所有已完成 Sprint 中仍未关闭的工单（遗留工单） -->
+    <resultMap id="lingeringIssueItemMap" type="com.trackflow.sprint.vo.LingeringIssuesVO$LingeringIssueItem">
+        <id property="id" column="id" javaType="java.lang.String"/>
+        <result property="issueKey" column="issue_key"/>
+        <result property="title" column="title"/>
+        <result property="priority" column="priority"/>
+        <result property="priorityColor" column="priority_color"/>
+        <result property="statusName" column="status_name"/>
+        <result property="statusColor" column="status_color"/>
+        <result property="assigneeName" column="assignee_name"/>
+        <result property="dueDate" column="due_date"/>
+        <result property="estimatedHours" column="estimated_hours"/>
+        <result property="sprintName" column="sprint_name"/>
+        <result property="sprintId" column="sprint_id" javaType="java.lang.String"/>
+    </resultMap>
+
+    <select id="selectLingeringIssues" resultMap="lingeringIssueItemMap">
+        SELECT
+            i.id,
+            i.issue_key,
+            i.title,
+            i.priority,
+            cfo.color AS priority_color,
+            ist.name AS status_name,
+            ist.color AS status_color,
+            u.display_name AS assignee_name,
+            i.due_date,
+            i.estimated_hours,
+            s.name AS sprint_name,
+            s.id AS sprint_id
+        FROM issue i
+        JOIN sprint s ON s.id = i.sprint_id AND s.status = 'completed'
+        JOIN issue_status ist ON ist.id = i.status_id
+        LEFT JOIN sys_user u ON u.id = i.assignee_id
+        LEFT JOIN custom_field_option cfo ON cfo.id = i.priority_option_id
+        WHERE s.project_id = #{projectId}
+          AND i.deleted_at IS NULL
+          AND ist.is_closed = false
+        ORDER BY s.updated_at DESC, i.created_at ASC
+    </select>
+
     <!-- 按负责人分组的工单统计 -->
     <select id="selectAssigneeDistribution" resultType="java.util.HashMap">
         SELECT

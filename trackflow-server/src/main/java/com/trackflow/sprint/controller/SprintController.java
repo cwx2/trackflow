@@ -13,6 +13,7 @@ import com.trackflow.sprint.vo.BurndownVO;
 import com.trackflow.sprint.vo.CompletionPreviewVO;
 import com.trackflow.sprint.vo.CreationPreviewVO;
 import com.trackflow.sprint.vo.DeletionPreviewVO;
+import com.trackflow.sprint.vo.LingeringIssuesVO;
 import com.trackflow.sprint.vo.SprintAssigneeDistributionVO;
 import com.trackflow.sprint.vo.SprintCompleteResultVO;
 import com.trackflow.sprint.vo.SprintVO;
@@ -67,6 +68,12 @@ public class SprintController {
     @PreAuthorize("@perm.check(#projectId, 'sprint:create')")
     public R<CreationPreviewVO> creationPreview(@PathVariable("projectId") Long projectId) {
         return R.ok(sprintService.getCreationPreview(projectId));
+    }
+
+    @GetMapping("/api/v1/projects/{projectId}/sprints/lingering-issues")
+    @PreAuthorize("@perm.check(#projectId, 'sprint:view')")
+    public R<LingeringIssuesVO> lingeringIssues(@PathVariable("projectId") Long projectId) {
+        return R.ok(sprintService.getLingeringIssues(projectId));
     }
 
     @GetMapping("/api/v1/sprints/{id}")

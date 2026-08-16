@@ -100,6 +100,16 @@ public interface SprintMapper extends BaseMapper<Sprint> {
     long countByProjectIds(@Param("projectIds") List<Long> projectIds);
 
     /**
+     * 查询项目所有已完成 Sprint 中仍未关闭的工单（遗留工单）。
+     * 用于迭代管理页面批量迁移操作。
+     *
+     * @param projectId 项目 ID
+     * @return 遗留工单列表（含所属 Sprint 信息）
+     */
+    List<com.trackflow.sprint.vo.LingeringIssuesVO.LingeringIssueItem> selectLingeringIssues(
+            @Param("projectId") Long projectId);
+
+    /**
      * 按实际工作流状态细分统计：获取指定 Sprint 列表中每个 Sprint 的工单按状态分组计数。
      * 返回 Map 列表，每项包含 sprint_id, status_id, status_name, status_color, category, sort_order, count。
      *

@@ -26,17 +26,23 @@
       <span class="lingering-text">
         有 <strong>{{ lingeringIssueCount }}</strong> 个工单仍在已完成迭代中未处理
       </span>
-      <a-button size="mini" type="text" @click="$emit('viewLingering')">
-        查看详情
-        <template #icon><icon-right /></template>
-      </a-button>
+      <div class="lingering-actions">
+        <a-button size="mini" type="primary" @click="$emit('migrateLingering')">
+          <template #icon><icon-swap /></template>
+          移入 Sprint
+        </a-button>
+        <a-button size="mini" type="text" @click="$emit('viewLingering')">
+          查看详情
+          <template #icon><icon-right /></template>
+        </a-button>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { EmptyState } from '@/components/base'
-import { IconPlus, IconUnorderedList, IconExclamationCircle, IconRight } from '@arco-design/web-vue/es/icon'
+import { IconPlus, IconUnorderedList, IconExclamationCircle, IconRight, IconSwap } from '@arco-design/web-vue/es/icon'
 
 defineProps<{
   canCreate: boolean
@@ -47,6 +53,7 @@ defineEmits<{
   create: []
   viewBacklog: []
   viewLingering: []
+  migrateLingering: []
 }>()
 </script>
 
@@ -88,5 +95,12 @@ defineEmits<{
 
 .lingering-text strong {
   color: var(--color-warning-light-4, var(--color-warning-6));
+}
+
+.lingering-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
 }
 </style>

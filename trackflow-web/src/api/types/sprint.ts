@@ -221,3 +221,30 @@ export interface SprintOverlapWarning {
     status: string
   }>
 }
+
+// ========== 遗留工单迁移预览 ==========
+export interface LingeringIssuesVO {
+  issues: LingeringIssueItem[]
+  targetSprints: LingeringTargetSprintItem[]
+}
+
+export interface LingeringIssueItem {
+  id: string
+  issueKey: string
+  title: string
+  priority?: string
+  priorityColor?: string
+  statusName: string
+  statusColor?: string
+  assigneeName?: string
+  dueDate?: string
+  estimatedHours?: number
+  sprintName: string
+  sprintId: string
+}
+
+export interface LingeringTargetSprintItem {
+  id: string
+  name: string
+  status: string
+}

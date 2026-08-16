@@ -54,6 +54,7 @@
         @create="openCreateModal"
         @view-backlog="handleViewBacklog"
         @view-lingering="handleViewLingeringIssues"
+        @migrate-lingering="showLingeringMigrateModal = true"
       />
 
       <!-- Active Sprints -->
@@ -229,6 +230,15 @@
       :initial-filter="drawerInitialFilter"
       @assigned="handleDrawerAssigned"
     />
+
+    <!-- 遗留工单批量迁移弹窗 -->
+    <SprintLingeringMigrateModal
+      :visible="showLingeringMigrateModal"
+      :project-id="selectedProject || ''"
+      @close="showLingeringMigrateModal = false"
+      @migrated="onLingeringMigrated"
+      @create-sprint="handleCreateSprintFromMigrate"
+    />
   </div>
 </template>
 
@@ -244,6 +254,7 @@ import SprintCard from './components/SprintCard.vue'
 import SprintGuidanceBanner from './components/SprintGuidanceBanner.vue'
 import SprintNoActiveState from './components/SprintNoActiveState.vue'
 import SprintCompleteModal from './components/SprintCompleteModal.vue'
+import SprintLingeringMigrateModal from './components/SprintLingeringMigrateModal.vue'
 import { EmptyState } from '@/components/base'
 import SprintDeleteModal from './components/SprintDeleteModal.vue'
 import SprintFormModal from './components/SprintFormModal.vue'
@@ -358,6 +369,20 @@ function handleViewLingeringIssues() {
   } else {
     router.push({ path: '/issues' })
   }
+}
+
+// ===== 遗留工单批量迁移 =====
+const showLingeringMigrateModal = ref(false)
+
+function onLingeringMigrated(_count: number) {
+  // 迁移成功后刷新 Sprint 列表
+  loadSprints()
+}
+
+function handleCreateSprintFromMigrate() {
+  // 关闭迁移弹窗，打开创建 Sprint 弹窗
+  showLingeringMigrateModal.value = false
+  openCreateModal()
 }
 
 const sprintGuidanceMessage = computed(() => {

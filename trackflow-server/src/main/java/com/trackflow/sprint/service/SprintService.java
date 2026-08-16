@@ -21,6 +21,7 @@ import com.trackflow.sprint.mapper.result.SprintStatsRow;
 import com.trackflow.sprint.vo.CompletionPreviewVO;
 import com.trackflow.sprint.vo.CreationPreviewVO;
 import com.trackflow.sprint.vo.DeletionPreviewVO;
+import com.trackflow.sprint.vo.LingeringIssuesVO;
 import com.trackflow.sprint.vo.SprintCompleteResultVO;
 import com.trackflow.sprint.vo.SprintOverlapWarningVO;
 import com.trackflow.sprint.vo.StatusBreakdownItem;
@@ -474,6 +475,42 @@ public class SprintService {
                 vo.setDefaultSprintName(defaultSprint.getName());
             }
         }
+
+        return vo;
+    }
+
+    /**
+     * 获取项目所有已完成 Sprint 中仍未关闭的工单（遗留工单）以及可迁移的目标 Sprint。
+     * 用于迭代管理页面"无活跃 Sprint"状态下的批量迁移操作。
+     *
+     * @param projectId 项目 ID
+     * @return 遗留工单列表 + 可迁移目标 Sprint 列表
+     */
+    @Transactional(readOnly = true)
+    public LingeringIssuesVO getLingeringIssues(Long projectId) {
+        projectService.assertProjectActive(projectId);
+
+        LingeringIssuesVO vo = new LingeringIssuesVO();
+
+        // 查询项目所有已完成 Sprint 中未关闭的工单
+        List<LingeringIssuesVO.LingeringIssueItem> issues = sprintMapper.selectLingeringIssues(projectId);
+        vo.setIssues(issues);
+
+        // 查询可迁移的目标 Sprint（planned/active 状态）
+        List<Sprint> candidateSprints = sprintMapper.selectList(
+                new LambdaQueryWrapper<Sprint>()
+                        .eq(Sprint::getProjectId, projectId)
+                        .in(Sprint::getStatus, SprintStatus.PLANNED, SprintStatus.ACTIVE)
+                        .orderByAsc(Sprint::getCreatedAt)
+        );
+        List<LingeringIssuesVO.TargetSprintItem> targetSprints = candidateSprints.stream().map(s -> {
+            LingeringIssuesVO.TargetSprintItem item = new LingeringIssuesVO.TargetSprintItem();
+            item.setId(String.valueOf(s.getId()));
+            item.setName(s.getName());
+            item.setStatus(s.getStatus().getValue());
+            return item;
+        }).collect(Collectors.toList());
+        vo.setTargetSprints(targetSprints);
 
         return vo;
     }

@@ -1,5 +1,5 @@
 import request from './request'
-import type { R, PageResult, SprintVO, SprintBurndownVO, SprintAssigneeDistributionVO, SprintVelocityVO, CompletionPreviewVO, CreationPreviewVO, DeletionPreviewVO, SprintCompleteResultVO } from './types'
+import type { R, PageResult, SprintVO, SprintBurndownVO, SprintAssigneeDistributionVO, SprintVelocityVO, CompletionPreviewVO, CreationPreviewVO, DeletionPreviewVO, SprintCompleteResultVO, LingeringIssuesVO } from './types'
 import type { AxiosRequestConfig } from 'axios'
 
 /** 可选请求配置（支持 _silent403 静默 403） */
@@ -122,5 +122,10 @@ export const sprintApi = {
     return request.get<any, R<SprintVelocityVO>>(`/projects/${projectId}/sprint-velocity`, {
       params: { limit }
     })
+  },
+
+  /** 获取项目所有已完成 Sprint 中的遗留工单（未关闭工单）及可迁移的目标 Sprint */
+  lingeringIssues(projectId: string) {
+    return request.get<any, R<LingeringIssuesVO>>(`/projects/${projectId}/sprints/lingering-issues`)
   }
 }
