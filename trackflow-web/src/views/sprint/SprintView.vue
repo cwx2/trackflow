@@ -92,9 +92,9 @@
         :project-key="selectedProjectKey"
         :can-edit="canEditSprintItem(sprint)"
         :can-delete="canDeleteSprintItem(sprint)"
-        :is-next="!hasActiveSprint && sprint.id === nextPlannedSprintId"
-        :has-active-sprint="hasActiveSprint"
-        :is-startable="!isSprintNotStartable(sprint, hasActiveSprint)"
+        :is-next="!hasActiveSprintForProject(sprint.projectId) && sprint.id === nextPlannedSprintId"
+        :has-active-sprint="hasActiveSprintForProject(sprint.projectId)"
+        :is-startable="!isSprintNotStartable(sprint, hasActiveSprintForProject(sprint.projectId))"
         :activate-tooltip="getActivateTooltip(sprint)"
         :inline-editable="true"
         @view-issues="viewSprintIssues"
@@ -294,7 +294,8 @@ function projectFallbackOption(value: string | number | boolean | Record<string,
 const { viewSprintIssues, viewSprintOnBoard, viewIssuesByCategory, viewIssuesByStatus, viewOverdueIssues } = useSprintNavigation(selectedProject, projects)
 const {
   sprints, loadingState, activeSprints, plannedSprints, completedSprints, archivedSprints,
-  hasActiveSprint, nextStartableSprint, loadSprints,
+  hasActiveSprint, hasActiveSprintForProject, getFirstActiveSprintForProject,
+  nextStartableSprint, loadSprints,
   handleActivateSprint, handleRevertToPlanned, archiveSprint, handleArchiveActiveSprint,
   restoreSprint, inlineRenameSprint
 } = useSprintData(selectedProject)
@@ -409,7 +410,10 @@ const nextPlannedSprintId = computed<string | null>(() => {
 
 function getActivateTooltip(sprint: SprintVO): string | undefined {
   if (!canEditSprintItem(sprint)) return '您的角色不具有迭代管理权限，请联系项目管理员'
-  if (hasActiveSprint.value) return `需要先完成当前活跃迭代「${activeSprints.value[0].name}」才能激活此迭代`
+  if (hasActiveSprintForProject(sprint.projectId)) {
+    const activeName = getFirstActiveSprintForProject(sprint.projectId)?.name || '未知'
+    return `需要先完成当前活跃迭代「${activeName}」才能激活此迭代`
+  }
   if (sprint.endDate) {
     const end = new Date(sprint.endDate); const today = new Date(); today.setHours(0,0,0,0); end.setHours(0,0,0,0)
     if (end.getTime() < today.getTime()) return `结束日期（${formatDate(sprint.endDate)}）已过期，无法激活`

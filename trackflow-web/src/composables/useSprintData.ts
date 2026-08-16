@@ -19,7 +19,37 @@ export function useSprintData(selectedProject: ComputedRef<string | null | undef
   const completedSprints = computed(() => sprints.value.filter(s => s.status === 'completed' || s.status === 'Completed'))
   const archivedSprints = computed(() => sprints.value.filter(s => s.status === 'archived' || s.status === 'Archived'))
   const hasActiveSprint = computed(() => activeSprints.value.length > 0)
-  const nextStartableSprint = computed(() => plannedSprints.value.find(s => !isSprintNotStartable(s, hasActiveSprint.value)) || null)
+
+  /**
+   * 按项目 ID 获取该项目的活跃 Sprint 列表。
+   * 在「全部项目」视图下用于逐卡片判断——每个 Sprint 卡片只关心
+   * 其所属项目是否已有活跃迭代，而不是全局是否有活跃迭代。
+   */
+  function getActiveSprintsForProject(projectId: string | undefined): SprintVO[] {
+    if (!projectId) return activeSprints.value
+    return activeSprints.value.filter(s => s.projectId === projectId)
+  }
+
+  /**
+   * 判断指定项目是否存在活跃 Sprint。
+   * - 当 selectedProject 已选中（单项目视图）：退化为全局 hasActiveSprint
+   * - 当 selectedProject 为空（全部项目视图）：按项目过滤
+   */
+  function hasActiveSprintForProject(projectId: string | undefined): boolean {
+    if (selectedProject.value) return hasActiveSprint.value
+    return getActiveSprintsForProject(projectId).length > 0
+  }
+
+  /**
+   * 获取指定项目的第一个活跃 Sprint（用于 tooltip 展示名称）。
+   */
+  function getFirstActiveSprintForProject(projectId: string | undefined): SprintVO | undefined {
+    if (selectedProject.value) return activeSprints.value[0]
+    if (!projectId) return activeSprints.value[0]
+    return activeSprints.value.find(s => s.projectId === projectId)
+  }
+
+  const nextStartableSprint = computed(() => plannedSprints.value.find(s => !isSprintNotStartable(s, hasActiveSprintForProject(s.projectId))) || null)
 
   async function loadSprints() {
     loadingState.value = 'loading'
@@ -44,10 +74,14 @@ export function useSprintData(selectedProject: ComputedRef<string | null | undef
   }
 
   function handleActivateSprint(id: string) {
-    if (hasActiveSprint.value) {
+    // 查找目标 Sprint 以确定其所属项目
+    const targetSprint = sprints.value.find(s => s.id === id)
+    const projectId = targetSprint?.projectId
+    if (hasActiveSprintForProject(projectId)) {
+      const activeName = getFirstActiveSprintForProject(projectId)?.name || '未知'
       Modal.warning({
         title: '无法激活迭代',
-        content: `当前项目已有一个活跃的迭代「${activeSprints.value[0].name}」正在进行中。请先完成该迭代后再激活新的迭代。`,
+        content: `该项目已有一个活跃的迭代「${activeName}」正在进行中。请先完成该迭代后再激活新的迭代。`,
         okText: '我知道了',
         hideCancel: true,
       })
@@ -137,6 +171,8 @@ export function useSprintData(selectedProject: ComputedRef<string | null | undef
     completedSprints,
     archivedSprints,
     hasActiveSprint,
+    hasActiveSprintForProject,
+    getFirstActiveSprintForProject,
     nextStartableSprint,
     loadSprints,
     handleActivateSprint,
