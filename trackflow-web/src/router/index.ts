@@ -475,7 +475,38 @@ router.beforeEach(async (to, _from, next) => {
     'EstimationReport': { title: '报表', path: '/reports/estimation' },
     'ReportDetail': { title: '报表', path: to.fullPath },
     'Projects': { title: '项目列表', path: '/projects' },
-    'Timesheet': { title: '时间表', path: '/timesheet' },
+    'Timesheets': { title: '工时记录', path: '/timesheets' },
+    // 工作流页面
+    'WorkflowList': { title: '工作流', path: '/workflow' },
+    'WorkflowEditor': { title: '工作流编辑', path: to.fullPath },
+    // 自动化页面
+    'Automation': { title: '自动化', path: '/automation' },
+    'AutomationEditor': { title: '自动化编辑', path: to.fullPath },
+    'AutomationExecutionHistory': { title: '执行历史', path: to.fullPath },
+    'AutomationOperations': { title: '自动化操作', path: '/automation-operations' },
+    // 管理后台页面
+    'Admin': { title: '系统管理', path: '/admin' },
+    'UserManagement': { title: '用户管理', path: '/admin/users' },
+    'UserDetail': { title: '用户详情', path: to.fullPath },
+    'RoleManagement': { title: '角色管理', path: '/admin/roles' },
+    'OrgManagement': { title: '组织管理', path: '/admin/organizations' },
+    'OrgDetail': { title: '组织详情', path: to.fullPath },
+    'GroupManagement': { title: '群组管理', path: '/admin/groups' },
+    'CustomFieldManagement': { title: '自定义字段', path: '/admin/custom-fields' },
+    'AuditLogs': { title: '审计日志', path: '/admin/audit-logs' },
+    'TimeTrackingSettings': { title: '工时设置', path: '/admin/time-tracking' },
+    'WorkItemAttributes': { title: '工作项属性', path: '/admin/work-item-attributes' },
+    'NotificationManagement': { title: '通知管理', path: '/admin/notifications' },
+    'RuleManagement': { title: '规则管理', path: '/admin/rules' },
+    'WebhookManagement': { title: 'Webhook 管理', path: '/admin/webhooks' },
+    'ActionRuleManagement': { title: '动作规则', path: '/admin/action-rules' },
+    'IntegrationManagement': { title: '集成管理', path: '/admin/integrations' },
+    'LinkTypeManagement': { title: '链接类型', path: '/admin/link-types' },
+    // 通知和设置页面
+    'Notifications': { title: '通知', path: '/notifications' },
+    'Profile': { title: '个人资料', path: '/settings/profile' },
+    'NotificationSettings': { title: '通知设置', path: '/settings/notifications' },
+    'AccountSecurity': { title: '账号安全', path: '/settings/security' },
   }
 
   const mainPageConfig = to.name ? mainPageTabMap[String(to.name)] : undefined
