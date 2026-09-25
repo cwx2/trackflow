@@ -535,7 +535,7 @@
 
 import { ref, reactive, computed, onMounted, onActivated, onUnmounted, watch, h, nextTick, provide } from 'vue'
 import { useRouter, useRoute, onBeforeRouteLeave } from 'vue-router'
-import { IconLoading, IconCheckCircle, IconEye, IconLayout, IconExpand, IconDownload, IconFile, IconCode, IconCopy, IconLink, IconCalendar, IconRight } from '@arco-design/web-vue/es/icon'
+import { IconLoading, IconEye, IconLayout, IconExpand, IconDownload, IconFile, IconCode, IconCopy, IconLink, IconCalendar, IconRight } from '@arco-design/web-vue/es/icon'
 import { Message, Modal } from '@arco-design/web-vue'
 import { handleApiError } from '@/utils/errorHandler'
 import { projectApi, issueApi, sprintApi, customFieldApi } from '@/api'
@@ -697,6 +697,7 @@ const projectList = computed<Array<{ id: string; name: string; key: string; favo
 const HIDE_RESOLVED_KEY = 'trackflow:hide-resolved'
 const hideResolved = ref(localStorage.getItem(HIDE_RESOLVED_KEY) === 'true')
 
+// @ts-ignore -- unused: kept for future feature
 function toggleHideResolved() {
   hideResolved.value = !hideResolved.value
   localStorage.setItem(HIDE_RESOLVED_KEY, String(hideResolved.value))
@@ -1105,8 +1106,10 @@ const activeQueryOwned = computed(() => {
   const currentUserId = String(authStore.user?.userId || authStore.user?.id || '')
   return activeQueryObj.value.userId === currentUserId && !activeQueryObj.value.shared
 })
+// @ts-ignore -- unused: kept for future feature
 const activeProjectName = computed(() => { if (!activeProjectId.value) return ''; const p = projectList.value.find(pr => pr.id === activeProjectId.value); return p?.name || '' })
 
+// @ts-ignore -- unused: kept for future feature
 const activeQueryProjectName = computed(() => {
   if (!activeQueryObj.value) return ''
   const filtersRaw = activeQueryObj.value.filters
@@ -1119,6 +1122,7 @@ const activeQueryProjectName = computed(() => {
   const p = projectList.value.find(pr => pr.id === projectFilter.value[0])
   return p?.name || ''
 })
+// @ts-ignore -- unused: kept for future feature
 function navigateToQueryProject() {
   if (!activeQueryObj.value) return
   const filtersRaw = activeQueryObj.value.filters; if (!filtersRaw) return

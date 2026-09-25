@@ -246,7 +246,7 @@ export function useBatchOps() {
    */
   async function executeBatchApi(
     issues: IssueVO[],
-    operation: string,
+    operation: 'status' | 'assign' | 'sprint' | 'priority' | 'delete' | 'restore' | 'tag_add' | 'tag_remove',
     params: Record<string, any>,
     operationName: string,
     suppressSuccessMessage = false

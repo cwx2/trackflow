@@ -734,8 +734,8 @@ async function loadProjects() {
     const total = res.data?.pagination?.total || list.length
     hasMore.value = projects.value.length < total
   } catch (e) {
-    if (e.response?.status !== 401) {
-      handleApiError(e, '加载项目列表失败')
+    const err = e as any; if (err.response?.status !== 401) {
+      handleApiError(err, '加载项目列表失败')
     }
     projects.value = []
   } finally {

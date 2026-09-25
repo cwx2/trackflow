@@ -553,7 +553,7 @@ async function saveLayout(layout: Array<{ i: string; x: number; y: number; w: nu
     // 乐观更新本地版本号
     currentDashboard.value.layoutVersion = version + 1
   } catch (e) {
-    if (e.response?.status === 409) {
+    const err = e as any; if (err.response?.status === 409) {
       Message.warning('布局已被其他操作修改，正在刷新...')
       // 重新加载仪表盘详情以获取最新版本
       await selectDashboard(currentDashboard.value!.id)
