@@ -487,11 +487,36 @@ public class QueryExecutor {
     private void applyUserFilter(QueryWrapper<Issue> wrapper, String column, String operator,
                                   List<String> values, Long currentUserId) {
         switch (operator) {
-            case "eq" -> wrapper.eq(column, Long.parseLong(values.get(0)));
-            case "neq" -> wrapper.ne(column, Long.parseLong(values.get(0)));
-            case "in" -> wrapper.in(column, values.stream().map(Long::parseLong).toList());
+            case "eq" -> {
+                Long id = parseLongSafe(values.get(0));
+                if (id != null) wrapper.eq(column, id);
+                else wrapper.apply("1=0");
+            }
+            case "neq" -> {
+                Long id = parseLongSafe(values.get(0));
+                if (id != null) wrapper.ne(column, id);
+            }
+            case "in" -> {
+                List<Long> ids = values.stream()
+                        .map(this::parseLongSafe)
+                        .filter(id -> id != null)
+                        .toList();
+                if (!ids.isEmpty()) wrapper.in(column, ids);
+                else wrapper.apply("1=0");
+            }
             case "is_empty" -> wrapper.isNull(column);
             case "is_not_empty" -> wrapper.isNotNull(column);
+        }
+    }
+
+    /** 安全解析 Long，非数字字符串（如历史脏数据中的项目名）返回 null。 */
+    private Long parseLongSafe(String value) {
+        if (value == null) return null;
+        try {
+            return Long.parseLong(value);
+        } catch (NumberFormatException e) {
+            log.debug("applyUserFilter: skipping non-numeric filter value: {}", value);
+            return null;
         }
     }
 

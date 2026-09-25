@@ -697,15 +697,6 @@ const projectList = computed<Array<{ id: string; name: string; key: string; favo
 const HIDE_RESOLVED_KEY = 'trackflow:hide-resolved'
 const hideResolved = ref(localStorage.getItem(HIDE_RESOLVED_KEY) === 'true')
 
-// @ts-ignore -- unused: kept for future feature
-function toggleHideResolved() {
-  hideResolved.value = !hideResolved.value
-  localStorage.setItem(HIDE_RESOLVED_KEY, String(hideResolved.value))
-  currentPage.value = 1
-  refreshList()
-  queryPanelRef.value?.loadPanel()
-}
-
 // ===== Export composable =====
 const { exportLoading, handleExport, onBatchExport } = useIssueExport({
   activeProjectId, filterProject, hideResolved, globalFilterParams, searchKeyword, selectedIds
@@ -1106,34 +1097,6 @@ const activeQueryOwned = computed(() => {
   const currentUserId = String(authStore.user?.userId || authStore.user?.id || '')
   return activeQueryObj.value.userId === currentUserId && !activeQueryObj.value.shared
 })
-// @ts-ignore -- unused: kept for future feature
-const activeProjectName = computed(() => { if (!activeProjectId.value) return ''; const p = projectList.value.find(pr => pr.id === activeProjectId.value); return p?.name || '' })
-
-// @ts-ignore -- unused: kept for future feature
-const activeQueryProjectName = computed(() => {
-  if (!activeQueryObj.value) return ''
-  const filtersRaw = activeQueryObj.value.filters
-  if (!filtersRaw) return ''
-  let filters: any[]
-  if (typeof filtersRaw === 'string') { try { filters = JSON.parse(filtersRaw) } catch { return '' } } else { filters = filtersRaw }
-  if (!Array.isArray(filters)) return ''
-  const projectFilter = filters.find((f: any) => f.field === 'project')
-  if (!projectFilter || !projectFilter.value || projectFilter.value.length === 0) return ''
-  const p = projectList.value.find(pr => pr.id === projectFilter.value[0])
-  return p?.name || ''
-})
-// @ts-ignore -- unused: kept for future feature
-function navigateToQueryProject() {
-  if (!activeQueryObj.value) return
-  const filtersRaw = activeQueryObj.value.filters; if (!filtersRaw) return
-  let filters: any[]; if (typeof filtersRaw === 'string') { try { filters = JSON.parse(filtersRaw) } catch { return } } else { filters = filtersRaw }
-  if (!Array.isArray(filters)) return
-  const projectFilter = filters.find((f: any) => f.field === 'project')
-  if (!projectFilter || !projectFilter.value || projectFilter.value.length === 0) return
-  const p = projectList.value.find(pr => pr.id === projectFilter.value[0])
-  if (p) selectProject(p)
-}
-
 const activeQueryReadonlyLabels = computed<string[]>(() => {
   // When dashboard filter is active (no saved query but filters from URL), show chip labels
   if (!activeQueryObj.value && isDashboardFilterActive.value && initialFilterChips.value.length > 0) {
