@@ -11,7 +11,7 @@ RUN npm ci --prefer-offline
 # 复制源码并构建
 COPY . .
 
-RUN npm run build
+RUN npm run build:docker
 
 # ===== Stage 2: 运行阶段（nginx 静态托管）=====
 FROM nginx:alpine AS runtime

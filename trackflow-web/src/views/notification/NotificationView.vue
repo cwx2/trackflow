@@ -82,9 +82,8 @@
                     <icon-check :size="14" />
                   </button>
                 </a-tooltip>
-                <a-tooltip content="标记未读" position="top" mini>
+                <a-tooltip v-if="item.isRead" content="标记未读" position="top" mini>
                   <button
-                    v-else
                     class="item-action-btn"
                     @click.stop="handleMarkUnread(item.id)"
                   >
