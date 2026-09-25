@@ -46,3 +46,6 @@ openproject/
 
 # 自动化脚本运行时锁文件
 scripts/.auto_iterate_parallel.lock
+
+# Claude 内部工具配置
+.claude/
