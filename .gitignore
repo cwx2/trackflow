@@ -49,3 +49,18 @@ scripts/.auto_iterate_parallel.lock
 
 # Claude 内部工具配置
 .claude/
+
+# 内部自动化脚本（非用户使用）
+scripts/
+
+# 内部工具 MCP server
+tools/
+
+# 内部文档（automation-node-contract 除外）
+docs/
+
+# Claude 配置文档
+CLAUDE.md
+
+# TypeScript 检查临时输出
+tsc-*.txt

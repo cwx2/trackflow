@@ -1,8 +1,0 @@
-﻿node.exe : npm notice run trackflow-web@1.0.0 npx
-所在位置 E:\Dev\Cache\npm-global\npx.ps1:24 字符: 5
-+     & "node$exe"  "$basedir/node_modules/npm/bin/npx-cli.js" $args
-+     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    + CategoryInfo          : NotSpecified: (npm notice run trackflow-web@1.0.0 npx:String) [], RemoteException
-    + FullyQualifiedErrorId : NativeCommandError
- 
-npm notice run vue-tsc --noEmit

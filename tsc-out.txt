@@ -1,8 +1,0 @@
-﻿node.exe : npm notice run trackflow-web@1.0.0 type-check
-所在位置 E:\Dev\Cache\npm-global\npm.ps1:24 字符: 5
-+     & "node$exe"  "$basedir/node_modules/npm/bin/npm-cli.js" $args
-+     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    + CategoryInfo          : NotSpecified: (npm notice run ....0.0 type-check:String) [], RemoteException
-    + FullyQualifiedErrorId : NativeCommandError
- 
-npm notice run vue-tsc --noEmit
