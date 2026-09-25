@@ -1,0 +1,143 @@
+services:
+
+  # ===== 数据库 =====
+  postgres:
+    image: postgres:15-alpine
+    container_name: trackflow-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: trackflow
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - trackflow-net
+
+  # ===== 缓存 =====
+  redis:
+    image: redis:7-alpine
+    container_name: trackflow-redis
+    restart: unless-stopped
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - trackflow-net
+
+  # ===== 文件存储 =====
+  minio:
+    image: minio/minio
+    container_name: trackflow-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY}
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - trackflow-net
+
+  # ===== 认证服务 =====
+  keycloak:
+    image: quay.io/keycloak/keycloak:24.0
+    container_name: trackflow-keycloak
+    restart: unless-stopped
+    command: start --import-realm --optimized
+    environment:
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN_USER}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: ${DB_USERNAME}
+      KC_DB_PASSWORD: ${DB_PASSWORD}
+      KC_HOSTNAME: ${KEYCLOAK_HOSTNAME}
+      KC_HOSTNAME_STRICT: "false"
+      KC_HTTP_ENABLED: "true"
+      KC_PROXY: edge
+    volumes:
+      - ./trackflow-server/keycloak/trackflow-realm.json:/opt/keycloak/data/import/trackflow-realm.json:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - trackflow-net
+
+  # ===== 后端 =====
+  backend:
+    build:
+      context: ./trackflow-server
+      dockerfile: Dockerfile
+    container_name: trackflow-backend
+    restart: unless-stopped
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/trackflow
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      KEYCLOAK_ISSUER_URI: http://keycloak:8080/realms/trackflow
+      KEYCLOAK_JWKS_URI: http://keycloak:8080/realms/trackflow/protocol/openid-connect/certs
+      KEYCLOAK_AUDIENCE: account
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
+      MINIO_BUCKET: trackflow
+      TRACKFLOW_CORS_ORIGINS: ${FRONTEND_URL}
+      TRACKFLOW_ENCRYPTION_KEY: ${TRACKFLOW_ENCRYPTION_KEY}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+    networks:
+      - trackflow-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8090/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # ===== 前端 =====
+  frontend:
+    build:
+      context: ./trackflow-web
+      dockerfile: Dockerfile
+    container_name: trackflow-frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-80}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - trackflow-net
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:
+
+networks:
+  trackflow-net:
+    driver: bridge

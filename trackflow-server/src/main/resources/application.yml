@@ -87,3 +87,13 @@ trackflow:
   monitor:
     enabled: true           # 是否启用慢操作监控切面
     slow-threshold: 500     # 全局慢操作阈值（毫秒），超过此值打 WARN
+
+# Actuator（仅暴露 health，供 Docker healthcheck 使用）
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never

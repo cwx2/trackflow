@@ -248,6 +248,99 @@ TrackFlow 使用双层 RBAC：
 
 ---
 
+## 生产部署（Docker 一键启动）
+
+### 前置条件
+
+- Docker 20.10+
+- Docker Compose v2
+- 一台 Linux 服务器（2 核 4G 起步，推荐 4 核 8G）
+
+### 1. 克隆仓库
+
+```bash
+git clone https://github.com/cwx2/trackflow.git
+cd trackflow
+```
+
+### 2. 配置环境变量
+
+```bash
+cp .env.example .env
+```
+
+用编辑器打开 `.env`，**必须修改**以下几项：
+
+| 变量 | 说明 |
+|------|------|
+| `DB_PASSWORD` | 数据库密码，设置强密码 |
+| `REDIS_PASSWORD` | Redis 密码 |
+| `MINIO_SECRET_KEY` | MinIO 密钥（≥8 位） |
+| `KEYCLOAK_ADMIN_PASSWORD` | Keycloak 管理员密码 |
+| `KEYCLOAK_HOSTNAME` | Keycloak 对外访问地址，如 `http://your-server-ip:8080` |
+| `FRONTEND_URL` | 前端访问地址，如 `http://your-server-ip` |
+| `TRACKFLOW_ENCRYPTION_KEY` | 运行 `openssl rand -base64 32` 生成 |
+
+### 3. 一键启动
+
+```bash
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+首次启动会拉取镜像并构建，约需 5~10 分钟。Flyway 会自动完成数据库初始化。
+
+查看启动日志：
+
+```bash
+docker compose -f docker-compose.prod.yml logs -f backend
+```
+
+看到 `Started TrackFlowApplication` 即为启动成功。
+
+### 4. 访问系统
+
+| 地址 | 说明 |
+|------|------|
+| `http://your-server-ip` | TrackFlow 主界面 |
+| `http://your-server-ip:8080` | Keycloak 管理控制台 |
+| `http://your-server-ip:9001` | MinIO 文件管理控制台 |
+
+使用内置测试账号 `testuser / test123` 登录，或在 Keycloak 控制台创建新用户。
+
+### 5. 配置 HTTPS（推荐）
+
+生产环境建议在服务器前置 Nginx / Caddy 处理 HTTPS，以 Caddy 为例：
+
+```
+trackflow.yourdomain.com {
+    reverse_proxy localhost:80
+}
+```
+
+配置完成后将 `.env` 中的 `FRONTEND_URL` 和 `KEYCLOAK_HOSTNAME` 更新为 HTTPS 地址，重启服务即可。
+
+### 常用运维命令
+
+```bash
+# 查看所有容器状态
+docker compose -f docker-compose.prod.yml ps
+
+# 停止服务
+docker compose -f docker-compose.prod.yml down
+
+# 更新到最新代码并重建
+git pull
+docker compose -f docker-compose.prod.yml up -d --build backend frontend
+
+# 查看后端日志（最近 100 行）
+docker compose -f docker-compose.prod.yml logs --tail=100 backend
+
+# 备份数据库
+docker exec trackflow-postgres pg_dump -U trackflow trackflow > backup.sql
+```
+
+---
+
 ## 开发指南
 
 ### 数据库迁移
